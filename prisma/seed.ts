@@ -1,7 +1,14 @@
 import { PrismaClient } from "@prisma/client";
+import { PrismaLibSQL } from "@prisma/adapter-libsql";
+import { createClient } from "@libsql/client";
 import bcrypt from "bcryptjs";
 
-const prisma = new PrismaClient();
+// Lokalda file:./prisma/dev.db, production'da Turso libsql://... — bir xil kod.
+const libsqlClient = createClient({
+  url: process.env.DATABASE_URL as string,
+  authToken: process.env.DATABASE_AUTH_TOKEN,
+});
+const prisma = new PrismaClient({ adapter: new PrismaLibSQL(libsqlClient) });
 
 const KIRIM_KATEGORIYALAR = [
   "Tabrik",
