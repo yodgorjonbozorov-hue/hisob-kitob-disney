@@ -1,0 +1,18 @@
+node_modules
+.next
+out
+build
+dist
+*.db
+*.db-journal
+.env
+.env*.local
+npm-debug.log*
+.DS_Store
+*.tsbuildinfo
+next-env.d.ts
+
+# Faqat mahalliy Windows muhitida npm o'rniga pnpm ishlatilgani uchun (README'ga qarang) —
+# Vercel'ning o'z (Linux) muhitida standart npm bilan o'rnatilishi uchun bularni commit qilmaymiz.
+pnpm-lock.yaml
+pnpm-workspace.yaml

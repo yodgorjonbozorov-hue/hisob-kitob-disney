@@ -1,0 +1,65 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// SQLite native enumlarni qo'llab-quvvatlamaydi, shuning uchun rol/turi String sifatida
+// saqlanadi va zod orqali ilova darajasida "admin"|"kassir" / "kirim"|"chiqim" bilan cheklanadi.
+
+model User {
+  id                String        @id @default(cuid())
+  ism               String
+  login             String        @unique
+  parolHash         String
+  rol               String
+  isActive          Boolean       @default(true)
+  createdAt         DateTime      @default(now())
+  transactions      Transaction[]
+
+  telegramChatId    String?       @unique
+  linkCode          String?
+  linkCodeExpiresAt DateTime?
+}
+
+/// Kalit-qiymat ko'rinishidagi tizim sozlamalari (masalan, oxirgi yuborilgan oylik hisobot).
+model AppSetting {
+  key   String @id
+  value String
+}
+
+model Category {
+  id           String        @id @default(cuid())
+  nomi         String
+  turi         String
+  tartib       Int           @default(0)
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  transactions Transaction[]
+
+  @@unique([nomi, turi])
+  @@index([turi, isActive])
+}
+
+model Transaction {
+  id         String   @id @default(cuid())
+  turi       String
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+  summa      Int
+  sana       DateTime
+  izoh       String?
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  filial     String?
+  createdAt  DateTime @default(now())
+
+  @@index([sana])
+  @@index([turi])
+  @@index([categoryId])
+  @@index([userId])
+}
