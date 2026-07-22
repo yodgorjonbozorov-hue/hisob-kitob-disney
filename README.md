@@ -49,15 +49,14 @@ Lokal ishlashda `DATABASE_AUTH_TOKEN` bo'sh qoldirilishi mumkin (fayl-based SQLi
 
 ## Migratsiya va boshlang'ich ma'lumotlar (seed)
 
-```bash
-npx prisma migrate dev
-```
-
-Bu buyruq ma'lumotlar bazasi jadvallarini yaratadi va `prisma/seed.ts` skriptini avtomatik ishga tushiradi (16 ta kategoriya, admin va kassir foydalanuvchilar, so'nggi 6 oy uchun demo tranzaksiyalar). Agar seedni qayta ishga tushirish kerak bo'lsa:
+Migratsiyalar `@libsql/client` orqali qo'llanadi (Prisma `migrate deploy` libsql:// protokolini qo'llab-quvvatlamaydi). Lokal (fayl) va Turso (bulut) uchun bir xil buyruq:
 
 ```bash
-npm run db:seed
+npm run db:apply    # prisma/migrations/* SQL fayllarini bazaga qo'llaydi (idempotent)
+npm run db:seed     # bizneslar (Disney Navoiy + Salyut), Disney kategoriyalari, admin/kassir1
 ```
+
+> Yangi migratsiya yaratish uchun (schema o'zgartirilganda): `npm run db:migrate:create -- --name <nom>` — bu faqat SQL faylini generatsiya qiladi, so'ng `npm run db:apply` bilan qo'llaysiz.
 
 ## Ishga tushirish
 
@@ -78,13 +77,22 @@ Seed skripti quyidagi foydalanuvchilarni yaratadi:
 
 **Muhim**: birinchi kirishdan so'ng parollarni albatta o'zgartiring (Admin panel → Foydalanuvchilar bo'limida yangi parol o'rnatish mumkin).
 
+## Ko'p-biznes (multi-business)
+
+Tizim bir nechta alohida biznesni bitta saytda yuritadi (masalan Disney Navoiy, Salyut, ...). Har bir biznesning **o'z alohida** hisob-kitobi bor: kategoriyalari, tranzaksiyalari, dashboard'i (0 dan boshlanadi) va oylik hisoboti.
+
+- **Direktor (admin)** barcha bizneslarni ko'radi va yon menyudagi dropdown orqali ular orasida almashadi (tanlov cookie'da saqlanadi).
+- **Kassir** bitta biznesga biriktiriladi — faqat o'z biznesini ko'radi/yozadi, boshqasiga o'ta olmaydi.
+- Yangi biznes **Admin panel → Bizneslar** bo'limidan qo'shiladi; bo'sh (kategoriyasiz) boshlanadi, admin o'ziga mos kategoriyalarni qo'shadi.
+- Barcha ma'lumotlar biznes bo'yicha izolyatsiya qilingan — bir biznes ma'lumoti boshqasida ko'rinmaydi (server darajasida `businessId` filtri, cross-business kirish imkonsiz).
+
 ## Funksiyalar
 
 - Tranzaksiya kiritish (kirim/chiqim), filtrlash, qidirish, tahrirlash va o'chirish (kassir faqat o'zi kiritgan yozuvni o'zgartira oladi)
 - Boshqaruv paneli: joriy oy bo'yicha jami kirim/chiqim/sof foyda, kategoriya bo'yicha doira diagrammalar, 6 oylik trend, kunlik dinamika
 - Oylik hisobot: kategoriya bo'yicha taqsimot, o'tgan oy bilan solishtirma, PDF va Excel formatda yuklab olish
-- Admin panel: kategoriyalarni boshqarish (faollashtirish/nofaollashtirish), foydalanuvchilarni boshqarish
-- Telegram bot: tezkor tranzaksiya kiritish, hisobot olish, direktorga avtomatik oylik hisobot (quyida batafsil)
+- Admin panel: bizneslar, kategoriyalar va foydalanuvchilarni boshqarish
+- Telegram bot: tezkor tranzaksiya kiritish (admin uchun biznes tanlash), hisobot olish, direktorga avtomatik oylik hisobot (har biznes uchun alohida)
 
 ## Telegram bot
 
