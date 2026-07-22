@@ -3,6 +3,7 @@ import { dateOnlyStringToUTCDate } from "@/lib/date";
 import type { Prisma } from "@prisma/client";
 
 export interface TransactionListParams {
+  businessId: string;
   from?: string | null;
   to?: string | null;
   turi?: string | null;
@@ -16,7 +17,7 @@ export async function listTransactions(params: TransactionListParams) {
   const page = Math.max(1, params.page ?? 1);
   const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 20));
 
-  const where: Prisma.TransactionWhereInput = {};
+  const where: Prisma.TransactionWhereInput = { businessId: params.businessId };
   if (params.from || params.to) {
     where.sana = {};
     if (params.from) where.sana.gte = dateOnlyStringToUTCDate(params.from);

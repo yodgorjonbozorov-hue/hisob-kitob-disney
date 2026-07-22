@@ -1,8 +1,9 @@
-export type FlowStep = "category" | "summa" | "sana" | "sana_custom" | "izoh";
+export type FlowStep = "business" | "category" | "summa" | "sana" | "sana_custom" | "izoh";
 
 export interface TransactionFlowState {
   step: FlowStep;
   turi: "kirim" | "chiqim";
+  businessId?: string;
   categoryId?: string;
   categoryNomi?: string;
   summa?: number;

@@ -5,12 +5,15 @@ export const createUserSchema = z.object({
   login: z.string().min(3, "Login kamida 3 belgi bo'lishi kerak").max(50),
   parol: z.string().min(4, "Parol kamida 4 belgi bo'lishi kerak").max(100),
   rol: z.enum(["admin", "kassir"]).default("kassir"),
+  // Kassir uchun biznes id majburiy (server tekshiradi); admin uchun bo'sh/null.
+  businessId: z.string().optional().nullable(),
 });
 
 export const updateUserSchema = z.object({
   isActive: z.boolean().optional(),
   parol: z.string().min(4).max(100).optional(),
   ism: z.string().min(1).max(100).optional(),
+  businessId: z.string().optional().nullable(),
 });
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;

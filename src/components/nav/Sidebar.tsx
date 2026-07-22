@@ -4,10 +4,18 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { Rol } from "@/lib/auth/session";
 import { TelegramLinkButton } from "@/components/TelegramLinkButton";
+import { BusinessSwitcher } from "@/components/BusinessSwitcher";
+
+interface BusinessOption {
+  id: string;
+  nomi: string;
+}
 
 interface Props {
   ism: string;
   rol: Rol;
+  businesses: BusinessOption[];
+  activeBusinessId: string | null;
 }
 
 const adminOnlyBaseLinks = [
@@ -19,11 +27,12 @@ const adminOnlyBaseLinks = [
 const kassirLinks = [{ href: "/tranzaksiyalar", label: "Tranzaksiyalar" }];
 
 const adminLinks = [
+  { href: "/admin/bizneslar", label: "Bizneslar" },
   { href: "/admin/kategoriyalar", label: "Kategoriyalar" },
   { href: "/admin/foydalanuvchilar", label: "Foydalanuvchilar" },
 ];
 
-export default function Sidebar({ ism, rol }: Props) {
+export default function Sidebar({ ism, rol, businesses, activeBusinessId }: Props) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -38,8 +47,12 @@ export default function Sidebar({ ism, rol }: Props) {
   return (
     <aside className="w-64 shrink-0 bg-slate-900 text-slate-100 min-h-screen hidden md:flex md:flex-col">
       <div className="px-6 py-6 border-b border-slate-800">
-        <h1 className="font-bold text-lg">Disney Navoiy</h1>
-        <p className="text-slate-400 text-xs mt-0.5">Kirim-Chiqim Hisoboti</p>
+        <h1 className="font-bold text-lg">Hisob-Kitob</h1>
+        <p className="text-slate-400 text-xs mt-0.5">Kirim-Chiqim Tizimi</p>
+      </div>
+      <div className="px-3 pt-4">
+        <p className="text-xs text-slate-500 px-1 mb-1">Biznes</p>
+        <BusinessSwitcher businesses={businesses} activeId={activeBusinessId} rol={rol} />
       </div>
       <nav className="flex-1 px-3 py-4 space-y-1">
         {links.map((link) => {

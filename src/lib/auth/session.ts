@@ -9,6 +9,8 @@ export interface SessionData {
   login?: string;
   ism?: string;
   rol?: Rol;
+  // Kassir uchun biriktirilgan biznes id; admin uchun null (barcha bizneslar).
+  businessId?: string | null;
 }
 
 export const sessionOptions: SessionOptions = {

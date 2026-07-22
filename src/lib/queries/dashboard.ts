@@ -17,19 +17,19 @@ export interface MonthSummary extends MonthTotals {
   };
 }
 
-async function sumByType(from: Date, to: Date, turi: "kirim" | "chiqim"): Promise<number> {
+async function sumByType(businessId: string, from: Date, to: Date, turi: "kirim" | "chiqim"): Promise<number> {
   const result = await prisma.transaction.aggregate({
     _sum: { summa: true },
-    where: { turi, sana: { gte: from, lt: to } },
+    where: { businessId, turi, sana: { gte: from, lt: to } },
   });
   return result._sum.summa ?? 0;
 }
 
-async function monthTotals(monthStr: string): Promise<MonthTotals> {
+async function monthTotals(businessId: string, monthStr: string): Promise<MonthTotals> {
   const { from, to } = monthRangeUTC(monthStr);
   const [jamiKirim, jamiChiqim] = await Promise.all([
-    sumByType(from, to, "kirim"),
-    sumByType(from, to, "chiqim"),
+    sumByType(businessId, from, to, "kirim"),
+    sumByType(businessId, from, to, "chiqim"),
   ]);
   return { jamiKirim, jamiChiqim, sofFoyda: jamiKirim - jamiChiqim };
 }
@@ -39,9 +39,15 @@ function pctChange(curr: number, prev: number): number | null {
   return ((curr - prev) / Math.abs(prev)) * 100;
 }
 
-export async function getMonthSummary(monthStr: string = currentMonthString()): Promise<MonthSummary> {
+export async function getMonthSummary(
+  businessId: string,
+  monthStr: string = currentMonthString()
+): Promise<MonthSummary> {
   const prevMonthStr = shiftMonthString(monthStr, -1);
-  const [curr, prev] = await Promise.all([monthTotals(monthStr), monthTotals(prevMonthStr)]);
+  const [curr, prev] = await Promise.all([
+    monthTotals(businessId, monthStr),
+    monthTotals(businessId, prevMonthStr),
+  ]);
 
   return {
     month: monthStr,
@@ -63,13 +69,14 @@ export interface CategoryBreakdownItem {
 }
 
 export async function getCategoryBreakdown(
+  businessId: string,
   monthStr: string,
   turi: "kirim" | "chiqim"
 ): Promise<CategoryBreakdownItem[]> {
   const { from, to } = monthRangeUTC(monthStr);
   const grouped = await prisma.transaction.groupBy({
     by: ["categoryId"],
-    where: { turi, sana: { gte: from, lt: to } },
+    where: { businessId, turi, sana: { gte: from, lt: to } },
     _sum: { summa: true },
   });
 
@@ -101,7 +108,11 @@ export interface TrendPoint {
   sofFoyda: number;
 }
 
-export async function getTrend(months: number = 6, endMonth: string = currentMonthString()): Promise<TrendPoint[]> {
+export async function getTrend(
+  businessId: string,
+  months: number = 6,
+  endMonth: string = currentMonthString()
+): Promise<TrendPoint[]> {
   const monthStrs: string[] = [];
   for (let i = months - 1; i >= 0; i--) {
     monthStrs.push(shiftMonthString(endMonth, -i));
@@ -109,7 +120,7 @@ export async function getTrend(months: number = 6, endMonth: string = currentMon
 
   const points = await Promise.all(
     monthStrs.map(async (m) => {
-      const totals = await monthTotals(m);
+      const totals = await monthTotals(businessId, m);
       return { month: m, ...totals };
     })
   );
@@ -123,10 +134,13 @@ export interface DailyPoint {
   chiqim: number;
 }
 
-export async function getDailyDynamics(monthStr: string = currentMonthString()): Promise<DailyPoint[]> {
+export async function getDailyDynamics(
+  businessId: string,
+  monthStr: string = currentMonthString()
+): Promise<DailyPoint[]> {
   const { from, to } = monthRangeUTC(monthStr);
   const transactions = await prisma.transaction.findMany({
-    where: { sana: { gte: from, lt: to } },
+    where: { businessId, sana: { gte: from, lt: to } },
     select: { sana: true, turi: true, summa: true },
   });
 

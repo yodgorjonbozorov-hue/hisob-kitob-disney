@@ -21,7 +21,7 @@ export async function buildMonthlyReportWorkbook(report: MonthlyReport): Promise
   ];
 
   sheet.mergeCells("A1:C1");
-  sheet.getCell("A1").value = `Disney Navoiy — Oylik hisobot: ${monthLabel}`;
+  sheet.getCell("A1").value = `${report.businessNomi} — Oylik hisobot: ${monthLabel}`;
   sheet.getCell("A1").font = { bold: true, size: 14 };
 
   sheet.addRow([]);

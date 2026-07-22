@@ -3,6 +3,7 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { getCurrentUser } from "@/lib/auth/session";
 import { handleApiError, requireRole, UnauthorizedError } from "@/lib/auth/guard";
 import { getMonthlyReport } from "@/lib/queries/report";
+import { resolveActiveBusinessId } from "@/lib/business";
 import { currentMonthString } from "@/lib/date";
 import { MonthlyReportDocument } from "@/lib/pdf/MonthlyReportDocument";
 
@@ -12,9 +13,12 @@ export async function GET(request: NextRequest) {
     if (!user) throw new UnauthorizedError();
     requireRole(user.rol, "admin");
 
+    const businessId = await resolveActiveBusinessId(user);
+    if (!businessId) return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });
+
     const { searchParams } = new URL(request.url);
     const month = searchParams.get("month") ?? currentMonthString();
-    const report = await getMonthlyReport(month);
+    const report = await getMonthlyReport(businessId, month);
 
     const buffer = await renderToBuffer(MonthlyReportDocument({ report }));
 

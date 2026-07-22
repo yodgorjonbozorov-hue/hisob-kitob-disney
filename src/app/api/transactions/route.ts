@@ -4,14 +4,19 @@ import { handleApiError, UnauthorizedError } from "@/lib/auth/guard";
 import { createTransactionSchema } from "@/lib/validation/transaction";
 import { listTransactions } from "@/lib/queries/transactions";
 import { createTransaction } from "@/lib/services/transactionService";
+import { resolveActiveBusinessId } from "@/lib/business";
 
 export async function GET(request: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) throw new UnauthorizedError();
 
+    const businessId = await resolveActiveBusinessId(user);
+    if (!businessId) return NextResponse.json({ items: [], total: 0, page: 1, pageSize: 20 });
+
     const { searchParams } = new URL(request.url);
     const result = await listTransactions({
+      businessId,
       from: searchParams.get("from"),
       to: searchParams.get("to"),
       turi: searchParams.get("turi"),
@@ -32,13 +37,16 @@ export async function POST(request: NextRequest) {
     const user = await getCurrentUser();
     if (!user) throw new UnauthorizedError();
 
+    const businessId = await resolveActiveBusinessId(user);
+    if (!businessId) return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });
+
     const body = await request.json();
     const parsed = createTransactionSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
     }
 
-    const transaction = await createTransaction(user.userId, parsed.data);
+    const transaction = await createTransaction(user.userId, businessId, parsed.data);
 
     return NextResponse.json(transaction, { status: 201 });
   } catch (error) {

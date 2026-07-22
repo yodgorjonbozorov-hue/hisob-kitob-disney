@@ -5,10 +5,18 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Rol } from "@/lib/auth/session";
 import { TelegramLinkButton } from "@/components/TelegramLinkButton";
+import { BusinessSwitcher } from "@/components/BusinessSwitcher";
+
+interface BusinessOption {
+  id: string;
+  nomi: string;
+}
 
 interface Props {
   ism: string;
   rol: Rol;
+  businesses: BusinessOption[];
+  activeBusinessId: string | null;
 }
 
 const adminOnlyBaseLinks = [
@@ -20,11 +28,12 @@ const adminOnlyBaseLinks = [
 const kassirLinks = [{ href: "/tranzaksiyalar", label: "Tranzaksiyalar" }];
 
 const adminLinks = [
+  { href: "/admin/bizneslar", label: "Bizneslar" },
   { href: "/admin/kategoriyalar", label: "Kategoriyalar" },
   { href: "/admin/foydalanuvchilar", label: "Foydalanuvchilar" },
 ];
 
-export default function MobileNav({ ism, rol }: Props) {
+export default function MobileNav({ ism, rol, businesses, activeBusinessId }: Props) {
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -39,11 +48,14 @@ export default function MobileNav({ ism, rol }: Props) {
 
   return (
     <div className="md:hidden bg-slate-900 text-slate-100">
-      <div className="flex items-center justify-between px-4 py-3">
-        <span className="font-bold">Disney Navoiy</span>
+      <div className="flex items-center justify-between px-4 py-3 gap-2">
+        <span className="font-bold shrink-0">Hisob-Kitob</span>
+        <div className="flex-1 min-w-0">
+          <BusinessSwitcher businesses={businesses} activeId={activeBusinessId} rol={rol} />
+        </div>
         <button
           onClick={() => setOpen(!open)}
-          className="text-sm px-3 py-1.5 rounded-lg bg-slate-800"
+          className="text-sm px-3 py-1.5 rounded-lg bg-slate-800 shrink-0"
         >
           {open ? "Yopish" : "Menyu"}
         </button>

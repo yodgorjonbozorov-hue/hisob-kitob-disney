@@ -37,114 +37,69 @@ const ADMIN_PAROL = "admin123";
 const KASSIR_LOGIN = "kassir1";
 const KASSIR_PAROL = "kassir123";
 
-function randomInt(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-function amountRangeFor(nomi: string, turi: "kirim" | "chiqim"): [number, number] {
-  if (turi === "chiqim") {
-    if (nomi === "Oyliklar") return [1_500_000, 4_000_000];
-    if (nomi === "Mayda xarajatlar") return [20_000, 150_000];
-    if (nomi === "Mashinalarga chiqim") return [100_000, 800_000];
-    if (nomi === "Ro'zg'or xarajatlari") return [50_000, 500_000];
-  }
-  return [150_000, 2_500_000];
-}
-
 async function main() {
-  console.log("Kategoriyalarni yaratish...");
+  console.log("Bizneslarni yaratish...");
 
-  const kirimCats = [];
+  // Disney Navoiy (kategoriyalar bilan) va Salyut (bo'sh — admin o'zi to'ldiradi).
+  const disney = await prisma.business.upsert({
+    where: { id: "biz_disney_navoiy" },
+    update: {},
+    create: { id: "biz_disney_navoiy", nomi: "Disney Navoiy" },
+  });
+  await prisma.business.upsert({
+    where: { id: "biz_salyut" },
+    update: {},
+    create: { id: "biz_salyut", nomi: "Salyut" },
+  });
+
+  console.log("Disney Navoiy kategoriyalarini yaratish...");
+
   for (let i = 0; i < KIRIM_KATEGORIYALAR.length; i++) {
     const nomi = KIRIM_KATEGORIYALAR[i];
-    const cat = await prisma.category.upsert({
-      where: { nomi_turi: { nomi, turi: "kirim" } },
+    await prisma.category.upsert({
+      where: { nomi_turi_businessId: { nomi, turi: "kirim", businessId: disney.id } },
       update: {},
-      create: { nomi, turi: "kirim", tartib: i },
+      create: { nomi, turi: "kirim", tartib: i, businessId: disney.id },
     });
-    kirimCats.push(cat);
   }
 
-  const chiqimCats = [];
   for (let i = 0; i < CHIQIM_KATEGORIYALAR.length; i++) {
     const nomi = CHIQIM_KATEGORIYALAR[i];
-    const cat = await prisma.category.upsert({
-      where: { nomi_turi: { nomi, turi: "chiqim" } },
+    await prisma.category.upsert({
+      where: { nomi_turi_businessId: { nomi, turi: "chiqim", businessId: disney.id } },
       update: {},
-      create: { nomi, turi: "chiqim", tartib: i },
+      create: { nomi, turi: "chiqim", tartib: i, businessId: disney.id },
     });
-    chiqimCats.push(cat);
   }
 
   console.log("Foydalanuvchilarni yaratish...");
 
   const adminHash = await bcrypt.hash(ADMIN_PAROL, 10);
-  const admin = await prisma.user.upsert({
+  await prisma.user.upsert({
     where: { login: ADMIN_LOGIN },
     update: {},
+    // Admin (direktor) — biznesga biriktirilmagan (businessId=null), barcha bizneslarni ko'radi.
     create: { ism: "Direktor", login: ADMIN_LOGIN, parolHash: adminHash, rol: "admin" },
   });
 
   const kassirHash = await bcrypt.hash(KASSIR_PAROL, 10);
-  const kassir = await prisma.user.upsert({
+  await prisma.user.upsert({
     where: { login: KASSIR_LOGIN },
     update: {},
-    create: { ism: "Kassir Aziza", login: KASSIR_LOGIN, parolHash: kassirHash, rol: "kassir" },
+    // Kassir — Disney Navoiy biznesiga biriktirilgan.
+    create: {
+      ism: "Kassir Aziza",
+      login: KASSIR_LOGIN,
+      parolHash: kassirHash,
+      rol: "kassir",
+      businessId: disney.id,
+    },
   });
 
-  const existingCount = await prisma.transaction.count();
-  if (existingCount === 0) {
-    console.log("Demo tranzaksiyalar yaratilmoqda...");
-    const now = new Date();
-    const monthsBack = 6;
-    const users = [admin, kassir];
-
-    for (let m = monthsBack - 1; m >= 0; m--) {
-      const year = now.getUTCFullYear();
-      const month = now.getUTCMonth() - m;
-      const monthDate = new Date(Date.UTC(year, month, 1));
-      const daysInMonth = new Date(Date.UTC(monthDate.getUTCFullYear(), monthDate.getUTCMonth() + 1, 0)).getUTCDate();
-
-      const kirimCount = randomInt(10, 18);
-      const chiqimCount = randomInt(8, 15);
-
-      for (let i = 0; i < kirimCount; i++) {
-        const cat = kirimCats[randomInt(0, kirimCats.length - 1)];
-        const [min, max] = amountRangeFor(cat.nomi, "kirim");
-        const day = randomInt(1, daysInMonth);
-        await prisma.transaction.create({
-          data: {
-            turi: "kirim",
-            categoryId: cat.id,
-            summa: randomInt(min, max),
-            sana: new Date(Date.UTC(monthDate.getUTCFullYear(), monthDate.getUTCMonth(), day)),
-            izoh: null,
-            userId: users[randomInt(0, users.length - 1)].id,
-          },
-        });
-      }
-
-      for (let i = 0; i < chiqimCount; i++) {
-        const cat = chiqimCats[randomInt(0, chiqimCats.length - 1)];
-        const [min, max] = amountRangeFor(cat.nomi, "chiqim");
-        const day = randomInt(1, daysInMonth);
-        await prisma.transaction.create({
-          data: {
-            turi: "chiqim",
-            categoryId: cat.id,
-            summa: randomInt(min, max),
-            sana: new Date(Date.UTC(monthDate.getUTCFullYear(), monthDate.getUTCMonth(), day)),
-            izoh: null,
-            userId: users[randomInt(0, users.length - 1)].id,
-          },
-        });
-      }
-    }
-  }
-
   console.log("\n=== Seed tugadi ===");
+  console.log("Bizneslar: Disney Navoiy (kategoriyalar bilan), Salyut (bo'sh)");
   console.log(`Admin login: ${ADMIN_LOGIN} / parol: ${ADMIN_PAROL}`);
-  console.log(`Kassir login: ${KASSIR_LOGIN} / parol: ${KASSIR_PAROL}`);
+  console.log(`Kassir login: ${KASSIR_LOGIN} / parol: ${KASSIR_PAROL} (Disney Navoiy)`);
   console.log("Iltimos, birinchi kirishdan keyin parollarni o'zgartiring.\n");
 }
 

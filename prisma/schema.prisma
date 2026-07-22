@@ -11,6 +11,17 @@ datasource db {
 // SQLite native enumlarni qo'llab-quvvatlamaydi, shuning uchun rol/turi String sifatida
 // saqlanadi va zod orqali ilova darajasida "admin"|"kassir" / "kirim"|"chiqim" bilan cheklanadi.
 
+/// Biznes (kompaniya). Har bir biznesning o'z kategoriyalari, tranzaksiyalari va dashboard'i.
+model Business {
+  id           String        @id @default(cuid())
+  nomi         String
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  categories   Category[]
+  transactions Transaction[]
+  users        User[]
+}
+
 model User {
   id                String        @id @default(cuid())
   ism               String
@@ -21,9 +32,15 @@ model User {
   createdAt         DateTime      @default(now())
   transactions      Transaction[]
 
+  // Kassir bitta biznesga biriktiriladi; admin uchun null (barcha bizneslarni ko'radi).
+  businessId        String?
+  business          Business?     @relation(fields: [businessId], references: [id])
+
   telegramChatId    String?       @unique
   linkCode          String?
   linkCodeExpiresAt DateTime?
+
+  @@index([businessId])
 }
 
 /// Kalit-qiymat ko'rinishidagi tizim sozlamalari (masalan, oxirgi yuborilgan oylik hisobot).
@@ -39,10 +56,13 @@ model Category {
   tartib       Int           @default(0)
   isActive     Boolean       @default(true)
   createdAt    DateTime      @default(now())
+  businessId   String
+  business     Business      @relation(fields: [businessId], references: [id])
   transactions Transaction[]
 
-  @@unique([nomi, turi])
+  @@unique([nomi, turi, businessId])
   @@index([turi, isActive])
+  @@index([businessId])
 }
 
 model Transaction {
@@ -50,6 +70,8 @@ model Transaction {
   turi       String
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id])
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
   summa      Int
   sana       DateTime
   izoh       String?
@@ -61,5 +83,6 @@ model Transaction {
   @@index([sana])
   @@index([turi])
   @@index([categoryId])
+  @@index([businessId])
   @@index([userId])
 }

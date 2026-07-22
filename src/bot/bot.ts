@@ -2,12 +2,13 @@ import { Bot } from "grammy";
 import { findUserByChatId, linkByCode } from "./auth";
 import {
   startTransactionFlow,
+  handleBusinessCallback,
   handleCategoryCallback,
   handleDateCallback,
   handleSkipIzohCallback,
   handleFlowText,
 } from "./transactionFlow";
-import { sendMonthlyReportText, sendReportDocument } from "./report";
+import { startMonthlyReport, handleReportBusinessCallback, sendReportDocument } from "./report";
 import { clearFlow } from "./state";
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -64,7 +65,7 @@ bot.command("kirim", async (ctx) => {
     await ctx.reply("Avval /kod orqali tizimga ulaning.");
     return;
   }
-  await startTransactionFlow(ctx, "kirim");
+  await startTransactionFlow(ctx, user, "kirim");
 });
 
 bot.command("chiqim", async (ctx) => {
@@ -73,7 +74,7 @@ bot.command("chiqim", async (ctx) => {
     await ctx.reply("Avval /kod orqali tizimga ulaning.");
     return;
   }
-  await startTransactionFlow(ctx, "chiqim");
+  await startTransactionFlow(ctx, user, "chiqim");
 });
 
 bot.command("hisobot", async (ctx) => {
@@ -86,7 +87,7 @@ bot.command("hisobot", async (ctx) => {
     await ctx.reply("Bu buyruq faqat direktor uchun mavjud.");
     return;
   }
-  await sendMonthlyReportText(ctx);
+  await startMonthlyReport(ctx);
 });
 
 bot.command("bekor", async (ctx) => {
@@ -94,8 +95,18 @@ bot.command("bekor", async (ctx) => {
   await ctx.reply("Amal bekor qilindi.");
 });
 
+bot.callbackQuery(/^biz:/, handleBusinessCallback);
 bot.callbackQuery(/^cat:/, handleCategoryCallback);
 bot.callbackQuery(/^sana:/, handleDateCallback);
+
+bot.callbackQuery(/^rbiz:/, async (ctx) => {
+  const user = await findUserByChatId(String(ctx.chat!.id));
+  if (!user || user.rol !== "admin") {
+    await ctx.answerCallbackQuery({ text: "Bu amal faqat direktor uchun mavjud." });
+    return;
+  }
+  await handleReportBusinessCallback(ctx);
+});
 
 bot.callbackQuery(/^izoh:skip$/, async (ctx) => {
   const user = await findUserByChatId(String(ctx.chat!.id));
@@ -106,7 +117,7 @@ bot.callbackQuery(/^izoh:skip$/, async (ctx) => {
   await handleSkipIzohCallback(ctx, user);
 });
 
-bot.callbackQuery(/^report:(pdf|excel):(.+)$/, async (ctx) => {
+bot.callbackQuery(/^report:(pdf|excel):([^:]+):(.+)$/, async (ctx) => {
   const user = await findUserByChatId(String(ctx.chat!.id));
   if (!user) {
     await ctx.answerCallbackQuery({ text: "Avval /kod orqali tizimga ulaning." });
@@ -116,10 +127,10 @@ bot.callbackQuery(/^report:(pdf|excel):(.+)$/, async (ctx) => {
     await ctx.answerCallbackQuery({ text: "Bu amal faqat direktor uchun mavjud." });
     return;
   }
-  const match = ctx.callbackQuery.data.match(/^report:(pdf|excel):(.+)$/);
+  const match = ctx.callbackQuery.data.match(/^report:(pdf|excel):([^:]+):(.+)$/);
   if (!match) return;
-  const [, format, month] = match;
-  await sendReportDocument(ctx, month, format as "pdf" | "excel");
+  const [, format, businessId, month] = match;
+  await sendReportDocument(ctx, businessId, month, format as "pdf" | "excel");
 });
 
 bot.on("message:text", async (ctx) => {

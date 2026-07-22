@@ -35,7 +35,7 @@ export function MonthlyReportDocument({ report }: { report: MonthlyReport }) {
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        <Text style={styles.title}>Disney Navoiy — Oylik hisobot</Text>
+        <Text style={styles.title}>{report.businessNomi} — Oylik hisobot</Text>
         <Text style={styles.subtitle}>{monthLabel}</Text>
 
         <View style={styles.summaryRow}>
@@ -62,7 +62,7 @@ export function MonthlyReportDocument({ report }: { report: MonthlyReport }) {
         <Text style={styles.sectionTitle}>Chiqim taqsimoti</Text>
         <CategoryTable data={report.chiqimByCategory} />
 
-        <Text style={styles.footer}>Disney Navoiy — avtomatik generatsiya qilingan hisobot</Text>
+        <Text style={styles.footer}>{report.businessNomi} — avtomatik generatsiya qilingan hisobot</Text>
       </Page>
     </Document>
   );

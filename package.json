@@ -9,7 +9,8 @@
     "lint": "next lint",
     "postinstall": "prisma generate",
     "db:seed": "node -r ts-node/register prisma/seed.ts",
-    "db:migrate": "prisma migrate dev",
+    "db:migrate:create": "prisma migrate dev --create-only",
+    "db:apply": "node scripts/db-migrate.mjs",
     "bot": "node -r ts-node/register src/bot/index.ts"
   },
   "prisma": {

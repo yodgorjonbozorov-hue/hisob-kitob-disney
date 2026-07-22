@@ -12,6 +12,8 @@ const USER_SELECT = {
   rol: true,
   isActive: true,
   createdAt: true,
+  businessId: true,
+  business: { select: { nomi: true } },
 } as const;
 
 export async function GET() {
@@ -43,6 +45,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
     }
 
+    // Kassir uchun biznes majburiy; admin uchun biznes yo'q (barcha bizneslarni ko'radi).
+    let businessId: string | null = null;
+    if (parsed.data.rol === "kassir") {
+      if (!parsed.data.businessId) {
+        return NextResponse.json({ error: "Kassir uchun biznes tanlanishi shart" }, { status: 400 });
+      }
+      const biz = await prisma.business.findUnique({ where: { id: parsed.data.businessId }, select: { id: true } });
+      if (!biz) {
+        return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });
+      }
+      businessId = biz.id;
+    }
+
     const existing = await prisma.user.findUnique({ where: { login: parsed.data.login } });
     if (existing) {
       return NextResponse.json({ error: "Bu login band" }, { status: 409 });
@@ -55,6 +70,7 @@ export async function POST(request: NextRequest) {
         login: parsed.data.login,
         parolHash,
         rol: parsed.data.rol,
+        businessId,
       },
       select: USER_SELECT,
     });

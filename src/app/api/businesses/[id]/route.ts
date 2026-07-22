@@ -2,19 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
 import { handleApiError, requireRole, UnauthorizedError } from "@/lib/auth/guard";
-import { updateUserSchema } from "@/lib/validation/user";
-import { hashPassword } from "@/lib/auth/password";
-
-const USER_SELECT = {
-  id: true,
-  ism: true,
-  login: true,
-  rol: true,
-  isActive: true,
-  createdAt: true,
-  businessId: true,
-  business: { select: { nomi: true } },
-} as const;
+import { updateBusinessSchema } from "@/lib/validation/business";
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -23,22 +11,17 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     requireRole(user.rol, "admin");
 
     const body = await request.json();
-    const parsed = updateUserSchema.safeParse(body);
+    const parsed = updateBusinessSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
     }
 
-    const { parol, ...rest } = parsed.data;
-    const updated = await prisma.user.update({
+    const business = await prisma.business.update({
       where: { id: params.id },
-      data: {
-        ...rest,
-        ...(parol ? { parolHash: await hashPassword(parol) } : {}),
-      },
-      select: USER_SELECT,
+      data: parsed.data,
     });
 
-    return NextResponse.json(updated);
+    return NextResponse.json(business);
   } catch (error) {
     return handleApiError(error);
   }

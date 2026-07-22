@@ -7,6 +7,11 @@ import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { formatDateUZ } from "@/lib/format";
 
+interface BusinessOption {
+  id: string;
+  nomi: string;
+}
+
 interface UserDTO {
   id: string;
   ism: string;
@@ -14,14 +19,18 @@ interface UserDTO {
   rol: string;
   isActive: boolean;
   createdAt: string;
+  businessId: string | null;
+  businessNomi: string | null;
 }
 
 export function UsersClient({
   initialUsers,
   currentUserId,
+  businesses,
 }: {
   initialUsers: UserDTO[];
   currentUserId: string;
+  businesses: BusinessOption[];
 }) {
   const [users, setUsers] = useState(initialUsers);
   const [modalOpen, setModalOpen] = useState(false);
@@ -34,7 +43,13 @@ export function UsersClient({
     });
     if (res.ok) {
       const updated = await res.json();
-      setUsers((prev) => prev.map((x) => (x.id === updated.id ? { ...updated } : x)));
+      setUsers((prev) =>
+        prev.map((x) =>
+          x.id === updated.id
+            ? { ...x, isActive: updated.isActive }
+            : x
+        )
+      );
     }
   }
 
@@ -56,6 +71,7 @@ export function UsersClient({
               <th className="pb-2">Ism</th>
               <th className="pb-2">Login</th>
               <th className="pb-2">Rol</th>
+              <th className="pb-2">Biznes</th>
               <th className="pb-2">Holati</th>
               <th className="pb-2">Qo'shilgan</th>
               <th className="pb-2 text-right">Amal</th>
@@ -67,6 +83,9 @@ export function UsersClient({
                 <td className="py-2.5">{u.ism}</td>
                 <td className="py-2.5 text-slate-500">{u.login}</td>
                 <td className="py-2.5">{u.rol === "admin" ? "Direktor" : "Kassir"}</td>
+                <td className="py-2.5 text-slate-500">
+                  {u.rol === "admin" ? "Barcha" : u.businessNomi ?? "—"}
+                </td>
                 <td className="py-2.5">
                   <Badge tone={u.isActive ? "kirim" : "neutral"}>{u.isActive ? "Faol" : "Nofaol"}</Badge>
                 </td>
@@ -87,27 +106,42 @@ export function UsersClient({
         </table>
       </Card>
 
-      {modalOpen && <NewUserModal onClose={() => setModalOpen(false)} onCreated={handleCreated} />}
+      {modalOpen && (
+        <NewUserModal businesses={businesses} onClose={() => setModalOpen(false)} onCreated={handleCreated} />
+      )}
     </div>
   );
 }
 
-function NewUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: (u: UserDTO) => void }) {
+function NewUserModal({
+  businesses,
+  onClose,
+  onCreated,
+}: {
+  businesses: BusinessOption[];
+  onClose: () => void;
+  onCreated: (u: UserDTO) => void;
+}) {
   const [ism, setIsm] = useState("");
   const [login, setLogin] = useState("");
   const [parol, setParol] = useState("");
   const [rol, setRol] = useState<"admin" | "kassir">("kassir");
+  const [businessId, setBusinessId] = useState(businesses[0]?.id ?? "");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    if (rol === "kassir" && !businessId) {
+      setError("Kassir uchun biznes tanlang");
+      return;
+    }
     setLoading(true);
     const res = await fetch("/api/users", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ism, login, parol, rol }),
+      body: JSON.stringify({ ism, login, parol, rol, businessId: rol === "kassir" ? businessId : null }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -153,6 +187,25 @@ function NewUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
           <option value="kassir">Kassir</option>
           <option value="admin">Direktor (admin)</option>
         </select>
+        {rol === "kassir" && (
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Biznes</label>
+            <select
+              value={businessId}
+              onChange={(e) => setBusinessId(e.target.value)}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            >
+              {businesses.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.nomi}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {rol === "admin" && (
+          <p className="text-xs text-slate-400">Direktor barcha bizneslarni ko'radi va almashadi.</p>
+        )}
         {error && <p className="text-rose-600 text-sm">{error}</p>}
         <div className="flex gap-2 justify-end pt-2">
           <Button variant="secondary" type="button" onClick={onClose}>

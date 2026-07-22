@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
   session.login = user.login;
   session.ism = user.ism;
   session.rol = user.rol as "admin" | "kassir";
+  session.businessId = user.businessId ?? null;
   await session.save();
 
   return NextResponse.json({ ok: true, rol: user.rol });

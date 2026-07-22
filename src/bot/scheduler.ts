@@ -23,7 +23,10 @@ async function markSentMonth(month: string): Promise<void> {
   });
 }
 
-/** Har oyning 1-sanasida o'tgan oy hisobotini barcha direktorlarga (admin) avtomatik yuboradi. */
+/**
+ * Har oyning 1-sanasida o'tgan oy hisobotini har bir faol biznes uchun alohida,
+ * barcha direktorlarga (admin) avtomatik yuboradi.
+ */
 export async function checkAndSendMonthlyReport(bot: Bot): Promise<void> {
   const today = new Date();
   if (today.getUTCDate() !== 1) return;
@@ -37,25 +40,33 @@ export async function checkAndSendMonthlyReport(bot: Bot): Promise<void> {
   });
   if (admins.length === 0) return;
 
-  const report = await getMonthlyReport(reportMonth);
+  const businesses = await prisma.business.findMany({ where: { isActive: true }, orderBy: { nomi: "asc" } });
   const { year, monthIndex0 } = parseMonthString(reportMonth);
-  const buffer = await renderToBuffer(MonthlyReportDocument({ report }));
 
-  const caption = [
-    `📊 ${uzOyNomi(monthIndex0)} ${year} — avtomatik oylik hisobot`,
-    `Jami kirim: ${formatSomLabel(report.jamiKirim)}`,
-    `Jami chiqim: ${formatSomLabel(report.jamiChiqim)}`,
-    `Sof foyda: ${formatSomLabel(report.sofFoyda)}`,
-  ].join("\n");
+  for (const business of businesses) {
+    const report = await getMonthlyReport(business.id, reportMonth);
+    // Bo'sh biznes uchun hisobot yubormaymiz.
+    if (report.jamiKirim === 0 && report.jamiChiqim === 0) continue;
 
-  for (const admin of admins) {
-    if (!admin.telegramChatId) continue;
-    try {
-      await bot.api.sendDocument(admin.telegramChatId, new InputFile(buffer, `hisobot-${reportMonth}.pdf`), {
-        caption,
-      });
-    } catch (error) {
-      console.error(`Hisobotni ${admin.ism}ga yuborishda xatolik:`, error);
+    const buffer = await renderToBuffer(MonthlyReportDocument({ report }));
+    const caption = [
+      `📊 ${business.nomi} — ${uzOyNomi(monthIndex0)} ${year} (avtomatik hisobot)`,
+      `Jami kirim: ${formatSomLabel(report.jamiKirim)}`,
+      `Jami chiqim: ${formatSomLabel(report.jamiChiqim)}`,
+      `Sof foyda: ${formatSomLabel(report.sofFoyda)}`,
+    ].join("\n");
+
+    for (const admin of admins) {
+      if (!admin.telegramChatId) continue;
+      try {
+        await bot.api.sendDocument(
+          admin.telegramChatId,
+          new InputFile(buffer, `hisobot-${business.nomi}-${reportMonth}.pdf`),
+          { caption }
+        );
+      } catch (error) {
+        console.error(`Hisobotni ${admin.ism}ga yuborishda xatolik:`, error);
+      }
     }
   }
 

@@ -1,0 +1,66 @@
+import { cookies } from "next/headers";
+import { prisma } from "@/lib/prisma";
+import type { SessionData } from "@/lib/auth/session";
+
+export const ACTIVE_BUSINESS_COOKIE = "active_business";
+
+export interface BusinessDTO {
+  id: string;
+  nomi: string;
+  isActive: boolean;
+}
+
+/** Foydalanuvchi kira oladigan bizneslar: admin → barcha faol; kassir → faqat o'ziniki. */
+export async function getAccessibleBusinesses(session: SessionData): Promise<BusinessDTO[]> {
+  if (session.rol === "kassir") {
+    if (!session.businessId) return [];
+    const b = await prisma.business.findUnique({
+      where: { id: session.businessId },
+      select: { id: true, nomi: true, isActive: true },
+    });
+    return b ? [b] : [];
+  }
+  // admin
+  return prisma.business.findMany({
+    where: { isActive: true },
+    select: { id: true, nomi: true, isActive: true },
+    orderBy: { nomi: "asc" },
+  });
+}
+
+/**
+ * Joriy so'rov uchun aktiv biznes id'sini hal qiladi.
+ * - Kassir: doim o'z businessId'si (o'zgartira olmaydi).
+ * - Admin: `active_business` cookie (mavjud va faol bo'lsa), aks holda birinchi faol biznes.
+ * Hech qanday biznes bo'lmasa null qaytaradi.
+ */
+export async function resolveActiveBusinessId(session: SessionData): Promise<string | null> {
+  if (session.rol === "kassir") {
+    return session.businessId ?? null;
+  }
+
+  const cookieId = (await cookies()).get(ACTIVE_BUSINESS_COOKIE)?.value;
+  if (cookieId) {
+    const exists = await prisma.business.findFirst({
+      where: { id: cookieId, isActive: true },
+      select: { id: true },
+    });
+    if (exists) return exists.id;
+  }
+
+  const first = await prisma.business.findFirst({
+    where: { isActive: true },
+    orderBy: { nomi: "asc" },
+    select: { id: true },
+  });
+  return first?.id ?? null;
+}
+
+export async function getActiveBusiness(session: SessionData): Promise<BusinessDTO | null> {
+  const id = await resolveActiveBusinessId(session);
+  if (!id) return null;
+  return prisma.business.findUnique({
+    where: { id },
+    select: { id: true, nomi: true, isActive: true },
+  });
+}

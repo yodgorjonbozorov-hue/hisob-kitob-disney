@@ -7,6 +7,7 @@ import { DailyDynamicsChart } from "@/components/charts/DailyDynamicsChart";
 import { formatSomLabel, formatPercent, changeDirection } from "@/lib/format";
 import { currentMonthString } from "@/lib/date";
 import { requireUser } from "@/lib/auth/session";
+import { resolveActiveBusinessId } from "@/lib/business";
 import {
   getMonthSummary,
   getCategoryBreakdown,
@@ -23,14 +24,24 @@ export default async function DashboardPage({
   if (session.rol !== "admin") {
     redirect("/tranzaksiyalar");
   }
+  const businessId = await resolveActiveBusinessId(session);
   const month = searchParams.month ?? currentMonthString();
 
+  if (!businessId) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold text-slate-800">Boshqaruv paneli</h1>
+        <p className="text-slate-500">Hali biznes yaratilmagan. Admin panel → Bizneslar bo'limidan qo'shing.</p>
+      </div>
+    );
+  }
+
   const [summary, kirimBreakdown, chiqimBreakdown, trend, daily] = await Promise.all([
-    getMonthSummary(month),
-    getCategoryBreakdown(month, "kirim"),
-    getCategoryBreakdown(month, "chiqim"),
-    getTrend(6, month),
-    getDailyDynamics(month),
+    getMonthSummary(businessId, month),
+    getCategoryBreakdown(businessId, month, "kirim"),
+    getCategoryBreakdown(businessId, month, "chiqim"),
+    getTrend(businessId, 6, month),
+    getDailyDynamics(businessId, month),
   ]);
 
   return (

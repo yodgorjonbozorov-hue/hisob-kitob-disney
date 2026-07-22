@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth/session";
+import { resolveActiveBusinessId } from "@/lib/business";
 import { listTransactions } from "@/lib/queries/transactions";
 import { TransactionsClient } from "./TransactionsClient";
 
@@ -18,9 +19,20 @@ export default async function TranzaksiyalarPage({
   searchParams: SearchParams;
 }) {
   const session = await requireUser();
+  const businessId = await resolveActiveBusinessId(session);
+
+  if (!businessId) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold text-slate-800">Tranzaksiyalar</h1>
+        <p className="text-slate-500">Sizga biznes biriktirilmagan. Admin bilan bog'laning.</p>
+      </div>
+    );
+  }
 
   const [result, categories] = await Promise.all([
     listTransactions({
+      businessId,
       from: searchParams.from,
       to: searchParams.to,
       turi: searchParams.turi,
@@ -28,7 +40,10 @@ export default async function TranzaksiyalarPage({
       q: searchParams.q,
       page: searchParams.page ? parseInt(searchParams.page, 10) : 1,
     }),
-    prisma.category.findMany({ where: { isActive: true }, orderBy: [{ tartib: "asc" }, { nomi: "asc" }] }),
+    prisma.category.findMany({
+      where: { businessId, isActive: true },
+      orderBy: [{ tartib: "asc" }, { nomi: "asc" }],
+    }),
   ]);
 
   return (

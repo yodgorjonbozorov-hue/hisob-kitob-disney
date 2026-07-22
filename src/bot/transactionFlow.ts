@@ -4,25 +4,66 @@ import { prisma } from "@/lib/prisma";
 import { formatSomLabel, parseSomInput, formatDateUZ } from "@/lib/format";
 import { todayDateOnlyString } from "@/lib/date";
 import { createTransaction } from "@/lib/services/transactionService";
-import { getFlow, setFlow, clearFlow } from "./state";
+import { getFlow, setFlow, clearFlow, type TransactionFlowState } from "./state";
 
 function chatIdOf(ctx: Context): string {
   return String(ctx.chat!.id);
 }
 
-export async function startTransactionFlow(ctx: Context, turi: "kirim" | "chiqim") {
+/**
+ * Tranzaksiya kiritishni boshlaydi.
+ * - Kassir (biznesga biriktirilgan): to'g'ridan-to'g'ri kategoriya tanlash.
+ * - Admin (biznes null): avval biznes tanlash bosqichi.
+ */
+export async function startTransactionFlow(ctx: Context, user: User, turi: "kirim" | "chiqim") {
   const chatId = chatIdOf(ctx);
+
+  if (user.businessId) {
+    setFlow(chatId, { step: "category", turi, businessId: user.businessId });
+    await showCategories(ctx, chatId, turi, user.businessId, false);
+    return;
+  }
+
+  // Admin — biznes tanlaydi.
+  const businesses = await prisma.business.findMany({
+    where: { isActive: true },
+    orderBy: { nomi: "asc" },
+  });
+  if (businesses.length === 0) {
+    await ctx.reply("Hali biznes yaratilmagan. Veb-saytda biznes qo'shing.");
+    return;
+  }
+
+  setFlow(chatId, { step: "business", turi });
+  const keyboard = new InlineKeyboard();
+  businesses.forEach((b, i) => {
+    keyboard.text(b.nomi, `biz:${b.id}`);
+    if (i % 2 === 1) keyboard.row();
+  });
+  await ctx.reply(`${turi === "kirim" ? "Kirim" : "Chiqim"} — qaysi biznes uchun?`, {
+    reply_markup: keyboard,
+  });
+}
+
+async function showCategories(
+  ctx: Context,
+  chatId: string,
+  turi: "kirim" | "chiqim",
+  businessId: string,
+  edit: boolean
+) {
   const categories = await prisma.category.findMany({
-    where: { turi, isActive: true },
+    where: { businessId, turi, isActive: true },
     orderBy: [{ tartib: "asc" }, { nomi: "asc" }],
   });
 
   if (categories.length === 0) {
-    await ctx.reply("Bu turdagi kategoriyalar hali sozlanmagan. Admin bilan bog'laning.");
+    const msg = "Bu biznesda bu turdagi kategoriyalar hali sozlanmagan. Admin panel orqali qo'shing.";
+    clearFlow(chatId);
+    if (edit) await ctx.editMessageText(msg);
+    else await ctx.reply(msg);
     return;
   }
-
-  setFlow(chatId, { step: "category", turi });
 
   const keyboard = new InlineKeyboard();
   categories.forEach((c, i) => {
@@ -30,9 +71,34 @@ export async function startTransactionFlow(ctx: Context, turi: "kirim" | "chiqim
     if (i % 2 === 1) keyboard.row();
   });
 
-  await ctx.reply(`${turi === "kirim" ? "Kirim" : "Chiqim"} — kategoriyani tanlang:`, {
-    reply_markup: keyboard,
+  const text = `${turi === "kirim" ? "Kirim" : "Chiqim"} — kategoriyani tanlang:`;
+  if (edit) await ctx.editMessageText(text, { reply_markup: keyboard });
+  else await ctx.reply(text, { reply_markup: keyboard });
+}
+
+export async function handleBusinessCallback(ctx: Context) {
+  const chatId = chatIdOf(ctx);
+  const flow = getFlow(chatId);
+  const data = ctx.callbackQuery?.data ?? "";
+  const businessId = data.startsWith("biz:") ? data.slice(4) : null;
+
+  if (!flow || flow.step !== "business" || !businessId) {
+    await ctx.answerCallbackQuery({ text: "Bu so'rov eskirgan, qaytadan boshlang." });
+    return;
+  }
+
+  const business = await prisma.business.findFirst({
+    where: { id: businessId, isActive: true },
+    select: { id: true },
   });
+  if (!business) {
+    await ctx.answerCallbackQuery({ text: "Biznes topilmadi" });
+    return;
+  }
+
+  setFlow(chatId, { ...flow, step: "category", businessId: business.id });
+  await ctx.answerCallbackQuery();
+  await showCategories(ctx, chatId, flow.turi, business.id, true);
 }
 
 export async function handleCategoryCallback(ctx: Context) {
@@ -41,13 +107,13 @@ export async function handleCategoryCallback(ctx: Context) {
   const data = ctx.callbackQuery?.data ?? "";
   const categoryId = data.startsWith("cat:") ? data.slice(4) : null;
 
-  if (!flow || flow.step !== "category" || !categoryId) {
+  if (!flow || flow.step !== "category" || !categoryId || !flow.businessId) {
     await ctx.answerCallbackQuery({ text: "Bu so'rov eskirgan, qaytadan boshlang." });
     return;
   }
 
   const category = await prisma.category.findUnique({ where: { id: categoryId } });
-  if (!category) {
+  if (!category || category.businessId !== flow.businessId) {
     await ctx.answerCallbackQuery({ text: "Kategoriya topilmadi" });
     return;
   }
@@ -140,17 +206,17 @@ export async function handleFlowText(ctx: Context, user: User): Promise<boolean>
 async function finalizeTransaction(
   ctx: Context,
   user: User,
-  flow: ReturnType<typeof getFlow>,
+  flow: TransactionFlowState,
   izoh: string | null
 ) {
   const chatId = chatIdOf(ctx);
-  if (!flow || !flow.categoryId || !flow.summa || !flow.sana) {
+  if (!flow.businessId || !flow.categoryId || !flow.summa || !flow.sana) {
     await ctx.reply("Xatolik yuz berdi, qaytadan /kirim yoki /chiqim buyrug'ini yuboring.");
     clearFlow(chatId);
     return;
   }
 
-  const transaction = await createTransaction(user.id, {
+  const transaction = await createTransaction(user.id, flow.businessId, {
     turi: flow.turi,
     categoryId: flow.categoryId,
     summa: flow.summa,
@@ -172,4 +238,3 @@ async function finalizeTransaction(
       .join("\n")
   );
 }
-
