@@ -28,11 +28,21 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
     }
 
-    const { parol, ...rest } = parsed.data;
+    const { parol, businessId, ...rest } = parsed.data;
+
+    // Biznes o'zgartirilsa — mavjudligini tekshiramiz (dangling reference bo'lmasin).
+    if (businessId !== undefined && businessId !== null) {
+      const biz = await prisma.business.findUnique({ where: { id: businessId }, select: { id: true } });
+      if (!biz) {
+        return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });
+      }
+    }
+
     const updated = await prisma.user.update({
       where: { id: params.id },
       data: {
         ...rest,
+        ...(businessId !== undefined ? { businessId } : {}),
         ...(parol ? { parolHash: await hashPassword(parol) } : {}),
       },
       select: USER_SELECT,

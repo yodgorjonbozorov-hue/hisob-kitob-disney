@@ -53,6 +53,22 @@ export function UsersClient({
     }
   }
 
+  async function changeBusiness(u: UserDTO, businessId: string) {
+    const res = await fetch(`/api/users/${u.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ businessId }),
+    });
+    if (res.ok) {
+      const nomi = businesses.find((b) => b.id === businessId)?.nomi ?? null;
+      setUsers((prev) =>
+        prev.map((x) => (x.id === u.id ? { ...x, businessId, businessNomi: nomi } : x))
+      );
+    } else {
+      alert((await res.json()).error ?? "Biznesni o'zgartirib bo'lmadi");
+    }
+  }
+
   function handleCreated(u: UserDTO) {
     setUsers((prev) => [...prev, u]);
     setModalOpen(false);
@@ -84,7 +100,22 @@ export function UsersClient({
                 <td className="py-2.5 text-slate-500">{u.login}</td>
                 <td className="py-2.5">{u.rol === "admin" ? "Direktor" : "Kassir"}</td>
                 <td className="py-2.5 text-slate-500">
-                  {u.rol === "admin" ? "Barcha" : u.businessNomi ?? "—"}
+                  {u.rol === "admin" ? (
+                    "Barcha"
+                  ) : (
+                    <select
+                      value={u.businessId ?? ""}
+                      onChange={(e) => changeBusiness(u, e.target.value)}
+                      className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                    >
+                      {u.businessId === null && <option value="">— (biriktirilmagan)</option>}
+                      {businesses.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.nomi}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </td>
                 <td className="py-2.5">
                   <Badge tone={u.isActive ? "kirim" : "neutral"}>{u.isActive ? "Faol" : "Nofaol"}</Badge>
