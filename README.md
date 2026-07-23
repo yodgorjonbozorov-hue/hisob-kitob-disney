@@ -86,6 +86,15 @@ Tizim bir nechta alohida biznesni bitta saytda yuritadi (masalan Disney Navoiy, 
 - Yangi biznes **Admin panel → Bizneslar** bo'limidan qo'shiladi; bo'sh (kategoriyasiz) boshlanadi, admin o'ziga mos kategoriyalarni qo'shadi.
 - Barcha ma'lumotlar biznes bo'yicha izolyatsiya qilingan — bir biznes ma'lumoti boshqasida ko'rinmaydi (server darajasida `businessId` filtri, cross-business kirish imkonsiz).
 
+## Ombor / Sotuv / Qarzdorlik (tovar sotadigan bizneslar uchun)
+
+Biznes **omborli** bo'lsa (Admin panel → Bizneslar → biznes yaratishda yoqiladi; Salyut'da yoqilgan), qo'shimcha modul ishlaydi:
+
+- **Ombor** (direktor): mahsulot turlari (masalan salyut turlari), har biriga **kelgan narx (tannarx)** va **sotuv narxi**, joriy qoldiq. "Ombor kirimi" bilan qoldiq oshiriladi. "Ko'p tur qo'shish" — bir nechta turni birdan kiritish. Ombor kirimi chiqim yozmaydi (tovar tannarxini direktor alohida kuzatadi).
+- **Sotuv** (direktor + kassir): mahsulot tanlab sotiladi. **Naqd** → darhol kirim (daromad) yoziladi; **Qarzga** → qarzdorlik yaratiladi (daromad hali yozilmaydi — kassa usuli). Omborda yetarli bo'lmasa sotib bo'lmaydi (atomik himoya).
+- **Qarzdorlik** (direktor + kassir): mijozlar qarzi ro'yxati (jami / to'langan / qolgan). To'lov qabul qilinganda o'sha summa **kirim** sifatida yoziladi.
+- **Kassir ko'rinishi**: sotuv narxini ko'radi (sotish uchun), lekin **qancha qolganini ko'rmaydi** — tugagan tur "Qolmadi" deb ko'rsatiladi. Ombordagi miqdorni faqat direktor ko'radi.
+
 ## Funksiyalar
 
 - Tranzaksiya kiritish (kirim/chiqim), filtrlash, qidirish, tahrirlash va o'chirish (kassir faqat o'zi kiritgan yozuvni o'zgartira oladi)
