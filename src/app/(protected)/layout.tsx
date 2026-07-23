@@ -14,6 +14,8 @@ export default async function ProtectedLayout({
     resolveActiveBusinessId(session),
   ]);
   const navBusinesses = businesses.map((b) => ({ id: b.id, nomi: b.nomi }));
+  // Aktiv biznes omborli bo'lsa — Ombor/Sotuv/Qarzlar menyulari ko'rsatiladi.
+  const activeOmborli = businesses.find((b) => b.id === activeBusinessId)?.omborli ?? false;
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
@@ -22,12 +24,14 @@ export default async function ProtectedLayout({
         rol={session.rol}
         businesses={navBusinesses}
         activeBusinessId={activeBusinessId}
+        omborli={activeOmborli}
       />
       <MobileNav
         ism={session.ism}
         rol={session.rol}
         businesses={navBusinesses}
         activeBusinessId={activeBusinessId}
+        omborli={activeOmborli}
       />
       <main className="flex-1 p-4 md:p-8">{children}</main>
     </div>

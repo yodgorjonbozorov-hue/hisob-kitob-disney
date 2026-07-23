@@ -16,6 +16,7 @@ interface Props {
   rol: Rol;
   businesses: BusinessOption[];
   activeBusinessId: string | null;
+  omborli: boolean;
 }
 
 const adminOnlyBaseLinks = [
@@ -32,11 +33,26 @@ const adminLinks = [
   { href: "/admin/foydalanuvchilar", label: "Foydalanuvchilar" },
 ];
 
-export default function Sidebar({ ism, rol, businesses, activeBusinessId }: Props) {
+// Ombor moduli havolalari (aktiv biznes omborli bo'lsa).
+const omborAdminLinks = [
+  { href: "/ombor", label: "Ombor" },
+  { href: "/sotuv", label: "Sotuv" },
+  { href: "/qarzlar", label: "Qarzlar" },
+];
+const omborKassirLinks = [
+  { href: "/sotuv", label: "Sotuv" },
+  { href: "/qarzlar", label: "Qarzlar" },
+];
+
+export default function Sidebar({ ism, rol, businesses, activeBusinessId, omborli }: Props) {
   const pathname = usePathname();
   const router = useRouter();
 
-  const links = rol === "admin" ? [...adminOnlyBaseLinks, ...adminLinks] : kassirLinks;
+  const omborLinks = omborli ? (rol === "admin" ? omborAdminLinks : omborKassirLinks) : [];
+  const links =
+    rol === "admin"
+      ? [...adminOnlyBaseLinks, ...omborLinks, ...adminLinks]
+      : [...omborLinks, ...kassirLinks];
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });

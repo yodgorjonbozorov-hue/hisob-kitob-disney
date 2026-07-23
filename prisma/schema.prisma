@@ -16,10 +16,13 @@ model Business {
   id           String        @id @default(cuid())
   nomi         String
   isActive     Boolean       @default(true)
+  // Ombor (inventar) tizimi yoqilganmi — tovar sotadigan bizneslar uchun (masalan Salyut).
+  omborli      Boolean       @default(false)
   createdAt    DateTime      @default(now())
   categories   Category[]
   transactions Transaction[]
   users        User[]
+  products     Product[]
 }
 
 model User {
@@ -85,4 +88,95 @@ model Transaction {
   @@index([categoryId])
   @@index([businessId])
   @@index([userId])
+}
+
+// ==== Ombor (inventar) moduli — faqat omborli bizneslar uchun ====
+
+/// Mahsulot turi (masalan salyut turlari) + narxlar + joriy qoldiq.
+model Product {
+  id           String       @id @default(cuid())
+  businessId   String
+  business     Business     @relation(fields: [businessId], references: [id])
+  nomi         String
+  kelganNarx   Int          @default(0) // tannarx (birlik)
+  sotuvNarx    Int          @default(0) // sotuv narxi (birlik)
+  miqdor       Int          @default(0) // ombordagi joriy qoldiq
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  stockEntries StockEntry[]
+  sales        Sale[]
+
+  @@index([businessId])
+}
+
+/// Ombor kirimi — mahsulot qoldig'ini oshiradi (chiqim tranzaksiya yaratmaydi).
+model StockEntry {
+  id         String   @id @default(cuid())
+  businessId String
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id])
+  miqdor     Int
+  birlikNarx Int // o'sha paytdagi tannarx snapshot
+  userId     String
+  izoh       String?
+  createdAt  DateTime @default(now())
+
+  @@index([businessId])
+  @@index([productId])
+}
+
+/// Sotuv — mahsulot qoldig'ini kamaytiradi. Naqd → kirim tranzaksiya; qarz → Debt.
+model Sale {
+  id            String   @id @default(cuid())
+  businessId    String
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id])
+  miqdor        Int
+  birlikNarx    Int // sotuv narxi snapshot
+  tannarx       Int // kelgan narx snapshot (marja hisobi uchun)
+  jamiSumma     Int
+  tolovTuri     String // "naqd" | "qarz"
+  mijozNomi     String?
+  mijozTel      String?
+  userId        String
+  transactionId String? // naqd bo'lsa bog'langan kirim tranzaksiya
+  createdAt     DateTime @default(now())
+  debt          Debt?
+
+  @@index([businessId])
+  @@index([productId])
+}
+
+/// Qarzdorlik — qarzga sotuvdan yaratiladi; to'lovlar bilan kamayadi.
+model Debt {
+  id         String        @id @default(cuid())
+  businessId String
+  saleId     String?       @unique
+  sale       Sale?         @relation(fields: [saleId], references: [id])
+  mijozNomi  String
+  mijozTel   String?
+  jamiSumma  Int
+  tolangan   Int           @default(0)
+  isYopilgan Boolean       @default(false)
+  izoh       String?
+  userId     String
+  createdAt  DateTime      @default(now())
+  payments   DebtPayment[]
+
+  @@index([businessId])
+}
+
+/// Qarz to'lovi — kirim tranzaksiya yaratadi va qarzni kamaytiradi.
+model DebtPayment {
+  id            String   @id @default(cuid())
+  debtId        String
+  debt          Debt     @relation(fields: [debtId], references: [id])
+  businessId    String
+  summa         Int
+  userId        String
+  transactionId String?
+  createdAt     DateTime @default(now())
+
+  @@index([debtId])
+  @@index([businessId])
 }

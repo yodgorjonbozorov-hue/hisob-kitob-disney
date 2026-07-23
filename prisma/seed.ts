@@ -46,11 +46,28 @@ async function main() {
     update: {},
     create: { id: "biz_disney_navoiy", nomi: "Disney Navoiy" },
   });
-  await prisma.business.upsert({
+  // Salyut — tovar sotadigan biznes: ombor tizimi yoqilgan.
+  const salyut = await prisma.business.upsert({
     where: { id: "biz_salyut" },
-    update: {},
-    create: { id: "biz_salyut", nomi: "Salyut" },
+    update: { omborli: true },
+    create: { id: "biz_salyut", nomi: "Salyut", omborli: true },
   });
+
+  console.log("Salyut mahsulot turlarini yaratish...");
+  const SALYUT_TURLARI = [
+    "Karalevski 36 talik",
+    "7 talik salyut",
+    "8 talik salyut",
+    "16 talik salyut",
+    "Mikki",
+  ];
+  for (const nomi of SALYUT_TURLARI) {
+    const mavjud = await prisma.product.findFirst({ where: { businessId: salyut.id, nomi } });
+    if (!mavjud) {
+      // Narxlar 0 — direktor keyin kelgan/sotuv narxini qo'yadi.
+      await prisma.product.create({ data: { businessId: salyut.id, nomi } });
+    }
+  }
 
   console.log("Disney Navoiy kategoriyalarini yaratish...");
 

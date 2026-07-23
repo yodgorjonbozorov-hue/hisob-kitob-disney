@@ -12,6 +12,9 @@ npm-debug.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# Vaqtinchalik (scratch) skriptlar — commit qilinmaydi
+scratch-*
+
 # Faqat mahalliy Windows muhitida npm o'rniga pnpm ishlatilgani uchun (README'ga qarang) —
 # Vercel'ning o'z (Linux) muhitida standart npm bilan o'rnatilishi uchun bularni commit qilmaymiz.
 pnpm-lock.yaml
