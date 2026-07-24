@@ -32,6 +32,15 @@ export function formatSomLabel(value: number): string {
   return `${formatSom(value)} so'm`;
 }
 
+/**
+ * PDF (Helvetica) uchun xavfsiz matn — o'zbek lotinidagi maxsus apostroflarni
+ * (ʻ U+02BB, ʼ U+02BC, curly ' ') oddiy ASCII apostrofga aylantiradi, aks holda
+ * Helvetica ularni ko'rsatmaydi (bo'sh katakcha).
+ */
+export function pdfSafe(text: string): string {
+  return text.replace(/[ʻʼ‘’`]/g, "'");
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Pul formatlash — YAGONA MANBA. Kod bazasida `.toLocaleString()` ishlatilmaydi.
 // Pul butun son (so'm) sifatida saqlanadi — float emas (yaxlitlash xatosi bo'lmasin).

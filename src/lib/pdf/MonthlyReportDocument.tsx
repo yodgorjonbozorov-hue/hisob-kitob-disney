@@ -1,5 +1,5 @@
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
-import { formatSom, formatPercent, uzOyNomi } from "@/lib/format";
+import { formatSom, formatPercent, uzOyNomi, pdfSafe } from "@/lib/format";
 import { parseMonthString } from "@/lib/date";
 import type { MonthlyReport } from "@/lib/queries/report";
 
@@ -35,7 +35,7 @@ export function MonthlyReportDocument({ report }: { report: MonthlyReport }) {
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        <Text style={styles.title}>{report.businessNomi} — Oylik hisobot</Text>
+        <Text style={styles.title}>{pdfSafe(report.businessNomi)} — Oylik hisobot</Text>
         <Text style={styles.subtitle}>{monthLabel}</Text>
 
         <View style={styles.summaryRow}>
@@ -62,7 +62,7 @@ export function MonthlyReportDocument({ report }: { report: MonthlyReport }) {
         <Text style={styles.sectionTitle}>Chiqim taqsimoti</Text>
         <CategoryTable data={report.chiqimByCategory} />
 
-        <Text style={styles.footer}>{report.businessNomi} — avtomatik generatsiya qilingan hisobot</Text>
+        <Text style={styles.footer}>{pdfSafe(report.businessNomi)} — avtomatik generatsiya qilingan hisobot</Text>
       </Page>
     </Document>
   );
@@ -81,7 +81,7 @@ function CategoryTable({ data }: { data: { nomi: string; summa: number; foiz: nu
       </View>
       {data.map((item) => (
         <View style={styles.tableRow} key={item.nomi}>
-          <Text style={styles.colName}>{item.nomi}</Text>
+          <Text style={styles.colName}>{pdfSafe(item.nomi)}</Text>
           <Text style={styles.colValue}>{formatSom(item.summa)} so'm</Text>
           <Text style={styles.colPercent}>{item.foiz.toFixed(1)}%</Text>
         </View>

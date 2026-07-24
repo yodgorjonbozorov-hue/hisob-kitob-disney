@@ -75,6 +75,7 @@ export function BottomNav({ ism, rol, omborli }: Props) {
   if (isAdmin) allLinks.push({ label: "Boshqaruv paneli", href: "/" });
   allLinks.push({ label: "Tranzaksiyalar", href: "/tranzaksiyalar" });
   if (isAdmin) allLinks.push({ label: "Oylik hisobot", href: "/hisobot" });
+  if (isAdmin) allLinks.push({ label: "Budjet", href: "/byudjet" });
   if (omborli) {
     if (isAdmin) allLinks.push({ label: "Ombor", href: "/ombor" });
     allLinks.push({ label: "Sotuv", href: "/sotuv" });

@@ -5,6 +5,7 @@ import Sidebar from "@/components/nav/Sidebar";
 import MobileNav from "@/components/nav/MobileNav";
 import { BottomNav } from "@/components/nav/BottomNav";
 import { ToastProvider } from "@/components/ui/Toast";
+import { CommandPalette } from "@/components/CommandPalette";
 
 export default async function ProtectedLayout({
   children,
@@ -44,6 +45,12 @@ export default async function ProtectedLayout({
         <ToastProvider>{children}</ToastProvider>
       </main>
       <BottomNav ism={session.ism} rol={session.rol} omborli={activeOmborli} />
+      <CommandPalette
+        rol={session.rol}
+        omborli={activeOmborli}
+        businesses={navBusinesses}
+        activeBusinessId={activeBusinessId}
+      />
     </div>
   );
 }

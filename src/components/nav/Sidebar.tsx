@@ -24,6 +24,7 @@ const adminOnlyBaseLinks = [
   { href: "/", label: "Boshqaruv paneli" },
   { href: "/tranzaksiyalar", label: "Tranzaksiyalar" },
   { href: "/hisobot", label: "Oylik hisobot" },
+  { href: "/byudjet", label: "Budjet" },
 ];
 
 const kassirLinks = [{ href: "/tranzaksiyalar", label: "Tranzaksiyalar" }];

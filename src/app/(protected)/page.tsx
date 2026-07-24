@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
+import { prisma } from "@/lib/prisma";
 import { Card } from "@/components/ui/Card";
 import { StatCard } from "@/components/ui/StatCard";
 import { MonthSelector } from "@/components/MonthSelector";
@@ -39,13 +41,14 @@ export default async function DashboardPage({
   }
 
   const business = await getActiveBusiness(session);
-  const [summary, kirimBreakdown, chiqimBreakdown, trend, daily, qarzTotal] = await Promise.all([
+  const [summary, kirimBreakdown, chiqimBreakdown, trend, daily, qarzTotal, categoryCount] = await Promise.all([
     getMonthSummary(businessId, month),
     getCategoryBreakdown(businessId, month, "kirim"),
     getCategoryBreakdown(businessId, month, "chiqim"),
     getTrend(businessId, 6, month),
     getDailyDynamics(businessId, month),
     business?.omborli ? getOutstandingDebtTotal(businessId) : Promise.resolve(0),
+    prisma.category.count({ where: { businessId } }),
   ]);
 
   return (
@@ -54,6 +57,30 @@ export default async function DashboardPage({
         <h1 className="text-2xl font-bold text-fg">Boshqaruv paneli</h1>
         <MonthSelector month={month} />
       </div>
+
+      {categoryCount === 0 && (
+        <Card className="border-brand/40 bg-income-soft/30">
+          <h2 className="font-semibold text-fg mb-1">Boshlashga tayyormisiz? 🚀</h2>
+          <p className="text-sm text-muted mb-3">
+            Bu biznes hali bo'sh. Ikki qadamda ishni boshlang:
+          </p>
+          <ol className="text-sm text-fg space-y-2">
+            <li>
+              1.{" "}
+              <Link href="/admin/kategoriyalar" className="text-brand font-medium hover:underline">
+                Kategoriya qo'shing
+              </Link>{" "}
+              (masalan: Sotuv, Ijara, Oylik)
+            </li>
+            <li>
+              2.{" "}
+              <Link href="/tranzaksiyalar" className="text-brand font-medium hover:underline">
+                Birinchi tranzaksiyani kiriting
+              </Link>
+            </li>
+          </ol>
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard
