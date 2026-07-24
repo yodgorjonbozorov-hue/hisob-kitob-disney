@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { getAccessibleBusinesses, resolveActiveBusinessId } from "@/lib/business";
+import { getNotificationCount } from "@/lib/queries/notifications";
 import Sidebar from "@/components/nav/Sidebar";
 import MobileNav from "@/components/nav/MobileNav";
 import { BottomNav } from "@/components/nav/BottomNav";
@@ -24,6 +25,9 @@ export default async function ProtectedLayout({
   const navBusinesses = businesses.map((b) => ({ id: b.id, nomi: b.nomi }));
   // Aktiv biznes omborli bo'lsa — Ombor/Sotuv/Qarzlar menyulari ko'rsatiladi.
   const activeOmborli = businesses.find((b) => b.id === activeBusinessId)?.omborli ?? false;
+  const notifCount = activeBusinessId
+    ? await getNotificationCount(activeBusinessId, { rol: session.rol, omborli: activeOmborli }).catch(() => 0)
+    : 0;
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
@@ -33,6 +37,7 @@ export default async function ProtectedLayout({
         businesses={navBusinesses}
         activeBusinessId={activeBusinessId}
         omborli={activeOmborli}
+        notifCount={notifCount}
       />
       <MobileNav
         ism={session.ism}
@@ -40,6 +45,7 @@ export default async function ProtectedLayout({
         businesses={navBusinesses}
         activeBusinessId={activeBusinessId}
         omborli={activeOmborli}
+        notifCount={notifCount}
       />
       <main className="flex-1 p-4 md:p-8 pb-24 lg:pb-8">
         <ToastProvider>{children}</ToastProvider>

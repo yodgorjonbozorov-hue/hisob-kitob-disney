@@ -25,6 +25,9 @@ interface Props {
   currentUserRol: Rol;
   onUpdated: (t: TransactionDTO) => void;
   onDelete: (t: TransactionDTO) => void;
+  selected: Set<string>;
+  onToggleSelect: (id: string) => void;
+  onToggleAll: () => void;
 }
 
 export function TransactionList({
@@ -37,9 +40,13 @@ export function TransactionList({
   currentUserRol,
   onUpdated,
   onDelete,
+  selected,
+  onToggleSelect,
+  onToggleAll,
 }: Props) {
   const [editing, setEditing] = useState<TransactionDTO | null>(null);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const allSelected = items.length > 0 && selected.size === items.length;
 
   function canModify(t: TransactionDTO) {
     return currentUserRol === "admin" || t.userId === currentUserId;
@@ -52,6 +59,9 @@ export function TransactionList({
         <table className="w-full text-sm">
           <thead className="bg-surface-2 text-muted text-xs uppercase">
             <tr>
+              <th className="px-4 py-3 w-8">
+                <input type="checkbox" checked={allSelected} onChange={onToggleAll} aria-label="Hammasini tanlash" />
+              </th>
               <th className="text-left px-4 py-3">Sana</th>
               <th className="text-left px-4 py-3">Turi</th>
               <th className="text-left px-4 py-3">Kategoriya</th>
@@ -64,13 +74,16 @@ export function TransactionList({
           <tbody className="divide-y divide-line">
             {items.length === 0 && (
               <tr>
-                <td colSpan={7} className="text-center text-faint py-8">
+                <td colSpan={8} className="text-center text-faint py-8">
                   Tranzaksiyalar topilmadi
                 </td>
               </tr>
             )}
             {items.map((t) => (
-              <tr key={t.id} className="hover:bg-surface-2">
+              <tr key={t.id} className={`hover:bg-surface-2 ${selected.has(t.id) ? "bg-brand/5" : ""}`}>
+                <td className="px-4 py-3">
+                  <input type="checkbox" checked={selected.has(t.id)} onChange={() => onToggleSelect(t.id)} aria-label="Tanlash" />
+                </td>
                 <td className="px-4 py-3 whitespace-nowrap">{formatDateUZ(new Date(t.sana))}</td>
                 <td className="px-4 py-3">
                   <Badge tone={t.turi === "kirim" ? "kirim" : "chiqim"}>
@@ -117,14 +130,17 @@ export function TransactionList({
           <p className="text-center text-faint py-8 text-sm">Tranzaksiyalar topilmadi</p>
         )}
         {items.map((t) => (
-          <div key={t.id} className="p-4">
+          <div key={t.id} className={`p-4 ${selected.has(t.id) ? "bg-brand/5" : ""}`}>
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
+              <div className="min-w-0 flex items-start gap-2">
+                <input type="checkbox" checked={selected.has(t.id)} onChange={() => onToggleSelect(t.id)} className="mt-1" aria-label="Tanlash" />
+                <div className="min-w-0">
                 <p className="font-medium text-fg truncate">{t.category.nomi}</p>
                 <p className="text-xs text-muted mt-0.5">
                   {formatDateUZ(new Date(t.sana))}
                   {t.izoh ? ` · ${t.izoh}` : ""} · {t.user.ism}
                 </p>
+                </div>
               </div>
               <span
                 className={`font-semibold tnum whitespace-nowrap ${

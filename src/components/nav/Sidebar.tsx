@@ -18,6 +18,7 @@ interface Props {
   businesses: BusinessOption[];
   activeBusinessId: string | null;
   omborli: boolean;
+  notifCount: number;
 }
 
 const adminOnlyBaseLinks = [
@@ -54,7 +55,7 @@ const ROL_LABEL: Record<Rol, string> = {
   sotuvchi: "Sotuvchi",
 };
 
-export default function Sidebar({ ism, rol, businesses, activeBusinessId, omborli }: Props) {
+export default function Sidebar({ ism, rol, businesses, activeBusinessId, omborli, notifCount }: Props) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -81,6 +82,19 @@ export default function Sidebar({ ism, rol, businesses, activeBusinessId, omborl
         <BusinessSwitcher businesses={businesses} activeId={activeBusinessId} rol={rol} />
       </div>
       <nav className="flex-1 px-3 py-4 space-y-1">
+        <Link
+          href="/bildirishnomalar"
+          className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition ${
+            pathname === "/bildirishnomalar" ? "bg-emerald-600 text-white" : "text-slate-300 hover:bg-slate-800"
+          }`}
+        >
+          <span>🔔 Bildirishnomalar</span>
+          {notifCount > 0 && (
+            <span className="bg-rose-500 text-white text-2xs font-semibold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+              {notifCount}
+            </span>
+          )}
+        </Link>
         {links.map((link) => {
           const active = pathname === link.href;
           return (

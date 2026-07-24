@@ -72,6 +72,7 @@ export function BottomNav({ ism, rol, omborli }: Props) {
 
   // Menyu sheet ichidagi barcha havolalar
   const allLinks: { label: string; href: string }[] = [];
+  allLinks.push({ label: "🔔 Bildirishnomalar", href: "/bildirishnomalar" });
   if (isAdmin) allLinks.push({ label: "Boshqaruv paneli", href: "/" });
   allLinks.push({ label: "Tranzaksiyalar", href: "/tranzaksiyalar" });
   if (isAdmin) allLinks.push({ label: "Oylik hisobot", href: "/hisobot" });

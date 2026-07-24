@@ -61,6 +61,30 @@ export async function listTransactions(params: TransactionListParams) {
 export type TransactionListResult = Awaited<ReturnType<typeof listTransactions>>;
 export type TransactionDTO = TransactionListResult["items"][number];
 
+/** Filtrga mos BARCHA tranzaksiyalar (eksport uchun, pagination'siz, 5000 gacha). */
+export async function listAllTransactions(params: TransactionListParams) {
+  const where: Prisma.TransactionWhereInput = { businessId: params.businessId, deletedAt: null };
+  if (params.from || params.to) {
+    where.sana = {};
+    if (params.from) where.sana.gte = dateOnlyStringToUTCDate(params.from);
+    if (params.to) where.sana.lt = new Date(dateOnlyStringToUTCDate(params.to).getTime() + 24 * 60 * 60 * 1000);
+  }
+  if (params.turi === "kirim" || params.turi === "chiqim") where.turi = params.turi;
+  if (params.categoryId) where.categoryId = params.categoryId;
+  if (params.q) where.izoh = { contains: params.q };
+  if (params.minSumma != null || params.maxSumma != null) {
+    where.summa = {};
+    if (params.minSumma != null) where.summa.gte = params.minSumma;
+    if (params.maxSumma != null) where.summa.lte = params.maxSumma;
+  }
+  return prisma.transaction.findMany({
+    where,
+    include: { category: true, user: { select: { ism: true } } },
+    orderBy: [{ sana: "desc" }, { createdAt: "desc" }],
+    take: 5000,
+  });
+}
+
 /** O'chirilgan (soft-deleted) tranzaksiyalar — admin savati uchun. */
 export async function listDeletedTransactions(businessId: string, limit = 100) {
   return prisma.transaction.findMany({
