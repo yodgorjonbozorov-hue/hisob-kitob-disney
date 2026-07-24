@@ -12,6 +12,12 @@ interface BusinessOption {
   nomi: string;
 }
 
+const ROL_LABEL: Record<string, string> = {
+  admin: "Direktor",
+  kassir: "Kassir",
+  sotuvchi: "Sotuvchi",
+};
+
 interface UserDTO {
   id: string;
   ism: string;
@@ -98,9 +104,9 @@ export function UsersClient({
               <tr key={u.id}>
                 <td className="py-2.5">{u.ism}</td>
                 <td className="py-2.5 text-slate-500">{u.login}</td>
-                <td className="py-2.5">{u.rol === "admin" ? "Direktor" : "Kassir"}</td>
+                <td className="py-2.5">{ROL_LABEL[u.rol] ?? u.rol}</td>
                 <td className="py-2.5 text-slate-500">
-                  {u.rol === "admin" ? (
+                  {u.rol !== "kassir" ? (
                     "Barcha"
                   ) : (
                     <select
@@ -156,7 +162,7 @@ function NewUserModal({
   const [ism, setIsm] = useState("");
   const [login, setLogin] = useState("");
   const [parol, setParol] = useState("");
-  const [rol, setRol] = useState<"admin" | "kassir">("kassir");
+  const [rol, setRol] = useState<"admin" | "kassir" | "sotuvchi">("kassir");
   const [businessId, setBusinessId] = useState(businesses[0]?.id ?? "");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -212,10 +218,11 @@ function NewUserModal({
         />
         <select
           value={rol}
-          onChange={(e) => setRol(e.target.value as "admin" | "kassir")}
+          onChange={(e) => setRol(e.target.value as "admin" | "kassir" | "sotuvchi")}
           className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
         >
           <option value="kassir">Kassir</option>
+          <option value="sotuvchi">Sotuvchi</option>
           <option value="admin">Direktor (admin)</option>
         </select>
         {rol === "kassir" && (
@@ -236,6 +243,11 @@ function NewUserModal({
         )}
         {rol === "admin" && (
           <p className="text-xs text-slate-400">Direktor barcha bizneslarni ko'radi va almashadi.</p>
+        )}
+        {rol === "sotuvchi" && (
+          <p className="text-xs text-slate-400">
+            Sotuvchi barcha bizneslarni ko'radi va almashadi, faqat sotadi (kirim/sotuv/qarzlar) — sof foyda va hisobotlarni ko'rmaydi.
+          </p>
         )}
         {error && <p className="text-rose-600 text-sm">{error}</p>}
         <div className="flex gap-2 justify-end pt-2">

@@ -44,6 +44,12 @@ const omborKassirLinks = [
   { href: "/qarzlar", label: "Qarzlar" },
 ];
 
+const ROL_LABEL: Record<Rol, string> = {
+  admin: "Direktor",
+  kassir: "Kassir",
+  sotuvchi: "Sotuvchi",
+};
+
 export default function Sidebar({ ism, rol, businesses, activeBusinessId, omborli }: Props) {
   const pathname = usePathname();
   const router = useRouter();
@@ -88,7 +94,7 @@ export default function Sidebar({ ism, rol, businesses, activeBusinessId, omborl
       </nav>
       <div className="px-6 py-4 border-t border-slate-800 space-y-2">
         <p className="text-sm font-medium">{ism}</p>
-        <p className="text-xs text-slate-400 mb-1">{rol === "admin" ? "Direktor" : "Kassir"}</p>
+        <p className="text-xs text-slate-400 mb-1">{ROL_LABEL[rol]}</p>
         <TelegramLinkButton className="block text-xs text-slate-400 hover:text-emerald-400" />
         <button
           onClick={handleLogout}

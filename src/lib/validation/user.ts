@@ -4,8 +4,8 @@ export const createUserSchema = z.object({
   ism: z.string().min(1, "Ism kiritilishi shart").max(100),
   login: z.string().min(3, "Login kamida 3 belgi bo'lishi kerak").max(50),
   parol: z.string().min(4, "Parol kamida 4 belgi bo'lishi kerak").max(100),
-  rol: z.enum(["admin", "kassir"]).default("kassir"),
-  // Kassir uchun biznes id majburiy (server tekshiradi); admin uchun bo'sh/null.
+  rol: z.enum(["admin", "kassir", "sotuvchi"]).default("kassir"),
+  // Kassir uchun biznes id majburiy (server tekshiradi); admin/sotuvchi uchun bo'sh/null (barcha bizneslar).
   businessId: z.string().optional().nullable(),
 });
 

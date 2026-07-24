@@ -1,15 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
-import { handleApiError, requireRole, UnauthorizedError } from "@/lib/auth/guard";
+import { handleApiError, ForbiddenError, UnauthorizedError } from "@/lib/auth/guard";
 import { ACTIVE_BUSINESS_COOKIE } from "@/lib/business";
 
-/** Admin aktiv biznesni tanlaydi (cookie o'rnatiladi). Kassir o'z biznesiga bog'langan — bu route unga kerak emas. */
+/**
+ * Ko'p-biznesli foydalanuvchi (admin/sotuvchi) aktiv biznesni tanlaydi (cookie o'rnatiladi).
+ * Kassir o'z biznesiga bog'langan — bu route unga kerak emas.
+ */
 export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) throw new UnauthorizedError();
-    requireRole(user.rol, "admin");
+    if (user.rol === "kassir") throw new ForbiddenError();
 
     const body = await request.json();
     const businessId = typeof body?.businessId === "string" ? body.businessId : null;

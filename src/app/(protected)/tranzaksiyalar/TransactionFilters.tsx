@@ -20,9 +20,11 @@ interface FiltersValue {
 export function TransactionFilters({
   categories,
   initial,
+  kirimOnly = false,
 }: {
   categories: CategoryOption[];
   initial: FiltersValue;
+  kirimOnly?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -57,7 +59,8 @@ export function TransactionFilters({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [values.q]);
 
-  const filteredCategories = values.turi ? categories.filter((c) => c.turi === values.turi) : categories;
+  const turiFilter = kirimOnly ? "kirim" : values.turi;
+  const filteredCategories = turiFilter ? categories.filter((c) => c.turi === turiFilter) : categories;
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-wrap gap-3 items-end">
@@ -79,18 +82,20 @@ export function TransactionFilters({
           className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
         />
       </div>
-      <div>
-        <label className="block text-xs font-medium text-slate-500 mb-1">Turi</label>
-        <select
-          value={values.turi}
-          onChange={(e) => update({ turi: e.target.value, categoryId: "" })}
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-        >
-          <option value="">Barchasi</option>
-          <option value="kirim">Kirim</option>
-          <option value="chiqim">Chiqim</option>
-        </select>
-      </div>
+      {!kirimOnly && (
+        <div>
+          <label className="block text-xs font-medium text-slate-500 mb-1">Turi</label>
+          <select
+            value={values.turi}
+            onChange={(e) => update({ turi: e.target.value, categoryId: "" })}
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+          >
+            <option value="">Barchasi</option>
+            <option value="kirim">Kirim</option>
+            <option value="chiqim">Chiqim</option>
+          </select>
+        </div>
+      )}
       <div>
         <label className="block text-xs font-medium text-slate-500 mb-1">Kategoriya</label>
         <select

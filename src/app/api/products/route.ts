@@ -17,8 +17,8 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const faqatFaol = searchParams.get("active") === "true";
-    // Kassir uchun miqdor RAQAMI berilmaydi (faqat mavjudlik).
-    const products = await listProducts(businessId, { forKassir: user.rol === "kassir", faqatFaol });
+    // Admin bo'lmaganlar (kassir/sotuvchi) uchun tannarx va miqdor RAQAMI berilmaydi (faqat mavjudlik).
+    const products = await listProducts(businessId, { forKassir: user.rol !== "admin", faqatFaol });
     return NextResponse.json(products);
   } catch (error) {
     return handleApiError(error);

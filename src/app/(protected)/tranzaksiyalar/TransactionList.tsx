@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import type { TransactionDTO } from "@/lib/queries/transactions";
+import type { Rol } from "@/lib/auth/session";
 
 interface CategoryOption {
   id: string;
@@ -21,7 +22,7 @@ interface Props {
   pageSize: number;
   categories: CategoryOption[];
   currentUserId: string;
-  currentUserRol: "admin" | "kassir";
+  currentUserRol: Rol;
   onUpdated: (t: TransactionDTO) => void;
   onDeleted: (id: string) => void;
 }

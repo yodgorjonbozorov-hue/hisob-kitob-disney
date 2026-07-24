@@ -6,6 +6,7 @@ import { TransactionForm } from "./TransactionForm";
 import { TransactionFilters } from "./TransactionFilters";
 import { TransactionList } from "./TransactionList";
 import type { TransactionDTO } from "@/lib/queries/transactions";
+import type { Rol } from "@/lib/auth/session";
 
 interface CategoryOption {
   id: string;
@@ -21,6 +22,7 @@ export function TransactionsClient({
   categories,
   currentUserId,
   currentUserRol,
+  kirimOnly = false,
   filters,
 }: {
   initialItems: TransactionDTO[];
@@ -29,7 +31,8 @@ export function TransactionsClient({
   pageSize: number;
   categories: CategoryOption[];
   currentUserId: string;
-  currentUserRol: "admin" | "kassir";
+  currentUserRol: Rol;
+  kirimOnly?: boolean;
   filters: { from: string; to: string; turi: string; categoryId: string; q: string };
 }) {
   const router = useRouter();
@@ -55,8 +58,8 @@ export function TransactionsClient({
 
   return (
     <div className="space-y-4">
-      <TransactionForm categories={categories} onCreated={handleCreated} />
-      <TransactionFilters categories={categories} initial={filters} />
+      <TransactionForm categories={categories} onCreated={handleCreated} kirimOnly={kirimOnly} />
+      <TransactionFilters categories={categories} initial={filters} kirimOnly={kirimOnly} />
       <TransactionList
         items={items}
         total={total}

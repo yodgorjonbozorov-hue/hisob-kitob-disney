@@ -44,6 +44,12 @@ const omborKassirLinks = [
   { href: "/qarzlar", label: "Qarzlar" },
 ];
 
+const ROL_LABEL: Record<Rol, string> = {
+  admin: "Direktor",
+  kassir: "Kassir",
+  sotuvchi: "Sotuvchi",
+};
+
 export default function MobileNav({ ism, rol, businesses, activeBusinessId, omborli }: Props) {
   const pathname = usePathname();
   const router = useRouter();
@@ -94,7 +100,7 @@ export default function MobileNav({ ism, rol, businesses, activeBusinessId, ombo
           })}
           <div className="pt-2 border-t border-slate-800 mt-2">
             <p className="text-sm">{ism}</p>
-            <p className="text-xs text-slate-400 mb-2">{rol === "admin" ? "Direktor" : "Kassir"}</p>
+            <p className="text-xs text-slate-400 mb-2">{ROL_LABEL[rol]}</p>
             <TelegramLinkButton className="block text-xs text-slate-400 mb-2" />
             <button onClick={handleLogout} className="text-sm text-rose-400">
               Chiqish

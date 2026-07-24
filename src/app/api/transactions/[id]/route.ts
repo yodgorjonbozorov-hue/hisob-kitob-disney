@@ -30,6 +30,11 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     const data = parsed.data;
 
+    // Sotuvchi faqat kirim yozuvlari bilan ishlaydi — chiqimni tahrirlay/o'zgartira olmaydi.
+    if (user.rol === "sotuvchi" && (existing.turi !== "kirim" || (data.turi !== undefined && data.turi !== "kirim"))) {
+      throw new ForbiddenError("Sotuvchi faqat kirim yozuvini o'zgartira oladi");
+    }
+
     // Kategoriya o'zgartirilsa, u ham shu biznesga tegishli bo'lishi kerak.
     if (data.categoryId !== undefined) {
       const cat = await prisma.category.findUnique({

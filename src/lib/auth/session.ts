@@ -2,14 +2,14 @@ import { cookies } from "next/headers";
 import { getIronSession, type IronSession, type SessionOptions } from "iron-session";
 import { redirect } from "next/navigation";
 
-export type Rol = "admin" | "kassir";
+export type Rol = "admin" | "kassir" | "sotuvchi";
 
 export interface SessionData {
   userId?: string;
   login?: string;
   ism?: string;
   rol?: Rol;
-  // Kassir uchun biriktirilgan biznes id; admin uchun null (barcha bizneslar).
+  // Kassir uchun biriktirilgan biznes id; admin/sotuvchi uchun null (barcha bizneslar).
   businessId?: string | null;
 }
 
