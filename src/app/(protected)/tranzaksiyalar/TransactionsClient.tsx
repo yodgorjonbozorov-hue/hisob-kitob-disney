@@ -37,7 +37,7 @@ export function TransactionsClient({
   currentUserRol: Rol;
   kirimOnly?: boolean;
   totals: { jamiKirim: number; jamiChiqim: number; sof: number };
-  filters: { from: string; to: string; turi: string; categoryId: string; q: string };
+  filters: { from: string; to: string; turi: string; categoryId: string; q: string; minSumma: string; maxSumma: string };
 }) {
   const router = useRouter();
   const { toast } = useToast();

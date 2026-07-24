@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { getActiveBusiness } from "@/lib/business";
-import { listProducts, getOmborStats, type ProductAdminDTO } from "@/lib/queries/inventory";
+import { listProducts, getOmborStats, getProductProfitability, type ProductAdminDTO } from "@/lib/queries/inventory";
 import { OmborClient } from "./OmborClient";
+import { Card } from "@/components/ui/Card";
+import { formatSomLabel } from "@/lib/format";
 
 export default async function OmborPage() {
   const session = await requireUser();
@@ -14,9 +16,10 @@ export default async function OmborPage() {
     redirect("/");
   }
 
-  const [products, stats] = await Promise.all([
+  const [products, stats, profit] = await Promise.all([
     listProducts(business.id, { forKassir: false }) as Promise<ProductAdminDTO[]>,
     getOmborStats(business.id),
+    getProductProfitability(business.id),
   ]);
 
   return (
@@ -28,6 +31,41 @@ export default async function OmborPage() {
         </p>
       </div>
       <OmborClient initialProducts={products} stats={stats} />
+
+      {profit.length > 0 && (
+        <Card className="p-0 overflow-hidden">
+          <h2 className="font-semibold text-fg px-5 pt-5 pb-3">Mahsulot foydaliligi</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-surface-2 text-muted text-xs uppercase">
+                <tr>
+                  <th className="text-left px-5 py-2">Mahsulot</th>
+                  <th className="text-right px-3 py-2">Sotilgan</th>
+                  <th className="text-right px-3 py-2">Daromad</th>
+                  <th className="text-right px-3 py-2">Foyda</th>
+                  <th className="text-right px-5 py-2">Marja</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {profit.map((p) => (
+                  <tr key={p.productId}>
+                    <td className="px-5 py-2.5 font-medium">
+                      {p.nomi}
+                      {p.foyda < 0 && <span className="ml-2 text-2xs text-expense">zararga</span>}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tnum">{p.sotilgan}</td>
+                    <td className="px-3 py-2.5 text-right tnum">{formatSomLabel(p.daromad)}</td>
+                    <td className={`px-3 py-2.5 text-right tnum font-medium ${p.foyda >= 0 ? "text-income" : "text-expense"}`}>
+                      {formatSomLabel(p.foyda)}
+                    </td>
+                    <td className={`px-5 py-2.5 text-right tnum ${p.marja >= 0 ? "text-muted" : "text-expense"}`}>{p.marja}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth/session";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { listTransactions } from "@/lib/queries/transactions";
+import { formatSom } from "@/lib/format";
 import { TransactionsClient } from "./TransactionsClient";
 
 interface SearchParams {
@@ -10,6 +11,8 @@ interface SearchParams {
   turi?: string;
   categoryId?: string;
   q?: string;
+  minSumma?: string;
+  maxSumma?: string;
   page?: string;
 }
 
@@ -40,6 +43,8 @@ export default async function TranzaksiyalarPage({
       turi: kirimOnly ? "kirim" : searchParams.turi,
       categoryId: searchParams.categoryId,
       q: searchParams.q,
+      minSumma: searchParams.minSumma ? parseInt(searchParams.minSumma, 10) : null,
+      maxSumma: searchParams.maxSumma ? parseInt(searchParams.maxSumma, 10) : null,
       page: searchParams.page ? parseInt(searchParams.page, 10) : 1,
     }),
     prisma.category.findMany({
@@ -67,6 +72,8 @@ export default async function TranzaksiyalarPage({
           turi: searchParams.turi ?? "",
           categoryId: searchParams.categoryId ?? "",
           q: searchParams.q ?? "",
+          minSumma: searchParams.minSumma ? formatSom(parseInt(searchParams.minSumma, 10)) : "",
+          maxSumma: searchParams.maxSumma ? formatSom(parseInt(searchParams.maxSumma, 10)) : "",
         }}
       />
     </div>

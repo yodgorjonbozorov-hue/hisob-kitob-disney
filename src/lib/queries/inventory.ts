@@ -98,6 +98,41 @@ export async function getOmborStats(businessId: string): Promise<OmborStats> {
   };
 }
 
+export interface ProductProfitDTO {
+  productId: string;
+  nomi: string;
+  sotilgan: number; // dona
+  daromad: number; // Σ jamiSumma
+  tannarx: number; // Σ tannarx × miqdor
+  foyda: number; // daromad − tannarx
+  marja: number; // foyda / daromad (%)
+}
+
+/** Mahsulot bo'yicha foydalilik (sotuvlar asosida). Kamayish tartibida foyda bo'yicha. */
+export async function getProductProfitability(businessId: string): Promise<ProductProfitDTO[]> {
+  const sales = await prisma.sale.findMany({
+    where: { businessId },
+    include: { product: { select: { nomi: true } } },
+  });
+  const map = new Map<string, ProductProfitDTO>();
+  for (const s of sales) {
+    let p = map.get(s.productId);
+    if (!p) {
+      p = { productId: s.productId, nomi: s.product.nomi, sotilgan: 0, daromad: 0, tannarx: 0, foyda: 0, marja: 0 };
+      map.set(s.productId, p);
+    }
+    p.sotilgan += s.miqdor;
+    p.daromad += s.jamiSumma;
+    p.tannarx += s.tannarx * s.miqdor;
+  }
+  const list = Array.from(map.values());
+  list.forEach((p) => {
+    p.foyda = p.daromad - p.tannarx;
+    p.marja = p.daromad > 0 ? Math.round((p.foyda / p.daromad) * 100) : 0;
+  });
+  return list.sort((a, b) => b.foyda - a.foyda);
+}
+
 export interface SaleDTO {
   id: string;
   productNomi: string;

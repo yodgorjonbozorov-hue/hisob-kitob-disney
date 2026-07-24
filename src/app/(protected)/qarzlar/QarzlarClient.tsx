@@ -6,15 +6,53 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
-import { formatSom, formatSomLabel, parseSomInput, formatDateUZ } from "@/lib/format";
+import { formatSom, formatSomLabel, parseSomInput, formatDateUZ, formatMoneyCompact } from "@/lib/format";
+import { useToast } from "@/components/ui/Toast";
 import type { DebtDTO } from "@/lib/queries/inventory";
+
+function daysSince(iso: string): number {
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+}
+/** Aging guruhi: 0-30 / 31-60 / 61-90 / 90+ */
+function bucketOf(days: number): 0 | 1 | 2 | 3 {
+  if (days <= 30) return 0;
+  if (days <= 60) return 1;
+  if (days <= 90) return 2;
+  return 3;
+}
+const BUCKET_META = [
+  { label: "0–30 kun", cls: "text-income" },
+  { label: "31–60 kun", cls: "text-amber-600 dark:text-amber-400" },
+  { label: "61–90 kun", cls: "text-orange-600 dark:text-orange-400" },
+  { label: "90+ kun", cls: "text-expense" },
+];
 
 export function QarzlarClient({ initialDebts }: { initialDebts: DebtDTO[] }) {
   const router = useRouter();
+  const { toast } = useToast();
   const [debts, setDebts] = useState(initialDebts);
   const [payFor, setPayFor] = useState<DebtDTO | null>(null);
 
-  const jamiQolgan = debts.filter((d) => !d.isYopilgan).reduce((a, d) => a + d.qolgan, 0);
+  const ochiq = debts.filter((d) => !d.isYopilgan);
+  const jamiQolgan = ochiq.reduce((a, d) => a + d.qolgan, 0);
+
+  // Aging guruhlari bo'yicha qolgan summa.
+  const buckets = [0, 0, 0, 0];
+  ochiq.forEach((d) => (buckets[bucketOf(daysSince(d.sana))] += d.qolgan));
+
+  // Ochiq qarzlar eng eski (ko'p kun) birinchi; yopilganlar oxirida.
+  const sorted = [...debts].sort((a, b) => {
+    if (a.isYopilgan !== b.isYopilgan) return a.isYopilgan ? 1 : -1;
+    return new Date(a.sana).getTime() - new Date(b.sana).getTime();
+  });
+
+  function reminder(d: DebtDTO) {
+    const text = `Assalomu alaykum, ${d.mijozNomi}. Sizning ${formatSomLabel(d.qolgan)} miqdoridagi qarzingiz eslatib o'tamiz. Iltimos, imkoniyat bo'lganda to'lab qo'ysangiz. Rahmat.`;
+    navigator.clipboard?.writeText(text).then(
+      () => toast({ message: "Eslatma matni nusxalandi", tone: "success" }),
+      () => toast({ message: text, tone: "neutral", duration: 8000 })
+    );
+  }
 
   function onPaid(debtId: string, tolangan: number, qolgan: number, isYopilgan: boolean) {
     setDebts((prev) =>
@@ -26,10 +64,18 @@ export function QarzlarClient({ initialDebts }: { initialDebts: DebtDTO[] }) {
 
   return (
     <div className="space-y-4">
-      <Card>
-        <p className="text-muted text-sm mb-1">Jami qolgan qarz</p>
-        <p className="text-2xl font-bold text-amber-600">{formatSomLabel(jamiQolgan)}</p>
-      </Card>
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="bg-surface rounded-2xl shadow-card border border-line p-4 col-span-2 lg:col-span-1">
+          <p className="text-muted text-sm mb-1">Jami qolgan</p>
+          <p className="text-xl font-semibold text-amber-600 tnum">{formatSomLabel(jamiQolgan)}</p>
+        </div>
+        {BUCKET_META.map((b, i) => (
+          <div key={i} className="bg-surface rounded-2xl shadow-card border border-line p-4">
+            <p className="text-muted text-sm mb-1">{b.label}</p>
+            <p className={`text-lg font-semibold tnum ${b.cls}`}>{formatMoneyCompact(buckets[i])}</p>
+          </div>
+        ))}
+      </div>
 
       <Card>
         <div className="overflow-x-auto">
@@ -53,28 +99,39 @@ export function QarzlarClient({ initialDebts }: { initialDebts: DebtDTO[] }) {
                   </td>
                 </tr>
               )}
-              {debts.map((d) => (
-                <tr key={d.id} className={d.isYopilgan ? "opacity-50" : ""}>
-                  <td className="py-2.5 font-medium">{d.mijozNomi}</td>
-                  <td className="py-2.5 text-muted">{d.mijozTel ?? "—"}</td>
-                  <td className="py-2.5 text-right">{formatSomLabel(d.jamiSumma)}</td>
-                  <td className="py-2.5 text-right text-income">{formatSom(d.tolangan)}</td>
-                  <td className="py-2.5 text-right font-medium text-amber-600">{formatSom(d.qolgan)}</td>
-                  <td className="py-2.5 text-muted whitespace-nowrap">{formatDateUZ(new Date(d.sana))}</td>
-                  <td className="py-2.5 text-right">
-                    {d.isYopilgan ? (
-                      <Badge tone="kirim">Yopilgan</Badge>
-                    ) : (
-                      <button
-                        onClick={() => setPayFor(d)}
-                        className="text-xs font-medium text-income hover:text-income-fg"
-                      >
-                        To'lov qabul qilish
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {sorted.map((d) => {
+                const days = daysSince(d.sana);
+                const bm = BUCKET_META[bucketOf(days)];
+                return (
+                  <tr key={d.id} className={d.isYopilgan ? "opacity-50" : ""}>
+                    <td className="py-2.5 font-medium">
+                      {d.mijozNomi}
+                      {!d.isYopilgan && (
+                        <span className={`ml-2 text-2xs ${bm.cls}`}>{days} kun</span>
+                      )}
+                    </td>
+                    <td className="py-2.5 text-muted">{d.mijozTel ?? "—"}</td>
+                    <td className="py-2.5 text-right tnum">{formatSomLabel(d.jamiSumma)}</td>
+                    <td className="py-2.5 text-right text-income tnum">{formatSom(d.tolangan)}</td>
+                    <td className="py-2.5 text-right font-medium text-amber-600 tnum">{formatSom(d.qolgan)}</td>
+                    <td className="py-2.5 text-muted whitespace-nowrap">{formatDateUZ(new Date(d.sana))}</td>
+                    <td className="py-2.5 text-right whitespace-nowrap">
+                      {d.isYopilgan ? (
+                        <Badge tone="kirim">Yopilgan</Badge>
+                      ) : (
+                        <>
+                          <button onClick={() => reminder(d)} className="text-xs font-medium text-muted hover:text-fg mr-3">
+                            Eslatma
+                          </button>
+                          <button onClick={() => setPayFor(d)} className="text-xs font-medium text-income hover:text-income-fg">
+                            To'lov
+                          </button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

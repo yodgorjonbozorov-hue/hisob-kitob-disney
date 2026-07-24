@@ -9,6 +9,8 @@ export interface TransactionListParams {
   turi?: string | null;
   categoryId?: string | null;
   q?: string | null;
+  minSumma?: number | null;
+  maxSumma?: number | null;
   page?: number;
   pageSize?: number;
 }
@@ -26,6 +28,11 @@ export async function listTransactions(params: TransactionListParams) {
   if (params.turi === "kirim" || params.turi === "chiqim") where.turi = params.turi;
   if (params.categoryId) where.categoryId = params.categoryId;
   if (params.q) where.izoh = { contains: params.q };
+  if (params.minSumma != null || params.maxSumma != null) {
+    where.summa = {};
+    if (params.minSumma != null) where.summa.gte = params.minSumma;
+    if (params.maxSumma != null) where.summa.lte = params.maxSumma;
+  }
 
   const [items, total, sums] = await Promise.all([
     prisma.transaction.findMany({

@@ -25,6 +25,8 @@ export async function GET(request: NextRequest) {
       turi,
       categoryId: searchParams.get("categoryId"),
       q: searchParams.get("q"),
+      minSumma: searchParams.get("minSumma") ? parseInt(searchParams.get("minSumma")!, 10) : null,
+      maxSumma: searchParams.get("maxSumma") ? parseInt(searchParams.get("maxSumma")!, 10) : null,
       page: parseInt(searchParams.get("page") ?? "1", 10),
       pageSize: parseInt(searchParams.get("pageSize") ?? "20", 10),
     });
