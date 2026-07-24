@@ -59,6 +59,26 @@ export function UsersClient({
     }
   }
 
+  async function changeRol(u: UserDTO, rol: string) {
+    const res = await fetch(`/api/users/${u.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rol }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setUsers((prev) =>
+        prev.map((x) =>
+          x.id === u.id
+            ? { ...x, rol: updated.rol, businessId: updated.businessId, businessNomi: updated.business?.nomi ?? null }
+            : x
+        )
+      );
+    } else {
+      alert((await res.json()).error ?? "Rolni o'zgartirib bo'lmadi");
+    }
+  }
+
   async function changeBusiness(u: UserDTO, businessId: string) {
     const res = await fetch(`/api/users/${u.id}`, {
       method: "PATCH",
@@ -104,7 +124,21 @@ export function UsersClient({
               <tr key={u.id}>
                 <td className="py-2.5">{u.ism}</td>
                 <td className="py-2.5 text-muted">{u.login}</td>
-                <td className="py-2.5">{ROL_LABEL[u.rol] ?? u.rol}</td>
+                <td className="py-2.5">
+                  {u.id === currentUserId ? (
+                    ROL_LABEL[u.rol] ?? u.rol
+                  ) : (
+                    <select
+                      value={u.rol}
+                      onChange={(e) => changeRol(u, e.target.value)}
+                      className="rounded-lg border border-line bg-surface px-2 py-1 text-sm"
+                    >
+                      <option value="kassir">Kassir</option>
+                      <option value="sotuvchi">Sotuvchi</option>
+                      <option value="admin">Direktor</option>
+                    </select>
+                  )}
+                </td>
                 <td className="py-2.5 text-muted">
                   {u.rol !== "kassir" ? (
                     "Barcha"

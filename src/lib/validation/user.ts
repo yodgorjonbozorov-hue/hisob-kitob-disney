@@ -13,6 +13,7 @@ export const updateUserSchema = z.object({
   isActive: z.boolean().optional(),
   parol: z.string().min(4).max(100).optional(),
   ism: z.string().min(1).max(100).optional(),
+  rol: z.enum(["admin", "kassir", "sotuvchi"]).optional(),
   businessId: z.string().optional().nullable(),
 });
 

@@ -28,21 +28,40 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
     }
 
-    const { parol, businessId, ...rest } = parsed.data;
+    const existing = await prisma.user.findUnique({
+      where: { id: params.id },
+      select: { rol: true, businessId: true },
+    });
+    if (!existing) {
+      return NextResponse.json({ error: "Foydalanuvchi topilmadi" }, { status: 404 });
+    }
 
-    // Biznes o'zgartirilsa — mavjudligini tekshiramiz (dangling reference bo'lmasin).
-    if (businessId !== undefined && businessId !== null) {
-      const biz = await prisma.business.findUnique({ where: { id: businessId }, select: { id: true } });
+    const { parol, businessId, rol, ...rest } = parsed.data;
+    const effectiveRol = rol ?? existing.rol;
+
+    // Biznesni rol asosida hal qilamiz: kassir → majburiy biznes; admin/sotuvchi → biznessiz.
+    let businessIdData: { businessId?: string | null } = {};
+    if (effectiveRol === "kassir") {
+      const targetBiz = businessId !== undefined ? businessId : existing.businessId;
+      if (!targetBiz) {
+        return NextResponse.json({ error: "Kassir uchun biznes tanlanishi shart" }, { status: 400 });
+      }
+      const biz = await prisma.business.findUnique({ where: { id: targetBiz }, select: { id: true } });
       if (!biz) {
         return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });
       }
+      businessIdData = { businessId: targetBiz };
+    } else {
+      // admin/sotuvchi barcha bizneslarni ko'radi — biriktirilgan biznes bo'lmaydi.
+      businessIdData = { businessId: null };
     }
 
     const updated = await prisma.user.update({
       where: { id: params.id },
       data: {
         ...rest,
-        ...(businessId !== undefined ? { businessId } : {}),
+        ...(rol !== undefined ? { rol } : {}),
+        ...businessIdData,
         ...(parol ? { parolHash: await hashPassword(parol) } : {}),
       },
       select: USER_SELECT,
