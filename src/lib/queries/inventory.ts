@@ -71,6 +71,15 @@ export async function listDebts(businessId: string): Promise<DebtDTO[]> {
   }));
 }
 
+/** Ochiq qarzlar bo'yicha qolgan umumiy summa (jamiSumma − tolangan). */
+export async function getOutstandingDebtTotal(businessId: string): Promise<number> {
+  const res = await prisma.debt.aggregate({
+    where: { businessId, isYopilgan: false },
+    _sum: { jamiSumma: true, tolangan: true },
+  });
+  return (res._sum.jamiSumma ?? 0) - (res._sum.tolangan ?? 0);
+}
+
 export interface OmborStats {
   turlarSoni: number;
   jamiQoldiq: number;

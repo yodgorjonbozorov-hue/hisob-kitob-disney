@@ -27,7 +27,7 @@ export async function listTransactions(params: TransactionListParams) {
   if (params.categoryId) where.categoryId = params.categoryId;
   if (params.q) where.izoh = { contains: params.q };
 
-  const [items, total] = await Promise.all([
+  const [items, total, sums] = await Promise.all([
     prisma.transaction.findMany({
       where,
       include: { category: true, user: { select: { id: true, ism: true } } },
@@ -36,9 +36,19 @@ export async function listTransactions(params: TransactionListParams) {
       take: pageSize,
     }),
     prisma.transaction.count({ where }),
+    // Filtrlangan to'plam bo'yicha jami (butun natija, faqat sahifa emas).
+    prisma.transaction.groupBy({
+      by: ["turi"],
+      where,
+      _sum: { summa: true },
+    }),
   ]);
 
-  return { items, total, page, pageSize };
+  const jamiKirim = sums.find((s) => s.turi === "kirim")?._sum.summa ?? 0;
+  const jamiChiqim = sums.find((s) => s.turi === "chiqim")?._sum.summa ?? 0;
+  const totals = { jamiKirim, jamiChiqim, sof: jamiKirim - jamiChiqim };
+
+  return { items, total, page, pageSize, totals };
 }
 
 export type TransactionListResult = Awaited<ReturnType<typeof listTransactions>>;

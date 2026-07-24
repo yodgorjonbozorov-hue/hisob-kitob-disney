@@ -60,6 +60,7 @@ export default async function TranzaksiyalarPage({
         currentUserId={session.userId}
         currentUserRol={session.rol}
         kirimOnly={kirimOnly}
+        totals={result.totals}
         filters={{
           from: searchParams.from ?? "",
           to: searchParams.to ?? "",

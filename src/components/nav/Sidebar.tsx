@@ -68,7 +68,7 @@ export default function Sidebar({ ism, rol, businesses, activeBusinessId, omborl
   }
 
   return (
-    <aside className="w-64 shrink-0 bg-slate-900 text-slate-100 min-h-screen hidden md:flex md:flex-col">
+    <aside className="w-64 shrink-0 bg-slate-900 text-slate-100 min-h-screen hidden lg:flex lg:flex-col">
       <div className="px-6 py-6 border-b border-slate-800">
         <h1 className="font-bold text-lg">Hisob-Kitob</h1>
         <p className="text-slate-400 text-xs mt-0.5">Kirim-Chiqim Tizimi</p>
