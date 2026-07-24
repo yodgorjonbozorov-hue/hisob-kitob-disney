@@ -89,7 +89,7 @@ export function UsersClient({
       <Card>
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-slate-400 text-xs uppercase">
+            <tr className="text-left text-faint text-xs uppercase">
               <th className="pb-2">Ism</th>
               <th className="pb-2">Login</th>
               <th className="pb-2">Rol</th>
@@ -99,20 +99,20 @@ export function UsersClient({
               <th className="pb-2 text-right">Amal</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-line">
             {users.map((u) => (
               <tr key={u.id}>
                 <td className="py-2.5">{u.ism}</td>
-                <td className="py-2.5 text-slate-500">{u.login}</td>
+                <td className="py-2.5 text-muted">{u.login}</td>
                 <td className="py-2.5">{ROL_LABEL[u.rol] ?? u.rol}</td>
-                <td className="py-2.5 text-slate-500">
+                <td className="py-2.5 text-muted">
                   {u.rol !== "kassir" ? (
                     "Barcha"
                   ) : (
                     <select
                       value={u.businessId ?? ""}
                       onChange={(e) => changeBusiness(u, e.target.value)}
-                      className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                      className="rounded-lg border border-line px-2 py-1 text-sm"
                     >
                       {u.businessId === null && <option value="">— (biriktirilmagan)</option>}
                       {businesses.map((b) => (
@@ -126,12 +126,12 @@ export function UsersClient({
                 <td className="py-2.5">
                   <Badge tone={u.isActive ? "kirim" : "neutral"}>{u.isActive ? "Faol" : "Nofaol"}</Badge>
                 </td>
-                <td className="py-2.5 text-slate-500">{formatDateUZ(new Date(u.createdAt))}</td>
+                <td className="py-2.5 text-muted">{formatDateUZ(new Date(u.createdAt))}</td>
                 <td className="py-2.5 text-right">
                   {u.id !== currentUserId && (
                     <button
                       onClick={() => toggleActive(u)}
-                      className="text-xs font-medium text-slate-500 hover:text-emerald-600"
+                      className="text-xs font-medium text-muted hover:text-income"
                     >
                       {u.isActive ? "Nofaollashtirish" : "Faollashtirish"}
                     </button>
@@ -197,7 +197,7 @@ function NewUserModal({
           value={ism}
           onChange={(e) => setIsm(e.target.value)}
           placeholder="Ism"
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-line px-3 py-2 text-sm"
           required
         />
         <input
@@ -205,7 +205,7 @@ function NewUserModal({
           value={login}
           onChange={(e) => setLogin(e.target.value)}
           placeholder="Login"
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-line px-3 py-2 text-sm"
           required
         />
         <input
@@ -213,13 +213,13 @@ function NewUserModal({
           value={parol}
           onChange={(e) => setParol(e.target.value)}
           placeholder="Parol"
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-line px-3 py-2 text-sm"
           required
         />
         <select
           value={rol}
           onChange={(e) => setRol(e.target.value as "admin" | "kassir" | "sotuvchi")}
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-line px-3 py-2 text-sm"
         >
           <option value="kassir">Kassir</option>
           <option value="sotuvchi">Sotuvchi</option>
@@ -227,11 +227,11 @@ function NewUserModal({
         </select>
         {rol === "kassir" && (
           <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">Biznes</label>
+            <label className="block text-xs font-medium text-muted mb-1">Biznes</label>
             <select
               value={businessId}
               onChange={(e) => setBusinessId(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm"
             >
               {businesses.map((b) => (
                 <option key={b.id} value={b.id}>
@@ -242,14 +242,14 @@ function NewUserModal({
           </div>
         )}
         {rol === "admin" && (
-          <p className="text-xs text-slate-400">Direktor barcha bizneslarni ko'radi va almashadi.</p>
+          <p className="text-xs text-faint">Direktor barcha bizneslarni ko'radi va almashadi.</p>
         )}
         {rol === "sotuvchi" && (
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-faint">
             Sotuvchi barcha bizneslarni ko'radi va almashadi, faqat sotadi (kirim/sotuv/qarzlar) — sof foyda va hisobotlarni ko'rmaydi.
           </p>
         )}
-        {error && <p className="text-rose-600 text-sm">{error}</p>}
+        {error && <p className="text-expense text-sm">{error}</p>}
         <div className="flex gap-2 justify-end pt-2">
           <Button variant="secondary" type="button" onClick={onClose}>
             Bekor qilish

@@ -6,7 +6,7 @@ import type { DailyPoint } from "@/lib/queries/dashboard";
 
 export function DailyDynamicsChart({ data }: { data: DailyPoint[] }) {
   if (data.length === 0) {
-    return <p className="text-slate-400 text-sm text-center py-12">Bu oy uchun ma'lumot yo'q</p>;
+    return <p className="text-faint text-sm text-center py-12">Bu oy uchun ma'lumot yo'q</p>;
   }
 
   const withDay = data.map((d) => ({ ...d, kun: d.date.slice(-2) }));

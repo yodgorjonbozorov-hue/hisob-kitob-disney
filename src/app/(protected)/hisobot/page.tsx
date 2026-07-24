@@ -21,8 +21,8 @@ export default async function HisobotPage({
   if (!businessId) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-slate-800">Oylik hisobot</h1>
-        <p className="text-slate-500">Hali biznes yaratilmagan.</p>
+        <h1 className="text-2xl font-bold text-fg">Oylik hisobot</h1>
+        <p className="text-muted">Hali biznes yaratilmagan.</p>
       </div>
     );
   }
@@ -32,7 +32,7 @@ export default async function HisobotPage({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-slate-800">Oylik hisobot</h1>
+        <h1 className="text-2xl font-bold text-fg">Oylik hisobot</h1>
         <MonthSelector month={month} />
       </div>
       <ReportView report={report} />

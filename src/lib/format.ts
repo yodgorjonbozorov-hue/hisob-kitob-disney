@@ -32,6 +32,35 @@ export function formatSomLabel(value: number): string {
   return `${formatSom(value)} so'm`;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Pul formatlash — YAGONA MANBA. Kod bazasida `.toLocaleString()` ishlatilmaydi.
+// Pul butun son (so'm) sifatida saqlanadi — float emas (yaxlitlash xatosi bo'lmasin).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** `12 450 000 so'm` — guruhlangan, uz-UZ. Jadval/ro'yxat/summa uchun asosiy format. */
+export function formatMoney(value: number): string {
+  return `${formatSom(value)} so'm`;
+}
+
+/**
+ * `12,4 mln` / `1,2 mlrd` / `980 ming` — KPI kartalari va grafik o'qlari uchun ixcham.
+ * Manfiy qiymatlar ham qo'llab-quvvatlanadi.
+ */
+export function formatMoneyCompact(value: number): string {
+  const neg = value < 0 ? "-" : "";
+  const abs = Math.abs(value);
+  const fmt = (n: number, suffix: string) => {
+    // Bir kasrli, keraksiz nol tushiriladi: 12,0 → 12
+    const rounded = Math.round(n * 10) / 10;
+    const s = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1).replace(".", ",");
+    return `${neg}${s} ${suffix}`;
+  };
+  if (abs >= 1_000_000_000) return fmt(abs / 1_000_000_000, "mlrd");
+  if (abs >= 1_000_000) return fmt(abs / 1_000_000, "mln");
+  if (abs >= 10_000) return fmt(abs / 1_000, "ming");
+  return `${neg}${formatSom(abs)}`;
+}
+
 /** "1 250 000" yoki "1250000" kabi kiritilgan matndan raqamni ajratib oladi. */
 export function parseSomInput(raw: string): number {
   const cleaned = raw.replace(/[^\d]/g, "");
@@ -56,6 +85,30 @@ export function formatDateUZ(date: Date): string {
   const m = (date.getUTCMonth() + 1).toString().padStart(2, "0");
   const y = date.getUTCFullYear();
   return `${d}.${m}.${y}`;
+}
+
+/** Sana + oy nomi bilan: "24 Iyul 2026". DateOnly (UTC) qiymat uchun. */
+export function formatDate(date: Date): string {
+  const d = date.getUTCDate();
+  const m = uzOyNomi(date.getUTCMonth());
+  const y = date.getUTCFullYear();
+  return `${d} ${m} ${y}`;
+}
+
+/**
+ * Nisbiy sana (o'zbekcha): `bugun`, `kecha`, `3 kun oldin`, aks holda to'liq sana.
+ * Taqqoslash Asia/Tashkent (UTC+5) kun chegaralari bo'yicha amalga oshiriladi.
+ */
+export function formatRelative(date: Date, now: Date = new Date()): string {
+  const TASHKENT_OFFSET_MS = 5 * 60 * 60 * 1000;
+  const dayIndex = (d: Date) => Math.floor((d.getTime() + TASHKENT_OFFSET_MS) / 86_400_000);
+  const diff = dayIndex(now) - dayIndex(date);
+  if (diff === 0) return "bugun";
+  if (diff === 1) return "kecha";
+  if (diff === -1) return "ertaga";
+  if (diff > 1 && diff <= 30) return `${diff} kun oldin`;
+  if (diff < -1 && diff >= -30) return `${-diff} kundan keyin`;
+  return formatDateUZ(date);
 }
 
 export function formatMonthLabel(year: number, monthIndex0: number): string {

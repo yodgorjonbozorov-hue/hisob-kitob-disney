@@ -43,16 +43,16 @@ export function OmborClient({
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
-          <p className="text-slate-500 text-sm mb-1">Mahsulot turlari</p>
-          <p className="text-2xl font-bold text-slate-800">{stats.turlarSoni}</p>
+          <p className="text-muted text-sm mb-1">Mahsulot turlari</p>
+          <p className="text-2xl font-bold text-fg">{stats.turlarSoni}</p>
         </Card>
         <Card>
-          <p className="text-slate-500 text-sm mb-1">Jami qoldiq (dona)</p>
-          <p className="text-2xl font-bold text-slate-800">{formatSom(stats.jamiQoldiq)}</p>
+          <p className="text-muted text-sm mb-1">Jami qoldiq (dona)</p>
+          <p className="text-2xl font-bold text-fg">{formatSom(stats.jamiQoldiq)}</p>
         </Card>
         <Card>
-          <p className="text-slate-500 text-sm mb-1">Ombor qiymati (tannarx)</p>
-          <p className="text-2xl font-bold text-slate-800">{formatSomLabel(stats.omborQiymati)}</p>
+          <p className="text-muted text-sm mb-1">Ombor qiymati (tannarx)</p>
+          <p className="text-2xl font-bold text-fg">{formatSomLabel(stats.omborQiymati)}</p>
         </Card>
       </div>
 
@@ -67,7 +67,7 @@ export function OmborClient({
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-slate-400 text-xs uppercase">
+              <tr className="text-left text-faint text-xs uppercase">
                 <th className="pb-2">Nomi</th>
                 <th className="pb-2 text-right">Tannarx</th>
                 <th className="pb-2 text-right">Sotuv narxi</th>
@@ -76,10 +76,10 @@ export function OmborClient({
                 <th className="pb-2 text-right">Amallar</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-line">
               {products.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-center text-slate-400 py-6">
+                  <td colSpan={6} className="text-center text-faint py-6">
                     Hali mahsulot yo'q
                   </td>
                 </tr>
@@ -89,7 +89,7 @@ export function OmborClient({
                   <td className="py-2.5 font-medium">{p.nomi}</td>
                   <td className="py-2.5 text-right">{formatSomLabel(p.kelganNarx)}</td>
                   <td className="py-2.5 text-right">{formatSomLabel(p.sotuvNarx)}</td>
-                  <td className={`py-2.5 text-right font-medium ${p.miqdor > 0 ? "text-slate-800" : "text-rose-600"}`}>
+                  <td className={`py-2.5 text-right font-medium ${p.miqdor > 0 ? "text-fg" : "text-expense"}`}>
                     {p.miqdor > 0 ? formatSom(p.miqdor) : "Qolmadi"}
                   </td>
                   <td className="py-2.5">
@@ -98,19 +98,19 @@ export function OmborClient({
                   <td className="py-2.5 text-right whitespace-nowrap">
                     <button
                       onClick={() => setStockFor(p)}
-                      className="text-xs font-medium text-emerald-600 hover:text-emerald-700 mr-3"
+                      className="text-xs font-medium text-income hover:text-income-fg mr-3"
                     >
                       Ombor kirimi
                     </button>
                     <button
                       onClick={() => setEditing(p)}
-                      className="text-xs font-medium text-slate-500 hover:text-slate-700 mr-3"
+                      className="text-xs font-medium text-muted hover:text-fg mr-3"
                     >
                       Narx
                     </button>
                     <button
                       onClick={() => toggleActive(p)}
-                      className="text-xs font-medium text-slate-500 hover:text-rose-600"
+                      className="text-xs font-medium text-muted hover:text-expense"
                     >
                       {p.isActive ? "Nofaol" : "Faol"}
                     </button>
@@ -142,7 +142,7 @@ function NarxInput({ value, onChange, placeholder }: { value: string; onChange: 
       value={value}
       onChange={(e) => onChange(e.target.value ? formatSom(parseSomInput(e.target.value)) : "")}
       placeholder={placeholder}
-      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+      className="w-full rounded-lg border border-line px-3 py-2 text-sm"
     />
   );
 }
@@ -180,19 +180,19 @@ function NewProductModal({ onClose, onDone }: { onClose: () => void; onDone: () 
           value={nomi}
           onChange={(e) => setNomi(e.target.value)}
           placeholder="Nomi (masalan: Mikki)"
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-line px-3 py-2 text-sm"
           autoFocus
           required
         />
         <div>
-          <label className="block text-xs text-slate-500 mb-1">Kelgan narx (tannarx)</label>
+          <label className="block text-xs text-muted mb-1">Kelgan narx (tannarx)</label>
           <NarxInput value={kelgan} onChange={setKelgan} placeholder="0" />
         </div>
         <div>
-          <label className="block text-xs text-slate-500 mb-1">Sotuv narxi</label>
+          <label className="block text-xs text-muted mb-1">Sotuv narxi</label>
           <NarxInput value={sotuv} onChange={setSotuv} placeholder="0" />
         </div>
-        {error && <p className="text-rose-600 text-sm">{error}</p>}
+        {error && <p className="text-expense text-sm">{error}</p>}
         <div className="flex gap-2 justify-end pt-2">
           <Button variant="secondary" type="button" onClick={onClose}>
             Bekor qilish
@@ -247,7 +247,7 @@ function BulkProductsModal({ onClose, onDone }: { onClose: () => void; onDone: (
   return (
     <Modal open onClose={onClose} title="Ko'p tur qo'shish">
       <form onSubmit={submit} className="space-y-3">
-        <div className="grid grid-cols-[1fr,90px,90px] gap-2 text-xs text-slate-500">
+        <div className="grid grid-cols-[1fr,90px,90px] gap-2 text-xs text-muted">
           <span>Nomi</span>
           <span>Tannarx</span>
           <span>Sotuv narxi</span>
@@ -259,7 +259,7 @@ function BulkProductsModal({ onClose, onDone }: { onClose: () => void; onDone: (
               value={r.nomi}
               onChange={(e) => setRow(i, { nomi: e.target.value })}
               placeholder="Nomi"
-              className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+              className="rounded-lg border border-line px-2 py-1.5 text-sm"
             />
             <input
               type="text"
@@ -267,7 +267,7 @@ function BulkProductsModal({ onClose, onDone }: { onClose: () => void; onDone: (
               value={r.kelgan}
               onChange={(e) => setRow(i, { kelgan: e.target.value ? formatSom(parseSomInput(e.target.value)) : "" })}
               placeholder="0"
-              className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+              className="rounded-lg border border-line px-2 py-1.5 text-sm"
             />
             <input
               type="text"
@@ -275,18 +275,18 @@ function BulkProductsModal({ onClose, onDone }: { onClose: () => void; onDone: (
               value={r.sotuv}
               onChange={(e) => setRow(i, { sotuv: e.target.value ? formatSom(parseSomInput(e.target.value)) : "" })}
               placeholder="0"
-              className="rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+              className="rounded-lg border border-line px-2 py-1.5 text-sm"
             />
           </div>
         ))}
         <button
           type="button"
           onClick={() => setRows((prev) => [...prev, { nomi: "", kelgan: "", sotuv: "" }])}
-          className="text-sm text-emerald-600 hover:text-emerald-700"
+          className="text-sm text-income hover:text-income-fg"
         >
           + Yana qator
         </button>
-        {error && <p className="text-rose-600 text-sm">{error}</p>}
+        {error && <p className="text-expense text-sm">{error}</p>}
         <div className="flex gap-2 justify-end pt-2">
           <Button variant="secondary" type="button" onClick={onClose}>
             Bekor qilish
@@ -340,18 +340,18 @@ function EditPriceModal({
           type="text"
           value={nomi}
           onChange={(e) => setNomi(e.target.value)}
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-line px-3 py-2 text-sm"
           required
         />
         <div>
-          <label className="block text-xs text-slate-500 mb-1">Kelgan narx (tannarx)</label>
+          <label className="block text-xs text-muted mb-1">Kelgan narx (tannarx)</label>
           <NarxInput value={kelgan} onChange={setKelgan} placeholder="0" />
         </div>
         <div>
-          <label className="block text-xs text-slate-500 mb-1">Sotuv narxi</label>
+          <label className="block text-xs text-muted mb-1">Sotuv narxi</label>
           <NarxInput value={sotuv} onChange={setSotuv} placeholder="0" />
         </div>
-        {error && <p className="text-rose-600 text-sm">{error}</p>}
+        {error && <p className="text-expense text-sm">{error}</p>}
         <div className="flex gap-2 justify-end pt-2">
           <Button variant="secondary" type="button" onClick={onClose}>
             Bekor qilish
@@ -404,22 +404,22 @@ function StockEntryModal({
   return (
     <Modal open onClose={onClose} title={`Ombor kirimi: ${product.nomi}`}>
       <form onSubmit={submit} className="space-y-3">
-        <p className="text-sm text-slate-500">
-          Joriy qoldiq: <span className="font-medium text-slate-700">{formatSom(product.miqdor)} dona</span>
+        <p className="text-sm text-muted">
+          Joriy qoldiq: <span className="font-medium text-fg">{formatSom(product.miqdor)} dona</span>
         </p>
         <div>
-          <label className="block text-xs text-slate-500 mb-1">Kelgan miqdor (dona)</label>
+          <label className="block text-xs text-muted mb-1">Kelgan miqdor (dona)</label>
           <input
             type="text"
             inputMode="numeric"
             value={miqdor}
             onChange={(e) => setMiqdor(e.target.value ? formatSom(parseSomInput(e.target.value)) : "")}
             placeholder="0"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-line px-3 py-2 text-sm"
             autoFocus
           />
         </div>
-        {error && <p className="text-rose-600 text-sm">{error}</p>}
+        {error && <p className="text-expense text-sm">{error}</p>}
         <div className="flex gap-2 justify-end pt-2">
           <Button variant="secondary" type="button" onClick={onClose}>
             Bekor qilish

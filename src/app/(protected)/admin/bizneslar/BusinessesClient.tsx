@@ -51,7 +51,7 @@ export function BusinessesClient({ initialBusinesses }: { initialBusinesses: Bus
       <Card>
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-slate-400 text-xs uppercase">
+            <tr className="text-left text-faint text-xs uppercase">
               <th className="pb-2">Nomi</th>
               <th className="pb-2 text-right">Kategoriyalar</th>
               <th className="pb-2 text-right">Tranzaksiyalar</th>
@@ -59,19 +59,19 @@ export function BusinessesClient({ initialBusinesses }: { initialBusinesses: Bus
               <th className="pb-2 text-right">Amal</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-line">
             {businesses.map((b) => (
               <tr key={b.id}>
                 <td className="py-2.5 font-medium">{b.nomi}</td>
-                <td className="py-2.5 text-right text-slate-500">{b.kategoriyalar}</td>
-                <td className="py-2.5 text-right text-slate-500">{b.tranzaksiyalar}</td>
+                <td className="py-2.5 text-right text-muted">{b.kategoriyalar}</td>
+                <td className="py-2.5 text-right text-muted">{b.tranzaksiyalar}</td>
                 <td className="py-2.5">
                   <Badge tone={b.isActive ? "kirim" : "neutral"}>{b.isActive ? "Faol" : "Nofaol"}</Badge>
                 </td>
                 <td className="py-2.5 text-right">
                   <button
                     onClick={() => toggleActive(b)}
-                    className="text-xs font-medium text-slate-500 hover:text-emerald-600"
+                    className="text-xs font-medium text-muted hover:text-income"
                   >
                     {b.isActive ? "Nofaollashtirish" : "Faollashtirish"}
                   </button>
@@ -124,14 +124,14 @@ function NewBusinessModal({
           value={nomi}
           onChange={(e) => setNomi(e.target.value)}
           placeholder="Biznes nomi (masalan: Salyut)"
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-line px-3 py-2 text-sm"
           autoFocus
           required
         />
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-faint">
           Yangi biznes bo'sh boshlanadi — kategoriyalarni "Kategoriyalar" bo'limida qo'shasiz.
         </p>
-        {error && <p className="text-rose-600 text-sm">{error}</p>}
+        {error && <p className="text-expense text-sm">{error}</p>}
         <div className="flex gap-2 justify-end pt-2">
           <Button variant="secondary" type="button" onClick={onClose}>
             Bekor qilish

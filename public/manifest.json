@@ -1,0 +1,19 @@
+{
+  "name": "Disney Navoiy — Hisob-Kitob",
+  "short_name": "Hisob-Kitob",
+  "description": "Kirim-chiqim, sotuv va ombor hisob-kitob tizimi",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#059669",
+  "orientation": "portrait",
+  "lang": "uz",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import type { Rol } from "@/lib/auth/session";
 import { TelegramLinkButton } from "@/components/TelegramLinkButton";
 import { BusinessSwitcher } from "@/components/BusinessSwitcher";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface BusinessOption {
   id: string;
@@ -93,8 +94,13 @@ export default function Sidebar({ ism, rol, businesses, activeBusinessId, omborl
         })}
       </nav>
       <div className="px-6 py-4 border-t border-slate-800 space-y-2">
-        <p className="text-sm font-medium">{ism}</p>
-        <p className="text-xs text-slate-400 mb-1">{ROL_LABEL[rol]}</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">{ism}</p>
+            <p className="text-xs text-slate-400">{ROL_LABEL[rol]}</p>
+          </div>
+          <ThemeToggle className="text-slate-400 hover:text-white hover:bg-slate-800" />
+        </div>
         <TelegramLinkButton className="block text-xs text-slate-400 hover:text-emerald-400" />
         <button
           onClick={handleLogout}

@@ -16,9 +16,9 @@ export default async function QarzlarPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-800">Qarzdorlik</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Biznes: <span className="font-medium text-slate-700">{business.nomi}</span>
+        <h1 className="text-2xl font-bold text-fg">Qarzdorlik</h1>
+        <p className="text-sm text-muted mt-1">
+          Biznes: <span className="font-medium text-fg">{business.nomi}</span>
         </p>
       </div>
       <QarzlarClient initialDebts={debts} />

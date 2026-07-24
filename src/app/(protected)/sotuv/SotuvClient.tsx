@@ -98,14 +98,14 @@ export function SotuvClient({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <Card>
-        <h2 className="font-semibold text-slate-700 mb-3">Yangi sotuv</h2>
+        <h2 className="font-semibold text-fg mb-3">Yangi sotuv</h2>
         <form onSubmit={submit} className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">Mahsulot</label>
+            <label className="block text-xs font-medium text-muted mb-1">Mahsulot</label>
             <select
               value={productId}
               onChange={(e) => setProductId(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm"
             >
               <option value="">Tanlang...</option>
               {products.map((p) => (
@@ -119,18 +119,18 @@ export function SotuvClient({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Miqdor (dona)</label>
+              <label className="block text-xs font-medium text-muted mb-1">Miqdor (dona)</label>
               <input
                 type="text"
                 inputMode="numeric"
                 value={miqdor}
                 onChange={(e) => setMiqdor(e.target.value ? formatSom(parseSomInput(e.target.value)) : "")}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Jami</label>
-              <div className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700">
+              <label className="block text-xs font-medium text-muted mb-1">Jami</label>
+              <div className="rounded-lg bg-surface-2 px-3 py-2 text-sm font-medium text-fg">
                 {formatSomLabel(jami)}
               </div>
             </div>
@@ -141,7 +141,7 @@ export function SotuvClient({
               type="button"
               onClick={() => setTolovTuri("naqd")}
               className={`flex-1 py-2 rounded-lg text-sm font-medium ${
-                tolovTuri === "naqd" ? "bg-emerald-600 text-white" : "bg-emerald-50 text-emerald-700"
+                tolovTuri === "naqd" ? "bg-emerald-600 text-white" : "bg-emerald-50 text-income-fg"
               }`}
             >
               Naqd
@@ -164,20 +164,20 @@ export function SotuvClient({
                 value={mijozNomi}
                 onChange={(e) => setMijozNomi(e.target.value)}
                 placeholder="Mijoz ismi"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm"
               />
               <input
                 type="text"
                 value={mijozTel}
                 onChange={(e) => setMijozTel(e.target.value)}
                 placeholder="Telefon (ixtiyoriy)"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm"
               />
             </div>
           )}
 
-          {error && <p className="text-rose-600 text-sm">{error}</p>}
-          {ok && <p className="text-emerald-600 text-sm">{ok}</p>}
+          {error && <p className="text-expense text-sm">{error}</p>}
+          {ok && <p className="text-income text-sm">{ok}</p>}
 
           <Button type="submit" disabled={loading} className="w-full">
             {loading ? "Saqlanmoqda..." : "Sotish"}
@@ -186,21 +186,21 @@ export function SotuvClient({
       </Card>
 
       <Card>
-        <h2 className="font-semibold text-slate-700 mb-3">So'nggi sotuvlar</h2>
+        <h2 className="font-semibold text-fg mb-3">So'nggi sotuvlar</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-slate-400 text-xs uppercase">
+              <tr className="text-left text-faint text-xs uppercase">
                 <th className="pb-2">Sana</th>
                 <th className="pb-2">Mahsulot</th>
                 <th className="pb-2 text-right">Summa</th>
                 <th className="pb-2">To'lov</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-line">
               {sales.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="text-center text-slate-400 py-6">
+                  <td colSpan={4} className="text-center text-faint py-6">
                     Hali sotuv yo'q
                   </td>
                 </tr>
@@ -209,7 +209,7 @@ export function SotuvClient({
                 <tr key={s.id}>
                   <td className="py-2 whitespace-nowrap">{formatDateUZ(new Date(s.sana))}</td>
                   <td className="py-2">
-                    {s.productNomi} <span className="text-slate-400">× {s.miqdor}</span>
+                    {s.productNomi} <span className="text-faint">× {s.miqdor}</span>
                   </td>
                   <td className="py-2 text-right font-medium">{formatSomLabel(s.jamiSumma)}</td>
                   <td className="py-2">

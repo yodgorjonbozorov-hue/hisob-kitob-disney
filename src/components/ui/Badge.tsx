@@ -3,16 +3,20 @@ export function Badge({
   tone = "neutral",
 }: {
   children: React.ReactNode;
-  tone?: "kirim" | "chiqim" | "neutral";
+  tone?: "kirim" | "chiqim" | "neutral" | "warning" | "info";
 }) {
   const toneClasses = {
-    kirim: "bg-emerald-100 text-emerald-700",
-    chiqim: "bg-rose-100 text-rose-700",
-    neutral: "bg-slate-100 text-slate-600",
+    kirim: "bg-income-soft text-income-fg",
+    chiqim: "bg-expense-soft text-expense-fg",
+    warning: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
+    info: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
+    neutral: "bg-surface-2 text-muted",
   }[tone];
 
   return (
-    <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${toneClasses}`}>
+    <span
+      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-2xs font-medium ${toneClasses}`}
+    >
       {children}
     </span>
   );

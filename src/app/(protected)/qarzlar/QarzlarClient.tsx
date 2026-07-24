@@ -27,7 +27,7 @@ export function QarzlarClient({ initialDebts }: { initialDebts: DebtDTO[] }) {
   return (
     <div className="space-y-4">
       <Card>
-        <p className="text-slate-500 text-sm mb-1">Jami qolgan qarz</p>
+        <p className="text-muted text-sm mb-1">Jami qolgan qarz</p>
         <p className="text-2xl font-bold text-amber-600">{formatSomLabel(jamiQolgan)}</p>
       </Card>
 
@@ -35,7 +35,7 @@ export function QarzlarClient({ initialDebts }: { initialDebts: DebtDTO[] }) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-slate-400 text-xs uppercase">
+              <tr className="text-left text-faint text-xs uppercase">
                 <th className="pb-2">Mijoz</th>
                 <th className="pb-2">Telefon</th>
                 <th className="pb-2 text-right">Jami</th>
@@ -45,10 +45,10 @@ export function QarzlarClient({ initialDebts }: { initialDebts: DebtDTO[] }) {
                 <th className="pb-2 text-right">Amal</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-line">
               {debts.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="text-center text-slate-400 py-6">
+                  <td colSpan={7} className="text-center text-faint py-6">
                     Qarzdorlik yo'q
                   </td>
                 </tr>
@@ -56,18 +56,18 @@ export function QarzlarClient({ initialDebts }: { initialDebts: DebtDTO[] }) {
               {debts.map((d) => (
                 <tr key={d.id} className={d.isYopilgan ? "opacity-50" : ""}>
                   <td className="py-2.5 font-medium">{d.mijozNomi}</td>
-                  <td className="py-2.5 text-slate-500">{d.mijozTel ?? "—"}</td>
+                  <td className="py-2.5 text-muted">{d.mijozTel ?? "—"}</td>
                   <td className="py-2.5 text-right">{formatSomLabel(d.jamiSumma)}</td>
-                  <td className="py-2.5 text-right text-emerald-600">{formatSom(d.tolangan)}</td>
+                  <td className="py-2.5 text-right text-income">{formatSom(d.tolangan)}</td>
                   <td className="py-2.5 text-right font-medium text-amber-600">{formatSom(d.qolgan)}</td>
-                  <td className="py-2.5 text-slate-500 whitespace-nowrap">{formatDateUZ(new Date(d.sana))}</td>
+                  <td className="py-2.5 text-muted whitespace-nowrap">{formatDateUZ(new Date(d.sana))}</td>
                   <td className="py-2.5 text-right">
                     {d.isYopilgan ? (
                       <Badge tone="kirim">Yopilgan</Badge>
                     ) : (
                       <button
                         onClick={() => setPayFor(d)}
-                        className="text-xs font-medium text-emerald-600 hover:text-emerald-700"
+                        className="text-xs font-medium text-income hover:text-income-fg"
                       >
                         To'lov qabul qilish
                       </button>
@@ -124,21 +124,21 @@ function PaymentModal({
   return (
     <Modal open onClose={onClose} title={`To'lov: ${debt.mijozNomi}`}>
       <form onSubmit={submit} className="space-y-3">
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-muted">
           Qolgan qarz: <span className="font-medium text-amber-600">{formatSomLabel(debt.qolgan)}</span>
         </p>
         <div>
-          <label className="block text-xs text-slate-500 mb-1">To'lov summasi (so'm)</label>
+          <label className="block text-xs text-muted mb-1">To'lov summasi (so'm)</label>
           <input
             type="text"
             inputMode="numeric"
             value={summa}
             onChange={(e) => setSumma(e.target.value ? formatSom(parseSomInput(e.target.value)) : "")}
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-line px-3 py-2 text-sm"
             autoFocus
           />
         </div>
-        {error && <p className="text-rose-600 text-sm">{error}</p>}
+        {error && <p className="text-expense text-sm">{error}</p>}
         <div className="flex gap-2 justify-end pt-2">
           <Button variant="secondary" type="button" onClick={onClose}>
             Bekor qilish

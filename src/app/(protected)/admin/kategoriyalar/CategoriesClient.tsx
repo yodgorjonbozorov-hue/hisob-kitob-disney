@@ -44,13 +44,13 @@ export function CategoriesClient({ initialCategories }: { initialCategories: Cat
         <div className="flex gap-2">
           <button
             onClick={() => setTab("kirim")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === "kirim" ? "bg-emerald-600 text-white" : "bg-emerald-50 text-emerald-700"}`}
+            className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === "kirim" ? "bg-emerald-600 text-white" : "bg-emerald-50 text-income-fg"}`}
           >
             Kirim
           </button>
           <button
             onClick={() => setTab("chiqim")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === "chiqim" ? "bg-rose-600 text-white" : "bg-rose-50 text-rose-700"}`}
+            className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === "chiqim" ? "bg-rose-600 text-white" : "bg-rose-50 text-expense-fg"}`}
           >
             Chiqim
           </button>
@@ -61,13 +61,13 @@ export function CategoriesClient({ initialCategories }: { initialCategories: Cat
       <Card>
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-slate-400 text-xs uppercase">
+            <tr className="text-left text-faint text-xs uppercase">
               <th className="pb-2">Nomi</th>
               <th className="pb-2">Holati</th>
               <th className="pb-2 text-right">Amal</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-line">
             {visible.map((cat) => (
               <tr key={cat.id}>
                 <td className="py-2.5">{cat.nomi}</td>
@@ -77,7 +77,7 @@ export function CategoriesClient({ initialCategories }: { initialCategories: Cat
                 <td className="py-2.5 text-right">
                   <button
                     onClick={() => toggleActive(cat)}
-                    className="text-xs font-medium text-slate-500 hover:text-emerald-600"
+                    className="text-xs font-medium text-muted hover:text-income"
                   >
                     {cat.isActive ? "Nofaollashtirish" : "Faollashtirish"}
                   </button>
@@ -134,11 +134,11 @@ function NewCategoryModal({
           value={nomi}
           onChange={(e) => setNomi(e.target.value)}
           placeholder="Kategoriya nomi"
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-line px-3 py-2 text-sm"
           autoFocus
           required
         />
-        {error && <p className="text-rose-600 text-sm">{error}</p>}
+        {error && <p className="text-expense text-sm">{error}</p>}
         <div className="flex gap-2 justify-end pt-2">
           <Button variant="secondary" type="button" onClick={onClose}>
             Bekor qilish

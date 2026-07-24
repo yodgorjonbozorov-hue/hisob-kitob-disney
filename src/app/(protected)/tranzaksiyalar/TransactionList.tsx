@@ -52,10 +52,10 @@ export function TransactionList({
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+    <div className="bg-surface rounded-2xl shadow-sm border border-line overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
+          <thead className="bg-surface-2 text-muted text-xs uppercase">
             <tr>
               <th className="text-left px-4 py-3">Sana</th>
               <th className="text-left px-4 py-3">Turi</th>
@@ -66,16 +66,16 @@ export function TransactionList({
               <th className="text-right px-4 py-3">Amallar</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-line">
             {items.length === 0 && (
               <tr>
-                <td colSpan={7} className="text-center text-slate-400 py-8">
+                <td colSpan={7} className="text-center text-faint py-8">
                   Tranzaksiyalar topilmadi
                 </td>
               </tr>
             )}
             {items.map((t) => (
-              <tr key={t.id} className="hover:bg-slate-50">
+              <tr key={t.id} className="hover:bg-surface-2">
                 <td className="px-4 py-3 whitespace-nowrap">{formatDateUZ(new Date(t.sana))}</td>
                 <td className="px-4 py-3">
                   <Badge tone={t.turi === "kirim" ? "kirim" : "chiqim"}>
@@ -85,25 +85,25 @@ export function TransactionList({
                 <td className="px-4 py-3">{t.category.nomi}</td>
                 <td
                   className={`px-4 py-3 text-right font-medium whitespace-nowrap ${
-                    t.turi === "kirim" ? "text-emerald-600" : "text-rose-600"
+                    t.turi === "kirim" ? "text-income" : "text-expense"
                   }`}
                 >
                   {formatSomLabel(t.summa)}
                 </td>
-                <td className="px-4 py-3 text-slate-500 max-w-[200px] truncate">{t.izoh ?? "—"}</td>
-                <td className="px-4 py-3 text-slate-500">{t.user.ism}</td>
+                <td className="px-4 py-3 text-muted max-w-[200px] truncate">{t.izoh ?? "—"}</td>
+                <td className="px-4 py-3 text-muted">{t.user.ism}</td>
                 <td className="px-4 py-3 text-right whitespace-nowrap">
                   {canModify(t) && (
                     <>
                       <button
                         onClick={() => setEditing(t)}
-                        className="text-slate-500 hover:text-emerald-600 text-xs font-medium mr-3"
+                        className="text-muted hover:text-income text-xs font-medium mr-3"
                       >
                         Tahrirlash
                       </button>
                       <button
                         onClick={() => handleDelete(t.id)}
-                        className="text-slate-500 hover:text-rose-600 text-xs font-medium"
+                        className="text-muted hover:text-expense text-xs font-medium"
                       >
                         O'chirish
                       </button>
@@ -117,7 +117,7 @@ export function TransactionList({
       </div>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 text-sm text-slate-500">
+        <div className="flex items-center justify-between px-4 py-3 border-t border-line text-sm text-muted">
           <span>
             {page}-sahifa / {totalPages} tadan
           </span>
@@ -159,12 +159,12 @@ function PageLink({
   const searchParams = useSearchParams();
 
   if (disabled) {
-    return <span className="px-3 py-1 rounded-lg bg-slate-50 text-slate-300">{children}</span>;
+    return <span className="px-3 py-1 rounded-lg bg-surface-2 text-faint">{children}</span>;
   }
   const params = new URLSearchParams(searchParams.toString());
   params.set("page", String(page));
   return (
-    <a href={`?${params.toString()}`} className="px-3 py-1 rounded-lg bg-slate-100 hover:bg-slate-200">
+    <a href={`?${params.toString()}`} className="px-3 py-1 rounded-lg bg-surface-2 hover:bg-line">
       {children}
     </a>
   );
@@ -227,7 +227,7 @@ function EditModal({
               setTuri("kirim");
               setCategoryId("");
             }}
-            className={`flex-1 py-1.5 rounded-lg text-sm ${turi === "kirim" ? "bg-emerald-600 text-white" : "bg-emerald-50 text-emerald-700"}`}
+            className={`flex-1 py-1.5 rounded-lg text-sm ${turi === "kirim" ? "bg-emerald-600 text-white" : "bg-emerald-50 text-income-fg"}`}
           >
             Kirim
           </button>
@@ -236,7 +236,7 @@ function EditModal({
               setTuri("chiqim");
               setCategoryId("");
             }}
-            className={`flex-1 py-1.5 rounded-lg text-sm ${turi === "chiqim" ? "bg-rose-600 text-white" : "bg-rose-50 text-rose-700"}`}
+            className={`flex-1 py-1.5 rounded-lg text-sm ${turi === "chiqim" ? "bg-rose-600 text-white" : "bg-rose-50 text-expense-fg"}`}
           >
             Chiqim
           </button>
@@ -244,7 +244,7 @@ function EditModal({
         <select
           value={categoryId}
           onChange={(e) => setCategoryId(e.target.value)}
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-line px-3 py-2 text-sm"
         >
           {filteredCategories.map((c) => (
             <option key={c.id} value={c.id}>
@@ -257,22 +257,22 @@ function EditModal({
           inputMode="numeric"
           value={summaText}
           onChange={(e) => setSummaText(formatSom(parseSomInput(e.target.value)))}
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-line px-3 py-2 text-sm"
         />
         <input
           type="date"
           value={sana}
           onChange={(e) => setSana(e.target.value)}
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-line px-3 py-2 text-sm"
         />
         <input
           type="text"
           value={izoh}
           onChange={(e) => setIzoh(e.target.value)}
           placeholder="Izoh"
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-line px-3 py-2 text-sm"
         />
-        {error && <p className="text-rose-600 text-sm">{error}</p>}
+        {error && <p className="text-expense text-sm">{error}</p>}
         <div className="flex gap-2 justify-end pt-2">
           <Button variant="secondary" onClick={onClose} type="button">
             Bekor qilish

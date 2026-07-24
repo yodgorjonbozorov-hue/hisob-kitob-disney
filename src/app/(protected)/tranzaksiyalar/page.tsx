@@ -26,8 +26,8 @@ export default async function TranzaksiyalarPage({
   if (!businessId) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-slate-800">Tranzaksiyalar</h1>
-        <p className="text-slate-500">Sizga biznes biriktirilmagan. Admin bilan bog'laning.</p>
+        <h1 className="text-2xl font-bold text-fg">Tranzaksiyalar</h1>
+        <p className="text-muted">Sizga biznes biriktirilmagan. Admin bilan bog'laning.</p>
       </div>
     );
   }
@@ -50,7 +50,7 @@ export default async function TranzaksiyalarPage({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-slate-800">Tranzaksiyalar</h1>
+      <h1 className="text-2xl font-bold text-fg">Tranzaksiyalar</h1>
       <TransactionsClient
         initialItems={result.items}
         initialTotal={result.total}

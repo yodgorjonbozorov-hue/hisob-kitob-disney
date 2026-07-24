@@ -2,11 +2,93 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─────────────────────────────────────────────────────────────────────────
+   Dizayn tokenlari. RGB kanal qiymatlari (Tailwind <alpha-value> uchun).
+   income = muvaffaqiyat (yashil), expense = xavf (qizil) — hech qachon almashtirilmaydi.
+   ───────────────────────────────────────────────────────────────────────── */
+:root {
+  --bg-app: 248 250 252; /* slate-50 */
+  --bg-surface: 255 255 255;
+  --bg-surface-2: 241 245 249; /* slate-100 */
+  --border: 226 232 240; /* slate-200 */
+  --fg: 15 23 42; /* slate-900 */
+  --fg-muted: 100 116 139; /* slate-500 */
+  --fg-faint: 148 163 184; /* slate-400 */
+
+  --income: 5 150 105; /* emerald-600 */
+  --income-soft: 209 250 229; /* emerald-100 */
+  --income-fg: 4 120 87; /* emerald-700 */
+  --expense: 225 29 72; /* rose-600 */
+  --expense-soft: 255 228 230; /* rose-100 */
+  --expense-fg: 190 18 60; /* rose-700 */
+  --brand: 5 150 105;
+  --brand-fg: 255 255 255;
+
+  color-scheme: light;
+}
+
+.dark {
+  --bg-app: 2 6 23; /* slate-950 */
+  --bg-surface: 15 23 42; /* slate-900 */
+  --bg-surface-2: 30 41 59; /* slate-800 */
+  --border: 51 65 85; /* slate-700 */
+  --fg: 241 245 249; /* slate-100 */
+  --fg-muted: 148 163 184; /* slate-400 */
+  --fg-faint: 100 116 139; /* slate-500 */
+
+  --income: 52 211 153; /* emerald-400 — dark fonda yorqinroq */
+  --income-soft: 6 78 59; /* emerald-950-ish */
+  --income-fg: 110 231 183; /* emerald-300 */
+  --expense: 251 113 133; /* rose-400 */
+  --expense-soft: 76 5 25; /* rose-950-ish */
+  --expense-fg: 253 164 175; /* rose-300 */
+  --brand: 16 185 129;
+  --brand-fg: 255 255 255;
+
+  color-scheme: dark;
+}
+
 html {
-  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-family: var(--font-inter), "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
 }
 
 body {
-  background-color: #f8fafc;
-  color: #0f172a;
+  background-color: rgb(var(--bg-app));
+  color: rgb(var(--fg));
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Raqamlar hamma joyda tabular — ustunlar sakramaydi. */
+.tnum,
+table,
+.kpi,
+input[inputmode="numeric"] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Fokus halqasi — barcha interaktiv elementlar uchun ko'rinadigan */
+:focus-visible {
+  outline: 2px solid rgb(var(--brand));
+  outline-offset: 2px;
+}
+
+/* iOS safe-area yordamchilari */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.h-safe-bottom {
+  height: env(safe-area-inset-bottom);
 }

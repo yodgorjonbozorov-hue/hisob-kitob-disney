@@ -24,7 +24,7 @@ export interface PieDatum {
 
 export function CategoryPieChart({ data, emptyLabel }: { data: PieDatum[]; emptyLabel: string }) {
   if (data.length === 0) {
-    return <p className="text-slate-400 text-sm text-center py-12">{emptyLabel}</p>;
+    return <p className="text-faint text-sm text-center py-12">{emptyLabel}</p>;
   }
 
   return (

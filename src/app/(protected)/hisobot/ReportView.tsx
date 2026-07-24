@@ -6,33 +6,33 @@ import type { MonthlyReport } from "@/lib/queries/report";
 function ChangeLabel({ value, invert = false }: { value: number | null; invert?: boolean }) {
   const dir = changeDirection(value);
   const isGood = dir === "flat" ? null : invert ? dir === "down" : dir === "up";
-  const cls = isGood === null ? "text-slate-400" : isGood ? "text-emerald-600" : "text-rose-600";
+  const cls = isGood === null ? "text-faint" : isGood ? "text-income" : "text-expense";
   return <span className={cls}>{formatPercent(value)}</span>;
 }
 
 function CategoryTable({ title, data, tone }: { title: string; data: { nomi: string; summa: number; foiz: number }[]; tone: "kirim" | "chiqim" }) {
   return (
     <Card>
-      <h2 className="font-semibold text-slate-700 mb-3">{title}</h2>
+      <h2 className="font-semibold text-fg mb-3">{title}</h2>
       {data.length === 0 ? (
-        <p className="text-slate-400 text-sm py-6 text-center">Ma'lumot yo'q</p>
+        <p className="text-faint text-sm py-6 text-center">Ma'lumot yo'q</p>
       ) : (
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-slate-400 text-xs uppercase">
+            <tr className="text-left text-faint text-xs uppercase">
               <th className="pb-2">Kategoriya</th>
               <th className="pb-2 text-right">Summa</th>
               <th className="pb-2 text-right">Foiz</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-line">
             {data.map((item) => (
               <tr key={item.nomi}>
                 <td className="py-2">{item.nomi}</td>
-                <td className={`py-2 text-right font-medium ${tone === "kirim" ? "text-emerald-600" : "text-rose-600"}`}>
+                <td className={`py-2 text-right font-medium ${tone === "kirim" ? "text-income" : "text-expense"}`}>
                   {formatSomLabel(item.summa)}
                 </td>
-                <td className="py-2 text-right text-slate-500">{item.foiz.toFixed(1)}%</td>
+                <td className="py-2 text-right text-muted">{item.foiz.toFixed(1)}%</td>
               </tr>
             ))}
           </tbody>
@@ -47,22 +47,22 @@ export function ReportView({ report }: { report: MonthlyReport }) {
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
-          <p className="text-slate-500 text-sm mb-1">Jami kirim</p>
-          <p className="text-2xl font-bold text-emerald-600">{formatSomLabel(report.jamiKirim)}</p>
+          <p className="text-muted text-sm mb-1">Jami kirim</p>
+          <p className="text-2xl font-bold text-income">{formatSomLabel(report.jamiKirim)}</p>
           <p className="text-xs mt-1">
             O'tgan oyga nisbatan <ChangeLabel value={report.changePct.kirim} />
           </p>
         </Card>
         <Card>
-          <p className="text-slate-500 text-sm mb-1">Jami chiqim</p>
-          <p className="text-2xl font-bold text-rose-600">{formatSomLabel(report.jamiChiqim)}</p>
+          <p className="text-muted text-sm mb-1">Jami chiqim</p>
+          <p className="text-2xl font-bold text-expense">{formatSomLabel(report.jamiChiqim)}</p>
           <p className="text-xs mt-1">
             O'tgan oyga nisbatan <ChangeLabel value={report.changePct.chiqim} invert />
           </p>
         </Card>
         <Card className={report.sofFoyda >= 0 ? "bg-emerald-50 border-emerald-200" : "bg-rose-50 border-rose-200"}>
-          <p className="text-slate-500 text-sm mb-1">Sof foyda</p>
-          <p className={`text-2xl font-bold ${report.sofFoyda >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+          <p className="text-muted text-sm mb-1">Sof foyda</p>
+          <p className={`text-2xl font-bold ${report.sofFoyda >= 0 ? "text-income" : "text-expense"}`}>
             {formatSomLabel(report.sofFoyda)}
           </p>
           <p className="text-xs mt-1">

@@ -6,6 +6,7 @@ import { useState } from "react";
 import type { Rol } from "@/lib/auth/session";
 import { TelegramLinkButton } from "@/components/TelegramLinkButton";
 import { BusinessSwitcher } from "@/components/BusinessSwitcher";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface BusinessOption {
   id: string;
@@ -99,8 +100,13 @@ export default function MobileNav({ ism, rol, businesses, activeBusinessId, ombo
             );
           })}
           <div className="pt-2 border-t border-slate-800 mt-2">
-            <p className="text-sm">{ism}</p>
-            <p className="text-xs text-slate-400 mb-2">{ROL_LABEL[rol]}</p>
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <p className="text-sm">{ism}</p>
+                <p className="text-xs text-slate-400">{ROL_LABEL[rol]}</p>
+              </div>
+              <ThemeToggle className="text-slate-400 hover:text-white hover:bg-slate-800" />
+            </div>
             <TelegramLinkButton className="block text-xs text-slate-400 mb-2" />
             <button onClick={handleLogout} className="text-sm text-rose-400">
               Chiqish
