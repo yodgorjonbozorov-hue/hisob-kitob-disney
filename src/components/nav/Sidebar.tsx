@@ -104,6 +104,9 @@ export default function Sidebar({ ism, rol, businesses, activeBusinessId, omborl
           <ThemeToggle className="text-slate-400 hover:text-white hover:bg-slate-800" />
         </div>
         <TelegramLinkButton className="block text-xs text-slate-400 hover:text-emerald-400" />
+        <Link href="/parol-ozgartirish" className="block text-xs text-slate-400 hover:text-emerald-400">
+          Parolni o'zgartirish
+        </Link>
         <button
           onClick={handleLogout}
           className="text-sm text-rose-400 hover:text-rose-300"

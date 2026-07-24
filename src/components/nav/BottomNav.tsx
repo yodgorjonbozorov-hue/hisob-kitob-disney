@@ -189,6 +189,13 @@ export function BottomNav({ ism, rol, omborli }: Props) {
               })}
             </div>
             <TelegramLinkButton className="block text-sm text-muted mb-3" />
+            <Link
+              href="/parol-ozgartirish"
+              onClick={() => setMenuOpen(false)}
+              className="block text-sm text-muted mb-3"
+            >
+              Parolni o'zgartirish
+            </Link>
             <button
               onClick={handleLogout}
               className="w-full py-3 rounded-lg bg-expense-soft text-expense-fg text-sm font-medium min-h-[44px]"

@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { getAccessibleBusinesses, resolveActiveBusinessId } from "@/lib/business";
 import Sidebar from "@/components/nav/Sidebar";
@@ -11,6 +12,10 @@ export default async function ProtectedLayout({
   children: React.ReactNode;
 }) {
   const session = await requireUser();
+  // Boshlang'ich parolni majburiy almashtirish.
+  if (session.mustChangePassword) {
+    redirect("/parol-ozgartirish");
+  }
   const [businesses, activeBusinessId] = await Promise.all([
     getAccessibleBusinesses(session),
     resolveActiveBusinessId(session),

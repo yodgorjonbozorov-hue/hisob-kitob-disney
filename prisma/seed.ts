@@ -96,7 +96,8 @@ async function main() {
     where: { login: ADMIN_LOGIN },
     update: {},
     // Admin (direktor) — biznesga biriktirilmagan (businessId=null), barcha bizneslarni ko'radi.
-    create: { ism: "Direktor", login: ADMIN_LOGIN, parolHash: adminHash, rol: "admin" },
+    // Yangi o'rnatishda boshlang'ich parol majburiy almashtiriladi (mavjud DB'ga ta'sir qilmaydi — update bo'sh).
+    create: { ism: "Direktor", login: ADMIN_LOGIN, parolHash: adminHash, rol: "admin", mustChangePassword: true },
   });
 
   const kassirHash = await bcrypt.hash(KASSIR_PAROL, 10);

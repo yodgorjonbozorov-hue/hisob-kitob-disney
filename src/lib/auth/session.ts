@@ -11,6 +11,8 @@ export interface SessionData {
   rol?: Rol;
   // Kassir uchun biriktirilgan biznes id; admin/sotuvchi uchun null (barcha bizneslar).
   businessId?: string | null;
+  // Seed/boshlang'ich parolni majburiy almashtirish kerakmi.
+  mustChangePassword?: boolean;
 }
 
 export const sessionOptions: SessionOptions = {
