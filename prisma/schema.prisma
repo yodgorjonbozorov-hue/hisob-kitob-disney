@@ -24,6 +24,8 @@ model Business {
   users        User[]
   products     Product[]
   budgets      Budget[]
+  shiftCloses  ShiftClose[]
+  recurrings   RecurringTransaction[]
 }
 
 model User {
@@ -67,6 +69,7 @@ model Category {
   business     Business      @relation(fields: [businessId], references: [id])
   transactions Transaction[]
   budgets      Budget[]
+  recurrings   RecurringTransaction[]
 
   @@unique([nomi, turi, businessId])
   @@index([turi, isActive])
@@ -115,6 +118,41 @@ model AuditLog {
   @@index([businessId])
   @@index([entity])
   @@index([createdAt])
+}
+
+/// Kassir kun yakuni — kutilgan naqd (kirim) vs sanalgan naqd, farq.
+model ShiftClose {
+  id           String   @id @default(cuid())
+  businessId   String
+  business     Business @relation(fields: [businessId], references: [id])
+  userId       String
+  userIsm      String?
+  sana         DateTime
+  kutilganNaqd Int
+  sanalganNaqd Int
+  farq         Int
+  izoh         String?
+  createdAt    DateTime @default(now())
+
+  @@index([businessId, sana])
+}
+
+/// Takroriy tranzaksiya andozasi — har oy `kun` sanasida avtomatik yaratiladi.
+model RecurringTransaction {
+  id            String   @id @default(cuid())
+  businessId    String
+  business      Business @relation(fields: [businessId], references: [id])
+  categoryId    String
+  category      Category @relation(fields: [categoryId], references: [id])
+  turi          String
+  summa         Int
+  izoh          String?
+  kun           Int // oyning kuni (1-28)
+  isActive      Boolean  @default(true)
+  lastGenerated String? // oxirgi yaratilgan oy "YYYY-MM"
+  createdAt     DateTime @default(now())
+
+  @@index([businessId])
 }
 
 /// Kategoriya bo'yicha oylik budjet (limit). "oy" formati: "2026-07".

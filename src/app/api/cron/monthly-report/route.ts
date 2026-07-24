@@ -1,7 +1,12 @@
 import { bot } from "@/bot/bot";
 import { checkAndSendMonthlyReport } from "@/bot/scheduler";
+import { generateDueRecurring } from "@/lib/services/recurring";
 
-/** Vercel Cron kuniga bir marta shu route'ni chaqiradi; funksiya ichida "bugun 1-sanami" tekshiruvi bor. */
+/**
+ * Vercel Cron kuniga bir marta shu route'ni chaqiradi.
+ * - Oylik hisobot (funksiya ichida "bugun 1-sanami" tekshiruvi bor)
+ * - Muddati kelgan takroriy tranzaksiyalarni yaratish (idempotent)
+ */
 export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -9,5 +14,6 @@ export async function GET(req: Request) {
   }
 
   await checkAndSendMonthlyReport(bot);
-  return new Response("OK", { status: 200 });
+  const recurringCount = await generateDueRecurring().catch(() => 0);
+  return new Response(`OK (recurring: ${recurringCount})`, { status: 200 });
 }

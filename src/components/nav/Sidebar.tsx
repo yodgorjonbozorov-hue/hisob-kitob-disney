@@ -28,9 +28,14 @@ const adminOnlyBaseLinks = [
   { href: "/byudjet", label: "Budjet" },
 ];
 
-const kassirLinks = [{ href: "/tranzaksiyalar", label: "Tranzaksiyalar" }];
+const kassirLinks = [
+  { href: "/tranzaksiyalar", label: "Tranzaksiyalar" },
+  { href: "/smena", label: "Kun yakuni" },
+];
 
 const adminLinks = [
+  { href: "/takroriy", label: "Takroriy" },
+  { href: "/smena", label: "Kun yakuni" },
   { href: "/admin/bizneslar", label: "Bizneslar" },
   { href: "/admin/kategoriyalar", label: "Kategoriyalar" },
   { href: "/admin/foydalanuvchilar", label: "Foydalanuvchilar" },

@@ -82,7 +82,9 @@ export function BottomNav({ ism, rol, omborli }: Props) {
     allLinks.push({ label: "Sotuv", href: "/sotuv" });
     allLinks.push({ label: "Qarzlar", href: "/qarzlar" });
   }
+  allLinks.push({ label: "Kun yakuni", href: "/smena" });
   if (isAdmin) {
+    allLinks.push({ label: "Takroriy", href: "/takroriy" });
     allLinks.push({ label: "Bizneslar", href: "/admin/bizneslar" });
     allLinks.push({ label: "Kategoriyalar", href: "/admin/kategoriyalar" });
     allLinks.push({ label: "Foydalanuvchilar", href: "/admin/foydalanuvchilar" });
