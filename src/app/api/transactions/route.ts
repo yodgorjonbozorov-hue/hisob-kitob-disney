@@ -5,6 +5,7 @@ import { createTransactionSchema } from "@/lib/validation/transaction";
 import { listTransactions } from "@/lib/queries/transactions";
 import { createTransaction } from "@/lib/services/transactionService";
 import { resolveActiveBusinessId } from "@/lib/business";
+import { logAudit, getClientIp } from "@/lib/services/audit";
 
 export async function GET(request: NextRequest) {
   try {
@@ -54,6 +55,13 @@ export async function POST(request: NextRequest) {
     }
 
     const transaction = await createTransaction(user.userId, businessId, parsed.data);
+
+    await logAudit({
+      businessId, userId: user.userId, userIsm: user.ism,
+      action: "create", entity: "transaction", entityId: transaction.id,
+      after: { turi: parsed.data.turi, summa: parsed.data.summa, categoryId: parsed.data.categoryId },
+      ip: getClientIp(request),
+    });
 
     return NextResponse.json(transaction, { status: 201 });
   } catch (error) {

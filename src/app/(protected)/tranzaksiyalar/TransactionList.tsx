@@ -24,7 +24,7 @@ interface Props {
   currentUserId: string;
   currentUserRol: Rol;
   onUpdated: (t: TransactionDTO) => void;
-  onDeleted: (id: string) => void;
+  onDelete: (t: TransactionDTO) => void;
 }
 
 export function TransactionList({
@@ -36,19 +36,13 @@ export function TransactionList({
   currentUserId,
   currentUserRol,
   onUpdated,
-  onDeleted,
+  onDelete,
 }: Props) {
   const [editing, setEditing] = useState<TransactionDTO | null>(null);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   function canModify(t: TransactionDTO) {
     return currentUserRol === "admin" || t.userId === currentUserId;
-  }
-
-  async function handleDelete(id: string) {
-    if (!confirm("Bu tranzaksiyani o'chirmoqchimisiz?")) return;
-    const res = await fetch(`/api/transactions/${id}`, { method: "DELETE" });
-    if (res.ok) onDeleted(id);
   }
 
   return (
@@ -103,7 +97,7 @@ export function TransactionList({
                         Tahrirlash
                       </button>
                       <button
-                        onClick={() => handleDelete(t.id)}
+                        onClick={() => onDelete(t)}
                         className="text-muted hover:text-expense text-xs font-medium"
                       >
                         O'chirish
@@ -149,7 +143,7 @@ export function TransactionList({
                   Tahrirlash
                 </button>
                 <button
-                  onClick={() => handleDelete(t.id)}
+                  onClick={() => onDelete(t)}
                   className="text-xs font-medium text-muted hover:text-expense min-h-[36px]"
                 >
                   O'chirish

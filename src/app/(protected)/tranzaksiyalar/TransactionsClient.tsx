@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { TransactionForm } from "./TransactionForm";
 import { TransactionFilters } from "./TransactionFilters";
@@ -8,6 +8,7 @@ import { TransactionList } from "./TransactionList";
 import type { TransactionDTO } from "@/lib/queries/transactions";
 import type { Rol } from "@/lib/auth/session";
 import { formatMoney } from "@/lib/format";
+import { useToast } from "@/components/ui/Toast";
 
 interface CategoryOption {
   id: string;
@@ -39,8 +40,13 @@ export function TransactionsClient({
   filters: { from: string; to: string; turi: string; categoryId: string; q: string };
 }) {
   const router = useRouter();
+  const { toast } = useToast();
   const [items, setItems] = useState(initialItems);
   const [total, setTotal] = useState(initialTotal);
+
+  // Server ma'lumoti yangilanganda (router.refresh) lokal holatni sinxronlaymiz.
+  useEffect(() => setItems(initialItems), [initialItems]);
+  useEffect(() => setTotal(initialTotal), [initialTotal]);
 
   function handleCreated(t: TransactionDTO) {
     setItems((prev) => [t, ...prev]);
@@ -53,10 +59,36 @@ export function TransactionsClient({
     router.refresh();
   }
 
-  function handleDeleted(id: string) {
-    setItems((prev) => prev.filter((i) => i.id !== id));
+  // Optimistik o'chirish + 5s "Qaytarish" (undo). Soft-delete, keyin undo → restore.
+  async function handleDelete(t: TransactionDTO) {
+    setItems((prev) => prev.filter((i) => i.id !== t.id));
     setTotal((prev) => Math.max(0, prev - 1));
-    router.refresh();
+    try {
+      const res = await fetch(`/api/transactions/${t.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        // Muvaffaqiyatsiz — qaytaramiz.
+        setItems((prev) => [t, ...prev]);
+        setTotal((prev) => prev + 1);
+        toast({ message: "O'chirib bo'lmadi", tone: "error" });
+        return;
+      }
+      router.refresh();
+      toast({
+        message: "Tranzaksiya o'chirildi",
+        tone: "success",
+        action: {
+          label: "Qaytarish",
+          onClick: async () => {
+            await fetch(`/api/transactions/${t.id}/restore`, { method: "POST" });
+            router.refresh();
+          },
+        },
+      });
+    } catch {
+      setItems((prev) => [t, ...prev]);
+      setTotal((prev) => prev + 1);
+      toast({ message: "Serverga ulanib bo'lmadi", tone: "error" });
+    }
   }
 
   return (
@@ -72,7 +104,7 @@ export function TransactionsClient({
         currentUserId={currentUserId}
         currentUserRol={currentUserRol}
         onUpdated={handleUpdated}
-        onDeleted={handleDeleted}
+        onDelete={handleDelete}
       />
 
       {/* Filtrlangan jami — sticky footer (mobil'da pastki nav ustida) */}
@@ -84,9 +116,7 @@ export function TransactionsClient({
             {!kirimOnly && (
               <>
                 <span className="text-expense font-medium">− {formatMoney(totals.jamiChiqim)}</span>
-                <span className="font-semibold text-fg">
-                  Sof: {formatMoney(totals.sof)}
-                </span>
+                <span className="font-semibold text-fg">Sof: {formatMoney(totals.sof)}</span>
               </>
             )}
           </div>

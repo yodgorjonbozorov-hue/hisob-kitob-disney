@@ -17,7 +17,7 @@ export async function listTransactions(params: TransactionListParams) {
   const page = Math.max(1, params.page ?? 1);
   const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 20));
 
-  const where: Prisma.TransactionWhereInput = { businessId: params.businessId };
+  const where: Prisma.TransactionWhereInput = { businessId: params.businessId, deletedAt: null };
   if (params.from || params.to) {
     where.sana = {};
     if (params.from) where.sana.gte = dateOnlyStringToUTCDate(params.from);
@@ -53,3 +53,13 @@ export async function listTransactions(params: TransactionListParams) {
 
 export type TransactionListResult = Awaited<ReturnType<typeof listTransactions>>;
 export type TransactionDTO = TransactionListResult["items"][number];
+
+/** O'chirilgan (soft-deleted) tranzaksiyalar — admin savati uchun. */
+export async function listDeletedTransactions(businessId: string, limit = 100) {
+  return prisma.transaction.findMany({
+    where: { businessId, deletedAt: { not: null } },
+    include: { category: true, user: { select: { id: true, ism: true } } },
+    orderBy: { deletedAt: "desc" },
+    take: limit,
+  });
+}

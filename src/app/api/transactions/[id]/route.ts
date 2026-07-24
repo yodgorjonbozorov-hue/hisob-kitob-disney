@@ -5,6 +5,7 @@ import { handleApiError, requireOwnerOrAdmin, ForbiddenError, UnauthorizedError 
 import { updateTransactionSchema } from "@/lib/validation/transaction";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { resolveActiveBusinessId } from "@/lib/business";
+import { logAudit, getClientIp } from "@/lib/services/audit";
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -19,6 +20,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     // Faqat aktiv biznesning yozuvi tahrirlanadi (cross-business himoya).
     if (existing.businessId !== businessId) {
       throw new ForbiddenError("Bu yozuv boshqa biznesga tegishli");
+    }
+    if (existing.deletedAt) {
+      throw new ForbiddenError("O'chirilgan yozuvni tahrirlab bo'lmaydi");
     }
     requireOwnerOrAdmin(user.rol, user.userId, existing.userId);
 
@@ -59,13 +63,25 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       include: { category: true, user: { select: { id: true, ism: true } } },
     });
 
+    await logAudit({
+      businessId: existing.businessId,
+      userId: user.userId,
+      userIsm: user.ism,
+      action: "update",
+      entity: "transaction",
+      entityId: existing.id,
+      before: { turi: existing.turi, summa: existing.summa, categoryId: existing.categoryId, sana: existing.sana, izoh: existing.izoh },
+      after: { turi: updated.turi, summa: updated.summa, categoryId: updated.categoryId, sana: updated.sana, izoh: updated.izoh },
+      ip: getClientIp(request),
+    });
+
     return NextResponse.json(updated);
   } catch (error) {
     return handleApiError(error);
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const user = await getCurrentUser();
     if (!user) throw new UnauthorizedError();
@@ -80,7 +96,29 @@ export async function DELETE(_request: NextRequest, { params }: { params: { id: 
     }
     requireOwnerOrAdmin(user.rol, user.userId, existing.userId);
 
-    await prisma.transaction.delete({ where: { id: params.id } });
+    const permanent = new URL(request.url).searchParams.get("permanent") === "true";
+
+    if (permanent) {
+      // Butunlay o'chirish — faqat admin.
+      if (user.rol !== "admin") throw new ForbiddenError("Butunlay o'chirish faqat admin uchun");
+      await prisma.transaction.delete({ where: { id: params.id } });
+      await logAudit({
+        businessId: existing.businessId, userId: user.userId, userIsm: user.ism,
+        action: "delete", entity: "transaction", entityId: existing.id,
+        before: { turi: existing.turi, summa: existing.summa, permanent: true },
+        ip: getClientIp(request),
+      });
+      return NextResponse.json({ ok: true, permanent: true });
+    }
+
+    // Soft delete — belgilanadi (undo/savat uchun).
+    await prisma.transaction.update({ where: { id: params.id }, data: { deletedAt: new Date() } });
+    await logAudit({
+      businessId: existing.businessId, userId: user.userId, userIsm: user.ism,
+      action: "delete", entity: "transaction", entityId: existing.id,
+      before: { turi: existing.turi, summa: existing.summa, categoryId: existing.categoryId },
+      ip: getClientIp(request),
+    });
     return NextResponse.json({ ok: true });
   } catch (error) {
     return handleApiError(error);

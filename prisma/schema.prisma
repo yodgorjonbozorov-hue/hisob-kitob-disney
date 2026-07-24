@@ -23,6 +23,7 @@ model Business {
   transactions Transaction[]
   users        User[]
   products     Product[]
+  budgets      Budget[]
 }
 
 model User {
@@ -33,6 +34,9 @@ model User {
   rol               String
   isActive          Boolean       @default(true)
   createdAt         DateTime      @default(now())
+  lastLoginAt       DateTime?
+  // Seed parollarini birinchi kirishda majburiy almashtirish uchun.
+  mustChangePassword Boolean      @default(false)
   transactions      Transaction[]
 
   // Kassir bitta biznesga biriktiriladi; admin uchun null (barcha bizneslarni ko'radi).
@@ -62,6 +66,7 @@ model Category {
   businessId   String
   business     Business      @relation(fields: [businessId], references: [id])
   transactions Transaction[]
+  budgets      Budget[]
 
   @@unique([nomi, turi, businessId])
   @@index([turi, isActive])
@@ -82,12 +87,49 @@ model Transaction {
   user       User     @relation(fields: [userId], references: [id])
   filial     String?
   createdAt  DateTime @default(now())
+  // Soft delete — o'chirilgan yozuv shu vaqt bilan belgilanadi (undo/savat uchun).
+  deletedAt  DateTime?
 
   @@index([sana])
   @@index([turi])
   @@index([categoryId])
   @@index([businessId])
   @@index([userId])
+  @@index([deletedAt])
+}
+
+/// Audit izi — har bir muhim o'zgarish (kim, nima, oldin→keyin) yoziladi.
+model AuditLog {
+  id         String   @id @default(cuid())
+  businessId String?
+  userId     String?
+  userIsm    String?
+  action     String // "create" | "update" | "delete" | "restore"
+  entity     String // "transaction" | "user" | "category" | "sale" | "debt"
+  entityId   String
+  before     String? // JSON
+  after      String? // JSON
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([businessId])
+  @@index([entity])
+  @@index([createdAt])
+}
+
+/// Kategoriya bo'yicha oylik budjet (limit). "oy" formati: "2026-07".
+model Budget {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+  oy         String
+  limitSumma Int
+  createdAt  DateTime @default(now())
+
+  @@unique([categoryId, oy])
+  @@index([businessId, oy])
 }
 
 // ==== Ombor (inventar) moduli — faqat omborli bizneslar uchun ====

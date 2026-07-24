@@ -84,6 +84,8 @@ export function BottomNav({ ism, rol, omborli }: Props) {
     allLinks.push({ label: "Bizneslar", href: "/admin/bizneslar" });
     allLinks.push({ label: "Kategoriyalar", href: "/admin/kategoriyalar" });
     allLinks.push({ label: "Foydalanuvchilar", href: "/admin/foydalanuvchilar" });
+    allLinks.push({ label: "O'chirilganlar", href: "/admin/ochirilganlar" });
+    allLinks.push({ label: "Audit", href: "/admin/audit" });
   }
 
   async function handleLogout() {

@@ -32,6 +32,8 @@ const adminLinks = [
   { href: "/admin/bizneslar", label: "Bizneslar" },
   { href: "/admin/kategoriyalar", label: "Kategoriyalar" },
   { href: "/admin/foydalanuvchilar", label: "Foydalanuvchilar" },
+  { href: "/admin/ochirilganlar", label: "O'chirilganlar" },
+  { href: "/admin/audit", label: "Audit jurnali" },
 ];
 
 // Ombor moduli havolalari (aktiv biznes omborli bo'lsa).

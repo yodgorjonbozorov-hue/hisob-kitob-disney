@@ -1,6 +1,9 @@
 // Migratsiya SQL fayllarini libsql orqali qo'llaydi (Prisma migrate deploy libsql://
 // protokolini qo'llab-quvvatlamaydi). Lokal (file:) va Turso (libsql://) ikkalasida ishlaydi.
 // Idempotent: qo'llangan migratsiyalar `_applied_migrations` jadvalida belgilanadi.
+// Vercel build vaqtida avtomatik ishlaydi (build skriptida) — env Vercel'dan keladi,
+// lokalda .env'dan (dotenv). DATABASE_URL bo'lmasa jimgina o'tkazib yuboriladi.
+import "dotenv/config";
 import { createClient } from "@libsql/client";
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";

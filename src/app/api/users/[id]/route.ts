@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth/session";
 import { handleApiError, requireRole, UnauthorizedError } from "@/lib/auth/guard";
 import { updateUserSchema } from "@/lib/validation/user";
 import { hashPassword } from "@/lib/auth/password";
+import { logAudit, getClientIp } from "@/lib/services/audit";
 
 const USER_SELECT = {
   id: true,
@@ -65,6 +66,18 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
         ...(parol ? { parolHash: await hashPassword(parol) } : {}),
       },
       select: USER_SELECT,
+    });
+
+    await logAudit({
+      businessId: updated.businessId,
+      userId: user.userId,
+      userIsm: user.ism,
+      action: "update",
+      entity: "user",
+      entityId: params.id,
+      before: { rol: existing.rol, businessId: existing.businessId },
+      after: { rol: updated.rol, businessId: updated.businessId, ...(parol ? { parolChanged: true } : {}) },
+      ip: getClientIp(request),
     });
 
     return NextResponse.json(updated);
