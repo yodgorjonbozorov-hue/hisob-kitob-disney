@@ -19,6 +19,6 @@ export const config = {
      * sessiya cookie talab qiladi. Webhook/cron so'rovlari o'z ichida alohida
      * tekshiruv (secretToken / CRON_SECRET) orqali himoyalangan, sessiya cookie yo'q.
      */
-    "/((?!login|api/auth|api/telegram|api/cron|api/admin/migrate2|_next/static|_next/image|favicon.ico).*)",
+    "/((?!login|api/auth|api/telegram|api/cron|_next/static|_next/image|favicon.ico).*)",
   ],
 };

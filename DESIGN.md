@@ -107,16 +107,30 @@ Holat qoidasi: har bir ma'lumot sirti `loading` (skelet) · `empty` · `error`
 
 ---
 
-## 6. ROADMAP (keyingi bosqichlar — spetsifikatsiya bo'yicha)
+## 6. Bajarilgan (barchasi jonli — hisob-kitob-disneyn1.vercel.app)
 
-1. ✅ Dizayn tokenlari + dark mode + tipografiya + format (1-bosqich)
-2. 🔜 Mobil qobiq: pastki tab-bar + FAB + quick-add sheet
-3. 🔜 Dashboard: 4 StatCard (+ Qarzdorlik), Δ taqqoslash, sparkline
-4. 🔜 Tranzaksiyalar: sticky jami footer, mobil kartochka, URL filtrlar, pagination
-5. 🔜 Sotuv/Ombor/Qarzlar: kartochka grid, aging bar
-6. 🔜 Hisobot: print CSS, cyrillic-safe PDF shrift
-7. 🔜 Admin + AuditLog jadvali (backward-compatible migratsiya)
-8. 🔜 P0: command palette, global qidiruv, kengaytirilgan filtrlar, bulk amallar
+- ✅ Dizayn tokenlari, dark mode, Inter, tabular-nums, `lib/format.ts`
+- ✅ Mobil qobiq: pastki tab-bar + FAB + quick-add sheet
+- ✅ Dashboard: 4 StatCard (+ Qarzdorlik), Δ taqqoslash, onboarding
+- ✅ Tranzaksiyalar: sticky jami footer, mobil kartochka, sana presetlari +
+  summa oralig'i + URL filtrlar, ommaviy tanlash/o'chirish, Excel eksport
+- ✅ Qarzlar: aging (0-30/31-60/61-90/90+), eslatma; Ombor: foydalilik
+- ✅ Soft-delete + 5s undo + admin savati; AuditLog + admin ko'ruvchi
+- ✅ Sotuvchi roli (Doston); admin rol o'zgartirish
+- ✅ Xavfsizlik: login rate-limit, lastLogin, majburiy parol almashtirish
+- ✅ Budjetlar (kategoriya oylik limit, progress)
+- ✅ Command palette (⌘K) + global qidiruv
+- ✅ Bildirishnomalar markazi (budjet/ombor/qarz)
+- ✅ Kun yakuni (smena) + takroriy tranzaksiyalar (cron)
+- ✅ PDF cyrillic-safe apostrof
 
-> **Schema o'zgarishlari:** faqat backward-compatible (yangi nullable ustun/jadval)
-> avtomatik qilinadi; buzuvchi o'zgarishlar `MIGRATION.md` da hujjatlanadi.
+### Migratsiya strategiyasi
+Schema o'zgarishlari `prisma/migrations/*` da; Turso'ga xom-libsql migratsiya
+endpoint orqali (bir martalik, keyin olib tashlanadi) yoki
+`DATABASE_URL=... npm run db:apply` bilan qo'llanadi. Faqat additive (backward-
+compatible) o'zgarishlar.
+
+### Kelajakda (hali qilinmagan)
+CSV import, kvitansiya biriktirish (R2/S3), ko'p-valyuta, naqd oqim prognozi,
+maxsus hisobot konstruktori, rejalashtirilgan hisobotlar, URL-asosidagi biznes
+yo'nalishi (`/b/[biznes]`), PWA offline sync, Vitest/Playwright testlar.
