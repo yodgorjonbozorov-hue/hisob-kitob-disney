@@ -4,6 +4,7 @@ out
 build
 dist
 *.db
+*.db.backup
 *.db-journal
 .env
 .env*.local
