@@ -4,10 +4,10 @@ import { prisma } from "@/lib/prisma";
 import { Card } from "@/components/ui/Card";
 import { StatCard } from "@/components/ui/StatCard";
 import { MonthSelector } from "@/components/MonthSelector";
-import { CategoryPieChart } from "@/components/charts/CategoryPieChart";
+import { CategoryBars } from "@/components/charts/CategoryBars";
 import { TrendChart } from "@/components/charts/TrendChart";
 import { DailyDynamicsChart } from "@/components/charts/DailyDynamicsChart";
-import { formatMoneyCompact, formatSomLabel } from "@/lib/format";
+import { formatMoneyCompact } from "@/lib/format";
 import { currentMonthString } from "@/lib/date";
 import { requireUser } from "@/lib/auth/session";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
@@ -113,14 +113,12 @@ export default async function DashboardPage({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
-          <h2 className="font-semibold text-fg mb-3">Kirim — kategoriya bo'yicha</h2>
-          <CategoryPieChart data={kirimBreakdown} emptyLabel="Bu oyda kirim yo'q" />
-          <CategoryRanking data={kirimBreakdown} />
+          <h2 className="font-medium text-fg mb-4">Kirim — kategoriya bo'yicha</h2>
+          <CategoryBars data={kirimBreakdown} emptyLabel="Bu oyda kirim yo'q" />
         </Card>
         <Card>
-          <h2 className="font-semibold text-fg mb-3">Chiqim — kategoriya bo'yicha</h2>
-          <CategoryPieChart data={chiqimBreakdown} emptyLabel="Bu oyda chiqim yo'q" />
-          <CategoryRanking data={chiqimBreakdown} />
+          <h2 className="font-medium text-fg mb-4">Chiqim — kategoriya bo'yicha</h2>
+          <CategoryBars data={chiqimBreakdown} emptyLabel="Bu oyda chiqim yo'q" />
         </Card>
       </div>
 
@@ -134,23 +132,5 @@ export default async function DashboardPage({
         <DailyDynamicsChart data={daily} />
       </Card>
     </div>
-  );
-}
-
-function CategoryRanking({ data }: { data: { nomi: string; summa: number; foiz: number }[] }) {
-  if (data.length === 0) return null;
-  return (
-    <ul className="mt-3 space-y-1.5">
-      {data.map((item, i) => (
-        <li key={item.nomi} className="flex items-center justify-between text-sm">
-          <span className="text-muted">
-            {i + 1}. {item.nomi}
-          </span>
-          <span className="font-medium text-fg">
-            {formatSomLabel(item.summa)} <span className="text-faint">({item.foiz.toFixed(0)}%)</span>
-          </span>
-        </li>
-      ))}
-    </ul>
   );
 }
