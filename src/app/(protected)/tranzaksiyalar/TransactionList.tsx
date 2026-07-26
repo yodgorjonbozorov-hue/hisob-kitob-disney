@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import type { TransactionDTO } from "@/lib/queries/transactions";
 import type { Rol } from "@/lib/auth/session";
+import { ReceiptList } from "@/components/ui/ReceiptList";
 
 interface CategoryOption {
   id: string;
@@ -124,50 +125,27 @@ export function TransactionList({
         </table>
       </div>
 
-      {/* Mobil: kartochka ro'yxati */}
-      <div className="lg:hidden divide-y divide-line">
-        {items.length === 0 && (
-          <p className="text-center text-faint py-8 text-sm">Tranzaksiyalar topilmadi</p>
+      {/* Mobil: kassa lentasi (signature) — qatorga bosilganda tahrirlash */}
+      <div className="lg:hidden">
+        {items.length === 0 ? (
+          <p className="text-center text-faint py-8 text-sm">Yozuvlar topilmadi</p>
+        ) : (
+          <ReceiptList
+            items={items.map((t) => ({
+              id: t.id,
+              sana: typeof t.sana === "string" ? t.sana : new Date(t.sana).toISOString(),
+              turi: t.turi,
+              summa: t.summa,
+              categoryNomi: t.category.nomi,
+              izoh: t.izoh,
+              userIsm: t.user.ism,
+            }))}
+            onRowClick={(id) => {
+              const t = items.find((x) => x.id === id);
+              if (t && canModify(t)) setEditing(t);
+            }}
+          />
         )}
-        {items.map((t) => (
-          <div key={t.id} className={`p-4 ${selected.has(t.id) ? "bg-brand/5" : ""}`}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex items-start gap-2">
-                <input type="checkbox" checked={selected.has(t.id)} onChange={() => onToggleSelect(t.id)} className="mt-1" aria-label="Tanlash" />
-                <div className="min-w-0">
-                <p className="font-medium text-fg truncate">{t.category.nomi}</p>
-                <p className="text-xs text-muted mt-0.5">
-                  {formatDateUZ(new Date(t.sana))}
-                  {t.izoh ? ` · ${t.izoh}` : ""} · {t.user.ism}
-                </p>
-                </div>
-              </div>
-              <span
-                className={`font-semibold tnum whitespace-nowrap ${
-                  t.turi === "kirim" ? "text-income" : "text-expense"
-                }`}
-              >
-                {t.turi === "kirim" ? "+" : "−"} {formatSomLabel(t.summa)}
-              </span>
-            </div>
-            {canModify(t) && (
-              <div className="flex gap-4 mt-2">
-                <button
-                  onClick={() => setEditing(t)}
-                  className="text-xs font-medium text-muted hover:text-income min-h-[36px]"
-                >
-                  Tahrirlash
-                </button>
-                <button
-                  onClick={() => onDelete(t)}
-                  className="text-xs font-medium text-muted hover:text-expense min-h-[36px]"
-                >
-                  O'chirish
-                </button>
-              </div>
-            )}
-          </div>
-        ))}
       </div>
 
       {totalPages > 1 && (

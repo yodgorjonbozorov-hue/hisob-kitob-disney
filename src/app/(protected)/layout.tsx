@@ -30,33 +30,33 @@ export default async function ProtectedLayout({
     : 0;
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row">
-      <Sidebar
-        ism={session.ism}
-        rol={session.rol}
-        businesses={navBusinesses}
-        activeBusinessId={activeBusinessId}
-        omborli={activeOmborli}
-        notifCount={notifCount}
-      />
-      <MobileNav
-        ism={session.ism}
-        rol={session.rol}
-        businesses={navBusinesses}
-        activeBusinessId={activeBusinessId}
-        omborli={activeOmborli}
-        notifCount={notifCount}
-      />
-      <main className="flex-1 p-4 md:p-8 pb-24 lg:pb-8">
-        <ToastProvider>{children}</ToastProvider>
-      </main>
-      <BottomNav ism={session.ism} rol={session.rol} omborli={activeOmborli} />
-      <CommandPalette
-        rol={session.rol}
-        omborli={activeOmborli}
-        businesses={navBusinesses}
-        activeBusinessId={activeBusinessId}
-      />
-    </div>
+    <ToastProvider>
+      <div className="min-h-screen flex flex-col md:flex-row">
+        <Sidebar
+          ism={session.ism}
+          rol={session.rol}
+          businesses={navBusinesses}
+          activeBusinessId={activeBusinessId}
+          omborli={activeOmborli}
+          notifCount={notifCount}
+        />
+        <MobileNav
+          ism={session.ism}
+          rol={session.rol}
+          businesses={navBusinesses}
+          activeBusinessId={activeBusinessId}
+          omborli={activeOmborli}
+          notifCount={notifCount}
+        />
+        <main className="flex-1 p-4 md:p-8 pb-24 lg:pb-8">{children}</main>
+        <BottomNav ism={session.ism} rol={session.rol} omborli={activeOmborli} />
+        <CommandPalette
+          rol={session.rol}
+          omborli={activeOmborli}
+          businesses={navBusinesses}
+          activeBusinessId={activeBusinessId}
+        />
+      </div>
+    </ToastProvider>
   );
 }
