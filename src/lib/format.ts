@@ -29,7 +29,7 @@ export function formatSom(value: number): string {
 }
 
 export function formatSomLabel(value: number): string {
-  return `${formatSom(value)} so'm`;
+  return `${formatSom(value)} soʻm`;
 }
 
 /**
@@ -46,9 +46,9 @@ export function pdfSafe(text: string): string {
 // Pul butun son (so'm) sifatida saqlanadi — float emas (yaxlitlash xatosi bo'lmasin).
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** `12 450 000 so'm` — guruhlangan, uz-UZ. Jadval/ro'yxat/summa uchun asosiy format. */
+/** `12 450 000 soʻm` — guruhlangan, uz-UZ. Jadval/ro'yxat/summa uchun asosiy format. */
 export function formatMoney(value: number): string {
-  return `${formatSom(value)} so'm`;
+  return `${formatSom(value)} soʻm`;
 }
 
 /**
@@ -102,6 +102,34 @@ export function formatDate(date: Date): string {
   const m = uzOyNomi(date.getUTCMonth());
   const y = date.getUTCFullYear();
   return `${d} ${m} ${y}`;
+}
+
+/** `formatMoneyCompact` uchun qisqa alias (REDESIGN.md lug'ati). */
+export const formatCompact = formatMoneyCompact;
+
+/**
+ * "24 iyul" (joriy yil) yoki "24 iyul 2025" (boshqa yil) — kichik oy nomi.
+ * DateOnly (UTC) qiymat uchun.
+ */
+export function formatDateUz(date: Date, now: Date = new Date()): string {
+  const d = date.getUTCDate();
+  const m = uzOyNomi(date.getUTCMonth()).toLowerCase();
+  const y = date.getUTCFullYear();
+  return y === now.getUTCFullYear() ? `${d} ${m}` : `${d} ${m} ${y}`;
+}
+
+/**
+ * Nisbiy kun (bosh harf bilan): `Bugun`, `Kecha`, `Ertaga`, aks holda "24 iyul".
+ * Kassa lentasi kun sarlavhalari uchun. Asia/Tashkent kun chegaralari.
+ */
+export function formatRelativeDay(date: Date, now: Date = new Date()): string {
+  const TASHKENT_OFFSET_MS = 5 * 60 * 60 * 1000;
+  const dayIndex = (d: Date) => Math.floor((d.getTime() + TASHKENT_OFFSET_MS) / 86_400_000);
+  const diff = dayIndex(now) - dayIndex(date);
+  if (diff === 0) return "Bugun";
+  if (diff === 1) return "Kecha";
+  if (diff === -1) return "Ertaga";
+  return formatDateUz(date, now);
 }
 
 /**

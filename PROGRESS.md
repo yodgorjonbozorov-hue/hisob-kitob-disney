@@ -20,8 +20,21 @@ Faza-faza bajarilish jurnali.
 
 ## Jurnal
 
-### Faza 0 (boshlandi)
+### Faza 0 (tugadi)
 - `redesign/ui-v2` branch yaratildi (`main`dan).
 - `prisma/dev.db.backup` olindi.
 - `.claude/settings.json` xavfsizlik sozlamalari o'rnatildi.
 - `ASSUMPTIONS.md`, `PROGRESS.md`, `DESIGN.md` (redesign reja) yaratildi.
+- Playwright + chromium o'rnatildi, `scripts/shot.mjs` (390/1440px).
+
+### Faza 1 (tugadi)
+- `globals.css`: teal token palitrasi (canvas/surface/ink/brand/income/expense/debt),
+  light + dark. Kassa lentasi perforatsiya CSS'i.
+- `tailwind.config`: yangi tokenlar (debt, line-strong, brand.ink/wash, chart[1-5]),
+  type scale 12-60, radius 10/14/20, Manrope `font-display`.
+- `layout.tsx`: Manrope + Inter (next/font), theme-color yangilandi.
+- `lib/format.ts`: `soʻm` (U+02BB), `formatRelativeDay`, `formatDateUz`, `formatCompact`.
+- `lib/copy.ts`: markazlashgan lug'at.
+- Screenshot: `.screenshots/phase1/` — token re-skin ishladi, build toza.
+- Qolgan (keyingi fazalar): Money=Manrope (F2), nav token migratsiya (F3),
+  grafik default ko'rinishini olib tashlash (F5).

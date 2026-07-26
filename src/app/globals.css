@@ -3,47 +3,64 @@
 @tailwind utilities;
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Dizayn tokenlari. RGB kanal qiymatlari (Tailwind <alpha-value> uchun).
-   income = muvaffaqiyat (yashil), expense = xavf (qizil) — hech qachon almashtirilmaydi.
+   "Kassa" dizayn tokenlari (REDESIGN.md). Sovuq teal + issiq qarz rangi.
+   Rang faqat pul yo'nalishini bildiradi: income (yashil) / expense (qizil) /
+   debt (jigarrang). Tailwind default palitra UI'da ishlatilmaydi.
+   Token NOMLARI oldingi kod bilan mos (bg-app/surface/fg/muted/income...) —
+   qiymatlar yangi palitraga o'zgartirildi, shu bois butun ilova qayta bo'yaldi.
    ───────────────────────────────────────────────────────────────────────── */
 :root {
-  --bg-app: 248 250 252; /* slate-50 */
-  --bg-surface: 255 255 255;
-  --bg-surface-2: 241 245 249; /* slate-100 */
-  --border: 226 232 240; /* slate-200 */
-  --fg: 15 23 42; /* slate-900 */
-  --fg-muted: 100 116 139; /* slate-500 */
-  --fg-faint: 148 163 184; /* slate-400 */
+  --bg-app: 243 246 247;        /* canvas #F3F6F7 */
+  --bg-surface: 255 255 255;    /* surface #FFFFFF */
+  --bg-surface-2: 237 241 242;  /* surface-sunk #EDF1F2 */
+  --border: 221 228 231;        /* line #DDE4E7 */
+  --border-strong: 195 206 211; /* line-strong #C3CED3 */
+  --fg: 12 26 33;               /* ink #0C1A21 */
+  --fg-muted: 75 95 104;        /* ink-soft #4B5F68 */
+  --fg-faint: 130 150 160;      /* ink-faint #8296A0 */
 
-  --income: 5 150 105; /* emerald-600 */
-  --income-soft: 209 250 229; /* emerald-100 */
-  --income-fg: 4 120 87; /* emerald-700 */
-  --expense: 225 29 72; /* rose-600 */
-  --expense-soft: 255 228 230; /* rose-100 */
-  --expense-fg: 190 18 60; /* rose-700 */
-  --brand: 5 150 105;
+  --brand: 11 107 95;           /* #0B6B5F */
+  --brand-ink: 8 79 70;         /* #084F46 hover/pressed */
+  --brand-wash: 228 240 238;    /* #E4F0EE */
   --brand-fg: 255 255 255;
+
+  --income: 14 124 87;          /* #0E7C57 */
+  --income-soft: 230 244 238;   /* #E6F4EE */
+  --income-fg: 11 93 65;        /* darker for badge text */
+  --expense: 192 54 44;         /* #C0362C */
+  --expense-soft: 251 234 232;  /* #FBEAE8 */
+  --expense-fg: 154 43 34;
+  --debt: 185 118 26;           /* #B9761A */
+  --debt-soft: 251 241 227;     /* #FBF1E3 */
+  --debt-fg: 138 88 20;
 
   color-scheme: light;
 }
 
 .dark {
-  --bg-app: 2 6 23; /* slate-950 */
-  --bg-surface: 15 23 42; /* slate-900 */
-  --bg-surface-2: 30 41 59; /* slate-800 */
-  --border: 51 65 85; /* slate-700 */
-  --fg: 241 245 249; /* slate-100 */
-  --fg-muted: 148 163 184; /* slate-400 */
-  --fg-faint: 100 116 139; /* slate-500 */
+  --bg-app: 8 18 22;            /* deep teal-black */
+  --bg-surface: 15 28 33;
+  --bg-surface-2: 23 40 46;
+  --border: 40 58 64;
+  --border-strong: 58 78 84;
+  --fg: 226 236 238;
+  --fg-muted: 150 170 178;
+  --fg-faint: 104 128 136;
 
-  --income: 52 211 153; /* emerald-400 — dark fonda yorqinroq */
-  --income-soft: 6 78 59; /* emerald-950-ish */
-  --income-fg: 110 231 183; /* emerald-300 */
-  --expense: 251 113 133; /* rose-400 */
-  --expense-soft: 76 5 25; /* rose-950-ish */
-  --expense-fg: 253 164 175; /* rose-300 */
-  --brand: 16 185 129;
-  --brand-fg: 255 255 255;
+  --brand: 45 168 150;          /* yorqinroq teal */
+  --brand-ink: 90 200 182;
+  --brand-wash: 18 54 49;
+  --brand-fg: 6 20 18;
+
+  --income: 52 197 143;
+  --income-soft: 12 54 40;
+  --income-fg: 130 224 184;
+  --expense: 233 108 96;
+  --expense-soft: 60 24 20;
+  --expense-fg: 246 168 158;
+  --debt: 216 160 82;
+  --debt-soft: 54 40 18;
+  --debt-fg: 232 190 130;
 
   color-scheme: dark;
 }
@@ -59,7 +76,14 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Raqamlar hamma joyda tabular — ustunlar sakramaydi. */
+/* Raqamlar / display — Manrope, tabular. Pul, KPI, sarlavha summasi. */
+.font-display {
+  font-family: var(--font-manrope), "Manrope", var(--font-inter), sans-serif;
+  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
+}
+
+/* Har qanday raqamli kontekst tabular — ustunlar sakramaydi. */
 .tnum,
 table,
 .kpi,
@@ -68,7 +92,11 @@ input[inputmode="numeric"] {
   font-feature-settings: "tnum";
 }
 
-/* Reduced motion */
+/* 26px+ sarlavhalarda zichroq harf oralig'i */
+.tracking-tight-display {
+  letter-spacing: -0.02em;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -79,16 +107,33 @@ input[inputmode="numeric"] {
   }
 }
 
-/* Fokus halqasi — barcha interaktiv elementlar uchun ko'rinadigan */
 :focus-visible {
   outline: 2px solid rgb(var(--brand));
   outline-offset: 2px;
 }
 
-/* iOS safe-area yordamchilari */
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
 }
 .h-safe-bottom {
   height: env(safe-area-inset-bottom);
 }
+
+/* Signature: kassa lentasi perforatsiyasi (kun ajratgichi) */
+.receipt-perf {
+  position: relative;
+  border-bottom: 1px dashed rgb(var(--border-strong));
+}
+.receipt-perf::before,
+.receipt-perf::after {
+  content: "";
+  position: absolute;
+  bottom: -7px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: rgb(var(--bg-app));
+  border: 1px solid rgb(var(--border));
+}
+.receipt-perf::before { left: -6px; }
+.receipt-perf::after { right: -6px; }

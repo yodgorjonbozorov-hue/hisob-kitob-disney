@@ -16,10 +16,11 @@ const config: Config = {
         surface: "rgb(var(--bg-surface) / <alpha-value>)",
         "surface-2": "rgb(var(--bg-surface-2) / <alpha-value>)",
         line: "rgb(var(--border) / <alpha-value>)",
+        "line-strong": "rgb(var(--border-strong) / <alpha-value>)",
         fg: "rgb(var(--fg) / <alpha-value>)",
         muted: "rgb(var(--fg-muted) / <alpha-value>)",
         faint: "rgb(var(--fg-faint) / <alpha-value>)",
-        // Semantik moliyaviy ranglar
+        // Semantik moliyaviy ranglar: income (yashil) / expense (qizil) / debt (jigarrang)
         income: {
           DEFAULT: "rgb(var(--income) / <alpha-value>)",
           soft: "rgb(var(--income-soft) / <alpha-value>)",
@@ -30,33 +31,50 @@ const config: Config = {
           soft: "rgb(var(--expense-soft) / <alpha-value>)",
           fg: "rgb(var(--expense-fg) / <alpha-value>)",
         },
+        debt: {
+          DEFAULT: "rgb(var(--debt) / <alpha-value>)",
+          soft: "rgb(var(--debt-soft) / <alpha-value>)",
+          fg: "rgb(var(--debt-fg) / <alpha-value>)",
+        },
         brand: {
           DEFAULT: "rgb(var(--brand) / <alpha-value>)",
+          ink: "rgb(var(--brand-ink) / <alpha-value>)",
+          wash: "rgb(var(--brand-wash) / <alpha-value>)",
           fg: "rgb(var(--brand-fg) / <alpha-value>)",
         },
-        // Eski nomlar (backward-compat) — income/expense bilan bir xil
-        kirim: { DEFAULT: "#059669", light: "#d1fae5" },
-        chiqim: { DEFAULT: "#e11d48", light: "#ffe4e6" },
+        // Grafik kategoriya palitrasi (to'yinganligi past, doimiy biriktiriladi)
+        chart: {
+          1: "#0B6B5F",
+          2: "#2F6F91",
+          3: "#B06A4A",
+          4: "#6E7F52",
+          5: "#7A5C82",
+        },
       },
       fontFamily: {
         sans: ["var(--font-inter)", "Inter", "Segoe UI", "system-ui", "sans-serif"],
+        display: ["var(--font-manrope)", "Manrope", "var(--font-inter)", "sans-serif"],
       },
       fontSize: {
-        // Type scale: 12/13/14/16/20/24/32
+        // Type scale (REDESIGN.md): 12/13/15/17/20/26/34/46/60
         "2xs": ["0.75rem", { lineHeight: "1rem" }], // 12
         xs: ["0.8125rem", { lineHeight: "1.125rem" }], // 13
-        sm: ["0.875rem", { lineHeight: "1.25rem" }], // 14
-        base: ["1rem", { lineHeight: "1.5rem" }], // 16
-        lg: ["1.25rem", { lineHeight: "1.75rem" }], // 20
-        xl: ["1.5rem", { lineHeight: "2rem" }], // 24
-        "2xl": ["2rem", { lineHeight: "2.375rem" }], // 32
+        sm: ["0.9375rem", { lineHeight: "1.375rem" }], // 15 (body min)
+        base: ["1.0625rem", { lineHeight: "1.5rem" }], // 17 (kassir min)
+        lg: ["1.25rem", { lineHeight: "1.6rem" }], // 20
+        xl: ["1.625rem", { lineHeight: "1.9rem", letterSpacing: "-0.02em" }], // 26
+        "2xl": ["2.125rem", { lineHeight: "2.4rem", letterSpacing: "-0.02em" }], // 34
+        "3xl": ["2.875rem", { lineHeight: "3.1rem", letterSpacing: "-0.02em" }], // 46
+        "4xl": ["3.75rem", { lineHeight: "3.9rem", letterSpacing: "-0.02em" }], // 60
       },
       borderRadius: {
-        xl: "0.875rem",
-        "2xl": "1rem",
+        lg: "0.625rem", // 10 — input/tugma
+        xl: "0.875rem", // 14 — kartochka
+        "2xl": "1.25rem", // 20 — sheet/modal
       },
       boxShadow: {
-        card: "0 1px 2px 0 rgb(0 0 0 / 0.04), 0 1px 3px 0 rgb(0 0 0 / 0.06)",
+        card: "0 1px 2px 0 rgb(12 26 33 / 0.04)",
+        raised: "0 8px 28px 0 rgb(12 26 33 / 0.12)",
       },
       keyframes: {
         "slide-up": {
