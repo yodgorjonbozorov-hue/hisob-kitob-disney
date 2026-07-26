@@ -2,16 +2,18 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import {
+  LayoutDashboard, Receipt, FileText, PiggyBank, Bell, CalendarCheck, Repeat,
+  Package, ShoppingCart, HandCoins, Building2, Tags, Users, Trash2, ScrollText,
+  LogOut, KeyRound, type LucideIcon,
+} from "lucide-react";
+import { cn } from "@/lib/cn";
 import type { Rol } from "@/lib/auth/session";
 import { TelegramLinkButton } from "@/components/TelegramLinkButton";
 import { BusinessSwitcher } from "@/components/BusinessSwitcher";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
-interface BusinessOption {
-  id: string;
-  nomi: string;
-}
-
+interface BusinessOption { id: string; nomi: string }
 interface Props {
   ism: string;
   rol: Rol;
@@ -21,54 +23,45 @@ interface Props {
   notifCount: number;
 }
 
-const adminOnlyBaseLinks = [
-  { href: "/", label: "Boshqaruv paneli" },
-  { href: "/tranzaksiyalar", label: "Tranzaksiyalar" },
-  { href: "/hisobot", label: "Oylik hisobot" },
-  { href: "/byudjet", label: "Budjet" },
+type NavLink = { href: string; label: string; icon: LucideIcon };
+
+const adminBase: NavLink[] = [
+  { href: "/", label: "Asosiy", icon: LayoutDashboard },
+  { href: "/tranzaksiyalar", label: "Yozuvlar", icon: Receipt },
+  { href: "/hisobot", label: "Oylik hisobot", icon: FileText },
+  { href: "/byudjet", label: "Budjet", icon: PiggyBank },
+];
+const kassirBase: NavLink[] = [
+  { href: "/tranzaksiyalar", label: "Yozuvlar", icon: Receipt },
+  { href: "/smena", label: "Kun yakuni", icon: CalendarCheck },
+];
+const adminTail: NavLink[] = [
+  { href: "/takroriy", label: "Takroriy", icon: Repeat },
+  { href: "/smena", label: "Kun yakuni", icon: CalendarCheck },
+  { href: "/admin/bizneslar", label: "Bizneslar", icon: Building2 },
+  { href: "/admin/kategoriyalar", label: "Kategoriyalar", icon: Tags },
+  { href: "/admin/foydalanuvchilar", label: "Foydalanuvchilar", icon: Users },
+  { href: "/admin/ochirilganlar", label: "O'chirilganlar", icon: Trash2 },
+  { href: "/admin/audit", label: "Audit jurnali", icon: ScrollText },
+];
+const omborAdmin: NavLink[] = [
+  { href: "/ombor", label: "Ombor", icon: Package },
+  { href: "/sotuv", label: "Sotuv", icon: ShoppingCart },
+  { href: "/qarzlar", label: "Qarzlar", icon: HandCoins },
+];
+const omborKassir: NavLink[] = [
+  { href: "/sotuv", label: "Sotuv", icon: ShoppingCart },
+  { href: "/qarzlar", label: "Qarzlar", icon: HandCoins },
 ];
 
-const kassirLinks = [
-  { href: "/tranzaksiyalar", label: "Tranzaksiyalar" },
-  { href: "/smena", label: "Kun yakuni" },
-];
-
-const adminLinks = [
-  { href: "/takroriy", label: "Takroriy" },
-  { href: "/smena", label: "Kun yakuni" },
-  { href: "/admin/bizneslar", label: "Bizneslar" },
-  { href: "/admin/kategoriyalar", label: "Kategoriyalar" },
-  { href: "/admin/foydalanuvchilar", label: "Foydalanuvchilar" },
-  { href: "/admin/ochirilganlar", label: "O'chirilganlar" },
-  { href: "/admin/audit", label: "Audit jurnali" },
-];
-
-// Ombor moduli havolalari (aktiv biznes omborli bo'lsa).
-const omborAdminLinks = [
-  { href: "/ombor", label: "Ombor" },
-  { href: "/sotuv", label: "Sotuv" },
-  { href: "/qarzlar", label: "Qarzlar" },
-];
-const omborKassirLinks = [
-  { href: "/sotuv", label: "Sotuv" },
-  { href: "/qarzlar", label: "Qarzlar" },
-];
-
-const ROL_LABEL: Record<Rol, string> = {
-  admin: "Direktor",
-  kassir: "Kassir",
-  sotuvchi: "Sotuvchi",
-};
+const ROL_LABEL: Record<Rol, string> = { admin: "Direktor", kassir: "Kassir", sotuvchi: "Sotuvchi" };
 
 export default function Sidebar({ ism, rol, businesses, activeBusinessId, omborli, notifCount }: Props) {
   const pathname = usePathname();
   const router = useRouter();
 
-  const omborLinks = omborli ? (rol === "admin" ? omborAdminLinks : omborKassirLinks) : [];
-  const links =
-    rol === "admin"
-      ? [...adminOnlyBaseLinks, ...omborLinks, ...adminLinks]
-      : [...omborLinks, ...kassirLinks];
+  const omborLinks = omborli ? (rol === "admin" ? omborAdmin : omborKassir) : [];
+  const links = rol === "admin" ? [...adminBase, ...omborLinks, ...adminTail] : [...omborLinks, ...kassirBase];
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -76,62 +69,56 @@ export default function Sidebar({ ism, rol, businesses, activeBusinessId, omborl
     router.refresh();
   }
 
+  const item = (href: string, label: string, Icon: LucideIcon, badge?: number) => {
+    const active = pathname === href;
+    return (
+      <Link
+        key={href + label}
+        href={href}
+        className={cn(
+          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition",
+          active ? "bg-brand-wash text-brand font-medium" : "text-muted hover:bg-surface-2 hover:text-fg"
+        )}
+      >
+        <Icon className="w-[18px] h-[18px] shrink-0" strokeWidth={active ? 2.25 : 2} />
+        <span className="flex-1">{label}</span>
+        {badge ? (
+          <span className="bg-expense text-white text-2xs font-semibold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center tnum">
+            {badge}
+          </span>
+        ) : null}
+      </Link>
+    );
+  };
+
   return (
-    <aside className="w-64 shrink-0 bg-slate-900 text-slate-100 min-h-screen hidden lg:flex lg:flex-col">
-      <div className="px-6 py-6 border-b border-slate-800">
-        <h1 className="font-bold text-lg">Hisob-Kitob</h1>
-        <p className="text-slate-400 text-xs mt-0.5">Kirim-Chiqim Tizimi</p>
+    <aside className="w-64 shrink-0 bg-surface border-r border-line min-h-screen hidden lg:flex lg:flex-col">
+      <div className="px-5 py-5 border-b border-line">
+        <h1 className="font-display font-bold text-lg text-fg">Hisob-Kitob</h1>
+        <p className="text-faint text-xs mt-0.5">Kirim-chiqim tizimi</p>
       </div>
       <div className="px-3 pt-4">
-        <p className="text-xs text-slate-500 px-1 mb-1">Biznes</p>
+        <p className="text-2xs text-faint px-1 mb-1.5 uppercase tracking-wide">Biznes</p>
         <BusinessSwitcher businesses={businesses} activeId={activeBusinessId} rol={rol} />
       </div>
-      <nav className="flex-1 px-3 py-4 space-y-1">
-        <Link
-          href="/bildirishnomalar"
-          className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition ${
-            pathname === "/bildirishnomalar" ? "bg-emerald-600 text-white" : "text-slate-300 hover:bg-slate-800"
-          }`}
-        >
-          <span>🔔 Bildirishnomalar</span>
-          {notifCount > 0 && (
-            <span className="bg-rose-500 text-white text-2xs font-semibold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
-              {notifCount}
-            </span>
-          )}
-        </Link>
-        {links.map((link) => {
-          const active = pathname === link.href;
-          return (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={`block rounded-lg px-3 py-2 text-sm font-medium transition ${
-                active ? "bg-emerald-600 text-white" : "text-slate-300 hover:bg-slate-800"
-              }`}
-            >
-              {link.label}
-            </Link>
-          );
-        })}
+      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+        {item("/bildirishnomalar", "Bildirishnomalar", Bell, notifCount)}
+        {links.map((l) => item(l.href, l.label, l.icon))}
       </nav>
-      <div className="px-6 py-4 border-t border-slate-800 space-y-2">
+      <div className="px-4 py-4 border-t border-line space-y-2">
         <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium">{ism}</p>
-            <p className="text-xs text-slate-400">{ROL_LABEL[rol]}</p>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-fg truncate">{ism}</p>
+            <p className="text-xs text-faint">{ROL_LABEL[rol]}</p>
           </div>
-          <ThemeToggle className="text-slate-400 hover:text-white hover:bg-slate-800" />
+          <ThemeToggle />
         </div>
-        <TelegramLinkButton className="block text-xs text-slate-400 hover:text-emerald-400" />
-        <Link href="/parol-ozgartirish" className="block text-xs text-slate-400 hover:text-emerald-400">
-          Parolni o'zgartirish
+        <TelegramLinkButton className="flex items-center gap-2 text-xs text-muted hover:text-brand" />
+        <Link href="/parol-ozgartirish" className="flex items-center gap-2 text-xs text-muted hover:text-brand">
+          <KeyRound className="w-3.5 h-3.5" /> Parolni o'zgartirish
         </Link>
-        <button
-          onClick={handleLogout}
-          className="text-sm text-rose-400 hover:text-rose-300"
-        >
-          Chiqish
+        <button onClick={handleLogout} className="flex items-center gap-2 text-sm text-expense hover:text-expense-fg">
+          <LogOut className="w-4 h-4" /> Chiqish
         </button>
       </div>
     </aside>

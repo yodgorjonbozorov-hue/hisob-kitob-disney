@@ -62,7 +62,7 @@ export function BottomNav({ ism, rol, omborli }: Props) {
   // Asosiy tablar (rol + omborli asosida)
   const tabs: { label: string; href: string; icon: string }[] = [];
   if (isAdmin) tabs.push({ label: "Asosiy", href: "/", icon: "home" });
-  tabs.push({ label: "Tranzaksiya", href: "/tranzaksiyalar", icon: "list" });
+  tabs.push({ label: "Yozuvlar", href: "/tranzaksiyalar", icon: "list" });
   if (omborli) tabs.push({ label: "Sotuv", href: "/sotuv", icon: "cart" });
   else if (isAdmin) tabs.push({ label: "Hisobot", href: "/hisobot", icon: "chart" });
 
@@ -74,7 +74,7 @@ export function BottomNav({ ism, rol, omborli }: Props) {
   const allLinks: { label: string; href: string }[] = [];
   allLinks.push({ label: "🔔 Bildirishnomalar", href: "/bildirishnomalar" });
   if (isAdmin) allLinks.push({ label: "Boshqaruv paneli", href: "/" });
-  allLinks.push({ label: "Tranzaksiyalar", href: "/tranzaksiyalar" });
+  allLinks.push({ label: "Yozuvlar", href: "/tranzaksiyalar" });
   if (isAdmin) allLinks.push({ label: "Oylik hisobot", href: "/hisobot" });
   if (isAdmin) allLinks.push({ label: "Budjet", href: "/byudjet" });
   if (omborli) {

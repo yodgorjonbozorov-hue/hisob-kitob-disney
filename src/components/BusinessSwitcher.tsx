@@ -28,7 +28,10 @@ export function BusinessSwitcher({
   if (rol === "kassir" || businesses.length <= 1) {
     const nomi = businesses.find((b) => b.id === activeId)?.nomi ?? businesses[0]?.nomi ?? "—";
     return (
-      <div className="px-3 py-2 rounded-lg bg-slate-800 text-slate-100 text-sm font-medium">{nomi}</div>
+      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-2 text-fg text-sm font-medium border border-line">
+        <span className="w-2 h-2 rounded-full bg-brand shrink-0" />
+        <span className="truncate">{nomi}</span>
+      </div>
     );
   }
 
@@ -52,7 +55,7 @@ export function BusinessSwitcher({
       value={activeId ?? ""}
       onChange={handleChange}
       disabled={loading}
-      className="px-3 py-2 rounded-lg bg-slate-800 text-slate-100 text-sm font-medium border border-slate-700 focus:outline-none"
+      className="w-full px-3 py-2 rounded-lg bg-surface-2 text-fg text-sm font-medium border border-line focus:outline-none focus:border-brand"
     >
       {businesses.map((b) => (
         <option key={b.id} value={b.id}>
