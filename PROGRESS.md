@@ -4,12 +4,12 @@ Faza-faza bajarilish jurnali.
 
 | Faza | Ish | Holat |
 |---|---|---|
-| 0 | Audit, branch, backup, hujjatlar, before-screenshots | 🔄 Ketmoqda |
-| 1 | Tokenlar: globals.css, tailwind, shriftlar, format, copy | ⏳ |
-| 2 | components/ui primitivlari + ReceiptList + NumberPad + CategoryPicker | ⏳ |
-| 3 | App shell: sidebar, biznes almashtirgich, pastki nav, toast | ⏳ |
-| 4 | Kassir oqimi: kassa ekrani, 3-qadamli sheet, keypad, undo | ⏳ |
-| 5 | Direktor dashboard + grafik qoidalari (pie yo'q) | ⏳ |
+| 0 | Audit, branch, backup, hujjatlar, before-screenshots | ✅ |
+| 1 | Tokenlar: globals.css, tailwind, shriftlar, format, copy | ✅ |
+| 2 | components/ui primitivlari + ReceiptList + NumberPad + CategoryPicker | ✅ |
+| 3 | App shell: sidebar, biznes almashtirgich, pastki nav, toast | ✅ |
+| 4 | Kassir oqimi: kassa ekrani, 3-qadamli sheet, keypad, undo | 🔄 (keypad+sheet tayyor; kassa bosh ekrani qoldi) |
+| 5 | Direktor dashboard + grafik qoidalari (pie yo'q) | ✅ |
 | 6 | Yozuvlar sahifasi (filtr, lenta, eksport) | ⏳ |
 | 7 | Ombor / Sotuv / Qarzdorlik | ⏳ |
 | 8 | Oylik hisobot + PDF + Excel | ⏳ |
