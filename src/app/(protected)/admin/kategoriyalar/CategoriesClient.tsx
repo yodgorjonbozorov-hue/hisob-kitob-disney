@@ -44,13 +44,13 @@ export function CategoriesClient({ initialCategories }: { initialCategories: Cat
         <div className="flex gap-2">
           <button
             onClick={() => setTab("kirim")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === "kirim" ? "bg-emerald-600 text-white" : "bg-emerald-50 text-income-fg"}`}
+            className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === "kirim" ? "bg-income text-white" : "bg-income-soft text-income-fg"}`}
           >
             Kirim
           </button>
           <button
             onClick={() => setTab("chiqim")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === "chiqim" ? "bg-rose-600 text-white" : "bg-rose-50 text-expense-fg"}`}
+            className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === "chiqim" ? "bg-expense text-white" : "bg-expense-soft text-expense-fg"}`}
           >
             Chiqim
           </button>

@@ -60,7 +60,7 @@ export function ReportView({ report }: { report: MonthlyReport }) {
             O'tgan oyga nisbatan <ChangeLabel value={report.changePct.chiqim} invert />
           </p>
         </Card>
-        <Card className={report.sofFoyda >= 0 ? "bg-emerald-50 border-emerald-200" : "bg-rose-50 border-rose-200"}>
+        <Card className={report.sofFoyda >= 0 ? "bg-income-soft border-income/40" : "bg-expense-soft border-expense/40"}>
           <p className="text-muted text-sm mb-1">Sof foyda</p>
           <p className={`text-2xl font-bold ${report.sofFoyda >= 0 ? "text-income" : "text-expense"}`}>
             {formatSomLabel(report.sofFoyda)}
@@ -79,13 +79,13 @@ export function ReportView({ report }: { report: MonthlyReport }) {
       <div className="flex flex-wrap gap-3">
         <a
           href={`/api/reports/monthly/pdf?month=${report.month}`}
-          className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-800 hover:bg-slate-900 text-white transition"
+          className="px-4 py-2 rounded-lg text-sm font-medium bg-brand hover:bg-brand-ink text-white transition"
         >
           PDF yuklab olish
         </a>
         <a
           href={`/api/reports/monthly/excel?month=${report.month}`}
-          className="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white transition"
+          className="px-4 py-2 rounded-lg text-sm font-medium bg-income hover:brightness-110 text-white transition"
         >
           Excel yuklab olish
         </a>

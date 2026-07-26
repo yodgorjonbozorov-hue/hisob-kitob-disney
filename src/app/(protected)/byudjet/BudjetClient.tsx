@@ -53,7 +53,7 @@ export function BudjetClient({ rows, month }: { rows: BudgetRow[]; month: string
       {rows.map((r) => {
         const over = r.limitSumma > 0 && r.sarflangan > r.limitSumma;
         const warn = r.foiz >= 80 && r.foiz < 100;
-        const barColor = over || r.foiz >= 100 ? "bg-expense" : warn ? "bg-amber-500" : "bg-income";
+        const barColor = over || r.foiz >= 100 ? "bg-expense" : warn ? "bg-debt" : "bg-income";
         return (
           <Card key={r.categoryId}>
             <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
@@ -87,7 +87,7 @@ export function BudjetClient({ rows, month }: { rows: BudgetRow[]; month: string
                   <span className={over ? "text-expense font-medium" : "text-muted"}>
                     {formatSomLabel(r.sarflangan)} / {formatSomLabel(r.limitSumma)}
                   </span>
-                  <span className={over ? "text-expense font-semibold" : warn ? "text-amber-600 dark:text-amber-400" : "text-muted"}>
+                  <span className={over ? "text-expense font-semibold" : warn ? "text-debt dark:text-debt-fg" : "text-muted"}>
                     {r.foiz}%{over ? " · oshib ketdi!" : ""}
                   </span>
                 </div>

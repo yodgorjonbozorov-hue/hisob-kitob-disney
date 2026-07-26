@@ -22,7 +22,7 @@ function bucketOf(days: number): 0 | 1 | 2 | 3 {
 }
 const BUCKET_META = [
   { label: "0–30 kun", cls: "text-income" },
-  { label: "31–60 kun", cls: "text-amber-600 dark:text-amber-400" },
+  { label: "31–60 kun", cls: "text-debt dark:text-debt-fg" },
   { label: "61–90 kun", cls: "text-orange-600 dark:text-orange-400" },
   { label: "90+ kun", cls: "text-expense" },
 ];
@@ -67,7 +67,7 @@ export function QarzlarClient({ initialDebts }: { initialDebts: DebtDTO[] }) {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <div className="bg-surface rounded-2xl shadow-card border border-line p-4 col-span-2 lg:col-span-1">
           <p className="text-muted text-sm mb-1">Jami qolgan</p>
-          <p className="text-xl font-semibold text-amber-600 tnum">{formatSomLabel(jamiQolgan)}</p>
+          <p className="text-xl font-semibold text-debt tnum">{formatSomLabel(jamiQolgan)}</p>
         </div>
         {BUCKET_META.map((b, i) => (
           <div key={i} className="bg-surface rounded-2xl shadow-card border border-line p-4">
@@ -113,7 +113,7 @@ export function QarzlarClient({ initialDebts }: { initialDebts: DebtDTO[] }) {
                     <td className="py-2.5 text-muted">{d.mijozTel ?? "—"}</td>
                     <td className="py-2.5 text-right tnum">{formatSomLabel(d.jamiSumma)}</td>
                     <td className="py-2.5 text-right text-income tnum">{formatSom(d.tolangan)}</td>
-                    <td className="py-2.5 text-right font-medium text-amber-600 tnum">{formatSom(d.qolgan)}</td>
+                    <td className="py-2.5 text-right font-medium text-debt tnum">{formatSom(d.qolgan)}</td>
                     <td className="py-2.5 text-muted whitespace-nowrap">{formatDateUZ(new Date(d.sana))}</td>
                     <td className="py-2.5 text-right whitespace-nowrap">
                       {d.isYopilgan ? (
@@ -182,7 +182,7 @@ function PaymentModal({
     <Modal open onClose={onClose} title={`To'lov: ${debt.mijozNomi}`}>
       <form onSubmit={submit} className="space-y-3">
         <p className="text-sm text-muted">
-          Qolgan qarz: <span className="font-medium text-amber-600">{formatSomLabel(debt.qolgan)}</span>
+          Qolgan qarz: <span className="font-medium text-debt">{formatSomLabel(debt.qolgan)}</span>
         </p>
         <div>
           <label className="block text-xs text-muted mb-1">To'lov summasi (so'm)</label>

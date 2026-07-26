@@ -7,8 +7,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 
 const DOT: Record<string, string> = {
   danger: "bg-expense",
-  warning: "bg-amber-500",
-  info: "bg-sky-500",
+  warning: "bg-debt",
+  info: "bg-brand",
 };
 
 export default async function BildirishnomalarPage() {

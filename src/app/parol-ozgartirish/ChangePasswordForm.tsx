@@ -73,7 +73,7 @@ export function ChangePasswordForm({ forced }: { forced: boolean }) {
           <div className="flex-1 h-1.5 rounded-full bg-surface-2 overflow-hidden">
             <div
               className={`h-full transition-all ${
-                strength <= 1 ? "bg-expense" : strength === 2 ? "bg-amber-500" : "bg-income"
+                strength <= 1 ? "bg-expense" : strength === 2 ? "bg-debt" : "bg-income"
               }`}
               style={{ width: `${(strength / 4) * 100}%` }}
             />

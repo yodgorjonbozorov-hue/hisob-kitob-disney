@@ -42,7 +42,7 @@ export default function LoginForm() {
           type="text"
           value={login}
           onChange={(e) => setLogin(e.target.value)}
-          className="w-full rounded-lg border border-line px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          className="w-full rounded-lg border border-line px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand"
           autoFocus
           required
         />
@@ -53,7 +53,7 @@ export default function LoginForm() {
           type="password"
           value={parol}
           onChange={(e) => setParol(e.target.value)}
-          className="w-full rounded-lg border border-line px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          className="w-full rounded-lg border border-line px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand"
           required
         />
       </div>
@@ -61,7 +61,7 @@ export default function LoginForm() {
       <button
         type="submit"
         disabled={loading}
-        className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-medium rounded-lg py-2.5 transition"
+        className="w-full bg-income hover:brightness-110 disabled:opacity-60 text-white font-medium rounded-lg py-2.5 transition"
       >
         {loading ? "Kirilmoqda..." : "Kirish"}
       </button>

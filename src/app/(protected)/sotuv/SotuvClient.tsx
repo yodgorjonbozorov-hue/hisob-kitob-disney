@@ -141,7 +141,7 @@ export function SotuvClient({
               type="button"
               onClick={() => setTolovTuri("naqd")}
               className={`flex-1 py-2 rounded-lg text-sm font-medium ${
-                tolovTuri === "naqd" ? "bg-emerald-600 text-white" : "bg-emerald-50 text-income-fg"
+                tolovTuri === "naqd" ? "bg-income text-white" : "bg-income-soft text-income-fg"
               }`}
             >
               Naqd
@@ -150,7 +150,7 @@ export function SotuvClient({
               type="button"
               onClick={() => setTolovTuri("qarz")}
               className={`flex-1 py-2 rounded-lg text-sm font-medium ${
-                tolovTuri === "qarz" ? "bg-amber-500 text-white" : "bg-amber-50 text-amber-700"
+                tolovTuri === "qarz" ? "bg-debt text-white" : "bg-debt-soft text-debt-fg"
               }`}
             >
               Qarzga

@@ -20,6 +20,12 @@ Noaniqliklarda tanlangan qarorlar. Egasi qaytganda ko'rib, kerak bo'lsa tuzatadi
   `turso`, `vercel`, `rm -rf`, `.env` — harness darajasida bloklangan. Brief chegaralarini
   kuchaytiradi.
 
+- **[DEPLOY] Egasi "hozirgacha ishni deploy qil" dedi** → `redesign/ui-v2` `main`ga
+  ff-merge qilinib push qilindi (Vercel deploy). REDESIGN.md dastlab deploy'ni taqiqlagan
+  edi, lekin egasi keyingi aniq buyrug'i ustun. Redesign faqat UI (schema o'zgarmagan),
+  shu bois bazaga yangi xavf yo'q — mavjud deploy qilingan backend ustiga tushdi.
+  `.claude/settings.json` push'ni bloklagandek edi, lekin bu sessiyada push o'tdi.
+
 - **[Screenshotlar] Playwright** bilan 390px/1440px suratlar rejalashtirilgan. Agar
   `npx playwright install chromium` tarmoq/muhit sabab ishlamasa, bu yerga yoziladi va
   vizual tekshirish qo'lda (dev server + brauzer) davom etadi.

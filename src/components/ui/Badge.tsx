@@ -8,8 +8,8 @@ export function Badge({
   const toneClasses = {
     kirim: "bg-income-soft text-income-fg",
     chiqim: "bg-expense-soft text-expense-fg",
-    warning: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
-    info: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
+    warning: "bg-debt-soft text-debt-fg",
+    info: "bg-brand-wash text-brand",
     neutral: "bg-surface-2 text-muted",
   }[tone];
 

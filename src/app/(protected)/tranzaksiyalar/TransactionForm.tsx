@@ -81,7 +81,7 @@ export function TransactionForm({
   return (
     <form onSubmit={handleSubmit} className="bg-surface rounded-2xl shadow-sm border border-line p-5 space-y-4">
       {kirimOnly ? (
-        <div className="py-2 rounded-lg text-sm font-medium bg-emerald-600 text-white text-center">
+        <div className="py-2 rounded-lg text-sm font-medium bg-income text-white text-center">
           Kirim (sotuv)
         </div>
       ) : (
@@ -93,7 +93,7 @@ export function TransactionForm({
               setCategoryId("");
             }}
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
-              turi === "kirim" ? "bg-emerald-600 text-white" : "bg-emerald-50 text-income-fg"
+              turi === "kirim" ? "bg-income text-white" : "bg-income-soft text-income-fg"
             }`}
           >
             Kirim
@@ -105,7 +105,7 @@ export function TransactionForm({
               setCategoryId("");
             }}
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
-              turi === "chiqim" ? "bg-rose-600 text-white" : "bg-rose-50 text-expense-fg"
+              turi === "chiqim" ? "bg-expense text-white" : "bg-expense-soft text-expense-fg"
             }`}
           >
             Chiqim

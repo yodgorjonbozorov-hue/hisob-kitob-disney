@@ -259,7 +259,7 @@ function EditModal({
               setTuri("kirim");
               setCategoryId("");
             }}
-            className={`flex-1 py-1.5 rounded-lg text-sm ${turi === "kirim" ? "bg-emerald-600 text-white" : "bg-emerald-50 text-income-fg"}`}
+            className={`flex-1 py-1.5 rounded-lg text-sm ${turi === "kirim" ? "bg-income text-white" : "bg-income-soft text-income-fg"}`}
           >
             Kirim
           </button>
@@ -268,7 +268,7 @@ function EditModal({
               setTuri("chiqim");
               setCategoryId("");
             }}
-            className={`flex-1 py-1.5 rounded-lg text-sm ${turi === "chiqim" ? "bg-rose-600 text-white" : "bg-rose-50 text-expense-fg"}`}
+            className={`flex-1 py-1.5 rounded-lg text-sm ${turi === "chiqim" ? "bg-expense text-white" : "bg-expense-soft text-expense-fg"}`}
           >
             Chiqim
           </button>
