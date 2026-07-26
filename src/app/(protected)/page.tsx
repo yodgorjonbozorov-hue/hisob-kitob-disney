@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { Card } from "@/components/ui/Card";
@@ -8,7 +7,7 @@ import { CategoryBars } from "@/components/charts/CategoryBars";
 import { TrendChart } from "@/components/charts/TrendChart";
 import { DailyDynamicsChart } from "@/components/charts/DailyDynamicsChart";
 import { formatMoneyCompact } from "@/lib/format";
-import { currentMonthString } from "@/lib/date";
+import { currentMonthString, todayDateOnlyString } from "@/lib/date";
 import { requireUser } from "@/lib/auth/session";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import {
@@ -18,6 +17,9 @@ import {
   getDailyDynamics,
 } from "@/lib/queries/dashboard";
 import { getOutstandingDebtTotal } from "@/lib/queries/inventory";
+import { getTodayTotals } from "@/lib/queries/shift";
+import { listTransactions } from "@/lib/queries/transactions";
+import { KassaHome } from "./KassaHome";
 
 export default async function DashboardPage({
   searchParams,
@@ -25,9 +27,43 @@ export default async function DashboardPage({
   searchParams: { month?: string };
 }) {
   const session = await requireUser();
+
+  // Kassir/sotuvchi — dashboard EMAS, kassa bosh ekrani (REDESIGN.md 5.1).
   if (session.rol !== "admin") {
-    redirect("/tranzaksiyalar");
+    const bId = await resolveActiveBusinessId(session);
+    const business = await getActiveBusiness(session);
+    if (!bId) {
+      return (
+        <div className="max-w-lg mx-auto">
+          <p className="text-muted">Sizga biznes biriktirilmagan. Admin bilan bog'laning.</p>
+        </div>
+      );
+    }
+    const today = todayDateOnlyString();
+    const [bugun, recentRes] = await Promise.all([
+      getTodayTotals(bId, today),
+      listTransactions({ businessId: bId, page: 1, pageSize: 12, ...(session.rol === "sotuvchi" ? { turi: "kirim" } : {}) }),
+    ]);
+    const recent = recentRes.items.map((t) => ({
+      id: t.id,
+      sana: t.sana instanceof Date ? t.sana.toISOString() : String(t.sana),
+      turi: t.turi,
+      summa: t.summa,
+      categoryNomi: t.category.nomi,
+      izoh: t.izoh,
+      userIsm: t.user.ism,
+    }));
+    return (
+      <KassaHome
+        ism={session.ism}
+        rol={session.rol}
+        businessNomi={business?.nomi ?? "—"}
+        bugun={bugun}
+        recent={recent}
+      />
+    );
   }
+
   const businessId = await resolveActiveBusinessId(session);
   const month = searchParams.month ?? currentMonthString();
 

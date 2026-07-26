@@ -20,7 +20,17 @@ interface CategoryOption {
  * Tez qo'shish (REDESIGN.md 5.1) — FAB dan ochiladi. 3 qadam: katta keypad'da summa
  * → ikonkali kategoriya to'ri → Saqlash. Sotuvchi uchun faqat kirim.
  */
-export function QuickAddSheet({ open, onClose, rol }: { open: boolean; onClose: () => void; rol: Rol }) {
+export function QuickAddSheet({
+  open,
+  onClose,
+  rol,
+  defaultTuri = "kirim",
+}: {
+  open: boolean;
+  onClose: () => void;
+  rol: Rol;
+  defaultTuri?: "kirim" | "chiqim";
+}) {
   const router = useRouter();
   const { toast } = useToast();
   const kirimOnly = rol === "sotuvchi";
@@ -41,7 +51,7 @@ export function QuickAddSheet({ open, onClose, rol }: { open: boolean; onClose: 
     setCategoryId("");
     setIzoh("");
     setKecha(false);
-    setTuri("kirim");
+    setTuri(kirimOnly ? "kirim" : defaultTuri);
     if (categories === null) {
       fetch("/api/categories").then((r) => (r.ok ? r.json() : [])).then(setCategories).catch(() => setCategories([]));
     }
@@ -85,8 +95,8 @@ export function QuickAddSheet({ open, onClose, rol }: { open: boolean; onClose: 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 animate-fade-in lg:hidden" onClick={onClose} role="dialog" aria-modal="true">
-      <div onClick={(e) => e.stopPropagation()} className="bg-app text-fg w-full rounded-t-2xl pb-safe max-h-[94vh] overflow-y-auto animate-slide-up">
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 animate-fade-in" onClick={onClose} role="dialog" aria-modal="true">
+      <div onClick={(e) => e.stopPropagation()} className="bg-app text-fg w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl pb-safe max-h-[94vh] overflow-y-auto animate-slide-up">
         <div className="w-10 h-1 rounded-full bg-line-strong mx-auto my-3" />
 
         {/* Katta summa */}
