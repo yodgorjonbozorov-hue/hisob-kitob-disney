@@ -67,20 +67,20 @@ export function CommandPalette({
   const navCommands: Item[] = [];
   const nav = (href: string, label: string) =>
     navCommands.push({ key: `nav:${href}`, label, group: "O'tish", action: () => { router.push(href); close(); } });
-  if (isAdmin) nav("/", "Boshqaruv paneli");
-  nav("/tranzaksiyalar", "Tranzaksiyalar");
-  if (isAdmin) nav("/hisobot", "Oylik hisobot");
-  if (isAdmin) nav("/byudjet", "Budjet");
+  if (isAdmin) nav("/app", "Boshqaruv paneli");
+  nav("/app/tranzaksiyalar", "Tranzaksiyalar");
+  if (isAdmin) nav("/app/hisobot", "Oylik hisobot");
+  if (isAdmin) nav("/app/byudjet", "Budjet");
   // Sotuvchi faqat kirim/chiqim kiritadi — ombor/sotuv/qarzlar unga ko'rinmaydi.
   if (omborli && rol !== "SELLER") {
-    if (isAdmin) nav("/ombor", "Ombor");
-    nav("/sotuv", "Sotuv");
-    nav("/qarzlar", "Qarzlar");
+    if (isAdmin) nav("/app/ombor", "Ombor");
+    nav("/app/sotuv", "Sotuv");
+    nav("/app/qarzlar", "Qarzlar");
   }
   if (isAdmin) {
-    nav("/admin/foydalanuvchilar", "Foydalanuvchilar");
-    nav("/admin/audit", "Audit jurnali");
-    nav("/admin/ochirilganlar", "O'chirilganlar");
+    nav("/app/admin/foydalanuvchilar", "Foydalanuvchilar");
+    nav("/app/admin/audit", "Audit jurnali");
+    nav("/app/admin/ochirilganlar", "O'chirilganlar");
   }
 
   const bizCommands: Item[] = businesses
@@ -118,7 +118,7 @@ export function CommandPalette({
             label: `${t.categoryNomi} — ${formatSomLabel(t.summa)}`,
             sub: t.izoh ?? undefined,
             group: "Tranzaksiyalar",
-            action: () => { router.push("/tranzaksiyalar"); close(); },
+            action: () => { router.push("/app/tranzaksiyalar"); close(); },
           });
         }
         for (const d of data.debtors ?? []) {
@@ -127,14 +127,14 @@ export function CommandPalette({
             label: `${d.mijozNomi}`,
             sub: `Qolgan: ${formatSomLabel(d.qolgan)}`,
             group: "Qarzdorlar",
-            action: () => { router.push("/qarzlar"); close(); },
+            action: () => { router.push("/app/qarzlar"); close(); },
           });
         }
         for (const p of data.products ?? []) {
-          items.push({ key: `prod:${p.id}`, label: p.nomi, group: "Mahsulotlar", action: () => { router.push(isAdmin ? "/ombor" : "/sotuv"); close(); } });
+          items.push({ key: `prod:${p.id}`, label: p.nomi, group: "Mahsulotlar", action: () => { router.push(isAdmin ? "/app/ombor" : "/app/sotuv"); close(); } });
         }
         for (const c of data.categories ?? []) {
-          items.push({ key: `cat:${c.id}`, label: c.nomi, sub: c.turi, group: "Kategoriyalar", action: () => { router.push("/admin/kategoriyalar"); close(); } });
+          items.push({ key: `cat:${c.id}`, label: c.nomi, sub: c.turi, group: "Kategoriyalar", action: () => { router.push("/app/admin/kategoriyalar"); close(); } });
         }
         setResults(items);
         setActive(0);

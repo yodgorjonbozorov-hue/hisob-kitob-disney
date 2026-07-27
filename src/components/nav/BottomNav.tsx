@@ -62,10 +62,10 @@ export function BottomNav({ ism, rol, omborli }: Props) {
 
   // Asosiy tablar (rol + omborli asosida)
   const tabs: { label: string; href: string; icon: string }[] = [];
-  if (isAdmin) tabs.push({ label: "Asosiy", href: "/", icon: "home" });
-  tabs.push({ label: "Yozuvlar", href: "/tranzaksiyalar", icon: "list" });
-  if (omborli && !isSeller) tabs.push({ label: "Sotuv", href: "/sotuv", icon: "cart" });
-  else if (isAdmin) tabs.push({ label: "Hisobot", href: "/hisobot", icon: "chart" });
+  if (isAdmin) tabs.push({ label: "Asosiy", href: "/app", icon: "home" });
+  tabs.push({ label: "Yozuvlar", href: "/app/tranzaksiyalar", icon: "list" });
+  if (omborli && !isSeller) tabs.push({ label: "Sotuv", href: "/app/sotuv", icon: "cart" });
+  else if (isAdmin) tabs.push({ label: "Hisobot", href: "/app/hisobot", icon: "chart" });
 
   const mid = Math.ceil(tabs.length / 2);
   const left = tabs.slice(0, mid);
@@ -73,24 +73,24 @@ export function BottomNav({ ism, rol, omborli }: Props) {
 
   // Menyu sheet ichidagi barcha havolalar
   const allLinks: { label: string; href: string }[] = [];
-  allLinks.push({ label: "🔔 Bildirishnomalar", href: "/bildirishnomalar" });
-  if (isAdmin) allLinks.push({ label: "Boshqaruv paneli", href: "/" });
-  allLinks.push({ label: "Yozuvlar", href: "/tranzaksiyalar" });
-  if (isAdmin) allLinks.push({ label: "Oylik hisobot", href: "/hisobot" });
-  if (isAdmin) allLinks.push({ label: "Budjet", href: "/byudjet" });
+  allLinks.push({ label: "🔔 Bildirishnomalar", href: "/app/bildirishnomalar" });
+  if (isAdmin) allLinks.push({ label: "Boshqaruv paneli", href: "/app" });
+  allLinks.push({ label: "Yozuvlar", href: "/app/tranzaksiyalar" });
+  if (isAdmin) allLinks.push({ label: "Oylik hisobot", href: "/app/hisobot" });
+  if (isAdmin) allLinks.push({ label: "Budjet", href: "/app/byudjet" });
   if (omborli && !isSeller) {
-    if (isAdmin) allLinks.push({ label: "Ombor", href: "/ombor" });
-    allLinks.push({ label: "Sotuv", href: "/sotuv" });
-    allLinks.push({ label: "Qarzlar", href: "/qarzlar" });
+    if (isAdmin) allLinks.push({ label: "Ombor", href: "/app/ombor" });
+    allLinks.push({ label: "Sotuv", href: "/app/sotuv" });
+    allLinks.push({ label: "Qarzlar", href: "/app/qarzlar" });
   }
-  if (!isSeller) allLinks.push({ label: "Kun yakuni", href: "/smena" });
+  if (!isSeller) allLinks.push({ label: "Kun yakuni", href: "/app/smena" });
   if (isAdmin) {
-    allLinks.push({ label: "Takroriy", href: "/takroriy" });
-    allLinks.push({ label: "Bizneslar", href: "/admin/bizneslar" });
-    allLinks.push({ label: "Kategoriyalar", href: "/admin/kategoriyalar" });
-    allLinks.push({ label: "Foydalanuvchilar", href: "/admin/foydalanuvchilar" });
-    allLinks.push({ label: "O'chirilganlar", href: "/admin/ochirilganlar" });
-    allLinks.push({ label: "Audit", href: "/admin/audit" });
+    allLinks.push({ label: "Takroriy", href: "/app/takroriy" });
+    allLinks.push({ label: "Bizneslar", href: "/app/admin/bizneslar" });
+    allLinks.push({ label: "Kategoriyalar", href: "/app/admin/kategoriyalar" });
+    allLinks.push({ label: "Foydalanuvchilar", href: "/app/admin/foydalanuvchilar" });
+    allLinks.push({ label: "O'chirilganlar", href: "/app/admin/ochirilganlar" });
+    allLinks.push({ label: "Audit", href: "/app/admin/audit" });
     allLinks.push({ label: "Obuna va to'lov", href: "/billing" });
   }
 

@@ -32,7 +32,7 @@ export default function SignupForm() {
         setLoading(false);
         return;
       }
-      router.push("/");
+      router.push("/app");
       router.refresh();
     } catch {
       setError("Serverga ulanib bo'lmadi");

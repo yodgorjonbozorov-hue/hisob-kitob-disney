@@ -112,7 +112,7 @@ export function SuperadminClient({
     if (!confirm(`${t.name} nomidan kirasizmi? Bu amal audit jurnaliga yoziladi.`)) return;
     const r = await call(`/api/superadmin/tenants/${t.id}/impersonate`);
     if (r) {
-      router.push("/");
+      router.push("/app");
       router.refresh();
     }
   }

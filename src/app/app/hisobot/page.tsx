@@ -17,7 +17,7 @@ export default async function HisobotPage({
   // Tenant konteksti: quyidagi barcha prisma so'rovlari shu tenantga avtomatik cheklanadi.
   return runWithTenant(tenantId, async () => {
   if (!isManager(session.rol)) {
-    redirect("/tranzaksiyalar");
+    redirect("/app/tranzaksiyalar");
   }
   const businessId = await resolveActiveBusinessId(session);
   const month = searchParams.month ?? currentMonthString();

@@ -11,11 +11,11 @@ export default async function SotuvPage() {
   return runWithTenant(tenantId, async () => {
   // Sotuvchi faqat kirim/chiqim kiritadi — bu sahifa unga yopiq.
   if (session.rol === "SELLER") {
-    redirect("/");
+    redirect("/app");
   }
   const business = await getActiveBusiness(session);
   if (!business || !business.omborli) {
-    redirect("/");
+    redirect("/app");
   }
 
   // Kassir uchun ham, admin uchun ham sotuv formasi bir xil (miqdorsiz — faqat mavjudlik).

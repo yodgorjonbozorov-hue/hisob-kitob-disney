@@ -27,33 +27,33 @@ interface Props {
 type NavLink = { href: string; label: string; icon: LucideIcon };
 
 const adminBase: NavLink[] = [
-  { href: "/", label: "Asosiy", icon: LayoutDashboard },
-  { href: "/tranzaksiyalar", label: "Yozuvlar", icon: Receipt },
-  { href: "/hisobot", label: "Oylik hisobot", icon: FileText },
-  { href: "/byudjet", label: "Budjet", icon: PiggyBank },
+  { href: "/app", label: "Asosiy", icon: LayoutDashboard },
+  { href: "/app/tranzaksiyalar", label: "Yozuvlar", icon: Receipt },
+  { href: "/app/hisobot", label: "Oylik hisobot", icon: FileText },
+  { href: "/app/byudjet", label: "Budjet", icon: PiggyBank },
 ];
 const kassirBase: NavLink[] = [
-  { href: "/tranzaksiyalar", label: "Yozuvlar", icon: Receipt },
-  { href: "/smena", label: "Kun yakuni", icon: CalendarCheck },
+  { href: "/app/tranzaksiyalar", label: "Yozuvlar", icon: Receipt },
+  { href: "/app/smena", label: "Kun yakuni", icon: CalendarCheck },
 ];
 const adminTail: NavLink[] = [
-  { href: "/takroriy", label: "Takroriy", icon: Repeat },
-  { href: "/smena", label: "Kun yakuni", icon: CalendarCheck },
-  { href: "/admin/bizneslar", label: "Bizneslar", icon: Building2 },
-  { href: "/admin/kategoriyalar", label: "Kategoriyalar", icon: Tags },
-  { href: "/admin/foydalanuvchilar", label: "Foydalanuvchilar", icon: Users },
-  { href: "/admin/ochirilganlar", label: "O'chirilganlar", icon: Trash2 },
-  { href: "/admin/audit", label: "Audit jurnali", icon: ScrollText },
+  { href: "/app/takroriy", label: "Takroriy", icon: Repeat },
+  { href: "/app/smena", label: "Kun yakuni", icon: CalendarCheck },
+  { href: "/app/admin/bizneslar", label: "Bizneslar", icon: Building2 },
+  { href: "/app/admin/kategoriyalar", label: "Kategoriyalar", icon: Tags },
+  { href: "/app/admin/foydalanuvchilar", label: "Foydalanuvchilar", icon: Users },
+  { href: "/app/admin/ochirilganlar", label: "O'chirilganlar", icon: Trash2 },
+  { href: "/app/admin/audit", label: "Audit jurnali", icon: ScrollText },
   { href: "/billing", label: "Obuna va to'lov", icon: CreditCard },
 ];
 const omborAdmin: NavLink[] = [
-  { href: "/ombor", label: "Ombor", icon: Package },
-  { href: "/sotuv", label: "Sotuv", icon: ShoppingCart },
-  { href: "/qarzlar", label: "Qarzlar", icon: HandCoins },
+  { href: "/app/ombor", label: "Ombor", icon: Package },
+  { href: "/app/sotuv", label: "Sotuv", icon: ShoppingCart },
+  { href: "/app/qarzlar", label: "Qarzlar", icon: HandCoins },
 ];
 const omborKassir: NavLink[] = [
-  { href: "/sotuv", label: "Sotuv", icon: ShoppingCart },
-  { href: "/qarzlar", label: "Qarzlar", icon: HandCoins },
+  { href: "/app/sotuv", label: "Sotuv", icon: ShoppingCart },
+  { href: "/app/qarzlar", label: "Qarzlar", icon: HandCoins },
 ];
 
 
@@ -63,7 +63,7 @@ export default function Sidebar({ ism, rol, businesses, activeBusinessId, omborl
 
   const omborLinks = omborli ? (isManager(rol) ? omborAdmin : omborKassir) : [];
   // Sotuvchi faqat kirim/chiqim kiritadi — unga faqat "Yozuvlar" ko'rinadi.
-  const sellerBase: NavLink[] = [{ href: "/tranzaksiyalar", label: "Yozuvlar", icon: Receipt }];
+  const sellerBase: NavLink[] = [{ href: "/app/tranzaksiyalar", label: "Yozuvlar", icon: Receipt }];
   const links = isManager(rol)
     ? [...adminBase, ...omborLinks, ...adminTail]
     : rol === "SELLER"
@@ -114,7 +114,7 @@ export default function Sidebar({ ism, rol, businesses, activeBusinessId, omborl
         <BusinessSwitcher businesses={businesses} activeId={activeBusinessId} rol={rol} />
       </div>
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {item("/bildirishnomalar", "Bildirishnomalar", Bell, notifCount)}
+        {item("/app/bildirishnomalar", "Bildirishnomalar", Bell, notifCount)}
         {links.map((l) => item(l.href, l.label, l.icon))}
       </nav>
       <div className="px-4 py-4 border-t border-line space-y-2">

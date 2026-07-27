@@ -107,14 +107,14 @@ export default async function DashboardPage({
           <ol className="text-sm text-fg space-y-2">
             <li>
               1.{" "}
-              <Link href="/admin/kategoriyalar" className="text-brand font-medium hover:underline">
+              <Link href="/app/admin/kategoriyalar" className="text-brand font-medium hover:underline">
                 Kategoriya qo'shing
               </Link>{" "}
               (masalan: Sotuv, Ijara, Oylik)
             </li>
             <li>
               2.{" "}
-              <Link href="/tranzaksiyalar" className="text-brand font-medium hover:underline">
+              <Link href="/app/tranzaksiyalar" className="text-brand font-medium hover:underline">
                 Birinchi tranzaksiyani kiriting
               </Link>
             </li>

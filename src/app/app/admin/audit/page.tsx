@@ -56,13 +56,13 @@ export default async function AuditPage({
   // Tenant konteksti: quyidagi barcha prisma so'rovlari shu tenantga avtomatik cheklanadi.
   return runWithTenant(tenantId, async () => {
   if (!isManager(session.rol)) {
-    redirect("/tranzaksiyalar");
+    redirect("/app/tranzaksiyalar");
   }
   const businessId = await resolveActiveBusinessId(session);
   const business = await getActiveBusiness(session);
   // Aktiv biznes bo'lmasa audit ko'rsatilmaydi (businessId'siz o'qish taqiqlangan).
   if (!businessId) {
-    redirect("/");
+    redirect("/app");
   }
 
   const { items, total, page, pageSize } = await listAuditLogs({

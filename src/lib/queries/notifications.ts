@@ -32,14 +32,14 @@ export async function getNotifications(
           severity: "danger",
           title: "Budjet oshib ketdi",
           message: `"${b.nomi}" bo'yicha limit ${b.foiz}% ga yetdi`,
-          href: "/byudjet",
+          href: "/app/byudjet",
         });
       } else if (b.foiz >= 80 && b.foiz < 100) {
         out.push({
           severity: "warning",
           title: "Budjet chegarasiga yaqin",
           message: `"${b.nomi}" — ${b.foiz}%`,
-          href: "/byudjet",
+          href: "/app/byudjet",
         });
       }
     }
@@ -60,7 +60,7 @@ export async function getNotifications(
         severity: "danger",
         title: "Ombor tugadi",
         message: `${out0.length} ta mahsulot qolmadi: ${out0.slice(0, 3).map((p) => p.nomi).join(", ")}${out0.length > 3 ? "…" : ""}`,
-        href: isManager(opts.rol) ? "/ombor" : "/sotuv",
+        href: isManager(opts.rol) ? "/app/ombor" : "/app/sotuv",
       });
     }
     if (lowOnly.length > 0) {
@@ -68,7 +68,7 @@ export async function getNotifications(
         severity: "warning",
         title: "Ombor kam qoldi",
         message: `${lowOnly.length} ta mahsulot ${LOW_STOCK} donadan kam`,
-        href: isManager(opts.rol) ? "/ombor" : "/sotuv",
+        href: isManager(opts.rol) ? "/app/ombor" : "/app/sotuv",
       });
     }
   }
@@ -88,14 +88,14 @@ export async function getNotifications(
         severity: "danger",
         title: "Uzoq muddatli qarz (90+ kun)",
         message: `${old90.length} ta mijoz, jami ${total.toLocaleString("ru-RU")} so'm`,
-        href: "/qarzlar",
+        href: "/app/qarzlar",
       });
     } else if (overdue.length > 0) {
       out.push({
         severity: "warning",
         title: "Muddati o'tgan qarz (30+ kun)",
         message: `${overdue.length} ta mijoz to'lovni kechiktirmoqda`,
-        href: "/qarzlar",
+        href: "/app/qarzlar",
       });
     }
   }

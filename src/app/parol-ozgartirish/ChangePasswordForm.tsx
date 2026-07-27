@@ -46,7 +46,7 @@ export function ChangePasswordForm({ forced }: { forced: boolean }) {
       setLoading(false);
       return;
     }
-    router.push("/");
+    router.push("/app");
     router.refresh();
   }
 
@@ -94,7 +94,7 @@ export function ChangePasswordForm({ forced }: { forced: boolean }) {
         Saqlash
       </Button>
       {!forced && (
-        <a href="/" className="block text-center text-sm text-muted hover:text-fg">
+        <a href="/app" className="block text-center text-sm text-muted hover:text-fg">
           Bekor qilish
         </a>
       )}

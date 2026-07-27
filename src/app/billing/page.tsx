@@ -117,7 +117,7 @@ export default async function BillingPage() {
           )}
 
           <div className="text-center">
-            <Link href="/" className="text-sm text-brand hover:underline">
+            <Link href="/app" className="text-sm text-brand hover:underline">
               ← Ilovaga qaytish
             </Link>
           </div>

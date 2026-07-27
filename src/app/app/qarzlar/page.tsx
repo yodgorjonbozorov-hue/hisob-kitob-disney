@@ -11,11 +11,11 @@ export default async function QarzlarPage() {
   return runWithTenant(tenantId, async () => {
   // Sotuvchi faqat kirim/chiqim kiritadi — bu sahifa unga yopiq.
   if (session.rol === "SELLER") {
-    redirect("/");
+    redirect("/app");
   }
   const business = await getActiveBusiness(session);
   if (!business || !business.omborli) {
-    redirect("/");
+    redirect("/app");
   }
 
   const debts = await listDebts(business.id);

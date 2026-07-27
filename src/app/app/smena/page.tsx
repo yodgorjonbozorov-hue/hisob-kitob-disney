@@ -12,7 +12,7 @@ export default async function SmenaPage() {
   return runWithTenant(tenantId, async () => {
   // Sotuvchi faqat kirim/chiqim kiritadi — bu sahifa unga yopiq.
   if (session.rol === "SELLER") {
-    redirect("/");
+    redirect("/app");
   }
   const businessId = await resolveActiveBusinessId(session);
   const business = await getActiveBusiness(session);

@@ -11,7 +11,7 @@ export default async function KategoriyalarPage() {
   // Tenant konteksti: quyidagi barcha prisma so'rovlari shu tenantga avtomatik cheklanadi.
   return runWithTenant(tenantId, async () => {
   if (!isManager(session.rol)) {
-    redirect("/");
+    redirect("/app");
   }
 
   const activeBusiness = await getActiveBusiness(session);

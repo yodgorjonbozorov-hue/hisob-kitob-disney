@@ -13,11 +13,11 @@ export default async function OmborPage() {
   // Tenant konteksti: quyidagi barcha prisma so'rovlari shu tenantga avtomatik cheklanadi.
   return runWithTenant(tenantId, async () => {
   if (!isManager(session.rol)) {
-    redirect("/");
+    redirect("/app");
   }
   const business = await getActiveBusiness(session);
   if (!business || !business.omborli) {
-    redirect("/");
+    redirect("/app");
   }
 
   const [products, stats, profit] = await Promise.all([

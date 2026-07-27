@@ -31,7 +31,7 @@ export async function requireSuperadminApi(): Promise<Required<SessionData>> {
 export async function requireSuperadminPage(): Promise<Required<SessionData>> {
   const session = await requireUser();
   if (!(await verifySuperadmin(session))) {
-    redirect("/");
+    redirect("/app");
   }
   return session;
 }
