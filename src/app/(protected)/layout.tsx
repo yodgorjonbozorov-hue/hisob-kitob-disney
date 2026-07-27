@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { requireUser } from "@/lib/auth/session";
+import { requireTenantPage } from "@/lib/auth/tenant";
+import { runWithTenant } from "@/lib/db/tenantContext";
 import { getAccessibleBusinesses, resolveActiveBusinessId } from "@/lib/business";
 import { getNotificationCount } from "@/lib/queries/notifications";
 import Sidebar from "@/components/nav/Sidebar";
@@ -13,7 +14,9 @@ export default async function ProtectedLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await requireUser();
+  const { session, tenantId } = await requireTenantPage();
+  // Tenant konteksti: quyidagi barcha prisma so'rovlari shu tenantga avtomatik cheklanadi.
+  return runWithTenant(tenantId, async () => {
   // Boshlang'ich parolni majburiy almashtirish.
   if (session.mustChangePassword) {
     redirect("/parol-ozgartirish");
@@ -59,4 +62,5 @@ export default async function ProtectedLayout({
       </div>
     </ToastProvider>
   );
+  });
 }

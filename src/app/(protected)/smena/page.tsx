@@ -1,11 +1,19 @@
-import { requireUser } from "@/lib/auth/session";
+import { redirect } from "next/navigation";
+import { requireTenantPage } from "@/lib/auth/tenant";
+import { runWithTenant } from "@/lib/db/tenantContext";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import { getExpectedCash, listShiftCloses } from "@/lib/queries/shift";
 import { todayDateOnlyString } from "@/lib/date";
 import { SmenaClient } from "./SmenaClient";
 
 export default async function SmenaPage() {
-  const session = await requireUser();
+  const { session, tenantId } = await requireTenantPage();
+  // Tenant konteksti: quyidagi barcha prisma so'rovlari shu tenantga avtomatik cheklanadi.
+  return runWithTenant(tenantId, async () => {
+  // Sotuvchi faqat kirim/chiqim kiritadi — bu sahifa unga yopiq.
+  if (session.rol === "SELLER") {
+    redirect("/");
+  }
   const businessId = await resolveActiveBusinessId(session);
   const business = await getActiveBusiness(session);
   const today = todayDateOnlyString();
@@ -26,4 +34,5 @@ export default async function SmenaPage() {
       <SmenaClient today={today} kutilgan={kutilgan} recent={recent} />
     </div>
   );
+  });
 }

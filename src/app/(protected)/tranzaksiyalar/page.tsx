@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth/session";
+import { requireTenantPage } from "@/lib/auth/tenant";
+import { runWithTenant } from "@/lib/db/tenantContext";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { listTransactions } from "@/lib/queries/transactions";
 import { formatSom } from "@/lib/format";
@@ -21,7 +22,9 @@ export default async function TranzaksiyalarPage({
 }: {
   searchParams: SearchParams;
 }) {
-  const session = await requireUser();
+  const { session, tenantId } = await requireTenantPage();
+  // Tenant konteksti: quyidagi barcha prisma so'rovlari shu tenantga avtomatik cheklanadi.
+  return runWithTenant(tenantId, async () => {
   const businessId = await resolveActiveBusinessId(session);
   // Sotuvchi kirim ham, chiqim ham qo'shadi/ko'radi — faqat "Sof foyda" ko'rsatkichi yashirin.
   const hideProfit = session.rol === "SELLER";
@@ -78,4 +81,5 @@ export default async function TranzaksiyalarPage({
       />
     </div>
   );
+  });
 }

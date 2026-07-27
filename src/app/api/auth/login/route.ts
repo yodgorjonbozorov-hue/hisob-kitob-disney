@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+// Login global (tenantlar aro) unique — autentifikatsiya rawPrisma bilan ishlaydi.
+import { rawPrisma as prisma } from "@/lib/db/rawPrisma";
 import { verifyPassword } from "@/lib/auth/password";
 import { getSession } from "@/lib/auth/session";
 import { normalizeRol } from "@/lib/auth/roles";

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+// Self-service: faqat sessiyadagi o'z userId bilan ishlaydi — rawPrisma xavfsiz.
+import { rawPrisma as prisma } from "@/lib/db/rawPrisma";
 import { getSession } from "@/lib/auth/session";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { z } from "zod";

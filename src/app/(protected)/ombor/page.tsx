@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { requireUser } from "@/lib/auth/session";
+import { requireTenantPage } from "@/lib/auth/tenant";
+import { runWithTenant } from "@/lib/db/tenantContext";
 import { isManager } from "@/lib/auth/roles";
 import { getActiveBusiness } from "@/lib/business";
 import { listProducts, getOmborStats, getProductProfitability, type ProductAdminDTO } from "@/lib/queries/inventory";
@@ -8,7 +9,9 @@ import { Card } from "@/components/ui/Card";
 import { formatSomLabel } from "@/lib/format";
 
 export default async function OmborPage() {
-  const session = await requireUser();
+  const { session, tenantId } = await requireTenantPage();
+  // Tenant konteksti: quyidagi barcha prisma so'rovlari shu tenantga avtomatik cheklanadi.
+  return runWithTenant(tenantId, async () => {
   if (!isManager(session.rol)) {
     redirect("/");
   }
@@ -69,4 +72,5 @@ export default async function OmborPage() {
       )}
     </div>
   );
+  });
 }

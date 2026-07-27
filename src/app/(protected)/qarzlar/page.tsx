@@ -1,11 +1,18 @@
 import { redirect } from "next/navigation";
-import { requireUser } from "@/lib/auth/session";
+import { requireTenantPage } from "@/lib/auth/tenant";
+import { runWithTenant } from "@/lib/db/tenantContext";
 import { getActiveBusiness } from "@/lib/business";
 import { listDebts } from "@/lib/queries/inventory";
 import { QarzlarClient } from "./QarzlarClient";
 
 export default async function QarzlarPage() {
-  const session = await requireUser();
+  const { session, tenantId } = await requireTenantPage();
+  // Tenant konteksti: quyidagi barcha prisma so'rovlari shu tenantga avtomatik cheklanadi.
+  return runWithTenant(tenantId, async () => {
+  // Sotuvchi faqat kirim/chiqim kiritadi — bu sahifa unga yopiq.
+  if (session.rol === "SELLER") {
+    redirect("/");
+  }
   const business = await getActiveBusiness(session);
   if (!business || !business.omborli) {
     redirect("/");
@@ -24,4 +31,5 @@ export default async function QarzlarPage() {
       <QarzlarClient initialDebts={debts} />
     </div>
   );
+  });
 }

@@ -2,7 +2,8 @@ import { redirect } from "next/navigation";
 import { getMonthlyReport } from "@/lib/queries/report";
 import { currentMonthString } from "@/lib/date";
 import { MonthSelector } from "@/components/MonthSelector";
-import { requireUser } from "@/lib/auth/session";
+import { requireTenantPage } from "@/lib/auth/tenant";
+import { runWithTenant } from "@/lib/db/tenantContext";
 import { isManager } from "@/lib/auth/roles";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { ReportView } from "./ReportView";
@@ -12,7 +13,9 @@ export default async function HisobotPage({
 }: {
   searchParams: { month?: string };
 }) {
-  const session = await requireUser();
+  const { session, tenantId } = await requireTenantPage();
+  // Tenant konteksti: quyidagi barcha prisma so'rovlari shu tenantga avtomatik cheklanadi.
+  return runWithTenant(tenantId, async () => {
   if (!isManager(session.rol)) {
     redirect("/tranzaksiyalar");
   }
@@ -39,4 +42,5 @@ export default async function HisobotPage({
       <ReportView report={report} />
     </div>
   );
+  });
 }

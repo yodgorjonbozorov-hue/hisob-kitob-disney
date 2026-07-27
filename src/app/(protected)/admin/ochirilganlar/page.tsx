@@ -1,12 +1,15 @@
 import { redirect } from "next/navigation";
-import { requireUser } from "@/lib/auth/session";
+import { requireTenantPage } from "@/lib/auth/tenant";
+import { runWithTenant } from "@/lib/db/tenantContext";
 import { isManager } from "@/lib/auth/roles";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import { listDeletedTransactions } from "@/lib/queries/transactions";
 import { OchirilganlarClient } from "./OchirilganlarClient";
 
 export default async function OchirilganlarPage() {
-  const session = await requireUser();
+  const { session, tenantId } = await requireTenantPage();
+  // Tenant konteksti: quyidagi barcha prisma so'rovlari shu tenantga avtomatik cheklanadi.
+  return runWithTenant(tenantId, async () => {
   if (!isManager(session.rol)) {
     redirect("/tranzaksiyalar");
   }
@@ -36,4 +39,5 @@ export default async function OchirilganlarPage() {
       <OchirilganlarClient initialItems={items} />
     </div>
   );
+  });
 }

@@ -1,28 +1,22 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/auth/session";
-import { handleApiError, requireManager, UnauthorizedError } from "@/lib/auth/guard";
+import { requireManager } from "@/lib/auth/guard";
+import { withTenant } from "@/lib/auth/tenant";
 import { updateBusinessSchema } from "@/lib/validation/business";
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    const user = await getCurrentUser();
-    if (!user) throw new UnauthorizedError();
-    requireManager(user.rol);
+export const PATCH = withTenant<{ params: { id: string } }>(async (request, { params }, { session: user }) => {
+  requireManager(user.rol);
 
-    const body = await request.json();
-    const parsed = updateBusinessSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
-    }
-
-    const business = await prisma.business.update({
-      where: { id: params.id },
-      data: parsed.data,
-    });
-
-    return NextResponse.json(business);
-  } catch (error) {
-    return handleApiError(error);
+  const body = await request.json();
+  const parsed = updateBusinessSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
   }
-}
+
+  const business = await prisma.business.update({
+    where: { id: params.id },
+    data: parsed.data,
+  });
+
+  return NextResponse.json(business);
+});

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+// Self-service: faqat sessiyadagi o'z userId bilan ishlaydi — rawPrisma xavfsiz.
+import { rawPrisma as prisma } from "@/lib/db/rawPrisma";
 import { getCurrentUser } from "@/lib/auth/session";
 import { handleApiError, UnauthorizedError } from "@/lib/auth/guard";
 

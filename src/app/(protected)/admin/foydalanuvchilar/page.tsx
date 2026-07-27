@@ -1,11 +1,14 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth/session";
+import { requireTenantPage } from "@/lib/auth/tenant";
+import { runWithTenant } from "@/lib/db/tenantContext";
 import { isManager } from "@/lib/auth/roles";
 import { UsersClient } from "./UsersClient";
 
 export default async function FoydalanuvchilarPage() {
-  const session = await requireUser();
+  const { session, tenantId } = await requireTenantPage();
+  // Tenant konteksti: quyidagi barcha prisma so'rovlari shu tenantga avtomatik cheklanadi.
+  return runWithTenant(tenantId, async () => {
   if (!isManager(session.rol)) {
     redirect("/");
   }
@@ -44,4 +47,5 @@ export default async function FoydalanuvchilarPage() {
       <UsersClient initialUsers={usersDTO} currentUserId={session.userId} businesses={businesses} />
     </div>
   );
+  });
 }

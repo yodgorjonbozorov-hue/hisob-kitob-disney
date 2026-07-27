@@ -8,7 +8,8 @@ import { TrendChart } from "@/components/charts/TrendChart";
 import { DailyDynamicsChart } from "@/components/charts/DailyDynamicsChart";
 import { formatMoneyCompact } from "@/lib/format";
 import { currentMonthString, todayDateOnlyString } from "@/lib/date";
-import { requireUser } from "@/lib/auth/session";
+import { requireTenantPage } from "@/lib/auth/tenant";
+import { runWithTenant } from "@/lib/db/tenantContext";
 import { isManager } from "@/lib/auth/roles";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import {
@@ -27,7 +28,9 @@ export default async function DashboardPage({
 }: {
   searchParams: { month?: string };
 }) {
-  const session = await requireUser();
+  const { session, tenantId } = await requireTenantPage();
+  // Tenant konteksti: quyidagi barcha prisma so'rovlari shu tenantga avtomatik cheklanadi.
+  return runWithTenant(tenantId, async () => {
 
   // Kassir/sotuvchi — dashboard EMAS, kassa bosh ekrani (REDESIGN.md 5.1).
   if (!isManager(session.rol)) {
@@ -170,4 +173,5 @@ export default async function DashboardPage({
       </Card>
     </div>
   );
+  });
 }

@@ -1,12 +1,15 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/auth/session";
+import { requireTenantPage } from "@/lib/auth/tenant";
+import { runWithTenant } from "@/lib/db/tenantContext";
 import { isManager } from "@/lib/auth/roles";
 import { getActiveBusiness } from "@/lib/business";
 import { CategoriesClient } from "./CategoriesClient";
 
 export default async function KategoriyalarPage() {
-  const session = await requireUser();
+  const { session, tenantId } = await requireTenantPage();
+  // Tenant konteksti: quyidagi barcha prisma so'rovlari shu tenantga avtomatik cheklanadi.
+  return runWithTenant(tenantId, async () => {
   if (!isManager(session.rol)) {
     redirect("/");
   }
@@ -37,4 +40,5 @@ export default async function KategoriyalarPage() {
       <CategoriesClient initialCategories={categories} />
     </div>
   );
+  });
 }

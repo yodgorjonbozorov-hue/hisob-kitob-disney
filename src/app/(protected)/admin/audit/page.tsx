@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { requireUser } from "@/lib/auth/session";
+import { requireTenantPage } from "@/lib/auth/tenant";
+import { runWithTenant } from "@/lib/db/tenantContext";
 import { isManager } from "@/lib/auth/roles";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import { listAuditLogs } from "@/lib/queries/audit";
@@ -51,12 +52,18 @@ export default async function AuditPage({
 }: {
   searchParams: { entity?: string; action?: string; page?: string };
 }) {
-  const session = await requireUser();
+  const { session, tenantId } = await requireTenantPage();
+  // Tenant konteksti: quyidagi barcha prisma so'rovlari shu tenantga avtomatik cheklanadi.
+  return runWithTenant(tenantId, async () => {
   if (!isManager(session.rol)) {
     redirect("/tranzaksiyalar");
   }
   const businessId = await resolveActiveBusinessId(session);
   const business = await getActiveBusiness(session);
+  // Aktiv biznes bo'lmasa audit ko'rsatilmaydi (businessId'siz o'qish taqiqlangan).
+  if (!businessId) {
+    redirect("/");
+  }
 
   const { items, total, page, pageSize } = await listAuditLogs({
     businessId,
@@ -110,4 +117,5 @@ export default async function AuditPage({
       )}
     </div>
   );
+  });
 }

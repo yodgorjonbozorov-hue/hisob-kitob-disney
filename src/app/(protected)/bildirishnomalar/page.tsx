@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/auth/session";
+import { requireTenantPage } from "@/lib/auth/tenant";
+import { runWithTenant } from "@/lib/db/tenantContext";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import { getNotifications } from "@/lib/queries/notifications";
 import { Card } from "@/components/ui/Card";
@@ -12,7 +13,9 @@ const DOT: Record<string, string> = {
 };
 
 export default async function BildirishnomalarPage() {
-  const session = await requireUser();
+  const { session, tenantId } = await requireTenantPage();
+  // Tenant konteksti: quyidagi barcha prisma so'rovlari shu tenantga avtomatik cheklanadi.
+  return runWithTenant(tenantId, async () => {
   const businessId = await resolveActiveBusinessId(session);
   const business = await getActiveBusiness(session);
 
@@ -52,4 +55,5 @@ export default async function BildirishnomalarPage() {
       )}
     </div>
   );
+  });
 }
