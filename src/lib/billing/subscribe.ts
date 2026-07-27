@@ -24,7 +24,8 @@ export async function confirmPayment(paymentId: string, now: Date = new Date()) 
   const tenant = await rawPrisma.tenant.findUnique({ where: { id: payment.tenantId } });
   if (!tenant) throw new BadRequestError("Tenant topilmadi");
 
-  const plan = planByCode(tenant.plan) ?? { code: tenant.plan };
+  // To'lov qaysi tarif uchun bo'lsa — tasdiqda tenant shu tarifga o'tadi (upgrade oqimi).
+  const plan = planByCode(payment.plan ?? tenant.plan) ?? { code: tenant.plan };
 
   // Davr boshlanishi: joriy davr hali tugamagan bo'lsa uning oxiridan (kunlar yo'qolmaydi).
   const base =
@@ -50,7 +51,7 @@ export async function confirmPayment(paymentId: string, now: Date = new Date()) 
     });
     const updatedTenant = await tx.tenant.update({
       where: { id: tenant.id },
-      data: { status: "ACTIVE", currentPeriodEnd: periodEnd },
+      data: { status: "ACTIVE", currentPeriodEnd: periodEnd, plan: plan.code },
     });
     return { payment: updatedPayment, subscription, tenant: updatedTenant };
   });

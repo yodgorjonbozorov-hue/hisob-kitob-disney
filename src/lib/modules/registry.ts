@@ -71,6 +71,18 @@ export const MODULLAR: ModulTarifi[] = [
     ],
   },
   {
+    code: "CRM",
+    nomi: "CRM — mijozlar va bitimlar",
+    tavsif: "Lead va bitimlar kanbani, kontaktlar, faoliyat tarixi. Yutilgan bitim 1 klikda kirimga aylanadi.",
+    core: false,
+    // Sotuvchining asosiy ish quroli — SELLER'ga to'liq ochiq (foydalanuvchi qarori).
+    rollar: ["OWNER", "ADMIN", "SELLER"],
+    nav: [
+      { href: "/app/crm", label: "CRM", icon: "crm", tartib: 30, rollar: ["OWNER", "ADMIN", "SELLER"] },
+      { href: "/app/crm/kontaktlar", label: "Kontaktlar", icon: "contacts", tartib: 31, rollar: ["OWNER", "ADMIN", "SELLER"] },
+    ],
+  },
+  {
     code: "BOSHQARUV",
     nomi: "Boshqaruv",
     tavsif: "Bizneslar, kategoriyalar, foydalanuvchilar, audit va obuna.",
@@ -134,10 +146,17 @@ export interface MobileTab {
 export function computeMobileTabs(holat: NavHolati): MobileTab[] {
   const tabs: MobileTab[] = [];
   const manager = isManager(holat.rol);
+  const crmBor = holat.yoqilgan.has("CRM") && modulByCode("CRM")!.rollar.includes(holat.rol);
   if (manager) tabs.push({ href: "/app", label: "Asosiy", icon: "home" });
   tabs.push({ href: "/app/tranzaksiyalar", label: "Yozuvlar", icon: "list" });
-  const omborBor = holat.yoqilgan.has("OMBOR") && holat.omborli && holat.rol !== "SELLER";
+  if (holat.rol === "SELLER") {
+    // Sotuvchi uchun CRM — asosiy ish quroli.
+    if (crmBor) tabs.push({ href: "/app/crm", label: "CRM", icon: "crm" });
+    return tabs;
+  }
+  const omborBor = holat.yoqilgan.has("OMBOR") && holat.omborli;
   if (omborBor) tabs.push({ href: "/app/sotuv", label: "Sotuv", icon: "cart" });
+  else if (crmBor) tabs.push({ href: "/app/crm", label: "CRM", icon: "crm" });
   else if (manager) tabs.push({ href: "/app/hisobot", label: "Hisobot", icon: "chart" });
   return tabs;
 }

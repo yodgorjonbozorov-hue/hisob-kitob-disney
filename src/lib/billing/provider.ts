@@ -37,8 +37,8 @@ export const manualProvider: PaymentProvider = {
     if (!plan) throw new BadRequestError("Noma'lum tarif");
 
     const payment = await prisma.payment.create({
-      // tenantId'ni tenant-scoped client o'zi yozadi.
-      data: { amount: plan.oylikNarx, provider: "MANUAL", status: "PENDING" } as never,
+      // tenantId'ni tenant-scoped client o'zi yozadi. plan — tasdiqda tenant shu tarifga o'tadi.
+      data: { amount: plan.oylikNarx, provider: "MANUAL", status: "PENDING", plan: plan.code } as never,
     });
 
     const korsatma = [

@@ -17,6 +17,13 @@ export const PLANLAR: Plan[] = [
     tavsif: "Cheksiz biznes, foydalanuvchi va tranzaksiya · Hisobotlar (PDF/Excel) · Telegram bot",
     modullar: ["MOLIYA", "OMBOR"],
   },
+  {
+    code: "PRO",
+    nomi: "Pro",
+    oylikNarx: 399_000,
+    tavsif: "Standart'dagi hammasi + CRM (bitimlar kanbani, kontaktlar, faoliyat tarixi)",
+    modullar: ["MOLIYA", "OMBOR", "CRM"],
+  },
 ];
 
 export function planByCode(code: string): Plan | null {
