@@ -38,19 +38,33 @@ const KASSIR_LOGIN = "kassir1";
 const KASSIR_PAROL = "kassir123";
 
 async function main() {
+  console.log("Tenant yaratish...");
+
+  // Default tenant — migratsiya backfill'i bilan bir xil ID (idempotent).
+  const tenant = await prisma.tenant.upsert({
+    where: { id: "tenant_disney_navoiy" },
+    update: {},
+    create: {
+      id: "tenant_disney_navoiy",
+      name: "Disney Navoiy",
+      slug: "disney-navoiy",
+      status: "ACTIVE",
+    },
+  });
+
   console.log("Bizneslarni yaratish...");
 
   // Disney Navoiy (kategoriyalar bilan) va Salyut (bo'sh — admin o'zi to'ldiradi).
   const disney = await prisma.business.upsert({
     where: { id: "biz_disney_navoiy" },
     update: {},
-    create: { id: "biz_disney_navoiy", nomi: "Disney Navoiy" },
+    create: { id: "biz_disney_navoiy", nomi: "Disney Navoiy", tenantId: tenant.id },
   });
   // Salyut — tovar sotadigan biznes: ombor tizimi yoqilgan.
   const salyut = await prisma.business.upsert({
     where: { id: "biz_salyut" },
     update: { omborli: true },
-    create: { id: "biz_salyut", nomi: "Salyut", omborli: true },
+    create: { id: "biz_salyut", nomi: "Salyut", omborli: true, tenantId: tenant.id },
   });
 
   console.log("Salyut mahsulot turlarini yaratish...");
@@ -95,9 +109,9 @@ async function main() {
   await prisma.user.upsert({
     where: { login: ADMIN_LOGIN },
     update: {},
-    // Admin (direktor) — biznesga biriktirilmagan (businessId=null), barcha bizneslarni ko'radi.
+    // Direktor (OWNER) — biznesga biriktirilmagan (businessId=null), tenant ichidagi barcha bizneslarni ko'radi.
     // Yangi o'rnatishda boshlang'ich parol majburiy almashtiriladi (mavjud DB'ga ta'sir qilmaydi — update bo'sh).
-    create: { ism: "Direktor", login: ADMIN_LOGIN, parolHash: adminHash, rol: "admin", mustChangePassword: true },
+    create: { ism: "Direktor", login: ADMIN_LOGIN, parolHash: adminHash, rol: "OWNER", mustChangePassword: true, tenantId: tenant.id },
   });
 
   const kassirHash = await bcrypt.hash(KASSIR_PAROL, 10);
@@ -109,8 +123,9 @@ async function main() {
       ism: "Kassir Aziza",
       login: KASSIR_LOGIN,
       parolHash: kassirHash,
-      rol: "kassir",
+      rol: "CASHIER",
       businessId: disney.id,
+      tenantId: tenant.id,
     },
   });
 

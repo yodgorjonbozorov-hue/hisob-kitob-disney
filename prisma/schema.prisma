@@ -11,7 +11,26 @@ datasource db {
 // SQLite native enumlarni qo'llab-quvvatlamaydi, shuning uchun rol/turi String sifatida
 // saqlanadi va zod orqali ilova darajasida "admin"|"kassir" / "kirim"|"chiqim" bilan cheklanadi.
 
-/// Biznes (kompaniya). Har bir biznesning o'z kategoriyalari, tranzaksiyalari va dashboard'i.
+/// Tenant — mijoz kompaniya (obuna egasi). Har bir tenant o'z bizneslari va
+/// foydalanuvchilariga ega; tenantlar bir-birining ma'lumotini hech qachon ko'rmaydi.
+/// status: "TRIAL" | "ACTIVE" | "PAST_DUE" | "BLOCKED" (zod bilan cheklanadi).
+model Tenant {
+  id               String     @id @default(cuid())
+  name             String
+  slug             String     @unique
+  status           String     @default("TRIAL")
+  trialEndsAt      DateTime?
+  currentPeriodEnd DateTime?
+  plan             String     @default("STANDARD")
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  businesses       Business[]
+  users            User[]
+
+  @@index([status])
+}
+
+/// Biznes (kompaniya bo'limi). Har bir biznesning o'z kategoriyalari, tranzaksiyalari va dashboard'i.
 model Business {
   id           String        @id @default(cuid())
   nomi         String
@@ -19,6 +38,8 @@ model Business {
   // Ombor (inventar) tizimi yoqilganmi — tovar sotadigan bizneslar uchun (masalan Salyut).
   omborli      Boolean       @default(false)
   createdAt    DateTime      @default(now())
+  tenantId     String
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
   categories   Category[]
   transactions Transaction[]
   users        User[]
@@ -26,6 +47,8 @@ model Business {
   budgets      Budget[]
   shiftCloses  ShiftClose[]
   recurrings   RecurringTransaction[]
+
+  @@index([tenantId])
 }
 
 model User {
@@ -33,6 +56,7 @@ model User {
   ism               String
   login             String        @unique
   parolHash         String
+  // rol: "SUPERADMIN" | "OWNER" | "ADMIN" | "CASHIER" | "SELLER" (zod bilan cheklanadi).
   rol               String
   isActive          Boolean       @default(true)
   createdAt         DateTime      @default(now())
@@ -41,7 +65,11 @@ model User {
   mustChangePassword Boolean      @default(false)
   transactions      Transaction[]
 
-  // Kassir bitta biznesga biriktiriladi; admin uchun null (barcha bizneslarni ko'radi).
+  // Tenant a'zoligi. Faqat SUPERADMIN (platforma egasi) uchun null.
+  tenantId          String?
+  tenant            Tenant?       @relation(fields: [tenantId], references: [id])
+
+  // Kassir bitta biznesga biriktiriladi; owner/admin/seller uchun null (tenant ichidagi barcha bizneslar).
   businessId        String?
   business          Business?     @relation(fields: [businessId], references: [id])
 
@@ -50,6 +78,7 @@ model User {
   linkCodeExpiresAt DateTime?
 
   @@index([businessId])
+  @@index([tenantId])
 }
 
 /// Kalit-qiymat ko'rinishidagi tizim sozlamalari (masalan, oxirgi yuborilgan oylik hisobot).
