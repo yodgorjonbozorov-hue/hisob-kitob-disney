@@ -10,6 +10,12 @@ import { join } from "node:path";
 
 const MIGRATIONS_DIR = "prisma/migrations";
 
+// DATABASE_URL bo'lmasa (masalan, env'siz lokal build) jimgina o'tkazib yuboriladi.
+if (!process.env.DATABASE_URL) {
+  console.log("DATABASE_URL yo'q — migratsiya o'tkazib yuborildi.");
+  process.exit(0);
+}
+
 const client = createClient({
   url: process.env.DATABASE_URL,
   authToken: process.env.DATABASE_AUTH_TOKEN,
