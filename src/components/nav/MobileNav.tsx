@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { Rol } from "@/lib/auth/session";
 import { BusinessSwitcher } from "@/components/BusinessSwitcher";
+import { DisneyLogo } from "@/components/DisneyLogo";
 
 interface BusinessOption {
   id: string;
@@ -26,7 +27,12 @@ export default function MobileNav({ rol, businesses, activeBusinessId, notifCoun
   return (
     <div className="lg:hidden sticky top-0 z-40 bg-surface/90 backdrop-blur border-b border-line">
       <div className="flex items-center justify-between px-4 py-2.5 gap-2">
-        <span className="font-semibold shrink-0 text-fg">Hisob-Kitob</span>
+        <span className="flex items-center gap-1.5 shrink-0">
+          <DisneyLogo className="w-5 h-6 text-fg" />
+          <span className="font-semibold tracking-[0.12em] text-fg text-sm" style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>
+            DISNEY
+          </span>
+        </span>
         <div className="flex-1 min-w-0">
           <BusinessSwitcher businesses={businesses} activeId={activeBusinessId} rol={rol} />
         </div>

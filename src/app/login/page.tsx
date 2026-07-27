@@ -1,14 +1,25 @@
 import LoginForm from "./LoginForm";
+import { DisneyLogo } from "@/components/DisneyLogo";
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-surface-2 px-4">
-      <div className="w-full max-w-sm bg-surface rounded-2xl shadow-lg p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-fg">Disney Navoiy</h1>
-          <p className="text-muted text-sm mt-1">Kirim-Chiqim Hisob-Kitob Tizimi</p>
+    <div className="min-h-screen flex items-center justify-center bg-app px-4 py-10">
+      <div className="w-full max-w-sm">
+        <div className="flex flex-col items-center text-center mb-8">
+          <DisneyLogo className="w-20 h-24 text-fg mb-4" />
+          <h1
+            className="text-2xl font-semibold tracking-[0.2em] text-fg"
+            style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}
+          >
+            DISNEY
+          </h1>
+          <p className="text-xs tracking-[0.3em] text-muted mt-1">XAQIQIY MUHABBAT</p>
+          <p className="text-sm text-faint mt-3">Kirim-chiqim hisob-kitob tizimi</p>
         </div>
-        <LoginForm />
+        <div className="bg-surface rounded-2xl shadow-card border border-line p-7">
+          <LoginForm />
+        </div>
+        <p className="text-center text-2xs text-faint mt-6">Disney Navoiy · since 2017</p>
       </div>
     </div>
   );

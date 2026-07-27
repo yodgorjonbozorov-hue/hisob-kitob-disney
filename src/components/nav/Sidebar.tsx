@@ -12,6 +12,7 @@ import type { Rol } from "@/lib/auth/session";
 import { TelegramLinkButton } from "@/components/TelegramLinkButton";
 import { BusinessSwitcher } from "@/components/BusinessSwitcher";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { DisneyLogo } from "@/components/DisneyLogo";
 
 interface BusinessOption { id: string; nomi: string }
 interface Props {
@@ -93,9 +94,14 @@ export default function Sidebar({ ism, rol, businesses, activeBusinessId, omborl
 
   return (
     <aside className="w-64 shrink-0 bg-surface border-r border-line min-h-screen hidden lg:flex lg:flex-col">
-      <div className="px-5 py-5 border-b border-line">
-        <h1 className="font-display font-bold text-lg text-fg">Hisob-Kitob</h1>
-        <p className="text-faint text-xs mt-0.5">Kirim-chiqim tizimi</p>
+      <div className="px-5 py-5 border-b border-line flex items-center gap-3">
+        <DisneyLogo className="w-8 h-10 text-fg shrink-0" />
+        <div className="min-w-0">
+          <h1 className="font-semibold tracking-[0.15em] text-fg text-base leading-none" style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>
+            DISNEY
+          </h1>
+          <p className="text-faint text-2xs tracking-[0.2em] mt-1">NAVOIY</p>
+        </div>
       </div>
       <div className="px-3 pt-4">
         <p className="text-2xs text-faint px-1 mb-1.5 uppercase tracking-wide">Biznes</p>

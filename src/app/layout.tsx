@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   title: "Disney Navoiy — Kirim-Chiqim Hisoboti",
   description: "Disney Navoiy kompaniyasi uchun kirim-chiqim hisob-kitob tizimi",
   manifest: "/manifest.json",
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "Hisob-Kitob" },
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "Disney Navoiy" },
 };
 
 export const viewport: Viewport = {
