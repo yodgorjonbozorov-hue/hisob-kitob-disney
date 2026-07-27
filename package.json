@@ -12,9 +12,11 @@
     "db:migrate:create": "prisma migrate dev --create-only",
     "db:apply": "node scripts/db-migrate.mjs",
     "bot": "node -r ts-node/register src/bot/index.ts",
+    "superadmin:create": "node -r ts-node/register scripts/create-superadmin.ts",
     "test:isolation": "node -r ts-node/register tests/isolation.test.ts",
     "test:signup": "node -r ts-node/register tests/signup.test.ts",
-    "test:billing": "node -r ts-node/register tests/billing.test.ts"
+    "test:billing": "node -r ts-node/register tests/billing.test.ts",
+    "test:superadmin": "node -r ts-node/register tests/superadmin.test.ts"
   },
   "prisma": {
     "seed": "node -r ts-node/register prisma/seed.ts"
