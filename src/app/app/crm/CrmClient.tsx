@@ -213,6 +213,21 @@ function BitimSheet({
     void yuklash();
   }, [yuklash]);
 
+  async function vazifaYaratish() {
+    const nomi = prompt("Vazifa nomi:", `${deal.nomi} — keyingi qadam`);
+    if (!nomi?.trim()) return;
+    const res = await fetch("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nomi: nomi.trim(), dealId: deal.id }),
+    });
+    if (res.ok) {
+      alert("Vazifa yaratildi — Vazifalar bo'limida ko'rasiz.");
+    } else {
+      alert((await res.json()).error ?? "Vazifa yaratilmadi (Vazifalar moduli yoqiqmi?)");
+    }
+  }
+
   async function izohYuborish(e: React.FormEvent) {
     e.preventDefault();
     if (!izoh.trim()) return;
@@ -259,6 +274,11 @@ function BitimSheet({
             </button>
           ))}
         </div>
+
+        {/* Bitimga bog'liq vazifa (Vazifalar moduli bilan integratsiya) */}
+        <button onClick={vazifaYaratish} className="text-brand text-sm font-medium">
+          + Vazifa yaratish
+        </button>
 
         {/* Tez izoh */}
         <form onSubmit={izohYuborish} className="flex gap-2">
