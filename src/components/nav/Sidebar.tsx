@@ -5,10 +5,11 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Receipt, FileText, PiggyBank, Bell, CalendarCheck, Repeat,
   Package, ShoppingCart, HandCoins, Building2, Tags, Users, Trash2, ScrollText,
-  LogOut, KeyRound, CreditCard, type LucideIcon,
+  LogOut, KeyRound, CreditCard, Blocks, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { isManager, ROL_LABEL, type Rol } from "@/lib/auth/roles";
+import { ROL_LABEL, type Rol } from "@/lib/auth/roles";
+import type { NavItem } from "@/lib/modules/registry";
 import { TelegramLinkButton } from "@/components/TelegramLinkButton";
 import { BusinessSwitcher } from "@/components/BusinessSwitcher";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -20,55 +21,34 @@ interface Props {
   rol: Rol;
   businesses: BusinessOption[];
   activeBusinessId: string | null;
-  omborli: boolean;
+  /** Modul registry'sidan generatsiya qilingan havolalar (lib/modules/registry.ts). */
+  navItems: NavItem[];
   notifCount: number;
 }
 
-type NavLink = { href: string; label: string; icon: LucideIcon };
+/** Registry'dagi ikon kaliti -> lucide komponenti. */
+const IKONLAR: Record<string, LucideIcon> = {
+  dashboard: LayoutDashboard,
+  receipt: Receipt,
+  report: FileText,
+  budget: PiggyBank,
+  repeat: Repeat,
+  shift: CalendarCheck,
+  package: Package,
+  cart: ShoppingCart,
+  debt: HandCoins,
+  business: Building2,
+  tags: Tags,
+  users: Users,
+  trash: Trash2,
+  audit: ScrollText,
+  modules: Blocks,
+  billing: CreditCard,
+};
 
-const adminBase: NavLink[] = [
-  { href: "/app", label: "Asosiy", icon: LayoutDashboard },
-  { href: "/app/tranzaksiyalar", label: "Yozuvlar", icon: Receipt },
-  { href: "/app/hisobot", label: "Oylik hisobot", icon: FileText },
-  { href: "/app/byudjet", label: "Budjet", icon: PiggyBank },
-];
-const kassirBase: NavLink[] = [
-  { href: "/app/tranzaksiyalar", label: "Yozuvlar", icon: Receipt },
-  { href: "/app/smena", label: "Kun yakuni", icon: CalendarCheck },
-];
-const adminTail: NavLink[] = [
-  { href: "/app/takroriy", label: "Takroriy", icon: Repeat },
-  { href: "/app/smena", label: "Kun yakuni", icon: CalendarCheck },
-  { href: "/app/admin/bizneslar", label: "Bizneslar", icon: Building2 },
-  { href: "/app/admin/kategoriyalar", label: "Kategoriyalar", icon: Tags },
-  { href: "/app/admin/foydalanuvchilar", label: "Foydalanuvchilar", icon: Users },
-  { href: "/app/admin/ochirilganlar", label: "O'chirilganlar", icon: Trash2 },
-  { href: "/app/admin/audit", label: "Audit jurnali", icon: ScrollText },
-  { href: "/billing", label: "Obuna va to'lov", icon: CreditCard },
-];
-const omborAdmin: NavLink[] = [
-  { href: "/app/ombor", label: "Ombor", icon: Package },
-  { href: "/app/sotuv", label: "Sotuv", icon: ShoppingCart },
-  { href: "/app/qarzlar", label: "Qarzlar", icon: HandCoins },
-];
-const omborKassir: NavLink[] = [
-  { href: "/app/sotuv", label: "Sotuv", icon: ShoppingCart },
-  { href: "/app/qarzlar", label: "Qarzlar", icon: HandCoins },
-];
-
-
-export default function Sidebar({ ism, rol, businesses, activeBusinessId, omborli, notifCount }: Props) {
+export default function Sidebar({ ism, rol, businesses, activeBusinessId, navItems, notifCount }: Props) {
   const pathname = usePathname();
   const router = useRouter();
-
-  const omborLinks = omborli ? (isManager(rol) ? omborAdmin : omborKassir) : [];
-  // Sotuvchi faqat kirim/chiqim kiritadi — unga faqat "Yozuvlar" ko'rinadi.
-  const sellerBase: NavLink[] = [{ href: "/app/tranzaksiyalar", label: "Yozuvlar", icon: Receipt }];
-  const links = isManager(rol)
-    ? [...adminBase, ...omborLinks, ...adminTail]
-    : rol === "SELLER"
-      ? sellerBase
-      : [...omborLinks, ...kassirBase];
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -115,7 +95,7 @@ export default function Sidebar({ ism, rol, businesses, activeBusinessId, omborl
       </div>
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         {item("/app/bildirishnomalar", "Bildirishnomalar", Bell, notifCount)}
-        {links.map((l) => item(l.href, l.label, l.icon))}
+        {navItems.map((l) => item(l.href, l.label, IKONLAR[l.icon] ?? Receipt))}
       </nav>
       <div className="px-4 py-4 border-t border-line space-y-2">
         <div className="flex items-center justify-between">

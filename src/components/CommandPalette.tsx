@@ -23,12 +23,13 @@ interface Item {
  */
 export function CommandPalette({
   rol,
-  omborli,
+  navItems,
   businesses,
   activeBusinessId,
 }: {
   rol: Rol;
-  omborli: boolean;
+  /** Registry'dan hisoblangan havolalar (label + href). */
+  navItems: { label: string; href: string }[];
   businesses: BusinessOption[];
   activeBusinessId: string | null;
 }) {
@@ -63,25 +64,13 @@ export function CommandPalette({
     if (open) setTimeout(() => inputRef.current?.focus(), 50);
   }, [open]);
 
-  // Navigatsiya buyruqlari (rol/omborli asosida)
-  const navCommands: Item[] = [];
-  const nav = (href: string, label: string) =>
-    navCommands.push({ key: `nav:${href}`, label, group: "O'tish", action: () => { router.push(href); close(); } });
-  if (isAdmin) nav("/app", "Boshqaruv paneli");
-  nav("/app/tranzaksiyalar", "Tranzaksiyalar");
-  if (isAdmin) nav("/app/hisobot", "Oylik hisobot");
-  if (isAdmin) nav("/app/byudjet", "Budjet");
-  // Sotuvchi faqat kirim/chiqim kiritadi — ombor/sotuv/qarzlar unga ko'rinmaydi.
-  if (omborli && rol !== "SELLER") {
-    if (isAdmin) nav("/app/ombor", "Ombor");
-    nav("/app/sotuv", "Sotuv");
-    nav("/app/qarzlar", "Qarzlar");
-  }
-  if (isAdmin) {
-    nav("/app/admin/foydalanuvchilar", "Foydalanuvchilar");
-    nav("/app/admin/audit", "Audit jurnali");
-    nav("/app/admin/ochirilganlar", "O'chirilganlar");
-  }
+  // Navigatsiya buyruqlari — modul registry'sidan (lib/modules/registry.ts).
+  const navCommands: Item[] = navItems.map((n) => ({
+    key: `nav:${n.href}`,
+    label: n.label,
+    group: "O'tish",
+    action: () => { router.push(n.href); close(); },
+  }));
 
   const bizCommands: Item[] = businesses
     .filter((b) => b.id !== activeBusinessId && rol !== "CASHIER")

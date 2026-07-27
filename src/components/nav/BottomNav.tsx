@@ -3,20 +3,19 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import { isManager, ROL_LABEL, type Rol } from "@/lib/auth/roles";
+import { ROL_LABEL, type Rol } from "@/lib/auth/roles";
+import type { MobileTab } from "@/lib/modules/registry";
 import { QuickAddSheet } from "./QuickAddSheet";
 import { TelegramLinkButton } from "@/components/TelegramLinkButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
-interface BusinessOption {
-  id: string;
-  nomi: string;
-}
-
 interface Props {
   ism: string;
   rol: Rol;
-  omborli: boolean;
+  /** Registry'dan hisoblangan pastki tablar (computeMobileTabs). */
+  tabs: MobileTab[];
+  /** Menyu sheet'idagi barcha havolalar (registry nav'idan). */
+  menyu: { label: string; href: string }[];
 }
 
 
@@ -50,49 +49,21 @@ function TabIcon({ name }: { name: string }) {
  * Mobil pastki tab-bar. Markazda ko'tarilgan FAB (tez qo'shish).
  * Faqat < lg — desktop'da yon menyu (Sidebar) ishlatiladi.
  */
-export function BottomNav({ ism, rol, omborli }: Props) {
+export function BottomNav({ ism, rol, tabs, menyu }: Props) {
   const pathname = usePathname();
   const router = useRouter();
   const [quickOpen, setQuickOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const isAdmin = isManager(rol);
-  // Sotuvchi faqat kirim/chiqim kiritadi — sotuv/smena bo'limlari unga ko'rinmaydi.
-  const isSeller = rol === "SELLER";
-
-  // Asosiy tablar (rol + omborli asosida)
-  const tabs: { label: string; href: string; icon: string }[] = [];
-  if (isAdmin) tabs.push({ label: "Asosiy", href: "/app", icon: "home" });
-  tabs.push({ label: "Yozuvlar", href: "/app/tranzaksiyalar", icon: "list" });
-  if (omborli && !isSeller) tabs.push({ label: "Sotuv", href: "/app/sotuv", icon: "cart" });
-  else if (isAdmin) tabs.push({ label: "Hisobot", href: "/app/hisobot", icon: "chart" });
-
   const mid = Math.ceil(tabs.length / 2);
   const left = tabs.slice(0, mid);
   const right = tabs.slice(mid);
 
-  // Menyu sheet ichidagi barcha havolalar
-  const allLinks: { label: string; href: string }[] = [];
-  allLinks.push({ label: "🔔 Bildirishnomalar", href: "/app/bildirishnomalar" });
-  if (isAdmin) allLinks.push({ label: "Boshqaruv paneli", href: "/app" });
-  allLinks.push({ label: "Yozuvlar", href: "/app/tranzaksiyalar" });
-  if (isAdmin) allLinks.push({ label: "Oylik hisobot", href: "/app/hisobot" });
-  if (isAdmin) allLinks.push({ label: "Budjet", href: "/app/byudjet" });
-  if (omborli && !isSeller) {
-    if (isAdmin) allLinks.push({ label: "Ombor", href: "/app/ombor" });
-    allLinks.push({ label: "Sotuv", href: "/app/sotuv" });
-    allLinks.push({ label: "Qarzlar", href: "/app/qarzlar" });
-  }
-  if (!isSeller) allLinks.push({ label: "Kun yakuni", href: "/app/smena" });
-  if (isAdmin) {
-    allLinks.push({ label: "Takroriy", href: "/app/takroriy" });
-    allLinks.push({ label: "Bizneslar", href: "/app/admin/bizneslar" });
-    allLinks.push({ label: "Kategoriyalar", href: "/app/admin/kategoriyalar" });
-    allLinks.push({ label: "Foydalanuvchilar", href: "/app/admin/foydalanuvchilar" });
-    allLinks.push({ label: "O'chirilganlar", href: "/app/admin/ochirilganlar" });
-    allLinks.push({ label: "Audit", href: "/app/admin/audit" });
-    allLinks.push({ label: "Obuna va to'lov", href: "/billing" });
-  }
+  // Menyu sheet: bildirishnomalar + registry'dan kelgan havolalar.
+  const allLinks: { label: string; href: string }[] = [
+    { label: "🔔 Bildirishnomalar", href: "/app/bildirishnomalar" },
+    ...menyu,
+  ];
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
