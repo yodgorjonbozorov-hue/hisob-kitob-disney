@@ -70,6 +70,10 @@ export async function requireTenantApi(): Promise<TenantContext> {
  */
 export async function requireTenantPage(): Promise<TenantContext> {
   const session = await requireUser();
+  // SUPERADMIN tenantsiz — unga alohida panel.
+  if (session.rol === "SUPERADMIN") {
+    redirect("/superadmin");
+  }
   const ctx = await buildContext(session);
   if (!ctx) {
     redirect("/login");
@@ -83,6 +87,9 @@ export async function requireTenantPage(): Promise<TenantContext> {
 /** /billing sahifasi uchun: sessiya + tenant kerak, lekin status tekshirilmaydi. */
 export async function requireBillingPage(): Promise<TenantContext> {
   const session = await requireUser();
+  if (session.rol === "SUPERADMIN") {
+    redirect("/superadmin");
+  }
   const ctx = await buildContext(session);
   if (!ctx) {
     redirect("/login");

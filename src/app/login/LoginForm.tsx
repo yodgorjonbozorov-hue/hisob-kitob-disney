@@ -26,7 +26,7 @@ export default function LoginForm() {
         setLoading(false);
         return;
       }
-      router.push("/");
+      router.push(data.rol === "SUPERADMIN" ? "/superadmin" : "/");
       router.refresh();
     } catch {
       setError("Serverga ulanib bo'lmadi");

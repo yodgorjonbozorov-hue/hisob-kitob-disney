@@ -16,6 +16,8 @@ export interface SessionData {
   businessId?: string | null;
   // Seed/boshlang'ich parolni majburiy almashtirish kerakmi.
   mustChangePassword?: boolean;
+  // Impersonatsiya: SUPERADMIN tenant nomidan kirganda uning userId'si shu yerda saqlanadi.
+  impersonatedBy?: string | null;
 }
 
 export const sessionOptions: SessionOptions = {
