@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
+import { isManager } from "@/lib/auth/roles";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import { listAuditLogs } from "@/lib/queries/audit";
 import { Card } from "@/components/ui/Card";
@@ -51,7 +52,7 @@ export default async function AuditPage({
   searchParams: { entity?: string; action?: string; page?: string };
 }) {
   const session = await requireUser();
-  if (session.rol !== "admin") {
+  if (!isManager(session.rol)) {
     redirect("/tranzaksiyalar");
   }
   const businessId = await resolveActiveBusinessId(session);

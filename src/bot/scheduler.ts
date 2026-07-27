@@ -6,6 +6,7 @@ import { getMonthlyReport } from "@/lib/queries/report";
 import { MonthlyReportDocument } from "@/lib/pdf/MonthlyReportDocument";
 import { shiftMonthString, currentMonthString, parseMonthString } from "@/lib/date";
 import { formatSomLabel, uzOyNomi } from "@/lib/format";
+import { MANAGER_ROLLAR } from "@/lib/auth/roles";
 
 const SETTING_KEY = "lastMonthlyReportSentForMonth";
 const CHECK_INTERVAL_MS = 60 * 60 * 1000; // har soatda tekshiradi
@@ -36,7 +37,7 @@ export async function checkAndSendMonthlyReport(bot: Bot): Promise<void> {
   if (lastSent === reportMonth) return;
 
   const admins = await prisma.user.findMany({
-    where: { rol: "admin", isActive: true, telegramChatId: { not: null } },
+    where: { rol: { in: MANAGER_ROLLAR }, isActive: true, telegramChatId: { not: null } },
   });
   if (admins.length === 0) return;
 

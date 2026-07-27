@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
 import { handleApiError, UnauthorizedError } from "@/lib/auth/guard";
+import { isManager } from "@/lib/auth/roles";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { logAudit, getClientIp } from "@/lib/services/audit";
 import { z } from "zod";
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
         id: { in: parsed.data.ids },
         businessId,
         deletedAt: null,
-        ...(user.rol === "admin" ? {} : { userId: user.userId }),
+        ...(isManager(user.rol) ? {} : { userId: user.userId }),
       },
       data: { deletedAt: new Date() },
     });

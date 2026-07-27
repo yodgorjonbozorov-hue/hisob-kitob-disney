@@ -24,7 +24,7 @@ export default async function TranzaksiyalarPage({
   const session = await requireUser();
   const businessId = await resolveActiveBusinessId(session);
   // Sotuvchi kirim ham, chiqim ham qo'shadi/ko'radi — faqat "Sof foyda" ko'rsatkichi yashirin.
-  const hideProfit = session.rol === "sotuvchi";
+  const hideProfit = session.rol === "SELLER";
 
   if (!businessId) {
     return (

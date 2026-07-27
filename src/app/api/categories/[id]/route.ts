@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
-import { handleApiError, requireRole, ForbiddenError, UnauthorizedError } from "@/lib/auth/guard";
+import { handleApiError, requireManager, ForbiddenError, UnauthorizedError } from "@/lib/auth/guard";
 import { updateCategorySchema } from "@/lib/validation/category";
 import { resolveActiveBusinessId } from "@/lib/business";
 
@@ -9,7 +9,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   try {
     const user = await getCurrentUser();
     if (!user) throw new UnauthorizedError();
-    requireRole(user.rol, "admin");
+    requireManager(user.rol);
 
     const businessId = await resolveActiveBusinessId(user);
     const existing = await prisma.category.findUnique({

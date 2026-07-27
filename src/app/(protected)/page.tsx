@@ -9,6 +9,7 @@ import { DailyDynamicsChart } from "@/components/charts/DailyDynamicsChart";
 import { formatMoneyCompact } from "@/lib/format";
 import { currentMonthString, todayDateOnlyString } from "@/lib/date";
 import { requireUser } from "@/lib/auth/session";
+import { isManager } from "@/lib/auth/roles";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import {
   getMonthSummary,
@@ -29,7 +30,7 @@ export default async function DashboardPage({
   const session = await requireUser();
 
   // Kassir/sotuvchi — dashboard EMAS, kassa bosh ekrani (REDESIGN.md 5.1).
-  if (session.rol !== "admin") {
+  if (!isManager(session.rol)) {
     const bId = await resolveActiveBusinessId(session);
     const business = await getActiveBusiness(session);
     if (!bId) {

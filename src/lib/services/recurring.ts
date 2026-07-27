@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { currentMonthString } from "@/lib/date";
 import { logAudit } from "@/lib/services/audit";
+import { MANAGER_ROLLAR } from "@/lib/auth/roles";
 
 /**
  * Muddati kelgan takroriy tranzaksiyalarni yaratadi. Har oy `kun` sanasi kelganda
@@ -24,8 +25,8 @@ export async function generateDueRecurring(now: Date = new Date()): Promise<numb
   });
   if (due.length === 0) return 0;
 
-  // Tranzaksiya userId talab qiladi — biznes admini yoki har qanday admin.
-  const admin = await prisma.user.findFirst({ where: { rol: "admin" }, select: { id: true, ism: true } });
+  // Tranzaksiya userId talab qiladi — tenant boshqaruvchisi (OWNER/ADMIN).
+  const admin = await prisma.user.findFirst({ where: { rol: { in: MANAGER_ROLLAR } }, select: { id: true, ism: true } });
   if (!admin) return 0;
 
   let count = 0;

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
-import { handleApiError, requireRole, UnauthorizedError } from "@/lib/auth/guard";
+import { handleApiError, requireManager, UnauthorizedError } from "@/lib/auth/guard";
 import { createUserSchema } from "@/lib/validation/user";
 import { hashPassword } from "@/lib/auth/password";
 
@@ -20,7 +20,7 @@ export async function GET() {
   try {
     const user = await getCurrentUser();
     if (!user) throw new UnauthorizedError();
-    requireRole(user.rol, "admin");
+    requireManager(user.rol);
 
     const users = await prisma.user.findMany({
       select: USER_SELECT,
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) throw new UnauthorizedError();
-    requireRole(user.rol, "admin");
+    requireManager(user.rol);
 
     const body = await request.json();
     const parsed = createUserSchema.safeParse(body);
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
 
     // Kassir uchun biznes majburiy; admin uchun biznes yo'q (barcha bizneslarni ko'radi).
     let businessId: string | null = null;
-    if (parsed.data.rol === "kassir") {
+    if (parsed.data.rol === "CASHIER") {
       if (!parsed.data.businessId) {
         return NextResponse.json({ error: "Kassir uchun biznes tanlanishi shart" }, { status: 400 });
       }

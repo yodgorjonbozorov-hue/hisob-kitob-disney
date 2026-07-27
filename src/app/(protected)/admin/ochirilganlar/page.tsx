@@ -1,12 +1,13 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
+import { isManager } from "@/lib/auth/roles";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import { listDeletedTransactions } from "@/lib/queries/transactions";
 import { OchirilganlarClient } from "./OchirilganlarClient";
 
 export default async function OchirilganlarPage() {
   const session = await requireUser();
-  if (session.rol !== "admin") {
+  if (!isManager(session.rol)) {
     redirect("/tranzaksiyalar");
   }
   const businessId = await resolveActiveBusinessId(session);

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
-import { handleApiError, requireRole, UnauthorizedError } from "@/lib/auth/guard";
+import { handleApiError, requireManager, UnauthorizedError } from "@/lib/auth/guard";
 import { updateUserSchema } from "@/lib/validation/user";
 import { hashPassword } from "@/lib/auth/password";
 import { logAudit, getClientIp } from "@/lib/services/audit";
@@ -21,7 +21,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   try {
     const user = await getCurrentUser();
     if (!user) throw new UnauthorizedError();
-    requireRole(user.rol, "admin");
+    requireManager(user.rol);
 
     const body = await request.json();
     const parsed = updateUserSchema.safeParse(body);
@@ -42,7 +42,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
     // Biznesni rol asosida hal qilamiz: kassir → majburiy biznes; admin/sotuvchi → biznessiz.
     let businessIdData: { businessId?: string | null } = {};
-    if (effectiveRol === "kassir") {
+    if (effectiveRol === "CASHIER") {
       const targetBiz = businessId !== undefined ? businessId : existing.businessId;
       if (!targetBiz) {
         return NextResponse.json({ error: "Kassir uchun biznes tanlanishi shart" }, { status: 400 });

@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
-import { handleApiError, requireRole, UnauthorizedError } from "@/lib/auth/guard";
+import { handleApiError, requireManager, UnauthorizedError } from "@/lib/auth/guard";
 import { updateBusinessSchema } from "@/lib/validation/business";
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const user = await getCurrentUser();
     if (!user) throw new UnauthorizedError();
-    requireRole(user.rol, "admin");
+    requireManager(user.rol);
 
     const body = await request.json();
     const parsed = updateBusinessSchema.safeParse(body);

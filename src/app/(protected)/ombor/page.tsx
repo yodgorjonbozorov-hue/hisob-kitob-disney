@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
+import { isManager } from "@/lib/auth/roles";
 import { getActiveBusiness } from "@/lib/business";
 import { listProducts, getOmborStats, getProductProfitability, type ProductAdminDTO } from "@/lib/queries/inventory";
 import { OmborClient } from "./OmborClient";
@@ -8,7 +9,7 @@ import { formatSomLabel } from "@/lib/format";
 
 export default async function OmborPage() {
   const session = await requireUser();
-  if (session.rol !== "admin") {
+  if (!isManager(session.rol)) {
     redirect("/");
   }
   const business = await getActiveBusiness(session);

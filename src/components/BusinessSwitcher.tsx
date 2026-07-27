@@ -25,7 +25,7 @@ export function BusinessSwitcher({
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
-  if (rol === "kassir" || businesses.length <= 1) {
+  if (rol === "CASHIER" || businesses.length <= 1) {
     const nomi = businesses.find((b) => b.id === activeId)?.nomi ?? businesses[0]?.nomi ?? "—";
     return (
       <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-2 text-fg text-sm font-medium border border-line">

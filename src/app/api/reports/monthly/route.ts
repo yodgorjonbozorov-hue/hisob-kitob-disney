@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/session";
-import { handleApiError, requireRole, UnauthorizedError } from "@/lib/auth/guard";
+import { handleApiError, requireManager, UnauthorizedError } from "@/lib/auth/guard";
 import { getMonthlyReport } from "@/lib/queries/report";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { currentMonthString } from "@/lib/date";
@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) throw new UnauthorizedError();
-    requireRole(user.rol, "admin");
+    requireManager(user.rol);
 
     const businessId = await resolveActiveBusinessId(user);
     if (!businessId) return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });

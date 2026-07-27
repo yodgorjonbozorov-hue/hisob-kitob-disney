@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) throw new UnauthorizedError();
-    if (user.rol === "kassir") throw new ForbiddenError();
+    if (user.rol === "CASHIER") throw new ForbiddenError();
 
     const body = await request.json();
     const businessId = typeof body?.businessId === "string" ? body.businessId : null;

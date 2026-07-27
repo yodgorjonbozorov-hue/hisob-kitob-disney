@@ -1,12 +1,13 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth/session";
+import { isManager } from "@/lib/auth/roles";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import { TakroriyClient } from "./TakroriyClient";
 
 export default async function TakroriyPage() {
   const session = await requireUser();
-  if (session.rol !== "admin") {
+  if (!isManager(session.rol)) {
     redirect("/tranzaksiyalar");
   }
   const businessId = await resolveActiveBusinessId(session);

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
 import { handleApiError, requireOwnerOrAdmin, ForbiddenError, UnauthorizedError } from "@/lib/auth/guard";
+import { isManager } from "@/lib/auth/roles";
 import { updateTransactionSchema } from "@/lib/validation/transaction";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { resolveActiveBusinessId } from "@/lib/business";
@@ -95,7 +96,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     if (permanent) {
       // Butunlay o'chirish — faqat admin.
-      if (user.rol !== "admin") throw new ForbiddenError("Butunlay o'chirish faqat admin uchun");
+      if (!isManager(user.rol)) throw new ForbiddenError("Butunlay o'chirish faqat direktor uchun");
       await prisma.transaction.delete({ where: { id: params.id } });
       await logAudit({
         businessId: existing.businessId, userId: user.userId, userIsm: user.ism,

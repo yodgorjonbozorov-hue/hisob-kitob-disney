@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
+import { isManager } from "@/lib/auth/roles";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import { getBudgetsWithSpend } from "@/lib/queries/budget";
 import { currentMonthString } from "@/lib/date";
@@ -8,7 +9,7 @@ import { BudjetClient } from "./BudjetClient";
 
 export default async function BudjetPage({ searchParams }: { searchParams: { month?: string } }) {
   const session = await requireUser();
-  if (session.rol !== "admin") {
+  if (!isManager(session.rol)) {
     redirect("/tranzaksiyalar");
   }
   const businessId = await resolveActiveBusinessId(session);

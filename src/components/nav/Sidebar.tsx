@@ -8,7 +8,7 @@ import {
   LogOut, KeyRound, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
-import type { Rol } from "@/lib/auth/session";
+import { isManager, ROL_LABEL, type Rol } from "@/lib/auth/roles";
 import { TelegramLinkButton } from "@/components/TelegramLinkButton";
 import { BusinessSwitcher } from "@/components/BusinessSwitcher";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -55,14 +55,13 @@ const omborKassir: NavLink[] = [
   { href: "/qarzlar", label: "Qarzlar", icon: HandCoins },
 ];
 
-const ROL_LABEL: Record<Rol, string> = { admin: "Direktor", kassir: "Kassir", sotuvchi: "Sotuvchi" };
 
 export default function Sidebar({ ism, rol, businesses, activeBusinessId, omborli, notifCount }: Props) {
   const pathname = usePathname();
   const router = useRouter();
 
-  const omborLinks = omborli ? (rol === "admin" ? omborAdmin : omborKassir) : [];
-  const links = rol === "admin" ? [...adminBase, ...omborLinks, ...adminTail] : [...omborLinks, ...kassirBase];
+  const omborLinks = omborli ? (isManager(rol) ? omborAdmin : omborKassir) : [];
+  const links = isManager(rol) ? [...adminBase, ...omborLinks, ...adminTail] : [...omborLinks, ...kassirBase];
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });

@@ -1,12 +1,13 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth/session";
+import { isManager } from "@/lib/auth/roles";
 import { getActiveBusiness } from "@/lib/business";
 import { CategoriesClient } from "./CategoriesClient";
 
 export default async function KategoriyalarPage() {
   const session = await requireUser();
-  if (session.rol !== "admin") {
+  if (!isManager(session.rol)) {
     redirect("/");
   }
 

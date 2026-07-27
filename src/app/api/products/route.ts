@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
-import { handleApiError, requireRole, UnauthorizedError } from "@/lib/auth/guard";
+import { handleApiError, requireManager, UnauthorizedError } from "@/lib/auth/guard";
+import { isManager } from "@/lib/auth/roles";
 import { createProductSchema } from "@/lib/validation/inventory";
 import { resolveActiveBusinessId, requireOmborli } from "@/lib/business";
 import { listProducts } from "@/lib/queries/inventory";
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const faqatFaol = searchParams.get("active") === "true";
     // Admin bo'lmaganlar (kassir/sotuvchi) uchun tannarx va miqdor RAQAMI berilmaydi (faqat mavjudlik).
-    const products = await listProducts(businessId, { forKassir: user.rol !== "admin", faqatFaol });
+    const products = await listProducts(businessId, { forKassir: !isManager(user.rol), faqatFaol });
     return NextResponse.json(products);
   } catch (error) {
     return handleApiError(error);
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) throw new UnauthorizedError();
-    requireRole(user.rol, "admin");
+    requireManager(user.rol);
 
     const businessId = await resolveActiveBusinessId(user);
     if (!businessId) return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });

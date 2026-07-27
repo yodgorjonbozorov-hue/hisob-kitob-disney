@@ -3,6 +3,7 @@ import { getMonthlyReport } from "@/lib/queries/report";
 import { currentMonthString } from "@/lib/date";
 import { MonthSelector } from "@/components/MonthSelector";
 import { requireUser } from "@/lib/auth/session";
+import { isManager } from "@/lib/auth/roles";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { ReportView } from "./ReportView";
 
@@ -12,7 +13,7 @@ export default async function HisobotPage({
   searchParams: { month?: string };
 }) {
   const session = await requireUser();
-  if (session.rol !== "admin") {
+  if (!isManager(session.rol)) {
     redirect("/tranzaksiyalar");
   }
   const businessId = await resolveActiveBusinessId(session);

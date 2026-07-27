@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import type { Rol } from "@/lib/auth/session";
+import { isManager, type Rol } from "@/lib/auth/roles";
 import { formatSomLabel } from "@/lib/format";
 
 interface BusinessOption {
@@ -38,7 +38,7 @@ export function CommandPalette({
   const [results, setResults] = useState<Item[]>([]);
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const isAdmin = rol === "admin";
+  const isAdmin = isManager(rol);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -83,7 +83,7 @@ export function CommandPalette({
   }
 
   const bizCommands: Item[] = businesses
-    .filter((b) => b.id !== activeBusinessId && rol !== "kassir")
+    .filter((b) => b.id !== activeBusinessId && rol !== "CASHIER")
     .map((b) => ({
       key: `biz:${b.id}`,
       label: `Biznes: ${b.nomi}`,

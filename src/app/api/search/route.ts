@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
 import { handleApiError, UnauthorizedError } from "@/lib/auth/guard";
+import { isManager } from "@/lib/auth/roles";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 
 /** Global qidiruv — aktiv biznes bo'yicha tranzaksiya/qarzdor/mahsulot/kategoriya. */
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
             take: 5,
           })
         : Promise.resolve([]),
-      user.rol === "admin"
+      isManager(user.rol)
         ? prisma.category.findMany({
             where: { businessId, nomi: { contains: q } },
             select: { id: true, nomi: true, turi: true },

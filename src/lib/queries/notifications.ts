@@ -1,3 +1,4 @@
+import { isManager } from "@/lib/auth/roles";
 import { prisma } from "@/lib/prisma";
 import { getBudgetsWithSpend } from "@/lib/queries/budget";
 import { currentMonthString } from "@/lib/date";
@@ -23,7 +24,7 @@ export async function getNotifications(
   const month = currentMonthString();
 
   // Budjet oshishi (faqat admin)
-  if (opts.rol === "admin") {
+  if (isManager(opts.rol)) {
     const budgets = await getBudgetsWithSpend(businessId, month);
     for (const b of budgets) {
       if (b.limitSumma > 0 && b.sarflangan > b.limitSumma) {
@@ -59,7 +60,7 @@ export async function getNotifications(
         severity: "danger",
         title: "Ombor tugadi",
         message: `${out0.length} ta mahsulot qolmadi: ${out0.slice(0, 3).map((p) => p.nomi).join(", ")}${out0.length > 3 ? "…" : ""}`,
-        href: opts.rol === "admin" ? "/ombor" : "/sotuv",
+        href: isManager(opts.rol) ? "/ombor" : "/sotuv",
       });
     }
     if (lowOnly.length > 0) {
@@ -67,7 +68,7 @@ export async function getNotifications(
         severity: "warning",
         title: "Ombor kam qoldi",
         message: `${lowOnly.length} ta mahsulot ${LOW_STOCK} donadan kam`,
-        href: opts.rol === "admin" ? "/ombor" : "/sotuv",
+        href: isManager(opts.rol) ? "/ombor" : "/sotuv",
       });
     }
   }

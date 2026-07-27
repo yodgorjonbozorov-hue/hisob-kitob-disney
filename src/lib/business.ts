@@ -14,7 +14,7 @@ export interface BusinessDTO {
 
 /** Foydalanuvchi kira oladigan bizneslar: admin → barcha faol; kassir → faqat o'ziniki. */
 export async function getAccessibleBusinesses(session: SessionData): Promise<BusinessDTO[]> {
-  if (session.rol === "kassir") {
+  if (session.rol === "CASHIER") {
     if (!session.businessId) return [];
     const b = await prisma.business.findUnique({
       where: { id: session.businessId },
@@ -37,7 +37,7 @@ export async function getAccessibleBusinesses(session: SessionData): Promise<Bus
  * Hech qanday biznes bo'lmasa null qaytaradi.
  */
 export async function resolveActiveBusinessId(session: SessionData): Promise<string | null> {
-  if (session.rol === "kassir") {
+  if (session.rol === "CASHIER") {
     return session.businessId ?? null;
   }
 

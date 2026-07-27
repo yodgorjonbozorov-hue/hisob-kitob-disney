@@ -1,5 +1,6 @@
 "use client";
 
+import { isManager } from "@/lib/auth/roles";
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { formatSom, formatSomLabel, parseSomInput, formatDateUZ } from "@/lib/format";
@@ -50,7 +51,7 @@ export function TransactionList({
   const allSelected = items.length > 0 && selected.size === items.length;
 
   function canModify(t: TransactionDTO) {
-    return currentUserRol === "admin" || t.userId === currentUserId;
+    return isManager(currentUserRol) || t.userId === currentUserId;
   }
 
   return (

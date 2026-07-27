@@ -10,6 +10,7 @@ import {
 } from "./transactionFlow";
 import { startMonthlyReport, handleReportBusinessCallback, sendReportDocument } from "./report";
 import { clearFlow } from "./state";
+import { isManager } from "@/lib/auth/roles";
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) {
@@ -20,7 +21,7 @@ export const bot = new Bot(token);
 
 function buyruqlarRoyxati(rol: string): string {
   const base = "Buyruqlar:\n/kirim — kirim kiritish\n/chiqim — chiqim kiritish";
-  return rol === "admin" ? `${base}\n/hisobot — joriy oy hisoboti` : base;
+  return isManager(rol) ? `${base}\n/hisobot — joriy oy hisoboti` : base;
 }
 
 bot.command("start", async (ctx) => {
@@ -83,7 +84,7 @@ bot.command("hisobot", async (ctx) => {
     await ctx.reply("Avval /kod orqali tizimga ulaning.");
     return;
   }
-  if (user.rol !== "admin") {
+  if (!isManager(user.rol)) {
     await ctx.reply("Bu buyruq faqat direktor uchun mavjud.");
     return;
   }
@@ -101,7 +102,7 @@ bot.callbackQuery(/^sana:/, handleDateCallback);
 
 bot.callbackQuery(/^rbiz:/, async (ctx) => {
   const user = await findUserByChatId(String(ctx.chat!.id));
-  if (!user || user.rol !== "admin") {
+  if (!user || !isManager(user.rol)) {
     await ctx.answerCallbackQuery({ text: "Bu amal faqat direktor uchun mavjud." });
     return;
   }
@@ -123,7 +124,7 @@ bot.callbackQuery(/^report:(pdf|excel):([^:]+):(.+)$/, async (ctx) => {
     await ctx.answerCallbackQuery({ text: "Avval /kod orqali tizimga ulaning." });
     return;
   }
-  if (user.rol !== "admin") {
+  if (!isManager(user.rol)) {
     await ctx.answerCallbackQuery({ text: "Bu amal faqat direktor uchun mavjud." });
     return;
   }

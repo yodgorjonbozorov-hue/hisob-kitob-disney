@@ -13,9 +13,10 @@ interface BusinessOption {
 }
 
 const ROL_LABEL: Record<string, string> = {
-  admin: "Direktor",
-  kassir: "Kassir",
-  sotuvchi: "Sotuvchi",
+  OWNER: "Direktor",
+  ADMIN: "Administrator",
+  CASHIER: "Kassir",
+  SELLER: "Sotuvchi",
 };
 
 interface UserDTO {
@@ -133,14 +134,14 @@ export function UsersClient({
                       onChange={(e) => changeRol(u, e.target.value)}
                       className="rounded-lg border border-line bg-surface px-2 py-1 text-sm"
                     >
-                      <option value="kassir">Kassir</option>
-                      <option value="sotuvchi">Sotuvchi</option>
-                      <option value="admin">Direktor</option>
+                      <option value="CASHIER">Kassir</option>
+                      <option value="SELLER">Sotuvchi</option>
+                      <option value="OWNER">Direktor</option>
                     </select>
                   )}
                 </td>
                 <td className="py-2.5 text-muted">
-                  {u.rol !== "kassir" ? (
+                  {u.rol !== "CASHIER" ? (
                     "Barcha"
                   ) : (
                     <select
@@ -196,7 +197,7 @@ function NewUserModal({
   const [ism, setIsm] = useState("");
   const [login, setLogin] = useState("");
   const [parol, setParol] = useState("");
-  const [rol, setRol] = useState<"admin" | "kassir" | "sotuvchi">("kassir");
+  const [rol, setRol] = useState<"OWNER" | "CASHIER" | "SELLER">("CASHIER");
   const [businessId, setBusinessId] = useState(businesses[0]?.id ?? "");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -204,7 +205,7 @@ function NewUserModal({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    if (rol === "kassir" && !businessId) {
+    if (rol === "CASHIER" && !businessId) {
       setError("Kassir uchun biznes tanlang");
       return;
     }
@@ -212,7 +213,7 @@ function NewUserModal({
     const res = await fetch("/api/users", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ism, login, parol, rol, businessId: rol === "kassir" ? businessId : null }),
+      body: JSON.stringify({ ism, login, parol, rol, businessId: rol === "CASHIER" ? businessId : null }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -252,14 +253,14 @@ function NewUserModal({
         />
         <select
           value={rol}
-          onChange={(e) => setRol(e.target.value as "admin" | "kassir" | "sotuvchi")}
+          onChange={(e) => setRol(e.target.value as "OWNER" | "CASHIER" | "SELLER")}
           className="w-full rounded-lg border border-line px-3 py-2 text-sm"
         >
-          <option value="kassir">Kassir</option>
-          <option value="sotuvchi">Sotuvchi</option>
-          <option value="admin">Direktor (admin)</option>
+          <option value="CASHIER">Kassir</option>
+          <option value="SELLER">Sotuvchi</option>
+          <option value="OWNER">Direktor</option>
         </select>
-        {rol === "kassir" && (
+        {rol === "CASHIER" && (
           <div>
             <label className="block text-xs font-medium text-muted mb-1">Biznes</label>
             <select
@@ -275,10 +276,10 @@ function NewUserModal({
             </select>
           </div>
         )}
-        {rol === "admin" && (
+        {rol === "OWNER" && (
           <p className="text-xs text-faint">Direktor barcha bizneslarni ko'radi va almashadi.</p>
         )}
-        {rol === "sotuvchi" && (
+        {rol === "SELLER" && (
           <p className="text-xs text-faint">
             Sotuvchi barcha bizneslarni ko'radi va almashadi, faqat sotadi (kirim/sotuv/qarzlar) — sof foyda va hisobotlarni ko'rmaydi.
           </p>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth/session";
-import { handleApiError, requireRole, ForbiddenError, UnauthorizedError } from "@/lib/auth/guard";
+import { handleApiError, requireManager, ForbiddenError, UnauthorizedError } from "@/lib/auth/guard";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { z } from "zod";
 
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) throw new UnauthorizedError();
-    requireRole(user.rol, "admin");
+    requireManager(user.rol);
     const businessId = await resolveActiveBusinessId(user);
     if (!businessId) return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });
 

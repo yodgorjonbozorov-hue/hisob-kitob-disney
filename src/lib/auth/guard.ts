@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { Rol } from "./session";
+import { isManager } from "./roles";
 
 export class ForbiddenError extends Error {
   constructor(message = "Ruxsat yo'q") {
@@ -29,9 +30,16 @@ export function requireRole(rol: Rol, allowed: Rol): void {
   }
 }
 
-/** Admin har doim, kassir faqat o'z yozuvini o'zgartira oladi. */
+/** Tenant boshqaruvchisi (OWNER/ADMIN) talab qilinadi — avvalgi "admin" tekshiruvi o'rnida. */
+export function requireManager(rol: Rol): void {
+  if (!isManager(rol)) {
+    throw new ForbiddenError();
+  }
+}
+
+/** Boshqaruvchi (OWNER/ADMIN) har doim, boshqalar faqat o'z yozuvini o'zgartira oladi. */
 export function requireOwnerOrAdmin(rol: Rol, userId: string, ownerId: string): void {
-  if (rol === "admin") return;
+  if (isManager(rol)) return;
   if (userId === ownerId) return;
   throw new ForbiddenError("Faqat o'zingiz kiritgan yozuvni o'zgartira olasiz");
 }

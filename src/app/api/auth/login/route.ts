@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/auth/password";
-import { getSession, type Rol } from "@/lib/auth/session";
+import { getSession } from "@/lib/auth/session";
+import { normalizeRol } from "@/lib/auth/roles";
 import { loginSchema } from "@/lib/validation/auth";
 import { rateLimit, rateLimitReset } from "@/lib/rateLimit";
 import { getClientIp } from "@/lib/services/audit";
@@ -45,7 +46,8 @@ export async function POST(request: NextRequest) {
   session.userId = user.id;
   session.login = user.login;
   session.ism = user.ism;
-  session.rol = user.rol as Rol;
+  session.rol = normalizeRol(user.rol);
+  session.tenantId = user.tenantId ?? null;
   session.businessId = user.businessId ?? null;
   session.mustChangePassword = user.mustChangePassword ?? false;
   await session.save();

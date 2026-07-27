@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import type { Rol } from "@/lib/auth/session";
+import { isManager, ROL_LABEL, type Rol } from "@/lib/auth/roles";
 import { QuickAddSheet } from "./QuickAddSheet";
 import { TelegramLinkButton } from "@/components/TelegramLinkButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -19,7 +19,6 @@ interface Props {
   omborli: boolean;
 }
 
-const ROL_LABEL: Record<Rol, string> = { admin: "Direktor", kassir: "Kassir", sotuvchi: "Sotuvchi" };
 
 const ICONS: Record<string, React.ReactNode> = {
   home: (
@@ -57,7 +56,7 @@ export function BottomNav({ ism, rol, omborli }: Props) {
   const [quickOpen, setQuickOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const isAdmin = rol === "admin";
+  const isAdmin = isManager(rol);
 
   // Asosiy tablar (rol + omborli asosida)
   const tabs: { label: string; href: string; icon: string }[] = [];

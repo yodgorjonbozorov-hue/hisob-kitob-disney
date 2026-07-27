@@ -1,15 +1,18 @@
 import { cookies } from "next/headers";
 import { getIronSession, type IronSession, type SessionOptions } from "iron-session";
 import { redirect } from "next/navigation";
+import { normalizeRol, type Rol } from "./roles";
 
-export type Rol = "admin" | "kassir" | "sotuvchi";
+export type { Rol };
 
 export interface SessionData {
   userId?: string;
   login?: string;
   ism?: string;
   rol?: Rol;
-  // Kassir uchun biriktirilgan biznes id; admin/sotuvchi uchun null (barcha bizneslar).
+  // Tenant a'zoligi; SUPERADMIN uchun null. Eski sessiyalarda bo'lmasligi mumkin.
+  tenantId?: string | null;
+  // Kassir uchun biriktirilgan biznes id; owner/admin/seller uchun null (tenant ichidagi barcha bizneslar).
   businessId?: string | null;
   // Seed/boshlang'ich parolni majburiy almashtirish kerakmi.
   mustChangePassword?: boolean;
@@ -36,6 +39,8 @@ export async function requireUser(): Promise<Required<SessionData>> {
   if (!session.userId || !session.rol || !session.login || !session.ism) {
     redirect("/login");
   }
+  // Migratsiyagacha ochilgan sessiyalarda eski rol nomlari bo'lishi mumkin.
+  session.rol = normalizeRol(session.rol);
   return session as Required<SessionData>;
 }
 
@@ -45,5 +50,6 @@ export async function getCurrentUser(): Promise<Required<SessionData> | null> {
   if (!session.userId || !session.rol || !session.login || !session.ism) {
     return null;
   }
+  session.rol = normalizeRol(session.rol);
   return session as Required<SessionData>;
 }
