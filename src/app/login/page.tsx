@@ -19,7 +19,13 @@ export default function LoginPage() {
         <div className="bg-surface rounded-2xl shadow-card border border-line p-7">
           <LoginForm />
         </div>
-        <p className="text-center text-2xs text-faint mt-6">Disney Navoiy · since 2017</p>
+        <p className="text-center text-sm text-muted mt-5">
+          Yangi kompaniyamisiz?{" "}
+          <a href="/signup" className="text-brand font-medium hover:underline">
+            14 kun bepul sinab ko'ring
+          </a>
+        </p>
+        <p className="text-center text-2xs text-faint mt-4">Disney Navoiy · since 2017</p>
       </div>
     </div>
   );
