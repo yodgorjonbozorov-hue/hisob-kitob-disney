@@ -75,6 +75,8 @@ model Payment {
   provider   String    @default("MANUAL")
   externalId String?
   status     String    @default("PENDING")
+  /// Qaysi tarif uchun to'lov — tasdiqda tenant.plan shu qiymatga o'tadi (upgrade oqimi).
+  plan       String?
   izoh       String?
   paidAt     DateTime?
   createdAt  DateTime  @default(now())
@@ -105,6 +107,10 @@ model Business {
   stockEntries StockEntry[]
   debtPayments DebtPayment[]
   auditLogs    AuditLog[]
+  contacts     Contact[]
+  stages       Stage[]
+  deals        Deal[]
+  crmActivities Activity[]
 
   @@index([tenantId])
 }
@@ -335,6 +341,84 @@ model Debt {
   payments   DebtPayment[]
 
   @@index([businessId])
+}
+
+// ==== CRM moduli (BOS-2) ====
+
+/// Mijoz/kontakt — CRM'ning asosiy sub'ekti.
+model Contact {
+  id         String    @id @default(cuid())
+  businessId String
+  business   Business  @relation(fields: [businessId], references: [id])
+  ism        String
+  tel        String?
+  telegram   String?
+  izoh       String?
+  createdBy  String
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
+  deals      Deal[]
+  activities Activity[]
+
+  @@index([businessId])
+  @@index([businessId, tel])
+}
+
+/// Sotuv bosqichi (kanban ustuni). turi: "OPEN" | "WON" | "LOST".
+model Stage {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+  nomi       String
+  tartib     Int      @default(0)
+  turi       String   @default("OPEN")
+  deals      Deal[]
+
+  @@index([businessId, tartib])
+}
+
+/// Bitim. Alohida "Lead" modeli YO'Q — birinchi bosqichdagi bitim = lead
+/// (sodda UX, konvertatsiya bosqichi degan ortiqcha qadam yo'q).
+model Deal {
+  id            String    @id @default(cuid())
+  businessId    String
+  business      Business  @relation(fields: [businessId], references: [id])
+  contactId     String?
+  contact       Contact?  @relation(fields: [contactId], references: [id])
+  nomi          String
+  summa         Int       @default(0)
+  stageId       String
+  stage         Stage     @relation(fields: [stageId], references: [id])
+  masulId       String    // mas'ul foydalanuvchi
+  manba         String?   // "qolda" | "telegram" | ...
+  muddat        DateTime?
+  yopilganAt    DateTime?
+  transactionId String?   // Yutildi -> yozilgan kirim tranzaksiyasi
+  izoh          String?
+  createdAt     DateTime  @default(now())
+  deletedAt     DateTime?
+  activities    Activity[]
+
+  @@index([businessId, stageId])
+  @@index([businessId, masulId])
+}
+
+/// CRM faoliyati (timeline): izoh, qo'ng'iroq, uchrashuv, tizim yozuvi.
+model Activity {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+  contactId  String?
+  contact    Contact? @relation(fields: [contactId], references: [id])
+  dealId     String?
+  deal       Deal?    @relation(fields: [dealId], references: [id])
+  turi       String   // "izoh" | "qongiroq" | "uchrashuv" | "tizim"
+  matn       String
+  userId     String
+  createdAt  DateTime @default(now())
+
+  @@index([businessId, dealId])
+  @@index([businessId, contactId])
 }
 
 /// Qarz to'lovi — kirim tranzaksiya yaratadi va qarzni kamaytiradi.

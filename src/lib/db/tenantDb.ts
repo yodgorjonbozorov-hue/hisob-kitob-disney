@@ -28,6 +28,11 @@ const BUSINESS_SCOPED = new Set([
   "Debt",
   "StockEntry",
   "DebtPayment",
+  // CRM (BOS-2)
+  "Contact",
+  "Stage",
+  "Deal",
+  "Activity",
 ]);
 // AuditLog: businessId nullable — biznesga bog'langan yozuvlar tenant bo'yicha filtrlanadi.
 const AUDIT_MODEL = "AuditLog";
