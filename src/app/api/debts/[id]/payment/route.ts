@@ -32,4 +32,4 @@ export const POST = withTenant<{ params: { id: string } }>(async (request, { par
     qolgan: debt.jamiSumma - debt.tolangan,
     isYopilgan: debt.isYopilgan,
   });
-});
+}, { module: "OMBOR" });

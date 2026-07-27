@@ -29,4 +29,4 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
   });
 
   return NextResponse.json(entry, { status: 201 });
-});
+}, { module: "OMBOR" });

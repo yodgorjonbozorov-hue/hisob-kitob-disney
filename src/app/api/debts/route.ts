@@ -14,4 +14,4 @@ export const GET = withTenant(async (_request, _ctx, { session: user }) => {
 
   const debts = await listDebts(businessId);
   return NextResponse.json(debts);
-});
+}, { module: "OMBOR" });

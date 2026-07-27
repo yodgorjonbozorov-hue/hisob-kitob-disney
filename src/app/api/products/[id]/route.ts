@@ -31,4 +31,4 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
     data: parsed.data,
   });
   return NextResponse.json(product);
-});
+}, { module: "OMBOR" });

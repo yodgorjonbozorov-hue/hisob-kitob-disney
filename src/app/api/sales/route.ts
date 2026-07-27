@@ -15,7 +15,7 @@ export const GET = withTenant(async (_request, _ctx, { session: user }) => {
 
   const sales = await listRecentSales(businessId);
   return NextResponse.json(sales);
-});
+}, { module: "OMBOR" });
 
 /** Sotuv — admin va kassir. */
 export const POST = withTenant(async (request, _ctx, { session: user }) => {
@@ -42,4 +42,4 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
   });
 
   return NextResponse.json(sale, { status: 201 });
-});
+}, { module: "OMBOR" });

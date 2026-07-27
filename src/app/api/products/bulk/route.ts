@@ -33,4 +33,4 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
   );
 
   return NextResponse.json({ soni: created.length, mahsulotlar: created }, { status: 201 });
-});
+}, { module: "OMBOR" });

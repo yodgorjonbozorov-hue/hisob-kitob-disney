@@ -19,7 +19,7 @@ export const GET = withTenant(async (request, _ctx, { session: user }) => {
   // Admin bo'lmaganlar (kassir/sotuvchi) uchun tannarx va miqdor RAQAMI berilmaydi (faqat mavjudlik).
   const products = await listProducts(businessId, { forKassir: !isManager(user.rol), faqatFaol });
   return NextResponse.json(products);
-});
+}, { module: "OMBOR" });
 
 export const POST = withTenant(async (request, _ctx, { session: user }) => {
   forbidSeller(user.rol);
@@ -44,4 +44,4 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
     },
   });
   return NextResponse.json(product, { status: 201 });
-});
+}, { module: "OMBOR" });
