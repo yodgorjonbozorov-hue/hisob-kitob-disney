@@ -47,6 +47,11 @@ model Business {
   budgets      Budget[]
   shiftCloses  ShiftClose[]
   recurrings   RecurringTransaction[]
+  sales        Sale[]
+  debts        Debt[]
+  stockEntries StockEntry[]
+  debtPayments DebtPayment[]
+  auditLogs    AuditLog[]
 
   @@index([tenantId])
 }
@@ -132,8 +137,9 @@ model Transaction {
 
 /// Audit izi — har bir muhim o'zgarish (kim, nima, oldin→keyin) yoziladi.
 model AuditLog {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   businessId String?
+  business   Business? @relation(fields: [businessId], references: [id])
   userId     String?
   userIsm    String?
   action     String // "create" | "update" | "delete" | "restore"
@@ -222,6 +228,7 @@ model Product {
 model StockEntry {
   id         String   @id @default(cuid())
   businessId String
+  business   Business @relation(fields: [businessId], references: [id])
   productId  String
   product    Product  @relation(fields: [productId], references: [id])
   miqdor     Int
@@ -238,6 +245,7 @@ model StockEntry {
 model Sale {
   id            String   @id @default(cuid())
   businessId    String
+  business      Business @relation(fields: [businessId], references: [id])
   productId     String
   product       Product  @relation(fields: [productId], references: [id])
   miqdor        Int
@@ -260,6 +268,7 @@ model Sale {
 model Debt {
   id         String        @id @default(cuid())
   businessId String
+  business   Business      @relation(fields: [businessId], references: [id])
   saleId     String?       @unique
   sale       Sale?         @relation(fields: [saleId], references: [id])
   mijozNomi  String
@@ -281,6 +290,7 @@ model DebtPayment {
   debtId        String
   debt          Debt     @relation(fields: [debtId], references: [id])
   businessId    String
+  business      Business @relation(fields: [businessId], references: [id])
   summa         Int
   userId        String
   transactionId String?
