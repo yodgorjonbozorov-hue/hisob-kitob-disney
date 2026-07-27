@@ -21,8 +21,8 @@ export const PLANLAR: Plan[] = [
     code: "PRO",
     nomi: "Pro",
     oylikNarx: 399_000,
-    tavsif: "Standart'dagi hammasi + CRM (bitimlar kanbani, kontaktlar, faoliyat tarixi)",
-    modullar: ["MOLIYA", "OMBOR", "CRM"],
+    tavsif: "Standart'dagi hammasi + CRM (bitimlar kanbani, kontaktlar) + Vazifalar",
+    modullar: ["MOLIYA", "OMBOR", "CRM", "VAZIFALAR"],
   },
 ];
 

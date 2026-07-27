@@ -83,6 +83,16 @@ export const MODULLAR: ModulTarifi[] = [
     ],
   },
   {
+    code: "VAZIFALAR",
+    nomi: "Vazifalar",
+    tavsif: "Jamoa vazifalari: mas'ul, muddat, 3 ustunli kanban. CRM bitimlariga bog'lanadi.",
+    core: false,
+    rollar: HAMMA,
+    nav: [
+      { href: "/app/vazifalar", label: "Vazifalar", icon: "tasks", tartib: 35, rollar: HAMMA },
+    ],
+  },
+  {
     code: "BOSHQARUV",
     nomi: "Boshqaruv",
     tavsif: "Bizneslar, kategoriyalar, foydalanuvchilar, audit va obuna.",

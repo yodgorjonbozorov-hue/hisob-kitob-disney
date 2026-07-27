@@ -3,6 +3,7 @@ import { checkAndSendMonthlyReport } from "@/bot/scheduler";
 import { generateDueRecurring } from "@/lib/services/recurring";
 import { sendExpiryWarnings } from "@/lib/billing/notify";
 import { updateExpiredStatuses } from "@/lib/billing/subscribe";
+import { sendTaskReminders } from "@/lib/tasks/service";
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { runWithTenant } from "@/lib/db/tenantContext";
 
@@ -41,5 +42,14 @@ export async function GET(req: Request) {
     return 0;
   });
 
-  return new Response(`OK (expired: ${expired}, recurring: ${recurringCount}, warned: ${warned})`, { status: 200 });
+  // Muddati kelgan vazifalar bo'yicha mas'ullarga eslatma (kuniga bir marta).
+  const taskReminders = await sendTaskReminders(bot.api).catch((e) => {
+    console.error("Vazifa eslatmalari xatosi:", e);
+    return 0;
+  });
+
+  return new Response(
+    `OK (expired: ${expired}, recurring: ${recurringCount}, warned: ${warned}, tasks: ${taskReminders})`,
+    { status: 200 }
+  );
 }
