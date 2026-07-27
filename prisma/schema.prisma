@@ -111,6 +111,7 @@ model Business {
   stages       Stage[]
   deals        Deal[]
   crmActivities Activity[]
+  tasks        Task[]
 
   @@index([tenantId])
 }
@@ -398,9 +399,34 @@ model Deal {
   createdAt     DateTime  @default(now())
   deletedAt     DateTime?
   activities    Activity[]
+  tasks         Task[]
 
   @@index([businessId, stageId])
   @@index([businessId, masulId])
+}
+
+// ==== Vazifalar moduli (BOS-3) ====
+
+/// Vazifa. holat: "OCHIQ" | "JARAYONDA" | "BAJARILDI" (sobit 3 ustun — sodda kanban).
+model Task {
+  id          String    @id @default(cuid())
+  businessId  String
+  business    Business  @relation(fields: [businessId], references: [id])
+  nomi        String
+  izoh        String?
+  holat       String    @default("OCHIQ")
+  masulId     String    // mas'ul foydalanuvchi
+  muddat      DateTime?
+  dealId      String?   // CRM bitimiga bog'lash (ixtiyoriy)
+  deal        Deal?     @relation(fields: [dealId], references: [id])
+  createdBy   String
+  bajarildiAt DateTime?
+  createdAt   DateTime  @default(now())
+  deletedAt   DateTime?
+
+  @@index([businessId, holat])
+  @@index([businessId, masulId])
+  @@index([businessId, muddat])
 }
 
 /// CRM faoliyati (timeline): izoh, qo'ng'iroq, uchrashuv, tizim yozuvi.

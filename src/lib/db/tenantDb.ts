@@ -33,6 +33,8 @@ const BUSINESS_SCOPED = new Set([
   "Stage",
   "Deal",
   "Activity",
+  // Vazifalar (BOS-3)
+  "Task",
 ]);
 // AuditLog: businessId nullable — biznesga bog'langan yozuvlar tenant bo'yicha filtrlanadi.
 const AUDIT_MODEL = "AuditLog";
