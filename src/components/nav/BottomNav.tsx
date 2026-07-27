@@ -91,6 +91,7 @@ export function BottomNav({ ism, rol, omborli }: Props) {
     allLinks.push({ label: "Foydalanuvchilar", href: "/admin/foydalanuvchilar" });
     allLinks.push({ label: "O'chirilganlar", href: "/admin/ochirilganlar" });
     allLinks.push({ label: "Audit", href: "/admin/audit" });
+    allLinks.push({ label: "Obuna va to'lov", href: "/billing" });
   }
 
   async function handleLogout() {

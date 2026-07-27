@@ -1,6 +1,7 @@
 import { bot } from "@/bot/bot";
 import { checkAndSendMonthlyReport } from "@/bot/scheduler";
 import { generateDueRecurring } from "@/lib/services/recurring";
+import { sendExpiryWarnings } from "@/lib/billing/notify";
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { runWithTenant } from "@/lib/db/tenantContext";
 
@@ -27,5 +28,11 @@ export async function GET(req: Request) {
     }
   }
 
-  return new Response(`OK (recurring: ${recurringCount})`, { status: 200 });
+  // Obuna/sinov muddati tugashiga oz qolgan tenantlarga Telegram ogohlantirish.
+  const warned = await sendExpiryWarnings(bot).catch((e) => {
+    console.error("Ogohlantirish xatosi:", e);
+    return 0;
+  });
+
+  return new Response(`OK (recurring: ${recurringCount}, warned: ${warned})`, { status: 200 });
 }

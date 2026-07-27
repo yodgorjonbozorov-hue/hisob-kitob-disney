@@ -34,4 +34,4 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
     path: "/",
   });
   return res;
-});
+}, { readonlyOk: true });

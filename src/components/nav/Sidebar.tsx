@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Receipt, FileText, PiggyBank, Bell, CalendarCheck, Repeat,
   Package, ShoppingCart, HandCoins, Building2, Tags, Users, Trash2, ScrollText,
-  LogOut, KeyRound, type LucideIcon,
+  LogOut, KeyRound, CreditCard, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { isManager, ROL_LABEL, type Rol } from "@/lib/auth/roles";
@@ -44,6 +44,7 @@ const adminTail: NavLink[] = [
   { href: "/admin/foydalanuvchilar", label: "Foydalanuvchilar", icon: Users },
   { href: "/admin/ochirilganlar", label: "O'chirilganlar", icon: Trash2 },
   { href: "/admin/audit", label: "Audit jurnali", icon: ScrollText },
+  { href: "/billing", label: "Obuna va to'lov", icon: CreditCard },
 ];
 const omborAdmin: NavLink[] = [
   { href: "/ombor", label: "Ombor", icon: Package },

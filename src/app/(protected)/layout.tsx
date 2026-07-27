@@ -8,13 +8,14 @@ import MobileNav from "@/components/nav/MobileNav";
 import { BottomNav } from "@/components/nav/BottomNav";
 import { ToastProvider } from "@/components/ui/Toast";
 import { CommandPalette } from "@/components/CommandPalette";
+import { BillingBanner } from "@/components/BillingBanner";
 
 export default async function ProtectedLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { session, tenantId } = await requireTenantPage();
+  const { session, tenantId, access } = await requireTenantPage();
   // Tenant konteksti: quyidagi barcha prisma so'rovlari shu tenantga avtomatik cheklanadi.
   return runWithTenant(tenantId, async () => {
   // Boshlang'ich parolni majburiy almashtirish.
@@ -51,7 +52,10 @@ export default async function ProtectedLayout({
           omborli={activeOmborli}
           notifCount={notifCount}
         />
-        <main className="flex-1 p-4 md:p-8 pb-24 lg:pb-8">{children}</main>
+        <main className="flex-1 p-4 md:p-8 pb-24 lg:pb-8">
+          <BillingBanner access={access} />
+          {children}
+        </main>
         <BottomNav ism={session.ism} rol={session.rol} omborli={activeOmborli} />
         <CommandPalette
           rol={session.rol}
