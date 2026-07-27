@@ -106,6 +106,8 @@ export interface WithTenantOptions {
   /** true bo'lsa READONLY rejimida ham yozish (POST/PATCH/DELETE) ruxsat — faqat
    *  ma'lumotga tegmaydigan amallar uchun (masalan aktiv biznes cookie'si). */
   readonlyOk?: boolean;
+  /** Modul kodi (masalan "OMBOR") — yoqilmagan/rol ruxsatsiz bo'lsa 403. */
+  module?: string;
 }
 
 type RouteHandler<Ctx> = (
@@ -135,7 +137,14 @@ export function withTenant<Ctx = unknown>(handler: RouteHandler<Ctx>, opts: With
         }
       }
 
-      return await runWithTenant(ctx.tenantId, () => handler(request, routeCtx, ctx));
+      return await runWithTenant(ctx.tenantId, async () => {
+        if (opts.module) {
+          // Dinamik import — aylanma bog'liqlikni oldini oladi (guard -> tenant -> guard).
+          const { requireModule } = await import("@/lib/modules/guard");
+          await requireModule(ctx, opts.module);
+        }
+        return handler(request, routeCtx, ctx);
+      });
     } catch (error) {
       return handleApiError(error);
     }

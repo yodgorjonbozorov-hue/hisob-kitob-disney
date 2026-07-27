@@ -1,0 +1,143 @@
+import type { Rol } from "@/lib/auth/roles";
+import { isManager } from "@/lib/auth/roles";
+
+/**
+ * MODUL KATALOGI — Business OS'ning yagona haqiqat manbai.
+ *
+ * Har modul: nomi, navigatsiya havolalari, rol matritsasi. Sidebar, BottomNav
+ * va CommandPalette havolalari SHU YERDAN generatsiya qilinadi — yangi modul
+ * qo'shilganda UI komponentlariga tegilmaydi.
+ *
+ * Qaysi tenant qaysi modulni yoqqani bazada (TenantModule), qaysi tarifda
+ * qaysi modul borligi lib/billing/plans.ts da.
+ *
+ * Client va server ikkalasida ishlatiladi — server-only import qo'shilmasin.
+ */
+
+export interface NavItem {
+  href: string;
+  label: string;
+  /** Ikonka kaliti — Sidebar o'z lucide xaritasidan oladi. */
+  icon: string;
+  /** Global tartib — sidebar shu bo'yicha saralanadi. */
+  tartib: number;
+  /** Qaysi rollar ko'radi. */
+  rollar: Rol[];
+}
+
+export interface ModulTarifi {
+  code: string;
+  nomi: string;
+  tavsif: string;
+  /** Core modul — o'chirib bo'lmaydi, TenantModule yozuvisiz ham yoqilgan. */
+  core: boolean;
+  /** Sozlamalar sahifasida kartochka sifatida ko'rsatilmaydi (sof nav-konteyner). */
+  korinmas?: boolean;
+  /** Modul rollari: bu modulga umuman kira oladigan rollar (nav'dan tashqari API himoya). */
+  rollar: Rol[];
+  nav: NavItem[];
+}
+
+const BOSHQARUVCHILAR: Rol[] = ["OWNER", "ADMIN"];
+const HAMMA: Rol[] = ["OWNER", "ADMIN", "CASHIER", "SELLER"];
+
+export const MODULLAR: ModulTarifi[] = [
+  {
+    code: "MOLIYA",
+    nomi: "Moliya",
+    tavsif: "Kirim-chiqim, budjet, takroriy to'lovlar, kun yakuni va oylik hisobotlar (PDF/Excel).",
+    core: true,
+    rollar: HAMMA,
+    nav: [
+      { href: "/app", label: "Asosiy", icon: "dashboard", tartib: 10, rollar: BOSHQARUVCHILAR },
+      { href: "/app/tranzaksiyalar", label: "Yozuvlar", icon: "receipt", tartib: 11, rollar: HAMMA },
+      { href: "/app/hisobot", label: "Oylik hisobot", icon: "report", tartib: 12, rollar: BOSHQARUVCHILAR },
+      { href: "/app/byudjet", label: "Budjet", icon: "budget", tartib: 13, rollar: BOSHQARUVCHILAR },
+      { href: "/app/takroriy", label: "Takroriy", icon: "repeat", tartib: 40, rollar: BOSHQARUVCHILAR },
+      { href: "/app/smena", label: "Kun yakuni", icon: "shift", tartib: 41, rollar: ["OWNER", "ADMIN", "CASHIER"] },
+    ],
+  },
+  {
+    code: "OMBOR",
+    nomi: "Ombor va sotuv",
+    tavsif: "Mahsulot qoldig'i, sotuv (naqd/qarz), qarzdorlik nazorati. Tovar sotadigan bizneslar uchun.",
+    core: false,
+    // Sotuvchi (SELLER) faqat kirim/chiqim kiritadi — ombor unga yopiq (foydalanuvchi qarori).
+    rollar: ["OWNER", "ADMIN", "CASHIER"],
+    nav: [
+      { href: "/app/ombor", label: "Ombor", icon: "package", tartib: 20, rollar: BOSHQARUVCHILAR },
+      { href: "/app/sotuv", label: "Sotuv", icon: "cart", tartib: 21, rollar: ["OWNER", "ADMIN", "CASHIER"] },
+      { href: "/app/qarzlar", label: "Qarzlar", icon: "debt", tartib: 22, rollar: ["OWNER", "ADMIN", "CASHIER"] },
+    ],
+  },
+  {
+    code: "BOSHQARUV",
+    nomi: "Boshqaruv",
+    tavsif: "Bizneslar, kategoriyalar, foydalanuvchilar, audit va obuna.",
+    core: true,
+    korinmas: true,
+    rollar: BOSHQARUVCHILAR,
+    nav: [
+      { href: "/app/admin/bizneslar", label: "Bizneslar", icon: "business", tartib: 50, rollar: BOSHQARUVCHILAR },
+      { href: "/app/admin/kategoriyalar", label: "Kategoriyalar", icon: "tags", tartib: 51, rollar: BOSHQARUVCHILAR },
+      { href: "/app/admin/foydalanuvchilar", label: "Foydalanuvchilar", icon: "users", tartib: 52, rollar: BOSHQARUVCHILAR },
+      { href: "/app/admin/ochirilganlar", label: "O'chirilganlar", icon: "trash", tartib: 53, rollar: BOSHQARUVCHILAR },
+      { href: "/app/admin/audit", label: "Audit jurnali", icon: "audit", tartib: 54, rollar: BOSHQARUVCHILAR },
+      { href: "/app/sozlamalar/modullar", label: "Modullar", icon: "modules", tartib: 55, rollar: ["OWNER"] },
+      { href: "/billing", label: "Obuna va to'lov", icon: "billing", tartib: 56, rollar: BOSHQARUVCHILAR },
+    ],
+  },
+];
+
+export function modulByCode(code: string): ModulTarifi | null {
+  return MODULLAR.find((m) => m.code === code) ?? null;
+}
+
+/** Sozlamalar sahifasida ko'rsatiladigan (toggle qilinadigan yoki core) modullar. */
+export function korinadiganModullar(): ModulTarifi[] {
+  return MODULLAR.filter((m) => !m.korinmas);
+}
+
+// ---------------------------------------------------------------------------
+// Navigatsiya generatsiyasi — Sidebar/BottomNav/CommandPalette uchun BITTA manba.
+// ---------------------------------------------------------------------------
+
+export interface NavHolati {
+  rol: Rol;
+  /** Tenant uchun yoqilgan modul kodlari (core'lar kiritilgan). */
+  yoqilgan: Set<string>;
+  /** Aktiv biznes omborli'mi — OMBOR nav'i faqat shunda ko'rinadi. */
+  omborli: boolean;
+}
+
+/** Sidebar/menyu uchun tartiblangan havolalar ro'yxati. */
+export function computeNav({ rol, yoqilgan, omborli }: NavHolati): NavItem[] {
+  const items: NavItem[] = [];
+  for (const m of MODULLAR) {
+    if (!m.core && !yoqilgan.has(m.code)) continue;
+    if (m.code === "OMBOR" && !omborli) continue;
+    if (!m.rollar.includes(rol)) continue;
+    for (const item of m.nav) {
+      if (item.rollar.includes(rol)) items.push(item);
+    }
+  }
+  return items.sort((a, b) => a.tartib - b.tartib);
+}
+
+export interface MobileTab {
+  href: string;
+  label: string;
+  icon: string;
+}
+
+/** Mobil pastki panel: maksimal 3 tab (o'rtada FAB) — qolgani Menyu'da. */
+export function computeMobileTabs(holat: NavHolati): MobileTab[] {
+  const tabs: MobileTab[] = [];
+  const manager = isManager(holat.rol);
+  if (manager) tabs.push({ href: "/app", label: "Asosiy", icon: "home" });
+  tabs.push({ href: "/app/tranzaksiyalar", label: "Yozuvlar", icon: "list" });
+  const omborBor = holat.yoqilgan.has("OMBOR") && holat.omborli && holat.rol !== "SELLER";
+  if (omborBor) tabs.push({ href: "/app/sotuv", label: "Sotuv", icon: "cart" });
+  else if (manager) tabs.push({ href: "/app/hisobot", label: "Hisobot", icon: "chart" });
+  return tabs;
+}

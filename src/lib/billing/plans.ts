@@ -5,6 +5,8 @@ export interface Plan {
   /** Oylik narx (so'm). */
   oylikNarx: number;
   tavsif: string;
+  /** Bu tarifda ochiq modullar (lib/modules/registry.ts kodlari). Core modullar har doim ochiq. */
+  modullar: string[];
 }
 
 export const PLANLAR: Plan[] = [
@@ -13,6 +15,7 @@ export const PLANLAR: Plan[] = [
     nomi: "Standart",
     oylikNarx: 199_000,
     tavsif: "Cheksiz biznes, foydalanuvchi va tranzaksiya · Hisobotlar (PDF/Excel) · Telegram bot",
+    modullar: ["MOLIYA", "OMBOR"],
   },
 ];
 
