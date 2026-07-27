@@ -247,7 +247,8 @@ function NewUserModal({
           type="password"
           value={parol}
           onChange={(e) => setParol(e.target.value)}
-          placeholder="Parol"
+          placeholder="Parol (kamida 8 belgi)"
+          minLength={8}
           className="w-full rounded-lg border border-line px-3 py-2 text-sm"
           required
         />

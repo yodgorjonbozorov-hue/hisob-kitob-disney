@@ -27,6 +27,18 @@ export async function POST(request: NextRequest) {
   }
 
   const { login, parol } = parsed.data;
+
+  // Bir login bo'yicha ham alohida limit (IP almashtirib brute-force qilishga qarshi):
+  // 15 daqiqada 5 urinish.
+  const rlLoginKey = `login:l:${login.toLowerCase()}`;
+  const rlLogin = rateLimit(rlLoginKey, 5, 15 * 60 * 1000);
+  if (!rlLogin.ok) {
+    return NextResponse.json(
+      { error: `Bu login uchun juda ko'p urinish. ${rlLogin.retryAfter} soniyadan keyin qayta urining.` },
+      { status: 429 }
+    );
+  }
+
   const genericError = NextResponse.json({ error: "Login yoki parol noto'g'ri" }, { status: 401 });
 
   const user = await prisma.user.findUnique({ where: { login } });
@@ -39,8 +51,9 @@ export async function POST(request: NextRequest) {
     return genericError;
   }
 
-  // Muvaffaqiyat — rate limitni tozalaymiz va oxirgi kirish vaqtini yozamiz.
+  // Muvaffaqiyat — rate limitlarni tozalaymiz va oxirgi kirish vaqtini yozamiz.
   rateLimitReset(rlKey);
+  rateLimitReset(rlLoginKey);
   await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }).catch(() => {});
 
   const session = await getSession();

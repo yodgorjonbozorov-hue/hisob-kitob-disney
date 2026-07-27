@@ -7,7 +7,7 @@ import { z } from "zod";
 
 const schema = z.object({
   eski: z.string().min(1, "Eski parol kiritilishi shart"),
-  yangi: z.string().min(6, "Yangi parol kamida 6 belgi bo'lishi kerak").max(100),
+  yangi: z.string().min(8, "Yangi parol kamida 8 belgi bo'lishi kerak").max(100),
 });
 
 /** Foydalanuvchi o'z parolini o'zgartiradi (eski parolni tasdiqlab). */

@@ -38,6 +38,17 @@ const KASSIR_LOGIN = "kassir1";
 const KASSIR_PAROL = "kassir123";
 
 async function main() {
+  // XAVFSIZLIK: seed faqat development uchun. Production bazasida admin/admin123
+  // kabi standart foydalanuvchi HECH QACHON yaratilmasligi kerak.
+  if (process.env.NODE_ENV === "production") {
+    console.error("XATO: db:seed production muhitida ishlatilmaydi. Yangi kompaniya /signup orqali ochiladi.");
+    process.exit(1);
+  }
+  if ((process.env.DATABASE_URL ?? "").startsWith("libsql://")) {
+    console.error("XATO: db:seed masofaviy (Turso) bazaga qarshi ishlatilmaydi — faqat lokal file: baza.");
+    process.exit(1);
+  }
+
   console.log("Tenant yaratish...");
 
   // Default tenant — migratsiya backfill'i bilan bir xil ID (idempotent).
