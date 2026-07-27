@@ -1,4 +1,5 @@
-import { prisma } from "@/lib/prisma";
+// Bot foydalanuvchini chatId/kod bo'yicha global aniqlaydi — rawPrisma; keyingi amallar tenant kontekstida.
+import { rawPrisma as prisma } from "@/lib/db/rawPrisma";
 import type { User } from "@prisma/client";
 
 export async function findUserByChatId(chatId: string) {

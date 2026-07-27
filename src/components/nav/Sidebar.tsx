@@ -61,7 +61,13 @@ export default function Sidebar({ ism, rol, businesses, activeBusinessId, omborl
   const router = useRouter();
 
   const omborLinks = omborli ? (isManager(rol) ? omborAdmin : omborKassir) : [];
-  const links = isManager(rol) ? [...adminBase, ...omborLinks, ...adminTail] : [...omborLinks, ...kassirBase];
+  // Sotuvchi faqat kirim/chiqim kiritadi — unga faqat "Yozuvlar" ko'rinadi.
+  const sellerBase: NavLink[] = [{ href: "/tranzaksiyalar", label: "Yozuvlar", icon: Receipt }];
+  const links = isManager(rol)
+    ? [...adminBase, ...omborLinks, ...adminTail]
+    : rol === "SELLER"
+      ? sellerBase
+      : [...omborLinks, ...kassirBase];
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });

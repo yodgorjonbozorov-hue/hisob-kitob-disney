@@ -57,12 +57,14 @@ export function BottomNav({ ism, rol, omborli }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const isAdmin = isManager(rol);
+  // Sotuvchi faqat kirim/chiqim kiritadi — sotuv/smena bo'limlari unga ko'rinmaydi.
+  const isSeller = rol === "SELLER";
 
   // Asosiy tablar (rol + omborli asosida)
   const tabs: { label: string; href: string; icon: string }[] = [];
   if (isAdmin) tabs.push({ label: "Asosiy", href: "/", icon: "home" });
   tabs.push({ label: "Yozuvlar", href: "/tranzaksiyalar", icon: "list" });
-  if (omborli) tabs.push({ label: "Sotuv", href: "/sotuv", icon: "cart" });
+  if (omborli && !isSeller) tabs.push({ label: "Sotuv", href: "/sotuv", icon: "cart" });
   else if (isAdmin) tabs.push({ label: "Hisobot", href: "/hisobot", icon: "chart" });
 
   const mid = Math.ceil(tabs.length / 2);
@@ -76,12 +78,12 @@ export function BottomNav({ ism, rol, omborli }: Props) {
   allLinks.push({ label: "Yozuvlar", href: "/tranzaksiyalar" });
   if (isAdmin) allLinks.push({ label: "Oylik hisobot", href: "/hisobot" });
   if (isAdmin) allLinks.push({ label: "Budjet", href: "/byudjet" });
-  if (omborli) {
+  if (omborli && !isSeller) {
     if (isAdmin) allLinks.push({ label: "Ombor", href: "/ombor" });
     allLinks.push({ label: "Sotuv", href: "/sotuv" });
     allLinks.push({ label: "Qarzlar", href: "/qarzlar" });
   }
-  allLinks.push({ label: "Kun yakuni", href: "/smena" });
+  if (!isSeller) allLinks.push({ label: "Kun yakuni", href: "/smena" });
   if (isAdmin) {
     allLinks.push({ label: "Takroriy", href: "/takroriy" });
     allLinks.push({ label: "Bizneslar", href: "/admin/bizneslar" });

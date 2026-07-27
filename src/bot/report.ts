@@ -77,13 +77,20 @@ export async function sendMonthlyReportText(
   });
 }
 
-/** report:(pdf|excel):<businessId>:<month> callback. Faqat admin uchun. */
+/** report:(pdf|excel):<businessId>:<month> callback. Faqat direktor uchun. */
 export async function sendReportDocument(
   ctx: Context,
   businessId: string,
   month: string,
   format: "pdf" | "excel"
 ) {
+  // Callback'dagi businessId tashqi input — tenant-scoped client orqali tekshiriladi (IDOR himoya).
+  const business = await prisma.business.findFirst({ where: { id: businessId }, select: { id: true } });
+  if (!business) {
+    await ctx.answerCallbackQuery({ text: "Biznes topilmadi" });
+    return;
+  }
+
   const report = await getMonthlyReport(businessId, month);
   await ctx.answerCallbackQuery({ text: "Fayl tayyorlanmoqda..." });
 

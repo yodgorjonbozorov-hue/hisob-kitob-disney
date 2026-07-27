@@ -71,7 +71,8 @@ export function CommandPalette({
   nav("/tranzaksiyalar", "Tranzaksiyalar");
   if (isAdmin) nav("/hisobot", "Oylik hisobot");
   if (isAdmin) nav("/byudjet", "Budjet");
-  if (omborli) {
+  // Sotuvchi faqat kirim/chiqim kiritadi — ombor/sotuv/qarzlar unga ko'rinmaydi.
+  if (omborli && rol !== "SELLER") {
     if (isAdmin) nav("/ombor", "Ombor");
     nav("/sotuv", "Sotuv");
     nav("/qarzlar", "Qarzlar");
