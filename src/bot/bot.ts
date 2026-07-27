@@ -2,6 +2,8 @@ import { Bot, type Context } from "grammy";
 import type { User } from "@prisma/client";
 import { findUserByChatId, linkByCode } from "./auth";
 import { runWithTenant } from "@/lib/db/tenantContext";
+import { rawPrisma } from "@/lib/db/rawPrisma";
+import { computeAccess } from "@/lib/billing/access";
 import { isManager } from "@/lib/auth/roles";
 import {
   startTransactionFlow,
@@ -33,7 +35,7 @@ function buyruqlarRoyxati(rol: string): string {
  */
 function tenantHandler(
   fn: (ctx: Context, user: User) => Promise<void>,
-  opts: { managerOnly?: boolean } = {}
+  opts: { managerOnly?: boolean; yozish?: boolean } = {}
 ) {
   return async (ctx: Context) => {
     const chatId = String(ctx.chat!.id);
@@ -55,6 +57,22 @@ function tenantHandler(
     }
     if (opts.managerOnly && !isManager(user.rol)) {
       await deny("Bu amal faqat direktor uchun mavjud.");
+      return;
+    }
+
+    // Obuna holati guard'i — veb bilan bir xil qoidalar bot uchun ham.
+    const tenant = await rawPrisma.tenant.findUnique({ where: { id: user.tenantId } });
+    if (!tenant) {
+      await deny("Kompaniya topilmadi.");
+      return;
+    }
+    const access = computeAccess(tenant);
+    if (access.mode === "BILLING_ONLY") {
+      await deny("Obuna faol emas. Veb-saytdagi \"Obuna va to'lov\" bo'limi orqali to'lov qiling.");
+      return;
+    }
+    if (access.mode === "READONLY" && opts.yozish) {
+      await deny("To'lov muddati o'tgan — yozish vaqtincha yopiq. Veb-saytda to'lov qiling.");
       return;
     }
 
@@ -98,8 +116,8 @@ bot.command("kod", async (ctx) => {
   await ctx.reply(`✅ Muvaffaqiyatli bog'landingiz, ${result.user.ism}!\n\n${buyruqlarRoyxati(result.user.rol)}`);
 });
 
-bot.command("kirim", tenantHandler((ctx, user) => startTransactionFlow(ctx, user, "kirim")));
-bot.command("chiqim", tenantHandler((ctx, user) => startTransactionFlow(ctx, user, "chiqim")));
+bot.command("kirim", tenantHandler((ctx, user) => startTransactionFlow(ctx, user, "kirim"), { yozish: true }));
+bot.command("chiqim", tenantHandler((ctx, user) => startTransactionFlow(ctx, user, "chiqim"), { yozish: true }));
 
 bot.command("hisobot", tenantHandler((ctx) => startMonthlyReport(ctx), { managerOnly: true }));
 
@@ -108,16 +126,16 @@ bot.command("bekor", async (ctx) => {
   await ctx.reply("Amal bekor qilindi.");
 });
 
-bot.callbackQuery(/^biz:/, tenantHandler((ctx) => handleBusinessCallback(ctx)));
-bot.callbackQuery(/^cat:/, tenantHandler((ctx) => handleCategoryCallback(ctx)));
-bot.callbackQuery(/^sana:/, tenantHandler((ctx) => handleDateCallback(ctx)));
+bot.callbackQuery(/^biz:/, tenantHandler((ctx) => handleBusinessCallback(ctx), { yozish: true }));
+bot.callbackQuery(/^cat:/, tenantHandler((ctx) => handleCategoryCallback(ctx), { yozish: true }));
+bot.callbackQuery(/^sana:/, tenantHandler((ctx) => handleDateCallback(ctx), { yozish: true }));
 
 bot.callbackQuery(
   /^rbiz:/,
   tenantHandler((ctx) => handleReportBusinessCallback(ctx), { managerOnly: true })
 );
 
-bot.callbackQuery(/^izoh:skip$/, tenantHandler((ctx, user) => handleSkipIzohCallback(ctx, user)));
+bot.callbackQuery(/^izoh:skip$/, tenantHandler((ctx, user) => handleSkipIzohCallback(ctx, user), { yozish: true }));
 
 bot.callbackQuery(
   /^report:(pdf|excel):([^:]+):(.+)$/,
@@ -134,9 +152,13 @@ bot.callbackQuery(
 
 bot.on(
   "message:text",
-  tenantHandler(async (ctx, user) => {
-    await handleFlowText(ctx, user);
-  })
+  // Matn xabarlari faqat kirim/chiqim oqimining davomi — yozish hisoblanadi.
+  tenantHandler(
+    async (ctx, user) => {
+      await handleFlowText(ctx, user);
+    },
+    { yozish: true }
+  )
 );
 
 bot.catch((err) => {

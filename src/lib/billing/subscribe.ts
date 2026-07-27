@@ -56,6 +56,20 @@ export async function confirmPayment(paymentId: string, now: Date = new Date()) 
   });
 }
 
+/**
+ * Cron: obuna davri tugagan ACTIVE tenantlarni PAST_DUE ga o'tkazadi.
+ * (Guard computeAccess orqali cron'siz ham himoya qiladi — bu holatni
+ * bazada ham aks ettirish uchun: panel/hisobotlarda to'g'ri ko'rinadi.)
+ * TRIAL muddati tugashi statusni o'zgartirmaydi — computeAccess o'zi bloklaydi.
+ */
+export async function updateExpiredStatuses(now: Date = new Date()): Promise<number> {
+  const res = await rawPrisma.tenant.updateMany({
+    where: { status: "ACTIVE", currentPeriodEnd: { lt: now } },
+    data: { status: "PAST_DUE" },
+  });
+  return res.count;
+}
+
 /** To'lovni rad etadi (masalan, pul kelib tushmagan bo'lsa). */
 export async function rejectPayment(paymentId: string, izoh?: string) {
   const payment = await rawPrisma.payment.findUnique({ where: { id: paymentId } });

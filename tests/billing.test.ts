@@ -17,6 +17,7 @@ let computeAccess: any;
 let confirmPayment: any;
 let rejectPayment: any;
 let extendTenant: any;
+let updateExpiredStatuses: any;
 let manualProvider: any;
 let createTenantWithOwner: any;
 
@@ -32,7 +33,7 @@ before(async () => {
   ({ prisma } = await import("@/lib/prisma"));
   ({ runWithTenant } = await import("@/lib/db/tenantContext"));
   ({ computeAccess } = await import("@/lib/billing/access"));
-  ({ confirmPayment, rejectPayment, extendTenant } = await import("@/lib/billing/subscribe"));
+  ({ confirmPayment, rejectPayment, extendTenant, updateExpiredStatuses } = await import("@/lib/billing/subscribe"));
   ({ manualProvider } = await import("@/lib/billing/provider"));
   ({ createTenantWithOwner } = await import("@/lib/services/signup"));
 
@@ -149,6 +150,31 @@ test("extendTenant: SUPERADMIN muddatni to'lovsiz uzaytiradi va tenant qayta ish
   tenant = await extendTenant(t.tenant.id, 7);
   assert.equal(tenant.status, "ACTIVE");
   assert.equal(computeAccess(tenant).mode, "FULL");
+});
+
+// ---------- Cron: statuslarni yangilash ----------
+test("updateExpiredStatuses: davri tugagan ACTIVE -> PAST_DUE (cron)", async () => {
+  const now = new Date();
+  const expired = await createTenantWithOwner({
+    kompaniyaNomi: "Muddati O'tgan",
+    ism: "X",
+    login: "+998900000099",
+    parol: "parol12345",
+  });
+  await rawPrisma.tenant.update({
+    where: { id: expired.tenant.id },
+    data: { status: "ACTIVE", currentPeriodEnd: new Date(now.getTime() - KUN_MS) },
+  });
+
+  const count = await updateExpiredStatuses(now);
+  assert.ok(count >= 1);
+
+  const after = await rawPrisma.tenant.findUnique({ where: { id: expired.tenant.id } });
+  assert.equal(after.status, "PAST_DUE");
+
+  // Faol tenantga tegilmaydi (t.tenant hozircha kelajak muddatli ACTIVE).
+  const active = await rawPrisma.tenant.findUnique({ where: { id: t.tenant.id } });
+  assert.equal(active.status, "ACTIVE");
 });
 
 // ---------- Izolyatsiya: to'lovlar ham tenant bo'yicha ----------

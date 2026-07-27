@@ -2,6 +2,7 @@ import { bot } from "@/bot/bot";
 import { checkAndSendMonthlyReport } from "@/bot/scheduler";
 import { generateDueRecurring } from "@/lib/services/recurring";
 import { sendExpiryWarnings } from "@/lib/billing/notify";
+import { updateExpiredStatuses } from "@/lib/billing/subscribe";
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { runWithTenant } from "@/lib/db/tenantContext";
 
@@ -15,6 +16,12 @@ export async function GET(req: Request) {
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return new Response("Unauthorized", { status: 401 });
   }
+
+  // Avval statuslar yangilanadi: davri tugagan ACTIVE -> PAST_DUE.
+  const expired = await updateExpiredStatuses().catch((e) => {
+    console.error("Status yangilash xatosi:", e);
+    return 0;
+  });
 
   await checkAndSendMonthlyReport(bot);
 
@@ -34,5 +41,5 @@ export async function GET(req: Request) {
     return 0;
   });
 
-  return new Response(`OK (recurring: ${recurringCount}, warned: ${warned})`, { status: 200 });
+  return new Response(`OK (expired: ${expired}, recurring: ${recurringCount}, warned: ${warned})`, { status: 200 });
 }
