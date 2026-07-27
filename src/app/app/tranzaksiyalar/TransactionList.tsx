@@ -169,10 +169,16 @@ export function TransactionList({
         <EditModal
           transaction={editing}
           categories={categories}
+          canDelete={canModify(editing)}
           onClose={() => setEditing(null)}
           onSaved={(t) => {
             onUpdated(t);
             setEditing(null);
+          }}
+          onDelete={() => {
+            const t = editing;
+            setEditing(null);
+            onDelete(t);
           }}
         />
       )}
@@ -206,13 +212,17 @@ function PageLink({
 function EditModal({
   transaction,
   categories,
+  canDelete,
   onClose,
   onSaved,
+  onDelete,
 }: {
   transaction: TransactionDTO;
   categories: CategoryOption[];
+  canDelete: boolean;
   onClose: () => void;
   onSaved: (t: TransactionDTO) => void;
+  onDelete: () => void;
 }) {
   const [turi, setTuri] = useState<"kirim" | "chiqim">(transaction.turi as "kirim" | "chiqim");
   const [categoryId, setCategoryId] = useState(transaction.categoryId);
@@ -306,13 +316,20 @@ function EditModal({
           className="w-full rounded-lg border border-line px-3 py-2 text-sm"
         />
         {error && <p className="text-expense text-sm">{error}</p>}
-        <div className="flex gap-2 justify-end pt-2">
-          <Button variant="secondary" onClick={onClose} type="button">
-            Bekor qilish
-          </Button>
-          <Button onClick={handleSave} disabled={loading} type="button">
-            {loading ? "Saqlanmoqda..." : "Saqlash"}
-          </Button>
+        <div className="flex gap-2 items-center pt-2">
+          {canDelete && (
+            <Button variant="danger" onClick={onDelete} type="button">
+              O'chirish
+            </Button>
+          )}
+          <div className="flex gap-2 ml-auto">
+            <Button variant="secondary" onClick={onClose} type="button">
+              Bekor qilish
+            </Button>
+            <Button onClick={handleSave} loading={loading} type="button">
+              Saqlash
+            </Button>
+          </div>
         </div>
       </div>
     </Modal>
