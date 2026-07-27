@@ -25,7 +25,6 @@ export async function GET(request: NextRequest) {
         where: {
           businessId,
           deletedAt: null,
-          ...(user.rol === "sotuvchi" ? { turi: "kirim" } : {}),
           OR: [{ izoh: { contains: q } }, { category: { nomi: { contains: q } } }],
         },
         include: { category: { select: { nomi: true } } },

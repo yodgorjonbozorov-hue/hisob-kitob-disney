@@ -26,7 +26,6 @@ export function KassaHome({
   recent: ReceiptItem[];
 }) {
   const [sheet, setSheet] = useState<null | "kirim" | "chiqim">(null);
-  const kirimOnly = rol === "sotuvchi";
 
   return (
     <div className="max-w-lg mx-auto space-y-5">
@@ -49,21 +48,19 @@ export function KassaHome({
       </div>
 
       {/* Katta tugmalar */}
-      <div className={kirimOnly ? "" : "grid grid-cols-1 gap-3"}>
+      <div className="grid grid-cols-1 gap-3">
         <button
           onClick={() => setSheet("kirim")}
           className="w-full min-h-[88px] rounded-xl bg-income text-white flex items-center justify-center gap-3 text-lg font-semibold active:scale-[0.99] transition shadow-card"
         >
           <ArrowDownLeft className="w-7 h-7" /> Pul kirdi
         </button>
-        {!kirimOnly && (
-          <button
-            onClick={() => setSheet("chiqim")}
-            className="w-full min-h-[88px] rounded-xl bg-expense text-white flex items-center justify-center gap-3 text-lg font-semibold active:scale-[0.99] transition shadow-card mt-3"
-          >
-            <ArrowUpRight className="w-7 h-7" /> Pul chiqdi
-          </button>
-        )}
+        <button
+          onClick={() => setSheet("chiqim")}
+          className="w-full min-h-[88px] rounded-xl bg-expense text-white flex items-center justify-center gap-3 text-lg font-semibold active:scale-[0.99] transition shadow-card"
+        >
+          <ArrowUpRight className="w-7 h-7" /> Pul chiqdi
+        </button>
       </div>
 
       {/* Oxirgi yozuvlar */}

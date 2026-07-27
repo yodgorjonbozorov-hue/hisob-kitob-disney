@@ -28,7 +28,6 @@ export async function POST(request: NextRequest) {
         businessId,
         deletedAt: null,
         ...(user.rol === "admin" ? {} : { userId: user.userId }),
-        ...(user.rol === "sotuvchi" ? { turi: "kirim" } : {}),
       },
       data: { deletedAt: new Date() },
     });

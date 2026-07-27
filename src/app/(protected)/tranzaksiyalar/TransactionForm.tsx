@@ -15,11 +15,9 @@ interface CategoryOption {
 export function TransactionForm({
   categories,
   onCreated,
-  kirimOnly = false,
 }: {
   categories: CategoryOption[];
   onCreated: (t: TransactionDTO) => void;
-  kirimOnly?: boolean;
 }) {
   const [turi, setTuri] = useState<"kirim" | "chiqim">("kirim");
   const [categoryId, setCategoryId] = useState("");
@@ -80,38 +78,32 @@ export function TransactionForm({
 
   return (
     <form onSubmit={handleSubmit} className="bg-surface rounded-2xl shadow-sm border border-line p-5 space-y-4">
-      {kirimOnly ? (
-        <div className="py-2 rounded-lg text-sm font-medium bg-income text-white text-center">
-          Kirim (sotuv)
-        </div>
-      ) : (
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setTuri("kirim");
-              setCategoryId("");
-            }}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
-              turi === "kirim" ? "bg-income text-white" : "bg-income-soft text-income-fg"
-            }`}
-          >
-            Kirim
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setTuri("chiqim");
-              setCategoryId("");
-            }}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
-              turi === "chiqim" ? "bg-expense text-white" : "bg-expense-soft text-expense-fg"
-            }`}
-          >
-            Chiqim
-          </button>
-        </div>
-      )}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setTuri("kirim");
+            setCategoryId("");
+          }}
+          className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
+            turi === "kirim" ? "bg-income text-white" : "bg-income-soft text-income-fg"
+          }`}
+        >
+          Kirim
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setTuri("chiqim");
+            setCategoryId("");
+          }}
+          className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
+            turi === "chiqim" ? "bg-expense text-white" : "bg-expense-soft text-expense-fg"
+          }`}
+        >
+          Chiqim
+        </button>
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>

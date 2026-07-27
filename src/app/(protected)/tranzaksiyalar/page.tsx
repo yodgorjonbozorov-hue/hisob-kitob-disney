@@ -23,8 +23,8 @@ export default async function TranzaksiyalarPage({
 }) {
   const session = await requireUser();
   const businessId = await resolveActiveBusinessId(session);
-  // Sotuvchi faqat kirim (sotuv) yozuvlarini ko'radi va qo'shadi — chiqim/foyda yo'q.
-  const kirimOnly = session.rol === "sotuvchi";
+  // Sotuvchi kirim ham, chiqim ham qo'shadi/ko'radi — faqat "Sof foyda" ko'rsatkichi yashirin.
+  const hideProfit = session.rol === "sotuvchi";
 
   if (!businessId) {
     return (
@@ -40,7 +40,7 @@ export default async function TranzaksiyalarPage({
       businessId,
       from: searchParams.from,
       to: searchParams.to,
-      turi: kirimOnly ? "kirim" : searchParams.turi,
+      turi: searchParams.turi,
       categoryId: searchParams.categoryId,
       q: searchParams.q,
       minSumma: searchParams.minSumma ? parseInt(searchParams.minSumma, 10) : null,
@@ -64,7 +64,7 @@ export default async function TranzaksiyalarPage({
         categories={categories}
         currentUserId={session.userId}
         currentUserRol={session.rol}
-        kirimOnly={kirimOnly}
+        hideProfit={hideProfit}
         totals={result.totals}
         filters={{
           from: searchParams.from ?? "",

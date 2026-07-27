@@ -23,17 +23,15 @@ interface CategoryOption {
 export function QuickAddSheet({
   open,
   onClose,
-  rol,
   defaultTuri = "kirim",
 }: {
   open: boolean;
   onClose: () => void;
-  rol: Rol;
+  rol?: Rol; // (endi ishlatilmaydi; chaqiruvchilar mosligini saqlash uchun)
   defaultTuri?: "kirim" | "chiqim";
 }) {
   const router = useRouter();
   const { toast } = useToast();
-  const kirimOnly = rol === "sotuvchi";
   const [turi, setTuri] = useState<"kirim" | "chiqim">("kirim");
   const [summa, setSumma] = useState(0);
   const [categoryId, setCategoryId] = useState("");
@@ -51,7 +49,7 @@ export function QuickAddSheet({
     setCategoryId("");
     setIzoh("");
     setKecha(false);
-    setTuri(kirimOnly ? "kirim" : defaultTuri);
+    setTuri(defaultTuri);
     if (categories === null) {
       fetch("/api/categories").then((r) => (r.ok ? r.json() : [])).then(setCategories).catch(() => setCategories([]));
     }
@@ -107,14 +105,10 @@ export function QuickAddSheet({
         </div>
 
         {/* Kirim / Chiqim */}
-        {!kirimOnly ? (
-          <div className="flex gap-2 px-5 mt-3">
-            <button onClick={() => { setTuri("kirim"); setCategoryId(""); }} className={`flex-1 h-11 rounded-lg text-sm font-medium ${turi === "kirim" ? "bg-income text-white" : "bg-income-soft text-income-fg"}`}>Pul kirdi</button>
-            <button onClick={() => { setTuri("chiqim"); setCategoryId(""); }} className={`flex-1 h-11 rounded-lg text-sm font-medium ${turi === "chiqim" ? "bg-expense text-white" : "bg-expense-soft text-expense-fg"}`}>Pul chiqdi</button>
-          </div>
-        ) : (
-          <div className="px-5 mt-3"><div className="h-11 rounded-lg bg-income text-white text-sm font-medium flex items-center justify-center">Pul kirdi (sotuv)</div></div>
-        )}
+        <div className="flex gap-2 px-5 mt-3">
+          <button onClick={() => { setTuri("kirim"); setCategoryId(""); }} className={`flex-1 h-11 rounded-lg text-sm font-medium ${turi === "kirim" ? "bg-income text-white" : "bg-income-soft text-income-fg"}`}>Pul kirdi</button>
+          <button onClick={() => { setTuri("chiqim"); setCategoryId(""); }} className={`flex-1 h-11 rounded-lg text-sm font-medium ${turi === "chiqim" ? "bg-expense text-white" : "bg-expense-soft text-expense-fg"}`}>Pul chiqdi</button>
+        </div>
 
         <div className="px-5 mt-4">
           <NumberPad value={summa} onChange={setSumma} tone={turi === "kirim" ? "income" : "expense"} />

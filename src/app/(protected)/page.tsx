@@ -42,7 +42,7 @@ export default async function DashboardPage({
     const today = todayDateOnlyString();
     const [bugun, recentRes] = await Promise.all([
       getTodayTotals(bId, today),
-      listTransactions({ businessId: bId, page: 1, pageSize: 12, ...(session.rol === "sotuvchi" ? { turi: "kirim" } : {}) }),
+      listTransactions({ businessId: bId, page: 1, pageSize: 12 }),
     ]);
     const recent = recentRes.items.map((t) => ({
       id: t.id,

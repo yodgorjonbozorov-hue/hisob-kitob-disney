@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       businessId,
       from: searchParams.get("from"),
       to: searchParams.get("to"),
-      turi: user.rol === "sotuvchi" ? "kirim" : searchParams.get("turi"),
+      turi: searchParams.get("turi"),
       categoryId: searchParams.get("categoryId"),
       q: searchParams.get("q"),
       minSumma: searchParams.get("minSumma") ? parseInt(searchParams.get("minSumma")!, 10) : null,

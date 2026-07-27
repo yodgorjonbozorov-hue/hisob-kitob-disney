@@ -24,7 +24,7 @@ export function TransactionsClient({
   categories,
   currentUserId,
   currentUserRol,
-  kirimOnly = false,
+  hideProfit = false,
   totals,
   filters,
 }: {
@@ -35,7 +35,7 @@ export function TransactionsClient({
   categories: CategoryOption[];
   currentUserId: string;
   currentUserRol: Rol;
-  kirimOnly?: boolean;
+  hideProfit?: boolean;
   totals: { jamiKirim: number; jamiChiqim: number; sof: number };
   filters: { from: string; to: string; turi: string; categoryId: string; q: string; minSumma: string; maxSumma: string };
 }) {
@@ -131,8 +131,8 @@ export function TransactionsClient({
 
   return (
     <div className="space-y-4">
-      <TransactionForm categories={categories} onCreated={handleCreated} kirimOnly={kirimOnly} />
-      <TransactionFilters categories={categories} initial={filters} kirimOnly={kirimOnly} />
+      <TransactionForm categories={categories} onCreated={handleCreated} />
+      <TransactionFilters categories={categories} initial={filters} />
 
       <div className="flex items-center justify-between">
         <span className="text-sm text-muted">
@@ -177,11 +177,9 @@ export function TransactionsClient({
           <span className="text-sm text-muted tnum">{total} ta yozuv</span>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm tnum">
             <span className="text-income font-medium">+ {formatMoney(totals.jamiKirim)}</span>
-            {!kirimOnly && (
-              <>
-                <span className="text-expense font-medium">− {formatMoney(totals.jamiChiqim)}</span>
-                <span className="font-semibold text-fg">Sof: {formatMoney(totals.sof)}</span>
-              </>
+            <span className="text-expense font-medium">− {formatMoney(totals.jamiChiqim)}</span>
+            {!hideProfit && (
+              <span className="font-semibold text-fg">Sof: {formatMoney(totals.sof)}</span>
             )}
           </div>
         </div>

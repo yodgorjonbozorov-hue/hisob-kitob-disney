@@ -64,11 +64,9 @@ const PRESETS = [
 export function TransactionFilters({
   categories,
   initial,
-  kirimOnly = false,
 }: {
   categories: CategoryOption[];
   initial: FiltersValue;
-  kirimOnly?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -113,7 +111,7 @@ export function TransactionFilters({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [values.q, values.minSumma, values.maxSumma]);
 
-  const turiFilter = kirimOnly ? "kirim" : values.turi;
+  const turiFilter = values.turi;
   const filteredCategories = turiFilter ? categories.filter((c) => c.turi === turiFilter) : categories;
   const activeCount = [values.from, values.to, values.turi, values.categoryId, values.q, values.minSumma, values.maxSumma].filter(Boolean).length;
 
@@ -163,16 +161,14 @@ export function TransactionFilters({
             <label className="block text-xs font-medium text-muted mb-1">Sanagacha</label>
             <input type="date" value={values.to} onChange={(e) => update({ to: e.target.value })} className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm" />
           </div>
-          {!kirimOnly && (
-            <div>
-              <label className="block text-xs font-medium text-muted mb-1">Turi</label>
-              <select value={values.turi} onChange={(e) => update({ turi: e.target.value, categoryId: "" })} className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm">
-                <option value="">Barchasi</option>
-                <option value="kirim">Kirim</option>
-                <option value="chiqim">Chiqim</option>
-              </select>
-            </div>
-          )}
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">Turi</label>
+            <select value={values.turi} onChange={(e) => update({ turi: e.target.value, categoryId: "" })} className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm">
+              <option value="">Barchasi</option>
+              <option value="kirim">Kirim</option>
+              <option value="chiqim">Chiqim</option>
+            </select>
+          </div>
           <div>
             <label className="block text-xs font-medium text-muted mb-1">Kategoriya</label>
             <select value={values.categoryId} onChange={(e) => update({ categoryId: e.target.value })} className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm">
