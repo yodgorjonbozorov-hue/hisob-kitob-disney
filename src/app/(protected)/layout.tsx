@@ -9,6 +9,7 @@ import { BottomNav } from "@/components/nav/BottomNav";
 import { ToastProvider } from "@/components/ui/Toast";
 import { CommandPalette } from "@/components/CommandPalette";
 import { BillingBanner } from "@/components/BillingBanner";
+import { ImpersonationBanner } from "@/components/ImpersonationBanner";
 
 export default async function ProtectedLayout({
   children,
@@ -53,6 +54,7 @@ export default async function ProtectedLayout({
           notifCount={notifCount}
         />
         <main className="flex-1 p-4 md:p-8 pb-24 lg:pb-8">
+          {session.impersonatedBy && <ImpersonationBanner ism={session.ism} />}
           <BillingBanner access={access} />
           {children}
         </main>
