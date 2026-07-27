@@ -1,29 +1,22 @@
-import { PrismaClient } from "@prisma/client";
-import { PrismaLibSQL } from "@prisma/adapter-libsql";
-import { createClient } from "@libsql/client";
-
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
-};
+import type { PrismaClient } from "@prisma/client";
+import { tenantClient } from "./db/tenantDb";
+import { currentTenantId } from "./db/tenantContext";
 
 /**
- * @libsql/client "file:./dev.db" (lokal) va "libsql://...turso.io" (production)
- * ikkalasini ham bir xil kodda qo'llab-quvvatlaydi — muhitlar orasida kod o'zgarmaydi,
- * faqat DATABASE_URL/DATABASE_AUTH_TOKEN qiymati farq qiladi.
+ * TENANT-HIMOYALANGAN Prisma client.
+ *
+ * Bu obyektga har qanday murojaat joriy tenant kontekstini talab qiladi
+ * (runWithTenant / withTenant / requireTenant orqali o'rnatiladi). Kontekst
+ * bo'lmasa — xato tashlanadi; jimgina barcha yozuvlarni qaytarish YO'Q.
+ *
+ * Barcha so'rovlarga tenant filtri avtomatik qo'shiladi (batafsil: lib/db/tenantDb.ts).
+ * Tizim ishlari (auth, bot foydalanuvchi aniqlash, cron aylanishi) uchun
+ * `@/lib/db/rawPrisma` dan ochiq foydalaniladi.
  */
-const libsqlClient = createClient({
-  url: process.env.DATABASE_URL as string,
-  authToken: process.env.DATABASE_AUTH_TOKEN,
-});
-const adapter = new PrismaLibSQL(libsqlClient);
-
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    adapter,
-    log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
-  });
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
-}
+export const prisma = new Proxy({} as Record<string | symbol, unknown>, {
+  get(_target, prop) {
+    const client = tenantClient(currentTenantId()) as any;
+    const value = client[prop];
+    return typeof value === "function" ? value.bind(client) : value;
+  },
+}) as unknown as PrismaClient;

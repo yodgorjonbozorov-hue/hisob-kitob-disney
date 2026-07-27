@@ -37,6 +37,13 @@ export function requireManager(rol: Rol): void {
   }
 }
 
+/** Sotuvchi (SELLER) faqat kirim/chiqim kirita oladi — boshqa modullar taqiqlanadi. */
+export function forbidSeller(rol: Rol): void {
+  if (rol === "SELLER") {
+    throw new ForbiddenError("Sotuvchi faqat kirim va chiqim kirita oladi");
+  }
+}
+
 /** Boshqaruvchi (OWNER/ADMIN) har doim, boshqalar faqat o'z yozuvini o'zgartira oladi. */
 export function requireOwnerOrAdmin(rol: Rol, userId: string, ownerId: string): void {
   if (isManager(rol)) return;
