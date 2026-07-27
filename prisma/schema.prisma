@@ -15,18 +15,55 @@ datasource db {
 /// foydalanuvchilariga ega; tenantlar bir-birining ma'lumotini hech qachon ko'rmaydi.
 /// status: "TRIAL" | "ACTIVE" | "PAST_DUE" | "BLOCKED" (zod bilan cheklanadi).
 model Tenant {
-  id               String     @id @default(cuid())
+  id               String         @id @default(cuid())
   name             String
-  slug             String     @unique
-  status           String     @default("TRIAL")
+  slug             String         @unique
+  status           String         @default("TRIAL")
   trialEndsAt      DateTime?
   currentPeriodEnd DateTime?
-  plan             String     @default("STANDARD")
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  plan             String         @default("STANDARD")
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
   businesses       Business[]
   users            User[]
+  subscriptions    Subscription[]
+  payments         Payment[]
 
+  @@index([status])
+}
+
+/// Obuna davri — har tasdiqlangan to'lov bitta davr yozuvini yaratadi (tarix uchun).
+/// status: "ACTIVE" | "EXPIRED" | "CANCELLED" (zod bilan cheklanadi).
+model Subscription {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  plan        String
+  status      String   @default("ACTIVE")
+  periodStart DateTime
+  periodEnd   DateTime
+  amount      Int
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([status])
+}
+
+/// To'lov yozuvi. provider: "MANUAL" | "PAYME" | "CLICK";
+/// status: "PENDING" | "CONFIRMED" | "REJECTED". MANUAL'da SUPERADMIN tasdiqlaydi.
+model Payment {
+  id         String    @id @default(cuid())
+  tenantId   String
+  tenant     Tenant    @relation(fields: [tenantId], references: [id])
+  amount     Int
+  provider   String    @default("MANUAL")
+  externalId String?
+  status     String    @default("PENDING")
+  izoh       String?
+  paidAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([tenantId])
   @@index([status])
 }
 

@@ -16,7 +16,7 @@ import { ForbiddenError } from "@/lib/auth/guard";
  *    (signup/superadmin rawPrisma bilan ishlaydi).
  */
 
-const TENANT_DIRECT = new Set(["Business", "User"]);
+const TENANT_DIRECT = new Set(["Business", "User", "Subscription", "Payment"]);
 const BUSINESS_SCOPED = new Set([
   "Category",
   "Transaction",
@@ -69,15 +69,13 @@ function buildTenantClient(tenantId: string) {
           const isDirect = TENANT_DIRECT.has(model);
           const isScoped = BUSINESS_SCOPED.has(model) || model === AUDIT_MODEL;
 
-          // Tenant modeli — faqat o'z tenantini ko'rish.
+          // Tenant modeli — faqat o'z tenantini O'QISH mumkin. Status/muddat kabi
+          // maydonlarni o'zgartirish faqat tizim darajasida (rawPrisma, SUPERADMIN).
           if (model === "Tenant") {
             if (operation === "findUnique" || operation === "findUniqueOrThrow" || operation === "findFirst" || operation === "findMany") {
               const a: any = args ?? {};
               a.where = a.where ? { AND: [a.where, { id: tenantId }] } : { id: tenantId };
               return query(a);
-            }
-            if (operation === "update" && (args as any)?.where?.id === tenantId) {
-              return query(args);
             }
             throw new ForbiddenError("Tenant amali tenant rejimida taqiqlangan");
           }
