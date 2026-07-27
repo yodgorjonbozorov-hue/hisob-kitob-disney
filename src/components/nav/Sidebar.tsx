@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Receipt, FileText, PiggyBank, Bell, CalendarCheck, Repeat,
   Package, ShoppingCart, HandCoins, Building2, Tags, Users, Trash2, ScrollText,
-  LogOut, KeyRound, CreditCard, Blocks, type LucideIcon,
+  LogOut, KeyRound, CreditCard, Blocks, Handshake, BookUser, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ROL_LABEL, type Rol } from "@/lib/auth/roles";
@@ -44,6 +44,8 @@ const IKONLAR: Record<string, LucideIcon> = {
   audit: ScrollText,
   modules: Blocks,
   billing: CreditCard,
+  crm: Handshake,
+  contacts: BookUser,
 };
 
 export default function Sidebar({ ism, rol, businesses, activeBusinessId, navItems, notifCount }: Props) {

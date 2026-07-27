@@ -101,6 +101,13 @@ export function SuperadminClient({
     if (r) setXabar(`${t.name}: muddat ${kunlar} kunga uzaytirildi.`);
   }
 
+  async function tarif(t: TenantRow) {
+    const plan = prompt(`${t.name} tarifi (STANDARD yoki PRO):`, t.plan)?.trim().toUpperCase();
+    if (!plan || plan === t.plan) return;
+    const r = await call(`/api/superadmin/tenants/${t.id}/plan`, { plan });
+    if (r) setXabar(`${t.name}: tarif ${plan} ga o'zgartirildi.`);
+  }
+
   async function blok(t: TenantRow) {
     const blocked = t.status !== "BLOCKED";
     if (blocked && !confirm(`${t.name} bloklansinmi? Mijoz faqat /billing sahifasini ochadi.`)) return;
@@ -256,6 +263,9 @@ export function SuperadminClient({
                       <div className="flex gap-1.5 justify-end flex-wrap">
                         <button className={btn} disabled={!!busy} onClick={() => uzaytirish(t)}>
                           + Muddat
+                        </button>
+                        <button className={btn} disabled={!!busy} onClick={() => tarif(t)}>
+                          {t.plan}
                         </button>
                         <button className={`${btn} ${t.status === "BLOCKED" ? "text-income-fg" : "text-expense-fg"}`} disabled={!!busy} onClick={() => blok(t)}>
                           {t.status === "BLOCKED" ? "Blokdan chiqarish" : "Bloklash"}
