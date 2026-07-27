@@ -16,7 +16,7 @@ import { ForbiddenError } from "@/lib/auth/guard";
  *    (signup/superadmin rawPrisma bilan ishlaydi).
  */
 
-const TENANT_DIRECT = new Set(["Business", "User", "Subscription", "Payment"]);
+const TENANT_DIRECT = new Set(["Business", "User", "Subscription", "Payment", "TenantModule"]);
 const BUSINESS_SCOPED = new Set([
   "Category",
   "Transaction",

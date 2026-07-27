@@ -28,8 +28,24 @@ model Tenant {
   users            User[]
   subscriptions    Subscription[]
   payments         Payment[]
+  modules          TenantModule[]
 
   @@index([status])
+}
+
+/// Tenant qaysi modullarni yoqqani. Modul katalogi kodda (lib/modules/registry.ts) —
+/// bu jadval faqat yoqilganlik holati. Core modullar yozuvsiz ham yoqilgan hisoblanadi.
+model TenantModule {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  code       String   // registry'dagi modul kodi (masalan "OMBOR")
+  isActive   Boolean  @default(true)
+  sozlamalar String?  // modul-spetsifik sozlamalar (JSON)
+  createdAt  DateTime @default(now())
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
 }
 
 /// Obuna davri — har tasdiqlangan to'lov bitta davr yozuvini yaratadi (tarix uchun).
