@@ -12,10 +12,13 @@ export const metadata = {
 
 const IMKONIYATLAR = [
   { icon: "📊", nomi: "Boshqaruv paneli", tavsif: "Kirim, chiqim, sof foyda va dinamika — bir qarashda. Oylik hisobotlar PDF va Excel'da." },
-  { icon: "🧾", nomi: "Tez kirim-chiqim", tavsif: "Kassir va sotuvchi uchun katta tugmali soddalashtirilgan ekran — yozuv 10 soniyada." },
+  { icon: "🤝", nomi: "CRM", tavsif: "Bitimlar kanbani, kontaktlar, faoliyat tarixi. Yutilgan bitim 1 klikda kirimga aylanadi." },
+  { icon: "✅", nomi: "Vazifalar", tavsif: "Jamoa vazifalari: mas'ul, muddat, kanban. Muddati kelganda Telegram eslatma." },
+  { icon: "✨", nomi: "AI yordamchi", tavsif: "\"Bu oy qanday o'tdi?\" — raqamlaringiz bo'yicha savol-javob va AI xulosalar." },
   { icon: "📦", nomi: "Ombor va sotuv", tavsif: "Mahsulot qoldig'i, sotuv (naqd/qarz), qarzdorlik va to'lovlar nazorati." },
-  { icon: "🤖", nomi: "Telegram bot", tavsif: "Kirim-chiqimni botdan kiriting, oylik hisobotni avtomatik oling." },
+  { icon: "🤖", nomi: "Telegram bot", tavsif: "Kirim-chiqim va leadlarni botdan kiriting, har kuni ertalab kunlik xulosa oling." },
   { icon: "🏪", nomi: "Bir nechta biznes", tavsif: "Har bir filial yoki yo'nalish alohida — raqamlar aralashmaydi." },
+  { icon: "🧩", nomi: "Modulli tizim", tavsif: "Keragini yoqasiz, keraksizini o'chirasiz — interfeys ortiqcha narsasiz qoladi." },
   { icon: "👥", nomi: "Rollar va audit", tavsif: "Direktor, kassir, sotuvchi — har kim o'z huquqi bilan. Har o'zgarish audit jurnalida." },
 ];
 

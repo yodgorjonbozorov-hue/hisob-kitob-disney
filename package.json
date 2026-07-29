@@ -20,7 +20,8 @@
     "test:modules": "node -r ts-node/register tests/modules.test.ts",
     "test:crm": "node -r ts-node/register tests/crm.test.ts",
     "test:tasks": "node -r ts-node/register tests/tasks.test.ts",
-    "test:ai": "node -r ts-node/register tests/ai.test.ts"
+    "test:ai": "node -r ts-node/register tests/ai.test.ts",
+    "test:automation": "node -r ts-node/register tests/automation.test.ts"
   },
   "prisma": {
     "seed": "node -r ts-node/register prisma/seed.ts"
