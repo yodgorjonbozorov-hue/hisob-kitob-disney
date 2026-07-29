@@ -6,14 +6,17 @@ import { requireTenantPage } from "@/lib/auth/tenant";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { isManager } from "@/lib/auth/roles";
 import { resolveActiveBusinessId } from "@/lib/business";
+import { getEnabledModules } from "@/lib/modules/guard";
 import { ReportView } from "./ReportView";
+import { AiXulosaBox } from "./AiXulosaBox";
 
 export default async function HisobotPage({
   searchParams,
 }: {
   searchParams: { month?: string };
 }) {
-  const { session, tenantId } = await requireTenantPage();
+  const ctx = await requireTenantPage();
+  const { session, tenantId } = ctx;
   // Tenant konteksti: quyidagi barcha prisma so'rovlari shu tenantga avtomatik cheklanadi.
   return runWithTenant(tenantId, async () => {
   if (!isManager(session.rol)) {
@@ -32,6 +35,8 @@ export default async function HisobotPage({
   }
 
   const report = await getMonthlyReport(businessId, month);
+  // AI xulosa bloki: modul yoqiq va kalit sozlangan bo'lsagina ko'rinadi.
+  const aiBor = (await getEnabledModules(ctx)).has("AI") && !!process.env.ANTHROPIC_API_KEY;
 
   return (
     <div className="space-y-6">
@@ -39,6 +44,7 @@ export default async function HisobotPage({
         <h1 className="text-2xl font-bold text-fg">Oylik hisobot</h1>
         <MonthSelector month={month} />
       </div>
+      {aiBor && <AiXulosaBox month={month} />}
       <ReportView report={report} />
     </div>
   );

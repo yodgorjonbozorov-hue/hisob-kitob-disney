@@ -104,3 +104,38 @@ export async function aiSuhbat(params: {
 
   return "Kechirasiz, savolingiz juda murakkab chiqdi — soddaroq qilib qayta so'rang.";
 }
+
+/** Oylik hisobot uchun bitta chaqiruvlik AI xulosa (tool'siz — tayyor JSON beriladi). */
+export async function aiHisobotXulosa(hisobot: unknown): Promise<string> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new AiSozlanmaganError();
+
+  const res = await fetch(API_URL, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      max_tokens: 700,
+      system:
+        "Sen o'zbek tilidagi moliya tahlilchisisan. Berilgan oylik hisobot JSON'i asosida " +
+        "3-5 jumlalik amaliy xulosa yoz: asosiy o'zgarishlar, e'tibor talab qiladigan joylar, " +
+        "1-2 ta aniq tavsiya. Faqat berilgan raqamlarga tayan, hech narsa o'ylab topma.",
+      messages: [{ role: "user", content: JSON.stringify(hisobot) }],
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Claude API xatosi (${res.status}): ${body.slice(0, 200)}`);
+  }
+  const data = (await res.json()) as { content: ApiContent[] };
+  return data.content
+    .filter((c) => c.type === "text")
+    .map((c) => c.text)
+    .join("\n")
+    .trim();
+}
