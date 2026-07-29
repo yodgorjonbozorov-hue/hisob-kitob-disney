@@ -93,6 +93,16 @@ export const MODULLAR: ModulTarifi[] = [
     ],
   },
   {
+    code: "AI",
+    nomi: "AI yordamchi",
+    tavsif: "Biznesingiz raqamlari bo'yicha savol-javob: \"Bu oy qanday o'tdi?\", \"Qaysi chiqim oshdi?\" — AI faqat sizning ma'lumotingizni ko'radi.",
+    core: false,
+    rollar: BOSHQARUVCHILAR,
+    nav: [
+      { href: "/app/ai", label: "AI yordamchi", icon: "ai", tartib: 14, rollar: BOSHQARUVCHILAR },
+    ],
+  },
+  {
     code: "BOSHQARUV",
     nomi: "Boshqaruv",
     tavsif: "Bizneslar, kategoriyalar, foydalanuvchilar, audit va obuna.",
