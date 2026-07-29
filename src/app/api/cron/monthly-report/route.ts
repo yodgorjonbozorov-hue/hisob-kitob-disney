@@ -4,6 +4,7 @@ import { generateDueRecurring } from "@/lib/services/recurring";
 import { sendExpiryWarnings } from "@/lib/billing/notify";
 import { updateExpiredStatuses } from "@/lib/billing/subscribe";
 import { sendTaskReminders } from "@/lib/tasks/service";
+import { sendDailyDigest } from "@/lib/reports/dailyDigest";
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { runWithTenant } from "@/lib/db/tenantContext";
 
@@ -48,8 +49,14 @@ export async function GET(req: Request) {
     return 0;
   });
 
+  // Kunlik xulosa: kechagi kirim/chiqim har tenant direktorlariga.
+  const digest = await sendDailyDigest(bot.api).catch((e) => {
+    console.error("Kunlik xulosa xatosi:", e);
+    return 0;
+  });
+
   return new Response(
-    `OK (expired: ${expired}, recurring: ${recurringCount}, warned: ${warned}, tasks: ${taskReminders})`,
+    `OK (expired: ${expired}, recurring: ${recurringCount}, warned: ${warned}, tasks: ${taskReminders}, digest: ${digest})`,
     { status: 200 }
   );
 }
