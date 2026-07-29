@@ -46,6 +46,26 @@ export async function requireModule(ctx: TenantContext, code: string): Promise<v
   }
 }
 
+/**
+ * Kontekstsiz tekshiruv (bot/cron uchun): modul shu tenantda yoqiqmi.
+ * rawPrisma ishlatadi — tenant konteksti talab qilinmaydi.
+ */
+export async function isModuleOnForTenant(tenantId: string, code: string): Promise<boolean> {
+  const m = modulByCode(code);
+  if (!m) return false;
+  if (m.core) return true;
+  const { rawPrisma } = await import("@/lib/db/rawPrisma");
+  const tenant = await rawPrisma.tenant.findUnique({ where: { id: tenantId }, select: { plan: true } });
+  if (!tenant) return false;
+  const plan = planByCode(tenant.plan);
+  if (!plan?.modullar.includes(code)) return false;
+  const row = await rawPrisma.tenantModule.findFirst({
+    where: { tenantId, code, isActive: true },
+    select: { id: true },
+  });
+  return !!row;
+}
+
 /** Sahifalar uchun: modul yopiq bo'lsa asosiy sahifaga redirect. */
 export async function requireModulePage(ctx: TenantContext, code: string): Promise<void> {
   const m = modulByCode(code);

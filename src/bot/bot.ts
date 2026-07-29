@@ -14,6 +14,9 @@ import {
   handleFlowText,
 } from "./transactionFlow";
 import { startMonthlyReport, handleReportBusinessCallback, sendReportDocument } from "./report";
+import { startLeadFlow, handleLeadBusinessCallback, handleLeadText, clearLeadFlow } from "./leadFlow";
+import { isModuleOnForTenant } from "@/lib/modules/guard";
+import { modulByCode } from "@/lib/modules/registry";
 import { clearFlow } from "./state";
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -24,7 +27,7 @@ if (!token) {
 export const bot = new Bot(token);
 
 function buyruqlarRoyxati(rol: string): string {
-  const base = "Buyruqlar:\n/kirim — kirim kiritish\n/chiqim — chiqim kiritish";
+  const base = "Buyruqlar:\n/kirim — kirim kiritish\n/chiqim — chiqim kiritish\n/lead — yangi mijoz/bitim (CRM)";
   return isManager(rol) ? `${base}\n/hisobot — joriy oy hisoboti` : base;
 }
 
@@ -121,11 +124,30 @@ bot.command("chiqim", tenantHandler((ctx, user) => startTransactionFlow(ctx, use
 
 bot.command("hisobot", tenantHandler((ctx) => startMonthlyReport(ctx), { managerOnly: true }));
 
+bot.command(
+  "lead",
+  tenantHandler(async (ctx, user) => {
+    // CRM moduli yoqiq va rol matritsasida ruxsat bo'lishi shart.
+    const crm = modulByCode("CRM");
+    if (!crm?.rollar.includes(user.rol as never)) {
+      await ctx.reply("Bu buyruq sizning rolingizga ochiq emas.");
+      return;
+    }
+    if (!(await isModuleOnForTenant(user.tenantId!, "CRM"))) {
+      await ctx.reply("CRM moduli yoqilmagan. Veb-saytda Sozlamalar → Modullar bo'limidan yoqing (PRO tarif).");
+      return;
+    }
+    await startLeadFlow(ctx, user);
+  })
+);
+
 bot.command("bekor", async (ctx) => {
   clearFlow(String(ctx.chat.id));
+  clearLeadFlow(String(ctx.chat.id));
   await ctx.reply("Amal bekor qilindi.");
 });
 
+bot.callbackQuery(/^lbiz:/, tenantHandler((ctx) => handleLeadBusinessCallback(ctx)));
 bot.callbackQuery(/^biz:/, tenantHandler((ctx) => handleBusinessCallback(ctx), { yozish: true }));
 bot.callbackQuery(/^cat:/, tenantHandler((ctx) => handleCategoryCallback(ctx), { yozish: true }));
 bot.callbackQuery(/^sana:/, tenantHandler((ctx) => handleDateCallback(ctx), { yozish: true }));
@@ -152,9 +174,10 @@ bot.callbackQuery(
 
 bot.on(
   "message:text",
-  // Matn xabarlari faqat kirim/chiqim oqimining davomi — yozish hisoblanadi.
+  // Matn xabarlari oqim davomi (lead yoki kirim/chiqim) — yozish hisoblanadi.
   tenantHandler(
     async (ctx, user) => {
+      if (await handleLeadText(ctx, user)) return;
       await handleFlowText(ctx, user);
     },
     { yozish: true }
