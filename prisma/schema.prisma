@@ -22,6 +22,10 @@ model Tenant {
   trialEndsAt      DateTime?
   currentPeriodEnd DateTime?
   plan             String         @default("STANDARD")
+  /// Bir martalik o'rnatish to'lovi: qachon olingani (null — hali olinmagan).
+  setupFeePaidAt   DateTime?
+  /// O'rnatish to'lovi summasi USD'da (kelishuvga ko'ra o'zgarishi mumkin).
+  setupFeeAmountUsd Int?
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   businesses       Business[]
@@ -461,4 +465,21 @@ model DebtPayment {
 
   @@index([debtId])
   @@index([businessId])
+}
+
+/// Demo so'rovi — landingdagi "Demo so'rash" formasi. Platforma darajasidagi yozuv:
+/// hech qanday tenantga tegishli emas, faqat superadmin ko'radi (rawPrisma orqali).
+/// Bu jadval mijoz kompaniya YARATMAYDI — kompaniyani superadmin qo'lda ochadi.
+model DemoRequest {
+  id         String   @id @default(cuid())
+  ism        String
+  telefon    String
+  biznesTuri String
+  izoh       String?
+  /// "YANGI" | "BOGLANILDI" | "YOPILDI"
+  status     String   @default("YANGI")
+  createdAt  DateTime @default(now())
+
+  @@index([status])
+  @@index([createdAt])
 }

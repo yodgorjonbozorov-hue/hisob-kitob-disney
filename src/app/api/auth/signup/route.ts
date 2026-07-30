@@ -1,65 +1,23 @@
-import { NextRequest, NextResponse } from "next/server";
-// Signup tizim-darajali amal (tenant endi yaratilmoqda) — rawPrisma.
-import { rawPrisma } from "@/lib/db/rawPrisma";
-import { getSession } from "@/lib/auth/session";
-import { signupSchema, normalizePhone } from "@/lib/validation/auth";
-import { createTenantWithOwner } from "@/lib/services/signup";
-import { rateLimit } from "@/lib/rateLimit";
-import { getClientIp } from "@/lib/services/audit";
+import { NextResponse } from "next/server";
 
 /**
- * Yangi kompaniya ro'yxatdan o'tishi: Tenant (TRIAL, 14 kun) + OWNER + default
- * biznes + boshlang'ich kategoriyalar — bitta tranzaksiyada. Muvaffaqiyatda
- * foydalanuvchi darhol tizimga kiritiladi (sessiya ochiladi).
+ * O'z-o'zidan ro'yxatdan o'tish YOPILGAN (BOS-6, sotuv modeli o'zgardi).
+ *
+ * Kompaniyani faqat platforma egasi superadmin panelidan qo'lda yaratadi
+ * (POST /api/superadmin/tenants). Bu endpoint saqlanib turibdi, chunki uni
+ * tashqaridan chaqirish urinishlari bo'lishi mumkin — har qanday holatda
+ * 403 qaytaradi va hech narsa yaratmaydi (faqat UI'ni yashirish yetarli emas).
+ *
+ * Mijozlar uchun yo'l: /demo → DemoRequest → superadmin qo'lda ochadi.
  */
-export async function POST(request: NextRequest) {
-  const ip = getClientIp(request) ?? "unknown";
-  // Bir IP dan soatiga 5 ta ro'yxatdan o'tish urinishi.
-  const rl = rateLimit(`signup:${ip}`, 5, 60 * 60 * 1000);
-  if (!rl.ok) {
-    return NextResponse.json(
-      { error: `Juda ko'p urinish. ${rl.retryAfter} soniyadan keyin qayta urining.` },
-      { status: 429 }
-    );
-  }
+const JAVOB = {
+  error: "Ro'yxatdan o'tish yopiq. Demo so'rash uchun /demo sahifasidan foydalaning.",
+} as const;
 
-  const body = await request.json();
-  const parsed = signupSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
-  }
+export async function POST() {
+  return NextResponse.json(JAVOB, { status: 403 });
+}
 
-  const login = normalizePhone(parsed.data.telefon);
-  if (login.replace("+", "").length < 9) {
-    return NextResponse.json({ error: "Telefon raqam noto'g'ri" }, { status: 400 });
-  }
-
-  // Login (telefon) butun tizim bo'ylab unique.
-  const existing = await rawPrisma.user.findUnique({ where: { login }, select: { id: true } });
-  if (existing) {
-    return NextResponse.json(
-      { error: "Bu telefon raqam allaqachon ro'yxatdan o'tgan. Tizimga kiring." },
-      { status: 409 }
-    );
-  }
-
-  const { tenant, user } = await createTenantWithOwner({
-    kompaniyaNomi: parsed.data.kompaniya,
-    ism: parsed.data.ism,
-    login,
-    parol: parsed.data.parol,
-  });
-
-  // Darhol tizimga kiritamiz.
-  const session = await getSession();
-  session.userId = user.id;
-  session.login = user.login;
-  session.ism = user.ism;
-  session.rol = "OWNER";
-  session.tenantId = tenant.id;
-  session.businessId = null;
-  session.mustChangePassword = false;
-  await session.save();
-
-  return NextResponse.json({ ok: true, tenantSlug: tenant.slug }, { status: 201 });
+export async function GET() {
+  return NextResponse.json(JAVOB, { status: 403 });
 }

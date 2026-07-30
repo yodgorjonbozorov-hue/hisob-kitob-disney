@@ -41,6 +41,8 @@ DATABASE_AUTH_TOKEN=""
 SESSION_SECRET="kamida-32-belgidan-iborat-tasodifiy-maxfiy-satr"
 TELEGRAM_BOT_TOKEN="@BotFather'dan olingan token"
 TELEGRAM_BOT_USERNAME="bot_username (ixtiyoriy, ulanish yo'riqnomasida ko'rsatiladi)"
+ADMIN_CHAT_ID="platforma egasining Telegram chat ID'si (ixtiyoriy — demo so'rovi bildirishnomasi)"
+NEXT_PUBLIC_ADMIN_TELEGRAM="https://t.me/username (ixtiyoriy — demo sahifasidagi bog'lanish havolasi)"
 ```
 
 Lokal ishlashda `DATABASE_AUTH_TOKEN` bo'sh qoldirilishi mumkin (fayl-based SQLite token talab qilmaydi). Production (Turso) uchun quyidagi "Production'ga deploy qilish" bo'limiga qarang.
@@ -172,6 +174,8 @@ git push -u origin main
 | `TELEGRAM_BOT_USERNAME` | bot username |
 | `TELEGRAM_WEBHOOK_SECRET` | o'zingiz o'ylab topgan maxfiy satr |
 | `CRON_SECRET` | o'zingiz o'ylab topgan maxfiy satr |
+| `ADMIN_CHAT_ID` | (ixtiyoriy) demo so'rovi kelganda xabar keladigan Telegram chat ID |
+| `NEXT_PUBLIC_ADMIN_TELEGRAM` | (ixtiyoriy) demo sahifasida ko'rsatiladigan Telegram havola |
 
 "Deploy" tugmasini bosing.
 

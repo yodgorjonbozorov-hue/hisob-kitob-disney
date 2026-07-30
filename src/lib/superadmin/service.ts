@@ -3,6 +3,8 @@ import { computeAccess } from "@/lib/billing/access";
 import { planByCode } from "@/lib/billing/plans";
 import { hashPassword } from "@/lib/auth/password";
 import { BadRequestError } from "@/lib/auth/guard";
+import { createTenantWithOwner } from "@/lib/services/signup";
+import { SETUP_FEE_USD } from "@/lib/billing/constants";
 
 /**
  * SUPERADMIN xizmat qatlami — barcha amallar rawPrisma bilan (tenantlar aro)
@@ -46,6 +48,9 @@ export interface TenantOverview {
   businessCount: number;
   lastActivity: Date | null;
   pendingPayments: number;
+  /** Bir martalik o'rnatish to'lovi: olingan sana va summa (null — olinmagan). */
+  setupFeePaidAt: Date | null;
+  setupFeeAmountUsd: number | null;
 }
 
 /** Barcha tenantlar ro'yxati (panel jadvali uchun). */
@@ -82,6 +87,8 @@ export async function listTenantsOverview(): Promise<TenantOverview[]> {
       businessCount: t._count.businesses,
       lastActivity,
       pendingPayments: pendingMap.get(t.id) ?? 0,
+      setupFeePaidAt: t.setupFeePaidAt,
+      setupFeeAmountUsd: t.setupFeeAmountUsd,
     };
   });
 }
@@ -141,21 +148,85 @@ export async function unblockTenant(tenantId: string, now: Date = new Date()) {
   });
 }
 
+/**
+ * Vaqtinchalik parol: 10 belgi, o'qishga oson alifbo — chalkash belgilar yo'q
+ * (0/O, 1/l/I tushirilgan). Parol hech qachon log qilinmaydi va faqat
+ * yaratgan superadminga bir marta qaytariladi.
+ */
+export function generateTempPassword(uzunlik = 10): string {
+  const alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
+  let parol = "";
+  for (let i = 0; i < uzunlik; i++) {
+    parol += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return parol;
+}
+
 /** Foydalanuvchi parolini tiklaydi (yangi parol qaytariladi — bir marta ko'rsatiladi). */
 export async function resetUserPassword(userId: string): Promise<{ login: string; yangiParol: string }> {
   const user = await rawPrisma.user.findUnique({ where: { id: userId }, select: { id: true, login: true } });
   if (!user) throw new BadRequestError("Foydalanuvchi topilmadi");
-  // 10 belgili tasodifiy parol (o'qilishi oson belgilar).
-  const alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
-  let yangiParol = "";
-  for (let i = 0; i < 10; i++) {
-    yangiParol += alphabet[Math.floor(Math.random() * alphabet.length)];
-  }
+  const yangiParol = generateTempPassword();
   await rawPrisma.user.update({
     where: { id: userId },
     data: { parolHash: await hashPassword(yangiParol), mustChangePassword: true },
   });
   return { login: user.login, yangiParol };
+}
+
+export interface CreateTenantParams {
+  kompaniyaNomi: string;
+  direktorIsmi: string;
+  /** Normalizatsiya qilingan telefon — login bo'ladi. */
+  login: string;
+  plan: string;
+  trialKunlari: number;
+  /** O'rnatish to'lovi olingan bo'lsa — summa (USD). */
+  setupFeeAmountUsd?: number;
+}
+
+/**
+ * Superadmin qo'lda yangi kompaniya ochadi.
+ *
+ * Yaratish mantig'i qayta yozilmaydi — signup xizmatidagi o'sha
+ * `createTenantWithOwner` tranzaksiyasi ishlatiladi (Tenant + Business +
+ * boshlang'ich kategoriyalar + OWNER). Farqi: parolni tizim generatsiya qiladi
+ * va `mustChangePassword` yoqiladi.
+ *
+ * Qaytadigan `vaqtinchalikParol` chaqiruvchiga BIR MARTA ko'rsatish uchun —
+ * bazada faqat bcrypt hash saqlanadi, log'ga yozilmaydi.
+ */
+export async function createTenantBySuperadmin(params: CreateTenantParams) {
+  const mavjud = await rawPrisma.user.findUnique({ where: { login: params.login }, select: { id: true } });
+  if (mavjud) {
+    throw new BadRequestError("Bu telefon raqam allaqachon tizimda mavjud");
+  }
+
+  const vaqtinchalikParol = generateTempPassword();
+  const { tenant, user, business } = await createTenantWithOwner({
+    kompaniyaNomi: params.kompaniyaNomi,
+    ism: params.direktorIsmi,
+    login: params.login,
+    parol: vaqtinchalikParol,
+    plan: params.plan,
+    trialKunlari: params.trialKunlari,
+    mustChangePassword: true,
+    setupFeeAmountUsd: params.setupFeeAmountUsd,
+  });
+
+  return { tenant, user, business, vaqtinchalikParol };
+}
+
+/** O'rnatish to'lovi holatini belgilaydi (to'landi / bekor qilindi). */
+export async function setSetupFee(tenantId: string, tolandi: boolean, amountUsd?: number) {
+  const tenant = await rawPrisma.tenant.findUnique({ where: { id: tenantId }, select: { id: true } });
+  if (!tenant) throw new BadRequestError("Tenant topilmadi");
+  return rawPrisma.tenant.update({
+    where: { id: tenantId },
+    data: tolandi
+      ? { setupFeePaidAt: new Date(), setupFeeAmountUsd: amountUsd ?? SETUP_FEE_USD }
+      : { setupFeePaidAt: null },
+  });
 }
 
 /** Impersonatsiya uchun tenantning birinchi faol boshqaruvchisini (OWNER, bo'lmasa ADMIN) topadi. */

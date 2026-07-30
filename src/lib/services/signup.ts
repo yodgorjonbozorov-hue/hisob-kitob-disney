@@ -1,8 +1,6 @@
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { hashPassword } from "@/lib/auth/password";
-
-/** Bepul sinov muddati (kun). */
-export const TRIAL_KUNLARI = 14;
+import { KUN_MS, TRIAL_KUNLARI } from "@/lib/billing/constants";
 
 /**
  * Yangi kompaniya uchun boshlang'ich kategoriyalar — seed'dagi kabi
@@ -40,17 +38,28 @@ export interface SignupParams {
   ism: string;
   login: string; // normalizatsiya qilingan telefon raqam
   parol: string;
+  /** Tarif kodi (STANDARD | PRO). Default — schema'dagi STANDARD. */
+  plan?: string;
+  /** Sinov muddati (kun). Default — TRIAL_KUNLARI. */
+  trialKunlari?: number;
+  /** Birinchi kirishda parolni almashtirishga majburlash (superadmin bergan vaqtinchalik parol). */
+  mustChangePassword?: boolean;
+  /** O'rnatish to'lovi olingan bo'lsa — summa (USD); olinmagan bo'lsa undefined. */
+  setupFeeAmountUsd?: number;
 }
 
 /**
- * Yangi mijoz kompaniyani ro'yxatdan o'tkazadi — BITTA tranzaksiya ichida:
- * Tenant (TRIAL, 14 kun) + OWNER foydalanuvchi + default Business + boshlang'ich kategoriyalar.
+ * Yangi kompaniyani tizimga tushiradi — BITTA tranzaksiya ichida:
+ * Tenant (TRIAL) + OWNER foydalanuvchi + default Business + boshlang'ich kategoriyalar.
  * rawPrisma ishlatiladi: bu tizim-darajali amal, tenant hali endi yaratilmoqda.
+ *
+ * Yagona yaratish nuqtasi: superadmin panelidagi "Yangi kompaniya" oqimi shu funksiyani chaqiradi.
  */
 export async function createTenantWithOwner(params: SignupParams) {
   const parolHash = await hashPassword(params.parol);
   const slug = await uniqueSlug(slugify(params.kompaniyaNomi));
-  const trialEndsAt = new Date(Date.now() + TRIAL_KUNLARI * 24 * 60 * 60 * 1000);
+  const kunlar = params.trialKunlari ?? TRIAL_KUNLARI;
+  const trialEndsAt = new Date(Date.now() + kunlar * KUN_MS);
 
   return rawPrisma.$transaction(async (tx) => {
     const tenant = await tx.tenant.create({
@@ -59,6 +68,10 @@ export async function createTenantWithOwner(params: SignupParams) {
         slug,
         status: "TRIAL",
         trialEndsAt,
+        ...(params.plan ? { plan: params.plan } : {}),
+        ...(params.setupFeeAmountUsd !== undefined
+          ? { setupFeeAmountUsd: params.setupFeeAmountUsd, setupFeePaidAt: new Date() }
+          : {}),
       },
     });
 
@@ -73,6 +86,7 @@ export async function createTenantWithOwner(params: SignupParams) {
         parolHash,
         rol: "OWNER",
         tenantId: tenant.id,
+        mustChangePassword: params.mustChangePassword ?? false,
       },
     });
 

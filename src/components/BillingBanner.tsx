@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Access } from "@/lib/billing/access";
 
 /**
- * Obuna holati banneri: muddat tugashiga <=3 kun qolganda ogohlantirish,
+ * Obuna holati banneri: muddat tugashiga oz qolganda (TRIAL_OGOHLANTIRISH_KUNLARI) ogohlantirish,
  * READONLY (to'lov o'tgan) rejimida esa doimiy qizil xabar.
  */
 export function BillingBanner({ access }: { access: Access }) {

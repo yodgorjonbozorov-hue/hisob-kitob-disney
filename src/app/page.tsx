@@ -2,12 +2,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
 import { PLANLAR } from "@/lib/billing/plans";
+import { SETUP_FEE_USD, TRIAL_KUNLARI } from "@/lib/billing/constants";
 import { DisneyLogo } from "@/components/DisneyLogo";
 
 export const metadata = {
   title: "Hisob-Kitob — biznesingiz uchun kirim-chiqim tizimi",
   description:
-    "Kirim-chiqim, ombor, sotuv va qarzdorlik hisobi — hisobotlar, Telegram bot va bir nechta biznes bitta tizimda. 14 kun bepul.",
+    "Kirim-chiqim, ombor, sotuv va qarzdorlik hisobi — hisobotlar, Telegram bot va bir nechta biznes bitta tizimda. Akkauntni o'zimiz sozlab topshiramiz.",
 };
 
 const IMKONIYATLAR = [
@@ -22,7 +23,7 @@ const IMKONIYATLAR = [
   { icon: "👥", nomi: "Rollar va audit", tavsif: "Direktor, kassir, sotuvchi — har kim o'z huquqi bilan. Har o'zgarish audit jurnalida." },
 ];
 
-/** Public landing — mahsulot tavsifi va ro'yxatdan o'tish. Tizimdagi foydalanuvchi darhol ilovaga o'tadi. */
+/** Public landing — mahsulot tavsifi va demo so'rovi. Tizimdagi foydalanuvchi darhol ilovaga o'tadi. */
 export default async function LandingPage() {
   const session = await getSession();
   if (session.userId) {
@@ -42,10 +43,10 @@ export default async function LandingPage() {
             Kirish
           </Link>
           <Link
-            href="/signup"
+            href="/demo"
             className="text-sm font-medium bg-income text-white rounded-lg px-4 py-2 hover:brightness-110 transition"
           >
-            Bepul sinab ko'rish
+            Demo so'rash
           </Link>
         </nav>
       </header>
@@ -61,16 +62,18 @@ export default async function LandingPage() {
         </p>
         <div className="mt-8 flex items-center justify-center gap-3 flex-wrap">
           <Link
-            href="/signup"
+            href="/demo"
             className="bg-income text-white font-medium rounded-xl px-8 py-3.5 text-lg hover:brightness-110 transition"
           >
-            14 kun bepul boshlash
+            Demo so'rash
           </Link>
           <Link href="/login" className="text-brand font-medium px-4 py-3.5 hover:underline">
             Hisobim bor →
           </Link>
         </div>
-        <p className="text-xs text-faint mt-3">Karta talab qilinmaydi · 2 daqiqada ishga tushadi</p>
+        <p className="text-xs text-faint mt-3">
+          {TRIAL_KUNLARI} kun sizga bepul · Akkauntni o'zimiz sozlab, login-parol bilan topshiramiz
+        </p>
       </section>
 
       {/* Demo video joyi */}
@@ -98,24 +101,36 @@ export default async function LandingPage() {
 
       {/* Tariflar */}
       <section className="max-w-3xl mx-auto px-4 pb-16">
-        <h2 className="text-2xl font-bold text-fg text-center mb-8">Tarif</h2>
-        {PLANLAR.map((plan) => (
-          <div key={plan.code} className="bg-surface rounded-2xl border border-line shadow-card p-7 text-center">
-            <h3 className="font-semibold text-fg text-lg">{plan.nomi}</h3>
-            <p className="mt-3">
-              <span className="text-4xl font-bold text-fg tnum">{plan.oylikNarx.toLocaleString("ru-RU")}</span>
-              <span className="text-muted"> so'm / oy</span>
-            </p>
-            <p className="text-sm text-muted mt-3">{plan.tavsif}</p>
-            <p className="text-sm text-income-fg font-medium mt-2">Avval 14 kun bepul sinaysiz</p>
-            <Link
-              href="/signup"
-              className="inline-block mt-5 bg-income text-white font-medium rounded-xl px-8 py-3 hover:brightness-110 transition"
-            >
-              Boshlash
-            </Link>
-          </div>
-        ))}
+        <h2 className="text-2xl font-bold text-fg text-center mb-8">Tariflar</h2>
+        <div className="grid sm:grid-cols-2 gap-4">
+          {PLANLAR.map((plan) => (
+            <div key={plan.code} className="bg-surface rounded-2xl border border-line shadow-card p-7 text-center">
+              <h3 className="font-semibold text-fg text-lg">{plan.nomi}</h3>
+              <p className="mt-3">
+                <span className="text-4xl font-bold text-fg tnum">{plan.oylikNarx.toLocaleString("ru-RU")}</span>
+                <span className="text-muted"> so'm / oy</span>
+              </p>
+              <p className="text-sm text-muted mt-3">{plan.tavsif}</p>
+            </div>
+          ))}
+        </div>
+        <div className="bg-surface rounded-2xl border border-line p-6 mt-4 text-center">
+          <p className="text-fg font-medium">
+            Bir martalik o'rnatish: <span className="tnum">{SETUP_FEE_USD}$</span>
+          </p>
+          <p className="text-sm text-muted mt-1">
+            Tizimga tushirish, sozlash va jamoangizni o'qitish — bir marta to'lanadi.
+          </p>
+          <p className="text-sm text-income-fg font-medium mt-3">
+            {TRIAL_KUNLARI} kun sizga bepul — akkauntni o'zimiz sozlab, login-parol bilan topshiramiz.
+          </p>
+          <Link
+            href="/demo"
+            className="inline-block mt-5 bg-income text-white font-medium rounded-xl px-8 py-3 hover:brightness-110 transition"
+          >
+            Demo so'rash
+          </Link>
+        </div>
       </section>
 
       {/* Footer */}
@@ -123,7 +138,7 @@ export default async function LandingPage() {
         <p>Hisob-Kitob · biznes uchun kirim-chiqim tizimi</p>
         <p className="mt-1">
           <Link href="/login" className="hover:text-fg">Kirish</Link> ·{" "}
-          <Link href="/signup" className="hover:text-fg">Ro'yxatdan o'tish</Link>
+          <Link href="/demo" className="hover:text-fg">Demo so'rash</Link>
         </p>
       </footer>
     </div>

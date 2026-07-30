@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 /**
  * Himoyalangan yo'llar uchun erta redirect: sessiya cookie bo'lmasa /login.
  * (Haqiqiy tekshiruv server komponentlarda — requireTenantPage/requireSuperadmin.)
- * Landing (/), /login, /signup ochiq; webhook/cron o'z secret'lari bilan himoyalangan.
+ * Landing (/), /login, /demo ochiq; webhook/cron o'z secret'lari bilan himoyalangan.
  */
 export function middleware(request: NextRequest) {
   const sessionCookie = request.cookies.get("disney_navoiy_session");
