@@ -3,64 +3,83 @@
 @tailwind utilities;
 
 /* ─────────────────────────────────────────────────────────────────────────
-   "Kassa" dizayn tokenlari (REDESIGN.md). Sovuq teal + issiq qarz rangi.
-   Rang faqat pul yo'nalishini bildiradi: income (yashil) / expense (qizil) /
-   debt (jigarrang). Tailwind default palitra UI'da ishlatilmaydi.
+   Balansa brend tokenlari (docs/BRAND.md). Brend rangi — teal (brand-700
+   #0F766E). Moliyaviy rang brend rangi bilan HECH QACHON almashtirilmaydi:
+   income (yashil) = pul kirdi, expense (qizil) = pul chiqdi, debt/warning
+   (amber) = ogohlantirish. Tailwind default palitra UI'da ishlatilmaydi.
    Token NOMLARI oldingi kod bilan mos (bg-app/surface/fg/muted/income...) —
-   qiymatlar yangi palitraga o'zgartirildi, shu bois butun ilova qayta bo'yaldi.
+   faqat qiymatlar Balansa palitrasiga o'tkazildi.
    ───────────────────────────────────────────────────────────────────────── */
 :root {
-  --bg-app: 243 246 247;        /* canvas #F3F6F7 */
-  --bg-surface: 255 255 255;    /* surface #FFFFFF */
-  --bg-surface-2: 237 241 242;  /* surface-sunk #EDF1F2 */
-  --border: 221 228 231;        /* line #DDE4E7 */
-  --border-strong: 195 206 211; /* line-strong #C3CED3 */
-  --fg: 12 26 33;               /* ink #0C1A21 */
-  --fg-muted: 75 95 104;        /* ink-soft #4B5F68 */
-  --fg-faint: 130 150 160;      /* ink-faint #8296A0 */
+  --bg-app: 241 245 249;        /* sahifa foni #F1F5F9 */
+  --bg-surface: 255 255 255;    /* karta foni #FFFFFF */
+  --bg-surface-2: 236 241 246;  /* surface-sunk #ECF1F6 */
+  --border: 226 232 240;        /* line #E2E8F0 */
+  --border-strong: 203 213 225; /* line-strong #CBD5E1 */
+  --fg: 15 23 42;               /* ink #0F172A */
+  --fg-muted: 71 85 105;        /* ink-soft #475569 */
+  --fg-faint: 100 116 139;      /* ink-faint #64748B */
 
-  --brand: 11 107 95;           /* #0B6B5F */
-  --brand-ink: 8 79 70;         /* #084F46 hover/pressed */
-  --brand-wash: 228 240 238;    /* #E4F0EE */
+  /* Brend shkalasi (o'zgarmas, dark mode'da ham bir xil) */
+  --brand-50: 240 253 250;      /* #F0FDFA */
+  --brand-100: 204 251 241;     /* #CCFBF1 */
+  --brand-200: 153 246 228;     /* #99F6E4 */
+  --brand-300: 94 234 212;      /* #5EEAD4 — logo mint akssenti */
+  --brand-400: 45 212 191;      /* #2DD4BF */
+  --brand-500: 20 184 166;      /* #14B8A6 — grafik, progress */
+  --brand-600: 13 148 136;      /* #0D9488 */
+  --brand-700: 15 118 110;      /* #0F766E — PRIMARY */
+  --brand-800: 17 94 89;        /* #115E59 */
+  --brand-900: 19 78 74;        /* #134E4A — dark surface */
+
+  /* Semantik brend tokenlari (dark mode'da flip bo'ladi) */
+  --brand: 15 118 110;          /* #0F766E */
+  --brand-ink: 17 94 89;        /* #115E59 hover/pressed */
+  --brand-wash: 204 251 241;    /* #CCFBF1 badge foni, tanlangan qator */
   --brand-fg: 255 255 255;
 
-  --income: 14 124 87;          /* #0E7C57 */
-  --income-soft: 230 244 238;   /* #E6F4EE */
-  --income-fg: 11 93 65;        /* darker for badge text */
-  --expense: 192 54 44;         /* #C0362C */
-  --expense-soft: 251 234 232;  /* #FBEAE8 */
-  --expense-fg: 154 43 34;
-  --debt: 185 118 26;           /* #B9761A */
-  --debt-soft: 251 241 227;     /* #FBF1E3 */
-  --debt-fg: 138 88 20;
+  --income: 22 163 74;          /* #16A34A */
+  --income-soft: 220 252 231;   /* #DCFCE7 */
+  --income-fg: 21 128 61;       /* #15803D badge matni */
+  --expense: 220 38 38;         /* #DC2626 */
+  --expense-soft: 254 226 226;  /* #FEE2E2 */
+  --expense-fg: 185 28 28;      /* #B91C1C */
+  --debt: 217 119 6;            /* #D97706 (warning oilasi) */
+  --debt-soft: 254 243 199;     /* #FEF3C7 */
+  --debt-fg: 180 83 9;          /* #B45309 */
+  --warning: 245 158 11;        /* #F59E0B obuna / budjet ogohlantirishi */
+  --info: 14 165 233;           /* #0EA5E9 neytral xabar */
 
   color-scheme: light;
 }
 
 .dark {
-  --bg-app: 8 18 22;            /* deep teal-black */
-  --bg-surface: 15 28 33;
-  --bg-surface-2: 23 40 46;
-  --border: 40 58 64;
-  --border-strong: 58 78 84;
-  --fg: 226 236 238;
-  --fg-muted: 150 170 178;
-  --fg-faint: 104 128 136;
+  --bg-app: 6 20 19;            /* deep teal-black */
+  --bg-surface: 13 33 31;
+  --bg-surface-2: 19 45 43;
+  --border: 34 62 59;
+  --border-strong: 52 84 80;
+  --fg: 226 240 238;
+  --fg-muted: 148 172 168;
+  --fg-faint: 104 132 128;
 
-  --brand: 45 168 150;          /* yorqinroq teal */
-  --brand-ink: 90 200 182;
-  --brand-wash: 18 54 49;
+  /* Brend semantikasi qorong'i fon uchun yorqinroq pog'onaga siljiydi */
+  --brand: 45 212 191;          /* brand-400 #2DD4BF */
+  --brand-ink: 94 234 212;      /* brand-300 #5EEAD4 */
+  --brand-wash: 19 78 74;       /* brand-900 #134E4A */
   --brand-fg: 6 20 18;
 
-  --income: 52 197 143;
-  --income-soft: 12 54 40;
-  --income-fg: 130 224 184;
-  --expense: 233 108 96;
-  --expense-soft: 60 24 20;
-  --expense-fg: 246 168 158;
-  --debt: 216 160 82;
-  --debt-soft: 54 40 18;
-  --debt-fg: 232 190 130;
+  --income: 74 222 128;         /* #4ADE80 */
+  --income-soft: 12 54 32;
+  --income-fg: 134 239 172;     /* #86EFAC */
+  --expense: 248 113 113;       /* #F87171 */
+  --expense-soft: 60 22 22;
+  --expense-fg: 252 165 165;    /* #FCA5A5 */
+  --debt: 251 191 36;           /* #FBBF24 */
+  --debt-soft: 56 40 12;
+  --debt-fg: 253 224 71;        /* #FDE047 */
+  --warning: 251 191 36;
+  --info: 56 189 248;           /* #38BDF8 */
 
   color-scheme: dark;
 }

@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { isManager } from "@/lib/auth/roles";
 import { PLANLAR } from "@/lib/billing/plans";
 import { formatDateUZ } from "@/lib/format";
-import { DisneyLogo } from "@/components/DisneyLogo";
+import { Logo } from "@/components/Logo";
 import { BillingClient } from "./BillingClient";
 
 export const metadata = { title: "Obuna va to'lov" };
@@ -33,9 +33,9 @@ export default async function BillingPage() {
       <div className="min-h-screen bg-app px-4 py-10">
         <div className="max-w-2xl mx-auto space-y-6">
           <div className="flex items-center gap-3">
-            <DisneyLogo className="w-8 h-10 text-fg" />
+            <Logo variant="icon" height={36} />
             <div>
-              <h1 className="text-2xl font-bold text-fg">Obuna va to'lov</h1>
+              <h1 className="font-heading text-2xl font-bold text-fg">Obuna va to'lov</h1>
               <p className="text-sm text-muted">{tenant.name}</p>
             </div>
           </div>

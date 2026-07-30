@@ -9,6 +9,7 @@ import { getMonthlyReport } from "@/lib/queries/report";
 import { MonthlyReportDocument } from "@/lib/pdf/MonthlyReportDocument";
 import { shiftMonthString, currentMonthString, parseMonthString } from "@/lib/date";
 import { formatSomLabel, uzOyNomi } from "@/lib/format";
+import { BRAND } from "@/lib/brand";
 
 const SETTING_KEY = "lastMonthlyReportSentForMonth";
 const CHECK_INTERVAL_MS = 60 * 60 * 1000; // har soatda tekshiradi
@@ -62,7 +63,9 @@ async function sendTenantMonthlyReport(bot: Bot, tenantId: string, reportMonth: 
 
     const buffer = await renderToBuffer(MonthlyReportDocument({ report }));
     const caption = [
-      `📊 ${business.nomi} — ${uzOyNomi(monthIndex0)} ${year} (avtomatik hisobot)`,
+      `📊 ${BRAND.nomi} — oylik hisobot`,
+      `${business.nomi} · ${uzOyNomi(monthIndex0)} ${year} (avtomatik)`,
+      "",
       `Jami kirim: ${formatSomLabel(report.jamiKirim)}`,
       `Jami chiqim: ${formatSomLabel(report.jamiChiqim)}`,
       `Sof foyda: ${formatSomLabel(report.sofFoyda)}`,

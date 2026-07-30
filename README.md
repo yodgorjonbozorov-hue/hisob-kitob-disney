@@ -1,6 +1,13 @@
-# Disney Navoiy — Kirim-Chiqim Hisob-Kitob Tizimi
+# Balansa — biznesingiz balansda
 
-"Disney Navoiy" kompaniyasi (animatsiya, o'yinchoqlar, dekoratsiya, hovli bezaklari, sveta-musiqa xizmatlari) uchun kirim-chiqim hisobini yuritish va oy oxirida direktor uchun avtomatik hisobot tayyorlash veb-ilovasi.
+**Balansa** ([balansa.uz](https://balansa.uz)) — kichik va o'rta biznes uchun yagona boshqaruv platformasi:
+kirim-chiqim, ombor, sotuv, qarzdorlik, CRM, vazifalar va hisobotlar bitta tizimda. Ko'p tenantli SaaS —
+har kompaniya o'z ma'lumotlari bilan izolyatsiyada ishlaydi, oy oxirida direktorga avtomatik hisobot boradi.
+
+Brend (nom, ranglar, logo, foydalanish qoidalari): [`docs/BRAND.md`](docs/BRAND.md).
+
+> Ilova avval "Hisob-Kitob" nomi bilan bitta mijoz (Disney Navoiy) uchun qurilgan edi —
+> shu bois `prisma/seed.ts` va migratsiyalarda o'sha nom *ma'lumot* sifatida qoladi.
 
 ## Texnologiyalar
 
@@ -41,7 +48,10 @@ DATABASE_AUTH_TOKEN=""
 SESSION_SECRET="kamida-32-belgidan-iborat-tasodifiy-maxfiy-satr"
 TELEGRAM_BOT_TOKEN="@BotFather'dan olingan token"
 TELEGRAM_BOT_USERNAME="bot_username (ixtiyoriy, ulanish yo'riqnomasida ko'rsatiladi)"
+NEXT_PUBLIC_APP_URL="https://balansa.uz"
 ```
+
+`NEXT_PUBLIC_APP_URL` — OG-image va metadata uchun absolyut manzil. O'rnatilmasa `https://balansa.uz` ishlatiladi.
 
 Lokal ishlashda `DATABASE_AUTH_TOKEN` bo'sh qoldirilishi mumkin (fayl-based SQLite token talab qilmaydi). Production (Turso) uchun quyidagi "Production'ga deploy qilish" bo'limiga qarang.
 
@@ -79,7 +89,7 @@ Seed skripti quyidagi foydalanuvchilarni yaratadi:
 
 ## Ko'p-biznes (multi-business)
 
-Tizim bir nechta alohida biznesni bitta saytda yuritadi (masalan Disney Navoiy, Salyut, ...). Har bir biznesning **o'z alohida** hisob-kitobi bor: kategoriyalari, tranzaksiyalari, dashboard'i (0 dan boshlanadi) va oylik hisoboti.
+Tizim bir nechta alohida biznesni bitta saytda yuritadi (masalan "Do'kon", "Filial-2", ...). Har bir biznesning **o'z alohida** hisob-kitobi bor: kategoriyalari, tranzaksiyalari, dashboard'i (0 dan boshlanadi) va oylik hisoboti.
 
 - **Direktor (admin)** barcha bizneslarni ko'radi va yon menyudagi dropdown orqali ular orasida almashadi (tanlov cookie'da saqlanadi).
 - **Kassir** bitta biznesga biriktiriladi — faqat o'z biznesini ko'radi/yozadi, boshqasiga o'ta olmaydi.
@@ -137,9 +147,9 @@ Lokal fayl-based SQLite va uzluksiz bot jarayoni serverless hostingda (Vercel) i
 ```bash
 npm install -g @turso/cli   # yoki https://docs.turso.tech/cli/installation
 turso auth login
-turso db create disney-navoiy
-turso db show disney-navoiy --url        # DATABASE_URL
-turso db tokens create disney-navoiy     # DATABASE_AUTH_TOKEN
+turso db create balansa
+turso db show balansa --url        # DATABASE_URL
+turso db tokens create balansa     # DATABASE_AUTH_TOKEN
 ```
 
 Olingan ikkita qiymatni keyingi bosqichda Vercel muhit o'zgaruvchilariga qo'shasiz. Bazani sxema bilan to'ldirish uchun (bir marta, lokal terminaldan Turso qiymatlari bilan):

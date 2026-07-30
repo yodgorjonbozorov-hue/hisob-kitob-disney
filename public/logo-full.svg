@@ -1,0 +1,13 @@
+<svg width="880" height="220" viewBox="0 0 880 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>Balansa logo</title>
+  <g transform="translate(20, 22) scale(0.34)">
+    <rect x="234" y="196" width="44" height="216" rx="8" fill="#0F766E"/>
+    <rect x="88" y="164" width="336" height="56" rx="28" fill="#0F766E"/>
+    <rect x="96" y="88" width="320" height="56" rx="28" fill="#5EEAD4"/>
+    <path d="M76 244h140c0 38.66-31.34 70-70 70s-70-31.34-70-70z" fill="#0F766E"/>
+    <path d="M296 244h140c0 38.66-31.34 70-70 70s-70-31.34-70-70z" fill="#0F766E"/>
+  </g>
+  <text x="212" y="140"
+        font-family="Poppins, Inter, 'Segoe UI', system-ui, sans-serif"
+        font-size="104" font-weight="700" letter-spacing="-2" fill="#0F172A">Balansa</text>
+</svg>

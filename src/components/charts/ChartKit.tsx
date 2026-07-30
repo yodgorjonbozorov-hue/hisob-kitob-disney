@@ -42,8 +42,9 @@ export function ChartLegend({ items }: { items: { label: string; color: string }
 }
 
 export const CHART_COLORS = {
-  income: "#0E7C57",
-  expense: "#C0362C",
-  ink: "#0C1A21",
-  brand: "#0B6B5F",
+  income: "#16A34A",
+  expense: "#DC2626",
+  ink: "#0F172A",
+  brand: "#0F766E",
+  brandSoft: "#5EEAD4",
 };

@@ -17,6 +17,7 @@ import { startMonthlyReport, handleReportBusinessCallback, sendReportDocument } 
 import { startLeadFlow, handleLeadBusinessCallback, handleLeadText, clearLeadFlow } from "./leadFlow";
 import { isModuleOnForTenant } from "@/lib/modules/guard";
 import { modulByCode } from "@/lib/modules/registry";
+import { BRAND } from "@/lib/brand";
 import { clearFlow } from "./state";
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -91,9 +92,10 @@ bot.command("start", async (ctx) => {
     return;
   }
   await ctx.reply(
-    "Assalomu alaykum! Bu Disney Navoiy kirim-chiqim boti.\n\n" +
-      "Botdan foydalanish uchun avval veb-saytda tizimga kiring, so'ng \"Telegram bot bilan bog'lash\" tugmasi orqali " +
-      "kod oling va bu yerga /kod 123456 ko'rinishida yuboring."
+    `${BRAND.nomi} — biznesingiz balansda.\n\n` +
+      `Bu ${BRAND.nomi} boti: kirim-chiqim, lead va hisobotlar Telegram orqali.\n\n` +
+      `Botdan foydalanish uchun avval ${BRAND.domen} saytida tizimga kiring, so'ng "Telegram bot bilan bog'lash" ` +
+      "tugmasi orqali kod oling va bu yerga /kod 123456 ko'rinishida yuboring."
   );
 });
 
