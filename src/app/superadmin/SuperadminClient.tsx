@@ -2,6 +2,8 @@
 
 import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
+import { YangiKompaniyaModal } from "./YangiKompaniyaModal";
+import { SETUP_FEE_USD } from "@/lib/billing/constants";
 
 interface Metrics {
   jamiTenant: number;
@@ -23,6 +25,17 @@ interface TenantRow {
   businessCount: number;
   lastActivity: string | null;
   pendingPayments: number;
+  setupFeePaidAt: string | null;
+  setupFeeAmountUsd: number | null;
+}
+interface DemoRow {
+  id: string;
+  ism: string;
+  telefon: string;
+  biznesTuri: string;
+  izoh: string | null;
+  status: string;
+  createdAt: string;
 }
 interface PaymentRow {
   id: string;
@@ -58,24 +71,27 @@ export function SuperadminClient({
   tenants,
   pendingPayments,
   users,
+  demoRequests,
 }: {
   superadminIsm: string;
   metrics: Metrics;
   tenants: TenantRow[];
   pendingPayments: PaymentRow[];
   users: UserRow[];
+  demoRequests: DemoRow[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [openUsers, setOpenUsers] = useState<string | null>(null);
   const [xabar, setXabar] = useState<string | null>(null);
+  const [modalOchiq, setModalOchiq] = useState(false);
 
-  async function call(url: string, body?: unknown): Promise<Record<string, unknown> | null> {
+  async function call(url: string, body?: unknown, method = "POST"): Promise<Record<string, unknown> | null> {
     setBusy(url);
     setXabar(null);
     try {
       const res = await fetch(url, {
-        method: "POST",
+        method,
         headers: { "Content-Type": "application/json" },
         body: body !== undefined ? JSON.stringify(body) : undefined,
       });
@@ -113,6 +129,30 @@ export function SuperadminClient({
     if (blocked && !confirm(`${t.name} bloklansinmi? Mijoz faqat /billing sahifasini ochadi.`)) return;
     const r = await call(`/api/superadmin/tenants/${t.id}/block`, { blocked });
     if (r) setXabar(`${t.name}: ${blocked ? "bloklandi" : `blokdan chiqarildi (${r.status})`}.`);
+  }
+
+  async function ornatishTolovi(t: TenantRow) {
+    const tolandi = !t.setupFeePaidAt;
+    let summaUsd = t.setupFeeAmountUsd ?? SETUP_FEE_USD;
+    if (tolandi) {
+      const kiritilgan = prompt(`${t.name} — o'rnatish to'lovi summasi (USD):`, String(summaUsd));
+      if (kiritilgan === null) return;
+      const n = Number(kiritilgan);
+      if (!Number.isInteger(n) || n < 0) {
+        setXabar("Summa noto'g'ri");
+        return;
+      }
+      summaUsd = n;
+    } else if (!confirm(`${t.name} — o'rnatish to'lovi belgisi olib tashlansinmi?`)) {
+      return;
+    }
+    const r = await call(`/api/superadmin/tenants/${t.id}/setup-fee`, { tolandi, summaUsd });
+    if (r) setXabar(`${t.name}: o'rnatish to'lovi ${tolandi ? `to'langan (${summaUsd}$)` : "to'lanmagan"} deb belgilandi.`);
+  }
+
+  async function demoHolat(d: DemoRow, status: string) {
+    const r = await call(`/api/superadmin/demo-requests/${d.id}`, { status }, "PATCH");
+    if (r) setXabar(`${d.ism}: holat ${status}.`);
   }
 
   async function kirish(t: TenantRow) {
@@ -162,10 +202,28 @@ export function SuperadminClient({
             <h1 className="text-2xl font-bold text-fg">SUPERADMIN panel</h1>
             <p className="text-sm text-muted">{superadminIsm} · platforma boshqaruvi</p>
           </div>
-          <button onClick={chiqish} className={btn}>
-            Chiqish
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setModalOchiq(true)}
+              className="px-3.5 py-2 rounded-lg text-sm font-medium bg-income text-white hover:brightness-110 transition"
+            >
+              + Yangi kompaniya
+            </button>
+            <button onClick={chiqish} className={btn}>
+              Chiqish
+            </button>
+          </div>
         </div>
+
+        {modalOchiq && (
+          <YangiKompaniyaModal
+            onClose={() => {
+              setModalOchiq(false);
+              router.refresh();
+            }}
+            onCreated={() => router.refresh()}
+          />
+        )}
 
         {xabar && (
           <div className="rounded-xl border border-line bg-brand-wash text-fg px-4 py-3 text-sm">{xabar}</div>
@@ -185,6 +243,49 @@ export function SuperadminClient({
               <p className="text-xl font-bold text-fg tnum mt-1">{m.value}</p>
             </div>
           ))}
+        </div>
+
+        {/* Demo so'rovlari */}
+        <div className="bg-surface rounded-2xl border border-line shadow-card p-5">
+          <h2 className="font-semibold text-fg mb-3">
+            Demo so&apos;rovlari ({demoRequests.filter((d) => d.status === "YANGI").length} yangi)
+          </h2>
+          {demoRequests.length === 0 ? (
+            <p className="text-sm text-faint">Hozircha so&apos;rov yo&apos;q.</p>
+          ) : (
+            <div className="divide-y divide-line">
+              {demoRequests.map((d) => (
+                <div key={d.id} className="py-2.5 flex items-start gap-3 flex-wrap text-sm">
+                  <div className="min-w-[180px]">
+                    <p className="font-medium text-fg">
+                      {d.ism}{" "}
+                      {d.status === "YANGI" && (
+                        <span className="text-2xs px-1.5 py-0.5 rounded-full bg-brand-wash text-brand align-middle">
+                          yangi
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-xs text-muted">
+                      {d.telefon} · {d.biznesTuri}
+                    </p>
+                    {d.izoh && <p className="text-xs text-faint mt-0.5">{d.izoh}</p>}
+                  </div>
+                  <span className="text-xs text-faint">{sana(d.createdAt)}</span>
+                  <span className="flex-1" />
+                  {d.status !== "BOGLANILDI" && (
+                    <button className={btn} disabled={!!busy} onClick={() => demoHolat(d, "BOGLANILDI")}>
+                      Bog&apos;lanildi
+                    </button>
+                  )}
+                  {d.status !== "YOPILDI" && (
+                    <button className={btn} disabled={!!busy} onClick={() => demoHolat(d, "YOPILDI")}>
+                      Yopish
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Kutilayotgan to'lovlar */}
@@ -215,13 +316,14 @@ export function SuperadminClient({
         {/* Tenantlar */}
         <div className="bg-surface rounded-2xl border border-line shadow-card p-5 overflow-x-auto">
           <h2 className="font-semibold text-fg mb-3">Tenantlar ({tenants.length})</h2>
-          <table className="w-full text-sm min-w-[760px]">
+          <table className="w-full text-sm min-w-[880px]">
             <thead>
               <tr className="text-left text-faint text-xs uppercase">
                 <th className="pb-2">Kompaniya</th>
                 <th className="pb-2">Holat</th>
                 <th className="pb-2">Ro'yxatdan</th>
                 <th className="pb-2">Muddat</th>
+                <th className="pb-2">O&apos;rnatish</th>
                 <th className="pb-2">Userlar</th>
                 <th className="pb-2">Oxirgi kirish</th>
                 <th className="pb-2 text-right">Amallar</th>
@@ -252,6 +354,18 @@ export function SuperadminClient({
                     <td className="py-2.5 text-muted">{sana(t.deadline)}</td>
                     <td className="py-2.5">
                       <button
+                        className={t.setupFeePaidAt ? "text-income-fg hover:underline" : "text-expense-fg hover:underline"}
+                        disabled={!!busy}
+                        onClick={() => ornatishTolovi(t)}
+                        title="O'rnatish to'lovi holatini o'zgartirish"
+                      >
+                        {t.setupFeePaidAt
+                          ? `✓ ${t.setupFeeAmountUsd ?? SETUP_FEE_USD}$ · ${sana(t.setupFeePaidAt)}`
+                          : "to'lanmagan"}
+                      </button>
+                    </td>
+                    <td className="py-2.5">
+                      <button
                         className="text-brand hover:underline"
                         onClick={() => setOpenUsers(openUsers === t.id ? null : t.id)}
                       >
@@ -278,7 +392,7 @@ export function SuperadminClient({
                   </tr>
                   {openUsers === t.id && (
                     <tr>
-                      <td colSpan={7} className="py-2 pl-4 bg-surface-2/50">
+                      <td colSpan={8} className="py-2 pl-4 bg-surface-2/50">
                         <div className="space-y-1.5">
                           {users
                             .filter((u) => u.tenantId === t.id)

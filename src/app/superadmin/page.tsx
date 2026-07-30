@@ -1,5 +1,6 @@
 import { requireSuperadminPage } from "@/lib/auth/superadmin";
 import { listTenantsOverview, getMetrics } from "@/lib/superadmin/service";
+import { listDemoRequests } from "@/lib/services/demoRequest";
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { SuperadminClient } from "./SuperadminClient";
 
@@ -9,7 +10,7 @@ export const metadata = { title: "SUPERADMIN — Platforma boshqaruvi" };
 export default async function SuperadminPage() {
   const session = await requireSuperadminPage();
 
-  const [metrics, tenants, pendingPayments, users] = await Promise.all([
+  const [metrics, tenants, pendingPayments, users, demoRequests] = await Promise.all([
     getMetrics(),
     listTenantsOverview(),
     rawPrisma.payment.findMany({
@@ -22,6 +23,7 @@ export default async function SuperadminPage() {
       select: { id: true, ism: true, login: true, rol: true, isActive: true, tenantId: true, lastLoginAt: true },
       orderBy: { createdAt: "asc" },
     }),
+    listDemoRequests(),
   ]);
 
   return (
@@ -33,6 +35,16 @@ export default async function SuperadminPage() {
         createdAt: t.createdAt.toISOString(),
         deadline: t.deadline?.toISOString() ?? null,
         lastActivity: t.lastActivity?.toISOString() ?? null,
+        setupFeePaidAt: t.setupFeePaidAt?.toISOString() ?? null,
+      }))}
+      demoRequests={demoRequests.map((d) => ({
+        id: d.id,
+        ism: d.ism,
+        telefon: d.telefon,
+        biznesTuri: d.biznesTuri,
+        izoh: d.izoh,
+        status: d.status,
+        createdAt: d.createdAt.toISOString(),
       }))}
       pendingPayments={pendingPayments.map((p) => ({
         id: p.id,
