@@ -8,7 +8,7 @@ import { rawPrisma } from "@/lib/db/rawPrisma";
  * SUPERADMIN guard'lari. Sessiyadagi rolga ISHONILMAYDI — har so'rovda bazadan
  * qayta tekshiriladi (rol o'zgartirilgan/o'chirilgan superadmin darhol yopiladi).
  */
-async function verifySuperadmin(session: Required<SessionData>): Promise<boolean> {
+export async function verifySuperadmin(session: Required<SessionData>): Promise<boolean> {
   if (session.rol !== "SUPERADMIN") return false;
   const user = await rawPrisma.user.findUnique({
     where: { id: session.userId },

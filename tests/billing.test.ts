@@ -20,6 +20,7 @@ let extendTenant: any;
 let updateExpiredStatuses: any;
 let manualProvider: any;
 let createTenantWithOwner: any;
+let PLANLAR: any;
 
 const KUN_MS = 24 * 60 * 60 * 1000;
 let t: any; // signup natijasi
@@ -36,6 +37,7 @@ before(async () => {
   ({ confirmPayment, rejectPayment, extendTenant, updateExpiredStatuses } = await import("@/lib/billing/subscribe"));
   ({ manualProvider } = await import("@/lib/billing/provider"));
   ({ createTenantWithOwner } = await import("@/lib/services/signup"));
+  ({ PLANLAR } = await import("@/lib/billing/plans"));
 
   t = await createTenantWithOwner({
     kompaniyaNomi: "Billing Test",
@@ -92,11 +94,14 @@ test("noma'lum status — xavfsizlik uchun BILLING_ONLY", () => {
 test("checkout PENDING Payment yaratadi (tenant kontekstida, tenantId avtomatik)", async () => {
   const result = await runWithTenant(t.tenant.id, () => manualProvider.initiateCheckout({ planCode: "STANDARD" }));
   assert.ok(result.paymentId);
-  assert.ok(result.korsatma?.includes("199"));
+  const standart = PLANLAR.find((p: any) => p.code === "STANDARD");
+  assert.ok(result.korsatma?.includes(standart.oylikNarx.toLocaleString("ru-RU")));
 
   const payment = await rawPrisma.payment.findUnique({ where: { id: result.paymentId } });
   assert.equal(payment.tenantId, t.tenant.id);
   assert.equal(payment.status, "PENDING");
+  // Narx snapshot: to'lov summasi yaratilgan paytdagi tarif narxi bilan saqlanadi.
+  assert.equal(payment.amount, standart.oylikNarx);
 });
 
 test("confirmPayment: to'lov tasdiqlanadi, obuna yaratiladi, tenant ACTIVE + 30 kun", async () => {
