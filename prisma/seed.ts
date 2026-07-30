@@ -51,25 +51,27 @@ async function main() {
 
   console.log("Tenant yaratish...");
 
-  // Default tenant — migratsiya backfill'i bilan bir xil ID (idempotent).
+  // Default demo tenant. ID'lar `20260727093026_tenant_layer` backfill'idagi qiymatlar
+  // bilan bir xil bo'lishi SHART (idempotentlik) — shu bois ular o'zgarmaydi, garchi
+  // nomi brendingdan keyin neytral bo'lsa ham. ID'lar hech qayerda ko'rinmaydi.
   const tenant = await prisma.tenant.upsert({
     where: { id: "tenant_disney_navoiy" },
     update: {},
     create: {
       id: "tenant_disney_navoiy",
-      name: "Disney Navoiy",
-      slug: "disney-navoiy",
+      name: "Demo Kompaniya",
+      slug: "demo-kompaniya",
       status: "ACTIVE",
     },
   });
 
   console.log("Bizneslarni yaratish...");
 
-  // Disney Navoiy (kategoriyalar bilan) va Salyut (bo'sh — admin o'zi to'ldiradi).
-  const disney = await prisma.business.upsert({
+  // Xizmatlar (kategoriyalar bilan) va Salyut (tovar sotadigan, ombor yoqilgan).
+  const xizmatlar = await prisma.business.upsert({
     where: { id: "biz_disney_navoiy" },
     update: {},
-    create: { id: "biz_disney_navoiy", nomi: "Disney Navoiy", tenantId: tenant.id },
+    create: { id: "biz_disney_navoiy", nomi: "Demo Xizmatlar", tenantId: tenant.id },
   });
   // Salyut — tovar sotadigan biznes: ombor tizimi yoqilgan.
   const salyut = await prisma.business.upsert({
@@ -94,23 +96,23 @@ async function main() {
     }
   }
 
-  console.log("Disney Navoiy kategoriyalarini yaratish...");
+  console.log("Demo Xizmatlar kategoriyalarini yaratish...");
 
   for (let i = 0; i < KIRIM_KATEGORIYALAR.length; i++) {
     const nomi = KIRIM_KATEGORIYALAR[i];
     await prisma.category.upsert({
-      where: { nomi_turi_businessId: { nomi, turi: "kirim", businessId: disney.id } },
+      where: { nomi_turi_businessId: { nomi, turi: "kirim", businessId: xizmatlar.id } },
       update: {},
-      create: { nomi, turi: "kirim", tartib: i, businessId: disney.id },
+      create: { nomi, turi: "kirim", tartib: i, businessId: xizmatlar.id },
     });
   }
 
   for (let i = 0; i < CHIQIM_KATEGORIYALAR.length; i++) {
     const nomi = CHIQIM_KATEGORIYALAR[i];
     await prisma.category.upsert({
-      where: { nomi_turi_businessId: { nomi, turi: "chiqim", businessId: disney.id } },
+      where: { nomi_turi_businessId: { nomi, turi: "chiqim", businessId: xizmatlar.id } },
       update: {},
-      create: { nomi, turi: "chiqim", tartib: i, businessId: disney.id },
+      create: { nomi, turi: "chiqim", tartib: i, businessId: xizmatlar.id },
     });
   }
 
@@ -129,21 +131,21 @@ async function main() {
   await prisma.user.upsert({
     where: { login: KASSIR_LOGIN },
     update: {},
-    // Kassir — Disney Navoiy biznesiga biriktirilgan.
+    // Kassir — bitta biznesga biriktirilgan.
     create: {
       ism: "Kassir Aziza",
       login: KASSIR_LOGIN,
       parolHash: kassirHash,
       rol: "CASHIER",
-      businessId: disney.id,
+      businessId: xizmatlar.id,
       tenantId: tenant.id,
     },
   });
 
   console.log("\n=== Seed tugadi ===");
-  console.log("Bizneslar: Disney Navoiy (kategoriyalar bilan), Salyut (bo'sh)");
+  console.log("Bizneslar: Demo Xizmatlar (kategoriyalar bilan), Salyut (omborli)");
   console.log(`Admin login: ${ADMIN_LOGIN} / parol: ${ADMIN_PAROL}`);
-  console.log(`Kassir login: ${KASSIR_LOGIN} / parol: ${KASSIR_PAROL} (Disney Navoiy)`);
+  console.log(`Kassir login: ${KASSIR_LOGIN} / parol: ${KASSIR_PAROL} (Demo Xizmatlar)`);
   console.log("Iltimos, birinchi kirishdan keyin parollarni o'zgartiring.\n");
 }
 

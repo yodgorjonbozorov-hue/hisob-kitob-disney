@@ -6,8 +6,8 @@ har kompaniya o'z ma'lumotlari bilan izolyatsiyada ishlaydi, oy oxirida direktor
 
 Brend (nom, ranglar, logo, foydalanish qoidalari): [`docs/BRAND.md`](docs/BRAND.md).
 
-> Ilova avval "Hisob-Kitob" nomi bilan bitta mijoz (Disney Navoiy) uchun qurilgan edi —
-> shu bois `prisma/seed.ts` va migratsiyalarda o'sha nom *ma'lumot* sifatida qoladi.
+> Ilova avval "Hisob-Kitob" nomi bilan bitta mijoz uchun qurilgan edi, keyin ko'p tenantli
+> SaaSga o'tkazildi. `prisma/seed.ts` endi neytral demo ma'lumot yaratadi.
 
 ## Texnologiyalar
 
@@ -63,7 +63,7 @@ Migratsiyalar `@libsql/client` orqali qo'llanadi (Prisma `migrate deploy` libsql
 
 ```bash
 npm run db:apply    # prisma/migrations/* SQL fayllarini bazaga qo'llaydi (idempotent)
-npm run db:seed     # bizneslar (Disney Navoiy + Salyut), Disney kategoriyalari, admin/kassir1
+npm run db:seed     # demo tenant, 2 biznes (Demo Xizmatlar + Salyut), kategoriyalar, admin/kassir1
 ```
 
 > Yangi migratsiya yaratish uchun (schema o'zgartirilganda): `npm run db:migrate:create -- --name <nom>` — bu faqat SQL faylini generatsiya qiladi, so'ng `npm run db:apply` bilan qo'llaysiz.

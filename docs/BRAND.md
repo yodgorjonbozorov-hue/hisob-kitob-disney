@@ -103,10 +103,17 @@ Bajarildi:
 - Telegram bot `/start`, kunlik xulosa va oylik hisobot sarlavhalari
 - Sessiya cookie nomi: `disney_navoiy_session` → `balansa_session`
 
+- `prisma/seed.ts` — demo ma'lumot neytral nomlarga o'tdi ("Demo Kompaniya" / "Demo Xizmatlar"),
+  `package-lock.json` nomi `balansa`.
+
 Ataylab tegilmadi:
 
-- **Ma'lumotlar bazasi** — `prisma/seed.ts` va migratsiyalardagi "Disney Navoiy" *mijoz ma'lumoti*,
-  brend emas. Migration yozilmaydi.
+- **Ma'lumotlar bazasi yozuvlari** — mavjud tenant/biznes nomlari mijoz ma'lumoti;
+  rebranding faqat prezentatsiya qatlamida, migration yozilmaydi.
+- **Seed'dagi ID'lar** (`tenant_disney_navoiy`, `biz_disney_navoiy`) — `20260727093026_tenant_layer`
+  backfill'idagi qiymatlar bilan bir xil bo'lishi shart (idempotentlik). ID'lar hech qayerda
+  ko'rinmaydi; `scripts/shot.mjs` ham shu ID'ga tayanadi.
+- **Qo'llanilgan migratsiya SQL'lari** — tarix; ularni tahrirlash hech narsa bermaydi.
 - **Route nomlari** (`/app/hisobot`, `/app/tranzaksiyalar`) — funksional yo'llar, brend emas.
 - **Telegram bot username va BotFather profili** — BotFather'da qo'lda: nom, description,
   about, profil rasmi → `public/favicon-256.png`. Username o'zgarsa, ulangan xodimlar

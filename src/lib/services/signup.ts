@@ -7,7 +7,7 @@ export const TRIAL_KUNLARI = 14;
 /**
  * Yangi kompaniya uchun boshlang'ich kategoriyalar — seed'dagi kabi
  * "har turdagi kategoriya to'plami" mantiqi, lekin umumiy nomlar bilan
- * (seed'dagi ro'yxat Disney Navoiyga xos edi).
+ * (seed'dagi ro'yxat bitta aniq biznesga xos edi).
  */
 export const STARTER_KIRIM = ["Sotuv", "Xizmat", "Boshqa kirim"];
 export const STARTER_CHIQIM = ["Ijara", "Oyliklar", "Kommunal", "Transport", "Mayda xarajatlar", "Boshqa chiqim"];
