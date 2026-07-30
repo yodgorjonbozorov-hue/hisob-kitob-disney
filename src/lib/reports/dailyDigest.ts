@@ -3,6 +3,7 @@ import { rawPrisma } from "@/lib/db/rawPrisma";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { MANAGER_ROLLAR } from "@/lib/auth/roles";
 import { formatSomLabel } from "@/lib/format";
+import { BRAND } from "@/lib/brand";
 
 /**
  * KUNLIK XULOSA (BOS-5): har ertalab (kunlik cron) kechagi kirim/chiqim/sof
@@ -52,7 +53,8 @@ export async function sendDailyDigest(botApi: {
         }
         if (qatorlar.length === 0) return 0;
 
-        const text = `🌅 Kunlik xulosa — ${kechaMatn}\n\n${qatorlar.join("\n")}`;
+        const text =
+          `🌅 ${BRAND.nomi} · Kunlik xulosa — ${kechaMatn}\n\n${qatorlar.join("\n")}`;
         let yuborildi = 0;
         for (const m of managers) {
           if (!m.telegramChatId) continue;

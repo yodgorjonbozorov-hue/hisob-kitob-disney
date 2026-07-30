@@ -1,11 +1,20 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Manrope } from "next/font/google";
+import { Inter, Manrope, Poppins } from "next/font/google";
+import { BRAND } from "@/lib/brand";
 import "./globals.css";
 
 const inter = Inter({
   subsets: ["latin", "latin-ext", "cyrillic"],
   variable: "--font-inter",
   display: "swap",
+});
+
+// Brend sarlavha shrifti (docs/BRAND.md: Poppins 600/700) — logo so'zligi va hero sarlavhalar.
+const poppins = Poppins({
+  subsets: ["latin", "latin-ext"],
+  variable: "--font-poppins",
+  display: "swap",
+  weight: ["600", "700"],
 });
 
 // Raqamlar va display sarlavhalar uchun (Manrope). Uzbek lotin `ʻ` (U+02BB)
@@ -18,10 +27,28 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "Disney Navoiy — Kirim-Chiqim Hisoboti",
-  description: "Disney Navoiy kompaniyasi uchun kirim-chiqim hisob-kitob tizimi",
+  metadataBase: new URL(BRAND.url),
+  title: `${BRAND.nomi} — Biznes uchun yagona boshqaruv platformasi`,
+  description: BRAND.tavsif,
   manifest: "/manifest.json",
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "Disney Navoiy" },
+  applicationName: BRAND.nomi,
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon-256.png", type: "image/png", sizes: "256x256" },
+    ],
+    apple: "/logo-icon-512.png",
+  },
+  openGraph: {
+    type: "website",
+    siteName: BRAND.nomi,
+    title: `${BRAND.nomi} — ${BRAND.tagline}`,
+    description: BRAND.tavsif,
+    url: BRAND.url,
+    locale: "uz_UZ",
+    images: [{ url: "/logo-full-1600.png", width: 1600, height: 400, alt: BRAND.nomi }],
+  },
+  appleWebApp: { capable: true, statusBarStyle: "default", title: BRAND.nomi },
 };
 
 export const viewport: Viewport = {
@@ -29,8 +56,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#F3F6F7" },
-    { media: "(prefers-color-scheme: dark)", color: "#081216" },
+    { media: "(prefers-color-scheme: light)", color: "#0F766E" },
+    { media: "(prefers-color-scheme: dark)", color: "#061413" },
   ],
 };
 
@@ -51,7 +78,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="uz" className={`${inter.variable} ${manrope.variable}`} suppressHydrationWarning>
+    <html
+      lang="uz"
+      className={`${inter.variable} ${manrope.variable} ${poppins.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>

@@ -1,10 +1,39 @@
-import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
+import { Document, Page, Text, View, StyleSheet, Svg, Rect, Path } from "@react-pdf/renderer";
 import { formatSom, formatPercent, uzOyNomi, pdfSafe } from "@/lib/format";
 import { parseMonthString } from "@/lib/date";
+import { BRAND, BRAND_SIGNATURE } from "@/lib/brand";
 import type { MonthlyReport } from "@/lib/queries/report";
+
+/**
+ * Brend belgisi PDF ichida vektor sifatida chiziladi (public/logo-icon.svg bilan bir xil
+ * geometriya). Tashqi rasm yuklab olinmaydi — hisobot generatsiyasi tarmoqqa bog'liq emas.
+ */
+function LogoMark({ size = 22 }: { size?: number }) {
+  return (
+    <Svg viewBox="0 0 512 512" style={{ width: size, height: size, marginRight: 6 }}>
+      <Rect x="234" y="196" width="44" height="216" rx="8" fill={BRAND.rang} />
+      <Rect x="88" y="164" width="336" height="56" rx="28" fill={BRAND.rang} />
+      <Rect x="96" y="88" width="320" height="56" rx="28" fill={BRAND.rangAkssent} />
+      <Path d="M76 244h140c0 38.66-31.34 70-70 70s-70-31.34-70-70z" fill={BRAND.rang} />
+      <Path d="M296 244h140c0 38.66-31.34 70-70 70s-70-31.34-70-70z" fill={BRAND.rang} />
+    </Svg>
+  );
+}
 
 const styles = StyleSheet.create({
   page: { padding: 32, fontSize: 11, fontFamily: "Helvetica" },
+  brandBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 2,
+    borderBottomColor: BRAND.rang,
+    paddingBottom: 8,
+    marginBottom: 16,
+  },
+  brandLockup: { flexDirection: "row", alignItems: "center" },
+  brandName: { fontSize: 15, fontFamily: "Helvetica-Bold", color: BRAND.rang },
+  brandTagline: { fontSize: 8, color: "#64748b" },
   title: { fontSize: 18, marginBottom: 4, fontFamily: "Helvetica-Bold" },
   subtitle: { fontSize: 11, color: "#64748b", marginBottom: 20 },
   summaryRow: { flexDirection: "row", marginBottom: 20, gap: 12 },
@@ -35,6 +64,14 @@ export function MonthlyReportDocument({ report }: { report: MonthlyReport }) {
   return (
     <Document>
       <Page size="A4" style={styles.page}>
+        <View style={styles.brandBar}>
+          <View style={styles.brandLockup}>
+            <LogoMark size={20} />
+            <Text style={styles.brandName}>{BRAND.nomi}</Text>
+          </View>
+          <Text style={styles.brandTagline}>{pdfSafe(BRAND.tagline)}</Text>
+        </View>
+
         <Text style={styles.title}>{pdfSafe(report.businessNomi)} — Oylik hisobot</Text>
         <Text style={styles.subtitle}>{monthLabel}</Text>
 
@@ -62,7 +99,9 @@ export function MonthlyReportDocument({ report }: { report: MonthlyReport }) {
         <Text style={styles.sectionTitle}>Chiqim taqsimoti</Text>
         <CategoryTable data={report.chiqimByCategory} />
 
-        <Text style={styles.footer}>{pdfSafe(report.businessNomi)} — avtomatik generatsiya qilingan hisobot</Text>
+        <Text style={styles.footer}>
+          {BRAND_SIGNATURE} · {pdfSafe(report.businessNomi)} — avtomatik generatsiya qilingan hisobot
+        </Text>
       </Page>
     </Document>
   );

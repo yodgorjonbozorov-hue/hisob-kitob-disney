@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
  * Landing (/), /login, /signup ochiq; webhook/cron o'z secret'lari bilan himoyalangan.
  */
 export function middleware(request: NextRequest) {
-  const sessionCookie = request.cookies.get("disney_navoiy_session");
+  const sessionCookie = request.cookies.get("balansa_session");
 
   if (!sessionCookie) {
     const loginUrl = new URL("/login", request.url);

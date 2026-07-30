@@ -12,17 +12,21 @@ analitik panel. Signature element: **kassa lentasi** (chek shaklidagi yozuvlar r
 
 ## Rang tokenlari (yagona manba: globals.css → tailwind)
 
-- canvas `#F3F6F7`, surface `#FFFFFF`, surface-sunk `#EDF1F2`, line `#DDE4E7`, line-strong `#C3CED3`
-- ink `#0C1A21`, ink-soft `#4B5F68`, ink-faint `#8296A0`
-- brand `#0B6B5F` (teal), brand-ink `#084F46`, brand-wash `#E4F0EE`
-- income `#0E7C57` / wash `#E6F4EE` · expense `#C0362C` / wash `#FBEAE8` · debt `#B9761A` / wash `#FBF1E3`
-- Grafik: `#0B6B5F #2F6F91 #B06A4A #6E7F52 #7A5C82` — har kategoriyaga doimiy rang.
+> Balansa rebrandingidan keyin qiymatlar yangilandi — to'liq palitra: [`docs/BRAND.md`](docs/BRAND.md).
+
+- canvas `#F1F5F9`, surface `#FFFFFF`, surface-sunk `#ECF1F6`, line `#E2E8F0`, line-strong `#CBD5E1`
+- ink `#0F172A`, ink-soft `#475569`, ink-faint `#64748B`
+- brand `#0F766E` (teal, brand-700), brand-ink `#115E59`, brand-wash `#CCFBF1` + `brand-50…900` shkalasi
+- income `#16A34A` / wash `#DCFCE7` · expense `#DC2626` / wash `#FEE2E2` · debt `#D97706` / wash `#FEF3C7`
+- warning `#F59E0B`, info `#0EA5E9`
+- Grafik: `#0F766E #2F6F91 #B06A4A #6E7F52 #7A5C82` — har kategoriyaga doimiy rang.
 - Tailwind default palitra (blue/gray/slate) UI'da **ishlatilmaydi** (Faza 10 grep).
 - Dark mode: joriy kodda bor — teal tokenlarning dark variantlari saqlanadi.
 
 ## Tipografika
 
-- Raqam/display: **Manrope** (600/700/800). UI/body: **Inter** (400/500/600). Utility: JetBrains Mono (ixtiyoriy).
+- Raqam/display: **Manrope** (600/700/800). UI/body: **Inter** (400/500/600).
+  Brend sarlavhalari: **Poppins** 600/700 (`font-heading`) — logo so'zligi, hero, sahifa sarlavhalari.
 - Har pul summasi `tabular-nums`. Format: `1 250 000 soʻm` (probel, tiyinsiz).
 - Scale: 12/13/15/17/20/26/34/46/60. 26+ da `letter-spacing:-0.02em`. Body ≥15px, kassir ≥17px.
 - Sarlavhalar sentence case.

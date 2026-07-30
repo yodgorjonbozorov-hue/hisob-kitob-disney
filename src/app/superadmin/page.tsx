@@ -3,7 +3,7 @@ import { listTenantsOverview, getMetrics } from "@/lib/superadmin/service";
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { SuperadminClient } from "./SuperadminClient";
 
-export const metadata = { title: "SUPERADMIN — Platforma boshqaruvi" };
+export const metadata = { title: "SUPERADMIN — Balansa platforma boshqaruvi" };
 
 /** Platforma egasi paneli. Faqat SUPERADMIN — boshqa har qanday rol "/" ga qaytariladi. */
 export default async function SuperadminPage() {

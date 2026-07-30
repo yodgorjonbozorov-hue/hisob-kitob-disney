@@ -1,9 +1,11 @@
 import type { Config } from "tailwindcss";
 
 /**
- * Dizayn tokenlari — CSS o'zgaruvchilari orqali (globals.css :root / .dark).
- * Semantik ranglar: income = muvaffaqiyat (yashil), expense = xavf (qizil) — HAMMA JOYDA bir xil.
+ * Balansa dizayn tokenlari — CSS o'zgaruvchilari orqali (globals.css :root / .dark).
+ * Semantik ranglar: income = kirim (yashil), expense = chiqim (qizil) — HAMMA JOYDA bir xil,
+ * brend teal bilan almashtirilmaydi.
  * Sirt/matn/chegara tokenlari dark mode'da avtomatik almashadi.
+ * `brand` — semantik (DEFAULT/ink/wash/fg dark mode'da flip bo'ladi) + 50…900 shkala.
  */
 const config: Config = {
   darkMode: "class",
@@ -36,15 +38,28 @@ const config: Config = {
           soft: "rgb(var(--debt-soft) / <alpha-value>)",
           fg: "rgb(var(--debt-fg) / <alpha-value>)",
         },
+        warning: "rgb(var(--warning) / <alpha-value>)",
+        info: "rgb(var(--info) / <alpha-value>)",
         brand: {
           DEFAULT: "rgb(var(--brand) / <alpha-value>)",
           ink: "rgb(var(--brand-ink) / <alpha-value>)",
           wash: "rgb(var(--brand-wash) / <alpha-value>)",
           fg: "rgb(var(--brand-fg) / <alpha-value>)",
+          // Brend shkalasi — mavzudan qat'i nazar bir xil (logo, grafik, akssent)
+          50: "rgb(var(--brand-50) / <alpha-value>)",
+          100: "rgb(var(--brand-100) / <alpha-value>)",
+          200: "rgb(var(--brand-200) / <alpha-value>)",
+          300: "rgb(var(--brand-300) / <alpha-value>)",
+          400: "rgb(var(--brand-400) / <alpha-value>)",
+          500: "rgb(var(--brand-500) / <alpha-value>)",
+          600: "rgb(var(--brand-600) / <alpha-value>)",
+          700: "rgb(var(--brand-700) / <alpha-value>)",
+          800: "rgb(var(--brand-800) / <alpha-value>)",
+          900: "rgb(var(--brand-900) / <alpha-value>)",
         },
-        // Grafik kategoriya palitrasi (to'yinganligi past, doimiy biriktiriladi)
+        // Grafik kategoriya palitrasi (brend teal'dan boshlanadi, doimiy biriktiriladi)
         chart: {
-          1: "#0B6B5F",
+          1: "#0F766E",
           2: "#2F6F91",
           3: "#B06A4A",
           4: "#6E7F52",
@@ -54,6 +69,9 @@ const config: Config = {
       fontFamily: {
         sans: ["var(--font-inter)", "Inter", "Segoe UI", "system-ui", "sans-serif"],
         display: ["var(--font-manrope)", "Manrope", "var(--font-inter)", "sans-serif"],
+        // Brend sarlavha shrifti (Poppins 600/700) — logo so'zligi va hero sarlavhalar.
+        // Pul summalari `font-display` (Manrope, tabular) da qoladi.
+        heading: ["var(--font-poppins)", "Poppins", "var(--font-inter)", "sans-serif"],
       },
       fontSize: {
         // Type scale (REDESIGN.md): 12/13/15/17/20/26/34/46/60

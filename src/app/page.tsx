@@ -2,10 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
 import { PLANLAR } from "@/lib/billing/plans";
-import { DisneyLogo } from "@/components/DisneyLogo";
+import { Logo } from "@/components/Logo";
+import { BRAND, BRAND_SIGNATURE, ESKI_NOM_IZOHI } from "@/lib/brand";
 
 export const metadata = {
-  title: "Hisob-Kitob — biznesingiz uchun kirim-chiqim tizimi",
+  title: `${BRAND.nomi} — ${BRAND.tagline}`,
   description:
     "Kirim-chiqim, ombor, sotuv va qarzdorlik hisobi — hisobotlar, Telegram bot va bir nechta biznes bitta tizimda. 14 kun bepul.",
 };
@@ -34,8 +35,8 @@ export default async function LandingPage() {
       {/* Header */}
       <header className="max-w-5xl mx-auto px-4 py-5 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <DisneyLogo className="w-7 h-9 text-fg" />
-          <span className="font-semibold text-fg text-lg">Hisob-Kitob</span>
+          <Logo variant="full" height={30} className="hidden sm:block" />
+          <Logo variant="icon" height={26} className="sm:hidden" />
         </div>
         <nav className="flex items-center gap-4">
           <Link href="/login" className="text-sm text-muted hover:text-fg">
@@ -43,7 +44,7 @@ export default async function LandingPage() {
           </Link>
           <Link
             href="/signup"
-            className="text-sm font-medium bg-income text-white rounded-lg px-4 py-2 hover:brightness-110 transition"
+            className="text-sm font-medium bg-brand text-brand-fg rounded-lg px-4 py-2 hover:bg-brand-ink transition"
           >
             Bepul sinab ko'rish
           </Link>
@@ -52,8 +53,11 @@ export default async function LandingPage() {
 
       {/* Hero */}
       <section className="max-w-3xl mx-auto px-4 pt-14 pb-12 text-center">
-        <h1 className="text-3xl md:text-5xl font-bold text-fg leading-tight">
-          Biznesingiz pulini <span className="text-brand">aniq hisobda</span> tuting
+        <p className="inline-block bg-brand-wash text-brand text-xs font-medium rounded-full px-3 py-1 mb-5">
+          {ESKI_NOM_IZOHI}
+        </p>
+        <h1 className="font-heading text-3xl md:text-5xl font-bold text-fg leading-tight">
+          Biznesingiz <span className="text-brand">balansda</span> bo'lsin
         </h1>
         <p className="text-muted mt-5 text-lg max-w-xl mx-auto">
           Kirim-chiqim, ombor, sotuv va qarzdorlik — telefon va kompyuterda ishlaydigan bitta sodda tizim.
@@ -62,7 +66,7 @@ export default async function LandingPage() {
         <div className="mt-8 flex items-center justify-center gap-3 flex-wrap">
           <Link
             href="/signup"
-            className="bg-income text-white font-medium rounded-xl px-8 py-3.5 text-lg hover:brightness-110 transition"
+            className="bg-brand text-brand-fg font-medium rounded-xl px-8 py-3.5 text-lg hover:bg-brand-ink transition"
           >
             14 kun bepul boshlash
           </Link>
@@ -84,7 +88,7 @@ export default async function LandingPage() {
 
       {/* Imkoniyatlar */}
       <section className="max-w-5xl mx-auto px-4 pb-14">
-        <h2 className="text-2xl font-bold text-fg text-center mb-8">Nimalar qila oladi?</h2>
+        <h2 className="font-heading text-2xl font-bold text-fg text-center mb-8">Nimalar qila oladi?</h2>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {IMKONIYATLAR.map((f) => (
             <div key={f.nomi} className="bg-surface rounded-2xl border border-line p-5">
@@ -98,7 +102,7 @@ export default async function LandingPage() {
 
       {/* Tariflar */}
       <section className="max-w-3xl mx-auto px-4 pb-16">
-        <h2 className="text-2xl font-bold text-fg text-center mb-8">Tarif</h2>
+        <h2 className="font-heading text-2xl font-bold text-fg text-center mb-8">Tarif</h2>
         {PLANLAR.map((plan) => (
           <div key={plan.code} className="bg-surface rounded-2xl border border-line shadow-card p-7 text-center">
             <h3 className="font-semibold text-fg text-lg">{plan.nomi}</h3>
@@ -110,7 +114,7 @@ export default async function LandingPage() {
             <p className="text-sm text-income-fg font-medium mt-2">Avval 14 kun bepul sinaysiz</p>
             <Link
               href="/signup"
-              className="inline-block mt-5 bg-income text-white font-medium rounded-xl px-8 py-3 hover:brightness-110 transition"
+              className="inline-block mt-5 bg-brand text-brand-fg font-medium rounded-xl px-8 py-3 hover:bg-brand-ink transition"
             >
               Boshlash
             </Link>
@@ -120,7 +124,7 @@ export default async function LandingPage() {
 
       {/* Footer */}
       <footer className="border-t border-line py-8 text-center text-sm text-faint">
-        <p>Hisob-Kitob · biznes uchun kirim-chiqim tizimi</p>
+        <p>{BRAND_SIGNATURE} · {BRAND.tagline}</p>
         <p className="mt-1">
           <Link href="/login" className="hover:text-fg">Kirish</Link> ·{" "}
           <Link href="/signup" className="hover:text-fg">Ro'yxatdan o'tish</Link>

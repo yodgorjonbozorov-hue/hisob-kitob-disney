@@ -20,8 +20,13 @@ export interface SessionData {
   impersonatedBy?: string | null;
 }
 
+/**
+ * Cookie nomi brend bilan birga o'zgardi. Eski `disney_navoiy_session` cookie'lari
+ * e'tiborga olinmaydi — foydalanuvchi qayta login qiladi. (Domen ham `balansa.uz`ga
+ * ko'chgani uchun eski cookie'lar baribir ko'chmaydi.)
+ */
 export const sessionOptions: SessionOptions = {
-  cookieName: "disney_navoiy_session",
+  cookieName: "balansa_session",
   password: process.env.SESSION_SECRET as string,
   cookieOptions: {
     httpOnly: true,
