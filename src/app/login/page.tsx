@@ -21,8 +21,8 @@ export default function LoginPage() {
         </div>
         <p className="text-center text-sm text-muted mt-5">
           Yangi kompaniyamisiz?{" "}
-          <a href="/signup" className="text-brand font-medium hover:underline">
-            14 kun bepul sinab ko'ring
+          <a href="/demo" className="text-brand font-medium hover:underline">
+            Demo so'rang
           </a>
         </p>
         <p className="text-center text-2xs text-faint mt-4">Disney Navoiy · since 2017</p>
