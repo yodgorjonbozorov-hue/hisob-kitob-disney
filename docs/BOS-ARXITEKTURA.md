@@ -92,8 +92,8 @@ async function requireModule(ctx: TenantContext, code: string): void
 `lib/billing/plans.ts` kengayadi:
 
 ```ts
-{ code: "STANDARD", oylikNarx: 199_000, modullar: ["MOLIYA", "OMBOR"] }
-{ code: "PRO",      oylikNarx: 399_000, modullar: [...STANDARD, "CRM", "VAZIFALAR", "AI"] }
+{ code: "STANDARD", oylikNarx: 200_000, modullar: ["MOLIYA", "OMBOR"] }
+{ code: "PRO",      oylikNarx: 300_000, modullar: [...STANDARD, "CRM", "VAZIFALAR", "AI"] }
 ```
 
 Narxlar — taklif, siz belgilaysiz. Mavjud STANDARD mijozlari ta'sirlanmaydi (grandfather: hozirgi modullar ularda qoladi).
