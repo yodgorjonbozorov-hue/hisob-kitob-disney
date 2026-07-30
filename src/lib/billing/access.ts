@@ -7,6 +7,8 @@
  *                   ma'lumot O'CHIRILMAYDI, yozish bloklanadi, o'qish/eksport ishlaydi
  *  - BILLING_ONLY — TRIAL tugagan yoki BLOCKED: faqat /billing ochiladi
  */
+import { KUN_MS, TRIAL_OGOHLANTIRISH_KUNLARI } from "./constants";
+
 export type AccessMode = "FULL" | "READONLY" | "BILLING_ONLY";
 
 export interface TenantHolat {
@@ -21,11 +23,9 @@ export interface Access {
   sabab: string | null;
   /** Amaldagi muddat tugashiga necha kun qoldi (salbiy — o'tib ketgan). null — muddatsiz. */
   kunQoldi: number | null;
-  /** Muddat tugashiga 3 kun yoki undan kam qolganda ogohlantirish. */
+  /** Muddat tugashiga TRIAL_OGOHLANTIRISH_KUNLARI yoki undan kam qolganda ogohlantirish. */
   ogohlantirish: string | null;
 }
-
-const KUN_MS = 24 * 60 * 60 * 1000;
 
 export function computeAccess(tenant: TenantHolat, now: Date = new Date()): Access {
   const deadline =
@@ -47,14 +47,14 @@ export function computeAccess(tenant: TenantHolat, now: Date = new Date()): Acce
 
   if (tenant.status === "TRIAL") {
     if (deadline && deadline.getTime() < now.getTime()) {
-      return { mode: "BILLING_ONLY", sabab: "14 kunlik bepul sinov muddati tugadi. Davom etish uchun obuna bo'ling.", kunQoldi, ogohlantirish: null };
+      return { mode: "BILLING_ONLY", sabab: "Bepul sinov muddati tugadi. Davom etish uchun obuna bo'ling.", kunQoldi, ogohlantirish: null };
     }
     return {
       mode: "FULL",
       sabab: null,
       kunQoldi,
       ogohlantirish:
-        kunQoldi !== null && kunQoldi <= 3
+        kunQoldi !== null && kunQoldi <= TRIAL_OGOHLANTIRISH_KUNLARI
           ? `Bepul sinov muddati ${kunQoldi} kundan keyin tugaydi. Uzilishsiz davom etish uchun obuna bo'ling.`
           : null,
     };
@@ -75,7 +75,7 @@ export function computeAccess(tenant: TenantHolat, now: Date = new Date()): Acce
       sabab: null,
       kunQoldi,
       ogohlantirish:
-        kunQoldi !== null && kunQoldi <= 3
+        kunQoldi !== null && kunQoldi <= TRIAL_OGOHLANTIRISH_KUNLARI
           ? `Obuna muddati ${kunQoldi} kundan keyin tugaydi. Uzilishsiz davom etish uchun to'lovni yangilang.`
           : null,
     };
