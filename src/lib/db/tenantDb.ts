@@ -38,6 +38,9 @@ const BUSINESS_SCOPED = new Set([
 ]);
 // AuditLog: businessId nullable — biznesga bog'langan yozuvlar tenant bo'yicha filtrlanadi.
 const AUDIT_MODEL = "AuditLog";
+// Platforma darajasidagi modellar — hech qaysi tenantga tegishli emas (faqat rawPrisma/SUPERADMIN).
+// Tenant rejimida butunlay bloklanadi, aks holda ular filtrsiz o'qilib qolardi.
+const PLATFORM_ONLY = new Set(["DemoRequest"]);
 
 const FILTER_OPS = new Set([
   "findMany",
@@ -85,6 +88,11 @@ function buildTenantClient(tenantId: string) {
               return query(a);
             }
             throw new ForbiddenError("Tenant amali tenant rejimida taqiqlangan");
+          }
+
+          // Platforma modellari (DemoRequest) — tenant rejimida umuman ochilmaydi.
+          if (PLATFORM_ONLY.has(model)) {
+            throw new ForbiddenError(`${model}: platforma darajasidagi model, tenant rejimida taqiqlangan`);
           }
 
           // Tenant bilan bog'liq bo'lmagan modellar (masalan AppSetting) — o'zgarishsiz.
