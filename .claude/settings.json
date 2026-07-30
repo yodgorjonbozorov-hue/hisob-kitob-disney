@@ -8,7 +8,6 @@
       "Edit(./.env.*)",
       "Bash(rm -rf:*)",
       "Bash(sudo:*)",
-      "Bash(git push:*)",
       "Bash(git reset --hard:*)",
       "Bash(npx prisma migrate reset:*)",
       "Bash(npx prisma db push:*)",
