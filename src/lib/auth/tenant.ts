@@ -14,6 +14,9 @@ export interface TenantInfo {
   trialEndsAt: Date | null;
   currentPeriodEnd: Date | null;
   plan: string;
+  /** Bir martalik o'rnatish to'lovi olingan sana (null — hali olinmagan). */
+  setupFeePaidAt: Date | null;
+  setupFeeAmountUsd: number | null;
 }
 
 /** Joriy so'rovning tenant konteksti: sessiya + tenant + hisoblangan kirish rejimi. */
@@ -41,7 +44,16 @@ async function loadTenant(session: Required<SessionData>): Promise<TenantInfo | 
   if (!tenantId) return null;
   return rawPrisma.tenant.findUnique({
     where: { id: tenantId },
-    select: { id: true, name: true, status: true, trialEndsAt: true, currentPeriodEnd: true, plan: true },
+    select: {
+      id: true,
+      name: true,
+      status: true,
+      trialEndsAt: true,
+      currentPeriodEnd: true,
+      plan: true,
+      setupFeePaidAt: true,
+      setupFeeAmountUsd: true,
+    },
   });
 }
 

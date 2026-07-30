@@ -1,4 +1,10 @@
-/** Tarif rejalari. Hozircha bitta STANDARD; keyinchalik shu ro'yxatga qo'shiladi. */
+/**
+ * Tarif rejalari — narx, nom, tavsif va modullar uchun YAGONA manba.
+ * Landing, billing, superadmin va bot shu ro'yxatdan o'qiydi.
+ *
+ * DIQQAT: narx o'zgarsa tarix retroaktiv o'zgarmaydi — Payment.amount va
+ * Subscription.amount yozuv yaratilgan paytdagi summani saqlaydi.
+ */
 export interface Plan {
   code: string;
   nomi: string;
@@ -13,14 +19,14 @@ export const PLANLAR: Plan[] = [
   {
     code: "STANDARD",
     nomi: "Standart",
-    oylikNarx: 199_000,
+    oylikNarx: 200_000,
     tavsif: "Cheksiz biznes, foydalanuvchi va tranzaksiya · Hisobotlar (PDF/Excel) · Telegram bot",
     modullar: ["MOLIYA", "OMBOR"],
   },
   {
     code: "PRO",
     nomi: "Pro",
-    oylikNarx: 399_000,
+    oylikNarx: 300_000,
     tavsif: "Standart'dagi hammasi + CRM (bitimlar kanbani, kontaktlar) + Vazifalar + AI yordamchi",
     modullar: ["MOLIYA", "OMBOR", "CRM", "VAZIFALAR", "AI"],
   },

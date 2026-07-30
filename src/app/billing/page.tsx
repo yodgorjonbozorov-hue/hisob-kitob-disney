@@ -4,6 +4,7 @@ import { runWithTenant } from "@/lib/db/tenantContext";
 import { prisma } from "@/lib/prisma";
 import { isManager } from "@/lib/auth/roles";
 import { PLANLAR } from "@/lib/billing/plans";
+import { SETUP_FEE_USD } from "@/lib/billing/constants";
 import { formatDateUZ } from "@/lib/format";
 import { DisneyLogo } from "@/components/DisneyLogo";
 import { BillingClient } from "./BillingClient";
@@ -59,6 +60,20 @@ export default async function BillingPage() {
               <p className="text-sm text-muted">Hammasi joyida — tizimdan to'liq foydalanishingiz mumkin.</p>
             )}
           </div>
+
+          {/* O'rnatish to'lovi — faqat to'lanmagan bo'lsa eslatiladi. */}
+          {!tenant.setupFeePaidAt && (
+            <div className="bg-surface rounded-2xl border border-line shadow-card p-6">
+              <h3 className="font-semibold text-fg">
+                Bir martalik o&apos;rnatish to&apos;lovi:{" "}
+                <span className="tnum">{tenant.setupFeeAmountUsd ?? SETUP_FEE_USD}$</span>
+              </h3>
+              <p className="text-sm text-muted mt-1">
+                Tizimga tushirish, sozlash va o&apos;qitish uchun. Hali qayd etilmagan — batafsil ma&apos;lumot
+                uchun biz bilan bog&apos;laning.
+              </p>
+            </div>
+          )}
 
           {/* Tariflar + to'lov */}
           {PLANLAR.map((plan) => (
