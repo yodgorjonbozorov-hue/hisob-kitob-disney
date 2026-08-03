@@ -1,23 +1,30 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState, useEffect, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { formatSom, formatSomLabel, parseSomInput } from "@/lib/format";
+import { omborMatn, isAvto } from "@/lib/biznesTuri";
 import type { ProductAdminDTO, OmborStats } from "@/lib/queries/inventory";
 
 export function OmborClient({
   initialProducts,
   stats,
+  biznesTuri = "umumiy",
 }: {
   initialProducts: ProductAdminDTO[];
   stats: OmborStats;
+  biznesTuri?: string;
 }) {
   const router = useRouter();
+  const avto = isAvto(biznesTuri);
+  const M = omborMatn(biznesTuri);
   const [products, setProducts] = useState(initialProducts);
+  // router.refresh() dan keyin server yangi ro'yxatni beradi — lokal state bilan moslaymiz.
+  useEffect(() => setProducts(initialProducts), [initialProducts]);
   const [editing, setEditing] = useState<ProductAdminDTO | null>(null);
   const [stockFor, setStockFor] = useState<ProductAdminDTO | null>(null);
   const [newOpen, setNewOpen] = useState(false);
@@ -43,24 +50,29 @@ export function OmborClient({
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
-          <p className="text-muted text-sm mb-1">Mahsulot turlari</p>
+          <p className="text-muted text-sm mb-1">{M.turlarSoni}</p>
           <p className="text-2xl font-bold text-fg">{stats.turlarSoni}</p>
         </Card>
         <Card>
-          <p className="text-muted text-sm mb-1">Jami qoldiq (dona)</p>
-          <p className="text-2xl font-bold text-fg">{formatSom(stats.jamiQoldiq)}</p>
+          <p className="text-muted text-sm mb-1">{M.jamiQoldiq}</p>
+          <p className="text-2xl font-bold text-fg">
+            {formatSom(stats.jamiQoldiq)}
+            {avto && <span className="text-base font-medium text-muted"> {M.dona}</span>}
+          </p>
         </Card>
         <Card>
-          <p className="text-muted text-sm mb-1">Ombor qiymati (tannarx)</p>
+          <p className="text-muted text-sm mb-1">{M.omborQiymati}</p>
           <p className="text-2xl font-bold text-fg">{formatSomLabel(stats.omborQiymati)}</p>
         </Card>
       </div>
 
       <div className="flex flex-wrap gap-2 justify-end">
-        <Button variant="secondary" onClick={() => setBulkOpen(true)}>
-          Ko'p tur qo'shish
-        </Button>
-        <Button onClick={() => setNewOpen(true)}>+ Yangi mahsulot</Button>
+        {!avto && (
+          <Button variant="secondary" onClick={() => setBulkOpen(true)}>
+            {M.koproq}
+          </Button>
+        )}
+        <Button onClick={() => setNewOpen(true)}>{M.yangi}</Button>
       </div>
 
       <Card>
@@ -68,45 +80,83 @@ export function OmborClient({
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-faint text-xs uppercase">
-                <th className="pb-2">Nomi</th>
-                <th className="pb-2 text-right">Tannarx</th>
+                <th className="pb-2">{avto ? "Mashina" : "Nomi"}</th>
+                {avto && <th className="pb-2">Yil</th>}
+                {avto && <th className="pb-2">Davlat raqami</th>}
+                <th className="pb-2 text-right">{avto ? "Olingan narx" : "Tannarx"}</th>
                 <th className="pb-2 text-right">Sotuv narxi</th>
-                <th className="pb-2 text-right">Qoldiq</th>
-                <th className="pb-2">Holati</th>
+                {avto && <th className="pb-2 text-right">Kutilayotgan foyda</th>}
+                <th className="pb-2 text-right">{M.qoldiq}</th>
+                {!avto && <th className="pb-2">Holati</th>}
                 <th className="pb-2 text-right">Amallar</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
               {products.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="text-center text-faint py-6">
-                    Hali mahsulot yo'q
+                  <td colSpan={avto ? 8 : 6} className="text-center text-faint py-6">
+                    {M.bosh}
                   </td>
                 </tr>
               )}
-              {products.map((p) => (
+              {products.map((p) => {
+                const kutilayotganFoyda = p.sotuvNarx > 0 ? p.sotuvNarx - p.kelganNarx : 0;
+                return (
                 <tr key={p.id} className={p.isActive ? "" : "opacity-50"}>
-                  <td className="py-2.5 font-medium">{p.nomi}</td>
+                  <td className="py-2.5 font-medium">
+                    {p.nomi}
+                    {avto && p.avtoRang && <span className="ml-2 text-2xs text-faint">{p.avtoRang}</span>}
+                  </td>
+                  {avto && <td className="py-2.5 text-muted tnum">{p.avtoYil ?? "—"}</td>}
+                  {avto && <td className="py-2.5 text-muted">{p.avtoRaqam ?? "—"}</td>}
                   <td className="py-2.5 text-right">{formatSomLabel(p.kelganNarx)}</td>
-                  <td className="py-2.5 text-right">{formatSomLabel(p.sotuvNarx)}</td>
-                  <td className={`py-2.5 text-right font-medium ${p.miqdor > 0 ? "text-fg" : "text-expense"}`}>
-                    {p.miqdor > 0 ? formatSom(p.miqdor) : "Qolmadi"}
+                  <td className="py-2.5 text-right">
+                    {p.sotuvNarx > 0 ? formatSomLabel(p.sotuvNarx) : <span className="text-faint">qo'yilmagan</span>}
                   </td>
-                  <td className="py-2.5">
-                    <Badge tone={p.isActive ? "kirim" : "neutral"}>{p.isActive ? "Faol" : "Nofaol"}</Badge>
-                  </td>
-                  <td className="py-2.5 text-right whitespace-nowrap">
-                    <button
-                      onClick={() => setStockFor(p)}
-                      className="text-xs font-medium text-income hover:text-income-fg mr-3"
+                  {avto && (
+                    // Sotilgan mashina uchun haqiqiy foyda quyidagi "sof foyda" jadvalida.
+                    <td
+                      className={`py-2.5 text-right tnum font-medium ${
+                        p.sotuvNarx === 0 || p.miqdor === 0
+                          ? "text-faint"
+                          : kutilayotganFoyda >= 0
+                            ? "text-income"
+                            : "text-expense"
+                      }`}
                     >
-                      Ombor kirimi
-                    </button>
+                      {p.miqdor > 0 && p.sotuvNarx > 0 ? formatSomLabel(kutilayotganFoyda) : "—"}
+                    </td>
+                  )}
+                  {avto ? (
+                    <td className="py-2.5 text-right">
+                      <Badge tone={p.miqdor > 0 ? "kirim" : "neutral"}>
+                        {p.miqdor > 0 ? "Sotuvda" : "Sotildi"}
+                      </Badge>
+                    </td>
+                  ) : (
+                    <td className={`py-2.5 text-right font-medium ${p.miqdor > 0 ? "text-fg" : "text-expense"}`}>
+                      {p.miqdor > 0 ? formatSom(p.miqdor) : "Qolmadi"}
+                    </td>
+                  )}
+                  {!avto && (
+                    <td className="py-2.5">
+                      <Badge tone={p.isActive ? "kirim" : "neutral"}>{p.isActive ? "Faol" : "Nofaol"}</Badge>
+                    </td>
+                  )}
+                  <td className="py-2.5 text-right whitespace-nowrap">
+                    {(!avto || p.miqdor === 0) && (
+                      <button
+                        onClick={() => setStockFor(p)}
+                        className="text-xs font-medium text-income hover:text-income-fg mr-3"
+                      >
+                        {M.kirim}
+                      </button>
+                    )}
                     <button
                       onClick={() => setEditing(p)}
                       className="text-xs font-medium text-muted hover:text-fg mr-3"
                     >
-                      Narx
+                      {avto ? "Tahrirlash" : "Narx"}
                     </button>
                     <button
                       onClick={() => toggleActive(p)}
@@ -116,19 +166,25 @@ export function OmborClient({
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
       </Card>
 
-      {newOpen && <NewProductModal onClose={() => setNewOpen(false)} onDone={refresh} />}
+      {newOpen &&
+        (avto ? (
+          <NewAvtoModal onClose={() => setNewOpen(false)} onDone={refresh} />
+        ) : (
+          <NewProductModal onClose={() => setNewOpen(false)} onDone={refresh} />
+        ))}
       {bulkOpen && <BulkProductsModal onClose={() => setBulkOpen(false)} onDone={refresh} />}
       {editing && (
-        <EditPriceModal product={editing} onClose={() => setEditing(null)} onDone={refresh} />
+        <EditPriceModal product={editing} avto={avto} onClose={() => setEditing(null)} onDone={refresh} />
       )}
       {stockFor && (
-        <StockEntryModal product={stockFor} onClose={() => setStockFor(null)} onDone={refresh} />
+        <StockEntryModal product={stockFor} avto={avto} onClose={() => setStockFor(null)} onDone={refresh} />
       )}
     </div>
   );
@@ -199,6 +255,199 @@ function NewProductModal({ onClose, onDone }: { onClose: () => void; onDone: () 
           </Button>
           <Button type="submit" disabled={loading}>
             {loading ? "..." : "Qo'shish"}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/**
+ * AVTO REJIMI — avtoparkka mashina qabul qilish.
+ * Naqd olinsa chiqim yoziladi; qarzga olinsa "men qarzdorman" qarzdorligi ochiladi.
+ */
+function NewAvtoModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [nomi, setNomi] = useState("");
+  const [yil, setYil] = useState("");
+  const [raqam, setRaqam] = useState("");
+  const [rang, setRang] = useState("");
+  const [olingan, setOlingan] = useState("");
+  const [sotuv, setSotuv] = useState("");
+  const [tolovTuri, setTolovTuri] = useState<"naqd" | "qarz">("naqd");
+  const [egasiNomi, setEgasiNomi] = useState("");
+  const [egasiTel, setEgasiTel] = useState("");
+  const [izoh, setIzoh] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const olinganNarx = parseSomInput(olingan);
+  const sotuvNarx = parseSomInput(sotuv);
+  const kutilayotganFoyda = sotuvNarx > 0 ? sotuvNarx - olinganNarx : 0;
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (olinganNarx <= 0) {
+      setError("Olingan narxni kiriting");
+      return;
+    }
+    setLoading(true);
+    const res = await fetch("/api/avto", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nomi,
+        olinganNarx,
+        sotuvNarx,
+        avtoYil: yil ? Number(yil) : null,
+        avtoRaqam: raqam || null,
+        avtoRang: rang || null,
+        izoh: izoh || null,
+        tolovTuri,
+        egasiNomi: egasiNomi || null,
+        egasiTel: egasiTel || null,
+      }),
+    });
+    if (!res.ok) {
+      setError((await res.json()).error ?? "Xatolik");
+      setLoading(false);
+      return;
+    }
+    onClose();
+    onDone();
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Avtoparkka mashina qabul qilish">
+      <form onSubmit={submit} className="space-y-3">
+        <input
+          type="text"
+          value={nomi}
+          onChange={(e) => setNomi(e.target.value)}
+          placeholder="Model (masalan: Malibu 2)"
+          className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+          autoFocus
+          required
+        />
+        <div className="grid grid-cols-3 gap-2">
+          <div>
+            <label className="block text-xs text-muted mb-1">Yil</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={yil}
+              onChange={(e) => setYil(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              placeholder="2018"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-muted mb-1">Davlat raqami</label>
+            <input
+              type="text"
+              value={raqam}
+              onChange={(e) => setRaqam(e.target.value.toUpperCase())}
+              placeholder="01A123BC"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-muted mb-1">Rang</label>
+            <input
+              type="text"
+              value={rang}
+              onChange={(e) => setRang(e.target.value)}
+              placeholder="Oq"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+            />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="block text-xs text-muted mb-1">Olingan narx</label>
+            <NarxInput value={olingan} onChange={setOlingan} placeholder="0" />
+          </div>
+          <div>
+            <label className="block text-xs text-muted mb-1">Sotuv narxi (rejalashtirilgan)</label>
+            <NarxInput value={sotuv} onChange={setSotuv} placeholder="0" />
+          </div>
+        </div>
+        {sotuvNarx > 0 && olinganNarx > 0 && (
+          <p className="text-xs text-muted">
+            Kutilayotgan foyda:{" "}
+            <span className={`font-medium ${kutilayotganFoyda >= 0 ? "text-income" : "text-expense"}`}>
+              {formatSomLabel(kutilayotganFoyda)}
+            </span>
+          </p>
+        )}
+
+        <div>
+          <label className="block text-xs text-muted mb-1">Qanday olindi?</label>
+          <div className="grid grid-cols-2 gap-2">
+            {(["naqd", "qarz"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTolovTuri(t)}
+                className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+                  tolovTuri === t ? "border-brand text-brand bg-brand/5" : "border-line text-muted"
+                }`}
+              >
+                {t === "naqd" ? "Naqd to'landi" : "Qarzga olindi"}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-faint mt-1">
+            {tolovTuri === "naqd"
+              ? "Chiqim yozuvi avtomatik yaratiladi (\"Mashina xaridi\")."
+              : "Egasiga qarzdorlik ochiladi — to'laganingizda chiqim yoziladi."}
+          </p>
+        </div>
+
+        {tolovTuri === "qarz" && (
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs text-muted mb-1">Kimdan olindi</label>
+              <input
+                type="text"
+                value={egasiNomi}
+                onChange={(e) => setEgasiNomi(e.target.value)}
+                placeholder="Ism familiya"
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-muted mb-1">Telefon</label>
+              <input
+                type="text"
+                value={egasiTel}
+                onChange={(e) => setEgasiTel(e.target.value)}
+                placeholder="+998 ..."
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+        )}
+
+        <div>
+          <label className="block text-xs text-muted mb-1">Izoh (ixtiyoriy)</label>
+          <input
+            type="text"
+            value={izoh}
+            onChange={(e) => setIzoh(e.target.value)}
+            placeholder="Holati, probeg, kelishuv sharti..."
+            className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+          />
+        </div>
+
+        {error && <p className="text-expense text-sm">{error}</p>}
+        <div className="flex gap-2 justify-end pt-2">
+          <Button variant="secondary" type="button" onClick={onClose}>
+            Bekor qilish
+          </Button>
+          <Button type="submit" disabled={loading}>
+            {loading ? "..." : "Qabul qilish"}
           </Button>
         </div>
       </form>
@@ -302,16 +551,21 @@ function BulkProductsModal({ onClose, onDone }: { onClose: () => void; onDone: (
 
 function EditPriceModal({
   product,
+  avto = false,
   onClose,
   onDone,
 }: {
   product: ProductAdminDTO;
+  avto?: boolean;
   onClose: () => void;
   onDone: () => void;
 }) {
   const [nomi, setNomi] = useState(product.nomi);
   const [kelgan, setKelgan] = useState(formatSom(product.kelganNarx));
   const [sotuv, setSotuv] = useState(formatSom(product.sotuvNarx));
+  const [yil, setYil] = useState(product.avtoYil ? String(product.avtoYil) : "");
+  const [raqam, setRaqam] = useState(product.avtoRaqam ?? "");
+  const [rang, setRang] = useState(product.avtoRang ?? "");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -322,7 +576,18 @@ function EditPriceModal({
     const res = await fetch(`/api/products/${product.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nomi, kelganNarx: parseSomInput(kelgan), sotuvNarx: parseSomInput(sotuv) }),
+      body: JSON.stringify({
+        nomi,
+        kelganNarx: parseSomInput(kelgan),
+        sotuvNarx: parseSomInput(sotuv),
+        ...(avto
+          ? {
+              avtoYil: yil ? Number(yil) : null,
+              avtoRaqam: raqam || null,
+              avtoRang: rang || null,
+            }
+          : {}),
+      }),
     });
     if (!res.ok) {
       setError((await res.json()).error ?? "Xatolik");
@@ -334,7 +599,7 @@ function EditPriceModal({
   }
 
   return (
-    <Modal open onClose={onClose} title="Narx tahrirlash">
+    <Modal open onClose={onClose} title={avto ? "Mashina ma'lumotlari" : "Narx tahrirlash"}>
       <form onSubmit={submit} className="space-y-3">
         <input
           type="text"
@@ -343,8 +608,40 @@ function EditPriceModal({
           className="w-full rounded-lg border border-line px-3 py-2 text-sm"
           required
         />
+        {avto && (
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label className="block text-xs text-muted mb-1">Yil</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={yil}
+                onChange={(e) => setYil(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-muted mb-1">Davlat raqami</label>
+              <input
+                type="text"
+                value={raqam}
+                onChange={(e) => setRaqam(e.target.value.toUpperCase())}
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-muted mb-1">Rang</label>
+              <input
+                type="text"
+                value={rang}
+                onChange={(e) => setRang(e.target.value)}
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+        )}
         <div>
-          <label className="block text-xs text-muted mb-1">Kelgan narx (tannarx)</label>
+          <label className="block text-xs text-muted mb-1">{avto ? "Olingan narx" : "Kelgan narx (tannarx)"}</label>
           <NarxInput value={kelgan} onChange={setKelgan} placeholder="0" />
         </div>
         <div>
@@ -367,21 +664,24 @@ function EditPriceModal({
 
 function StockEntryModal({
   product,
+  avto = false,
   onClose,
   onDone,
 }: {
   product: ProductAdminDTO;
+  avto?: boolean;
   onClose: () => void;
   onDone: () => void;
 }) {
-  const [miqdor, setMiqdor] = useState("");
+  // Avto rejimida bitta yozuv = bitta mashina — miqdor har doim 1.
+  const [miqdor, setMiqdor] = useState(avto ? "1" : "");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    const m = parseSomInput(miqdor);
+    const m = avto ? 1 : parseSomInput(miqdor);
     if (m <= 0) {
       setError("Miqdorni kiriting");
       return;
@@ -402,30 +702,43 @@ function StockEntryModal({
   }
 
   return (
-    <Modal open onClose={onClose} title={`Ombor kirimi: ${product.nomi}`}>
+    <Modal
+      open
+      onClose={onClose}
+      title={avto ? `Avtoparkka qaytarish: ${product.nomi}` : `Ombor kirimi: ${product.nomi}`}
+    >
       <form onSubmit={submit} className="space-y-3">
-        <p className="text-sm text-muted">
-          Joriy qoldiq: <span className="font-medium text-fg">{formatSom(product.miqdor)} dona</span>
-        </p>
-        <div>
-          <label className="block text-xs text-muted mb-1">Kelgan miqdor (dona)</label>
-          <input
-            type="text"
-            inputMode="numeric"
-            value={miqdor}
-            onChange={(e) => setMiqdor(e.target.value ? formatSom(parseSomInput(e.target.value)) : "")}
-            placeholder="0"
-            className="w-full rounded-lg border border-line px-3 py-2 text-sm"
-            autoFocus
-          />
-        </div>
+        {avto ? (
+          <p className="text-sm text-muted">
+            Mashina avtoparkka qaytariladi (masalan, sotuv bekor qilindi). Sotuv yozuvi va foyda hisobi
+            o'zgarmaydi — kerak bo'lsa yozuvni qo'lda to'g'rilang.
+          </p>
+        ) : (
+          <>
+            <p className="text-sm text-muted">
+              Joriy qoldiq: <span className="font-medium text-fg">{formatSom(product.miqdor)} dona</span>
+            </p>
+            <div>
+              <label className="block text-xs text-muted mb-1">Kelgan miqdor (dona)</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={miqdor}
+                onChange={(e) => setMiqdor(e.target.value ? formatSom(parseSomInput(e.target.value)) : "")}
+                placeholder="0"
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+                autoFocus
+              />
+            </div>
+          </>
+        )}
         {error && <p className="text-expense text-sm">{error}</p>}
         <div className="flex gap-2 justify-end pt-2">
           <Button variant="secondary" type="button" onClick={onClose}>
             Bekor qilish
           </Button>
           <Button type="submit" disabled={loading}>
-            {loading ? "..." : "Kiritish"}
+            {loading ? "..." : avto ? "Qaytarish" : "Kiritish"}
           </Button>
         </div>
       </form>

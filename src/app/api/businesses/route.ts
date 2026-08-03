@@ -20,7 +20,9 @@ export const POST = withTenant(async (request, _ctx, { session: user, tenantId }
     return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
   }
 
+  // Avto rejimi ombor tizimisiz ishlamaydi — birga yoqiladi.
+  const omborli = parsed.data.turi === "avto" ? { omborli: true } : {};
   // tenantId kontekstdan — extension ham xuddi shu qiymatni majburlaydi (lib/db/tenantDb.ts).
-  const business = await prisma.business.create({ data: { ...parsed.data, tenantId } });
+  const business = await prisma.business.create({ data: { ...parsed.data, ...omborli, tenantId } });
   return NextResponse.json(business, { status: 201 });
 });

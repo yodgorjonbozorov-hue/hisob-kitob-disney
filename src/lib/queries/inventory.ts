@@ -7,6 +7,11 @@ export interface ProductAdminDTO {
   sotuvNarx: number;
   miqdor: number;
   isActive: boolean;
+  izoh: string | null;
+  // Avto rejimi maydonlari (umumiy bizneslarda null).
+  avtoYil: number | null;
+  avtoRaqam: string | null;
+  avtoRang: string | null;
 }
 
 /** Kassir uchun — miqdor RAQAMI ko'rsatilmaydi, faqat `mavjud` (bor/yo'q). */
@@ -40,11 +45,17 @@ export async function listProducts(
     sotuvNarx: p.sotuvNarx,
     miqdor: p.miqdor,
     isActive: p.isActive,
+    izoh: p.izoh,
+    avtoYil: p.avtoYil,
+    avtoRaqam: p.avtoRaqam,
+    avtoRang: p.avtoRang,
   }));
 }
 
 export interface DebtDTO {
   id: string;
+  /** "olinadigan" — bizga qarzdor; "beriladigan" — biz qarzdormiz. */
+  turi: string;
   mijozNomi: string;
   mijozTel: string | null;
   jamiSumma: number;
@@ -52,15 +63,21 @@ export interface DebtDTO {
   qolgan: number;
   isYopilgan: boolean;
   sana: string;
+  muddat: string | null;
+  izoh: string | null;
+  /** Qarz bog'langan mahsulot/mashina nomi (bo'lsa). */
+  productNomi: string | null;
 }
 
 export async function listDebts(businessId: string): Promise<DebtDTO[]> {
   const debts = await prisma.debt.findMany({
     where: { businessId },
+    include: { product: { select: { nomi: true, avtoRaqam: true } } },
     orderBy: [{ isYopilgan: "asc" }, { createdAt: "desc" }],
   });
   return debts.map((d) => ({
     id: d.id,
+    turi: d.turi,
     mijozNomi: d.mijozNomi,
     mijozTel: d.mijozTel,
     jamiSumma: d.jamiSumma,
@@ -68,16 +85,50 @@ export async function listDebts(businessId: string): Promise<DebtDTO[]> {
     qolgan: d.jamiSumma - d.tolangan,
     isYopilgan: d.isYopilgan,
     sana: d.createdAt.toISOString(),
+    muddat: d.muddat ? d.muddat.toISOString() : null,
+    izoh: d.izoh,
+    productNomi: d.product ? [d.product.nomi, d.product.avtoRaqam].filter(Boolean).join(" · ") : null,
   }));
 }
 
-/** Ochiq qarzlar bo'yicha qolgan umumiy summa (jamiSumma − tolangan). */
-export async function getOutstandingDebtTotal(businessId: string): Promise<number> {
+/**
+ * Ochiq qarzlar bo'yicha qolgan summa (jamiSumma − tolangan).
+ * turi berilmasa — hamma yo'nalish bo'yicha (eski xatti-harakat).
+ */
+export async function getOutstandingDebtTotal(
+  businessId: string,
+  turi?: "olinadigan" | "beriladigan"
+): Promise<number> {
   const res = await prisma.debt.aggregate({
-    where: { businessId, isYopilgan: false },
+    where: { businessId, isYopilgan: false, ...(turi ? { turi } : {}) },
     _sum: { jamiSumma: true, tolangan: true },
   });
   return (res._sum.jamiSumma ?? 0) - (res._sum.tolangan ?? 0);
+}
+
+export interface QarzJamiDTO {
+  /** Bizga qarzdorlar — kelishi kerak bo'lgan pul. */
+  olinadigan: number;
+  /** Biz qarzdormiz — to'lanishi kerak bo'lgan pul. */
+  beriladigan: number;
+  /** Sof holat: olinadigan − beriladigan. */
+  sof: number;
+}
+
+/** Ikki yo'nalish bo'yicha ochiq qarzlar yakuni. */
+export async function getDebtTotals(businessId: string): Promise<QarzJamiDTO> {
+  const rows = await prisma.debt.groupBy({
+    by: ["turi"],
+    where: { businessId, isYopilgan: false },
+    _sum: { jamiSumma: true, tolangan: true },
+  });
+  const jami = (t: string) => {
+    const r = rows.find((x) => x.turi === t);
+    return (r?._sum.jamiSumma ?? 0) - (r?._sum.tolangan ?? 0);
+  };
+  const olinadigan = jami("olinadigan");
+  const beriladigan = jami("beriladigan");
+  return { olinadigan, beriladigan, sof: olinadigan - beriladigan };
 }
 
 export interface OmborStats {

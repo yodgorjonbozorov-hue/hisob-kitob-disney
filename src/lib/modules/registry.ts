@@ -140,17 +140,27 @@ export interface NavHolati {
   yoqilgan: Set<string>;
   /** Aktiv biznes omborli'mi — OMBOR nav'i faqat shunda ko'rinadi. */
   omborli: boolean;
+  /** Aktiv biznes avto rejimidami — OMBOR yorliqlari "Avtopark/Mashina sotish" bo'ladi. */
+  avto?: boolean;
 }
 
+/** Avto rejimidagi biznes uchun OMBOR moduli yorliqlari (lib/biznesTuri.ts bilan mos). */
+const AVTO_YORLIQLAR: Record<string, string> = {
+  "/app/ombor": "Avtopark",
+  "/app/sotuv": "Mashina sotish",
+};
+
 /** Sidebar/menyu uchun tartiblangan havolalar ro'yxati. */
-export function computeNav({ rol, yoqilgan, omborli }: NavHolati): NavItem[] {
+export function computeNav({ rol, yoqilgan, omborli, avto = false }: NavHolati): NavItem[] {
   const items: NavItem[] = [];
   for (const m of MODULLAR) {
     if (!m.core && !yoqilgan.has(m.code)) continue;
     if (m.code === "OMBOR" && !omborli) continue;
     if (!m.rollar.includes(rol)) continue;
     for (const item of m.nav) {
-      if (item.rollar.includes(rol)) items.push(item);
+      if (!item.rollar.includes(rol)) continue;
+      const label = avto ? AVTO_YORLIQLAR[item.href] ?? item.label : item.label;
+      items.push(label === item.label ? item : { ...item, label });
     }
   }
   return items.sort((a, b) => a.tartib - b.tartib);
@@ -175,7 +185,7 @@ export function computeMobileTabs(holat: NavHolati): MobileTab[] {
     return tabs;
   }
   const omborBor = holat.yoqilgan.has("OMBOR") && holat.omborli;
-  if (omborBor) tabs.push({ href: "/app/sotuv", label: "Sotuv", icon: "cart" });
+  if (omborBor) tabs.push({ href: "/app/sotuv", label: holat.avto ? "Sotish" : "Sotuv", icon: "cart" });
   else if (crmBor) tabs.push({ href: "/app/crm", label: "CRM", icon: "crm" });
   else if (manager) tabs.push({ href: "/app/hisobot", label: "Hisobot", icon: "chart" });
   return tabs;

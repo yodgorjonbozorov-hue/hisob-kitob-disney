@@ -8,6 +8,7 @@ import { listProducts, getOmborStats, getProductProfitability, type ProductAdmin
 import { OmborClient } from "./OmborClient";
 import { Card } from "@/components/ui/Card";
 import { formatSomLabel } from "@/lib/format";
+import { omborMatn, isAvto } from "@/lib/biznesTuri";
 
 export default async function OmborPage() {
   const ctx = await requireTenantPage();
@@ -30,26 +31,62 @@ export default async function OmborPage() {
     getProductProfitability(business.id),
   ]);
 
+  const M = omborMatn(business.turi);
+  const avto = isAvto(business.turi);
+  // Sotilganlar bo'yicha yakun — "sof foyda" ko'rsatkichi (avto rejimida ayniqsa muhim).
+  const jami = profit.reduce(
+    (a, p) => ({
+      sotilgan: a.sotilgan + p.sotilgan,
+      daromad: a.daromad + p.daromad,
+      tannarx: a.tannarx + p.tannarx,
+      foyda: a.foyda + p.foyda,
+    }),
+    { sotilgan: 0, daromad: 0, tannarx: 0, foyda: 0 }
+  );
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-fg">Ombor</h1>
+        <h1 className="text-2xl font-bold text-fg">{M.modul}</h1>
         <p className="text-sm text-muted mt-1">
           Biznes: <span className="font-medium text-fg">{business.nomi}</span>
         </p>
       </div>
-      <OmborClient initialProducts={products} stats={stats} />
+      <OmborClient initialProducts={products} stats={stats} biznesTuri={business.turi} />
+
+      {profit.length > 0 && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Card>
+            <p className="text-muted text-sm mb-1">{avto ? "Sotilgan mashinalar" : "Sotilgan (dona)"}</p>
+            <p className="text-xl font-semibold text-fg tnum">{jami.sotilgan}</p>
+          </Card>
+          <Card>
+            <p className="text-muted text-sm mb-1">Sotuvdan tushum</p>
+            <p className="text-xl font-semibold text-fg tnum">{formatSomLabel(jami.daromad)}</p>
+          </Card>
+          <Card>
+            <p className="text-muted text-sm mb-1">{avto ? "Mashinalar tannarxi" : "Tannarx"}</p>
+            <p className="text-xl font-semibold text-fg tnum">{formatSomLabel(jami.tannarx)}</p>
+          </Card>
+          <Card>
+            <p className="text-muted text-sm mb-1">Sof foyda</p>
+            <p className={`text-xl font-semibold tnum ${jami.foyda >= 0 ? "text-income" : "text-expense"}`}>
+              {formatSomLabel(jami.foyda)}
+            </p>
+          </Card>
+        </div>
+      )}
 
       {profit.length > 0 && (
         <Card className="p-0 overflow-hidden">
-          <h2 className="font-semibold text-fg px-5 pt-5 pb-3">Mahsulot foydaliligi</h2>
+          <h2 className="font-semibold text-fg px-5 pt-5 pb-3">{M.foydaSarlavha}</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-surface-2 text-muted text-xs uppercase">
                 <tr>
-                  <th className="text-left px-5 py-2">Mahsulot</th>
-                  <th className="text-right px-3 py-2">Sotilgan</th>
-                  <th className="text-right px-3 py-2">Daromad</th>
+                  <th className="text-left px-5 py-2">{avto ? "Mashina" : "Mahsulot"}</th>
+                  <th className="text-right px-3 py-2">{M.sotilgan}</th>
+                  <th className="text-right px-3 py-2">{avto ? "Sotilgan narx" : "Daromad"}</th>
                   <th className="text-right px-3 py-2">Foyda</th>
                   <th className="text-right px-5 py-2">Marja</th>
                 </tr>

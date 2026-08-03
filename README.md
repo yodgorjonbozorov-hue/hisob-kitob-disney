@@ -68,6 +68,17 @@ npm run db:seed     # demo tenant, 2 biznes (Demo Xizmatlar + Salyut), kategoriy
 
 > Yangi migratsiya yaratish uchun (schema o'zgartirilganda): `npm run db:migrate:create -- --name <nom>` — bu faqat SQL faylini generatsiya qiladi, so'ng `npm run db:apply` bilan qo'llaysiz.
 
+### Yangi mijoz (tenant) yaratish
+
+Superadmin panelisiz, bitta buyruq bilan — kompaniya + OWNER + biznes + kategoriyalar + obuna:
+
+```bash
+npm run client:create -- --nom "AvtoBalans" --login AvtoBalans --parol "avtobalans.uz" --tarif AVTO --turi avto --kunlar 30
+```
+
+`--tarif`: STANDARD | AVTO | PRO · `--turi`: umumiy | avto · `--kunlar`: obuna kunlari (0 → 14 kunlik TRIAL).
+Production'da xuddi shu buyruq Turso env (`DATABASE_URL`, `DATABASE_AUTH_TOKEN`) bilan ishlatiladi.
+
 ## Ishga tushirish
 
 ```bash
@@ -102,8 +113,18 @@ Biznes **omborli** bo'lsa (Admin panel → Bizneslar → biznes yaratishda yoqil
 
 - **Ombor** (direktor): mahsulot turlari (masalan salyut turlari), har biriga **kelgan narx (tannarx)** va **sotuv narxi**, joriy qoldiq. "Ombor kirimi" bilan qoldiq oshiriladi. "Ko'p tur qo'shish" — bir nechta turni birdan kiritish. Ombor kirimi chiqim yozmaydi (tovar tannarxini direktor alohida kuzatadi).
 - **Sotuv** (direktor + kassir): mahsulot tanlab sotiladi. **Naqd** → darhol kirim (daromad) yoziladi; **Qarzga** → qarzdorlik yaratiladi (daromad hali yozilmaydi — kassa usuli). Omborda yetarli bo'lmasa sotib bo'lmaydi (atomik himoya).
-- **Qarzdorlik** (direktor + kassir): mijozlar qarzi ro'yxati (jami / to'langan / qolgan). To'lov qabul qilinganda o'sha summa **kirim** sifatida yoziladi.
+- **Qarzdorlik** (direktor + kassir): **ikki yo'nalishli** ro'yxat — *Menga qarzdor* (qarzga sotilgan) va *Men qarzdorman* (olingan mol/mashina uchun to'lanmagan pul), yakunda **sof holat**. To'lov qabul qilinganda summa **kirim**, o'z qarzini to'laganda **chiqim** sifatida yoziladi. Qarzni qo'lda ham qo'shish mumkin (mahsulotga bog'lash va to'lov muddati bilan).
 - **Kassir ko'rinishi**: sotuv narxini ko'radi (sotish uchun), lekin **qancha qolganini ko'rmaydi** — tugagan tur "Qolmadi" deb ko'rsatiladi. Ombordagi miqdorni faqat direktor ko'radi.
+
+### Avto rejimi (olib-sotarlar uchun)
+
+Biznes **turi** "avto" bo'lsa (Admin panel → Bizneslar → *Avto rejim*), ombor moduli avtoparkka aylanadi:
+
+- Bitta yozuv = **bitta mashina** (model, yil, davlat raqami, rang; qoldiq 0/1 — "Sotuvda"/"Sotildi").
+- **Mashina qabul qilish**: *naqd* olinsa darhol chiqim yoziladi ("Mashina xaridi"); *qarzga* olinsa egasiga "Men qarzdorman" qarzdorligi ochiladi va chiqim to'lov paytida yoziladi (kassa usuli).
+- **Sof foyda**: har mashina bo'yicha sotilgan narx − olingan narx, hamda avtopark sahifasida umumiy yakun (sotilgan mashinalar, tushum, tannarx, sof foyda).
+- Kategoriyalar avto biznesga moslangan: rasmiylashtirish (MRB, notarius), ta'mirlash, sug'urta, evakuator, maydon ijarasi va h.k.
+- Tarif: **Avto — 200 000 so'm/oy** (Moliya + Avtopark modullari).
 
 ## Funksiyalar
 

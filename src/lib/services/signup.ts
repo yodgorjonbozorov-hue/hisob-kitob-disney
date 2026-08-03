@@ -12,6 +12,36 @@ export const TRIAL_KUNLARI = 14;
 export const STARTER_KIRIM = ["Sotuv", "Xizmat", "Boshqa kirim"];
 export const STARTER_CHIQIM = ["Ijara", "Oyliklar", "Kommunal", "Transport", "Mayda xarajatlar", "Boshqa chiqim"];
 
+/**
+ * AVTO (olib-sotar) biznes uchun boshlang'ich kategoriyalar.
+ * "Sotuv", "Qarz to'lovi", "Mashina xaridi", "Qarz to'lash" — ombor servisi
+ * avtomatik ishlatadigan nomlar (lib/services/inventory.ts), shu bois shu ro'yxatda
+ * ham bor: ular avvaldan ko'rinib turadi va takrorlanmaydi.
+ */
+export const AVTO_KIRIM = [
+  "Sotuv", // mashina sotuvi — avtomatik yoziladi
+  "Qarz to'lovi", // xaridor qarzini to'ladi — avtomatik
+  "Vositachilik (komissiya)",
+  "Ekspertiza xizmati",
+  "Boshqa kirim",
+];
+
+export const AVTO_CHIQIM = [
+  "Mashina xaridi", // avtoparkka naqd olindi — avtomatik yoziladi
+  "Qarz to'lash", // mashina egasiga to'lov — avtomatik
+  "Ta'mirlash va ehtiyot qismlar",
+  "Yuvish va tozalash",
+  "Rasmiylashtirish (MRB, notarius)",
+  "Sug'urta",
+  "Yoqilg'i",
+  "Evakuator va yetkazish",
+  "Jarimalar",
+  "Maydon ijarasi",
+  "Oyliklar",
+  "Reklama va e'lonlar",
+  "Boshqa chiqim",
+];
+
 /** Kompaniya nomidan URL-slug yasaydi (o'zbekcha apostroflar hisobga olinadi). */
 export function slugify(nomi: string): string {
   const s = nomi
@@ -40,6 +70,10 @@ export interface SignupParams {
   ism: string;
   login: string; // normalizatsiya qilingan telefon raqam
   parol: string;
+  /** Biznes turi: "umumiy" (default) yoki "avto" — kategoriyalar shunga qarab tanlanadi. */
+  biznesTuri?: "umumiy" | "avto";
+  /** Tarif kodi (lib/billing/plans.ts). Default STANDARD. */
+  plan?: string;
 }
 
 /**
@@ -51,6 +85,9 @@ export async function createTenantWithOwner(params: SignupParams) {
   const parolHash = await hashPassword(params.parol);
   const slug = await uniqueSlug(slugify(params.kompaniyaNomi));
   const trialEndsAt = new Date(Date.now() + TRIAL_KUNLARI * 24 * 60 * 60 * 1000);
+  const avto = params.biznesTuri === "avto";
+  const kirim = avto ? AVTO_KIRIM : STARTER_KIRIM;
+  const chiqim = avto ? AVTO_CHIQIM : STARTER_CHIQIM;
 
   return rawPrisma.$transaction(async (tx) => {
     const tenant = await tx.tenant.create({
@@ -59,11 +96,18 @@ export async function createTenantWithOwner(params: SignupParams) {
         slug,
         status: "TRIAL",
         trialEndsAt,
+        ...(params.plan ? { plan: params.plan } : {}),
       },
     });
 
     const business = await tx.business.create({
-      data: { nomi: params.kompaniyaNomi, tenantId: tenant.id },
+      // Avto rejimi ombor tizimisiz ishlamaydi — birga yoqiladi.
+      data: {
+        nomi: params.kompaniyaNomi,
+        tenantId: tenant.id,
+        turi: avto ? "avto" : "umumiy",
+        omborli: avto,
+      },
     });
 
     const user = await tx.user.create({
@@ -78,10 +122,17 @@ export async function createTenantWithOwner(params: SignupParams) {
 
     await tx.category.createMany({
       data: [
-        ...STARTER_KIRIM.map((nomi, i) => ({ nomi, turi: "kirim", tartib: i, businessId: business.id })),
-        ...STARTER_CHIQIM.map((nomi, i) => ({ nomi, turi: "chiqim", tartib: i, businessId: business.id })),
+        ...kirim.map((nomi, i) => ({ nomi, turi: "kirim", tartib: i, businessId: business.id })),
+        ...chiqim.map((nomi, i) => ({ nomi, turi: "chiqim", tartib: i, businessId: business.id })),
       ],
     });
+
+    // Avto biznes uchun OMBOR (avtopark) moduli darhol yoqiladi.
+    if (avto) {
+      await tx.tenantModule.create({
+        data: { tenantId: tenant.id, code: "OMBOR", isActive: true },
+      });
+    }
 
     return { tenant, user, business };
   });

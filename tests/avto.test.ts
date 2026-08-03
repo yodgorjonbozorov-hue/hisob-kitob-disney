@@ -1,0 +1,363 @@
+/**
+ * AVTO REJIMI va IKKI TOMONLAMA QARZDORLIK TESTLARI.
+ * createAvtoMashina (naqd/qarzga), sof foyda, createDebt, recordDebtPayment
+ * ikki yo'nalishda (kirim/chiqim), getDebtTotals, AVTO tarifi, tenant izolyatsiyasi.
+ * Ishga tushirish: npm run test:avto
+ */
+process.env.DATABASE_URL = "file:./prisma/test-avto.db";
+
+import { test, before, after } from "node:test";
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { rmSync } from "node:fs";
+
+let rawPrisma: any;
+let prisma: any;
+let runWithTenant: any;
+let createTenantWithOwner: any;
+let inventory: any;
+let queries: any;
+let plans: any;
+let registry: any;
+let biznesTuri: any;
+
+let tA: any;
+let tB: any;
+
+before(async () => {
+  rmSync("prisma/test-avto.db", { force: true });
+  const res = spawnSync(process.execPath, ["scripts/db-migrate.mjs"], { env: { ...process.env }, encoding: "utf8" });
+  if (res.status !== 0) throw new Error(`Migratsiya xatosi:\n${res.stdout}\n${res.stderr}`);
+
+  ({ rawPrisma } = await import("@/lib/db/rawPrisma"));
+  ({ prisma } = await import("@/lib/prisma"));
+  ({ runWithTenant } = await import("@/lib/db/tenantContext"));
+  ({ createTenantWithOwner } = await import("@/lib/services/signup"));
+  inventory = await import("@/lib/services/inventory");
+  queries = await import("@/lib/queries/inventory");
+  plans = await import("@/lib/billing/plans");
+  registry = await import("@/lib/modules/registry");
+  biznesTuri = await import("@/lib/biznesTuri");
+
+  tA = await createTenantWithOwner({
+    kompaniyaNomi: "Avto A",
+    ism: "A",
+    login: "+998955555501",
+    parol: "parol12345",
+    biznesTuri: "avto",
+    plan: "AVTO",
+  });
+  tB = await createTenantWithOwner({
+    kompaniyaNomi: "Avto B",
+    ism: "B",
+    login: "+998955555502",
+    parol: "parol12345",
+    biznesTuri: "avto",
+    plan: "AVTO",
+  });
+});
+
+after(async () => {
+  await rawPrisma?.$disconnect();
+});
+
+// ---------- Tarif va rejim ----------
+
+test("AVTO tarifi 200 000 so'm va MOLIYA+OMBOR modullari bilan mavjud", () => {
+  const plan = plans.planByCode("AVTO");
+  assert.ok(plan, "AVTO tarifi topilmadi");
+  assert.equal(plan.oylikNarx, 200_000);
+  assert.deepEqual(plan.modullar, ["MOLIYA", "OMBOR"]);
+});
+
+test("avto biznes omborli, avto rejimda va avto kategoriyalari bilan ochiladi", async () => {
+  const business = await rawPrisma.business.findUnique({ where: { id: tA.business.id } });
+  assert.equal(business.turi, "avto");
+  assert.equal(business.omborli, true);
+
+  const kategoriyalar = await rawPrisma.category.findMany({ where: { businessId: tA.business.id } });
+  const nomlar = kategoriyalar.map((k: any) => k.nomi);
+  assert.ok(nomlar.includes("Mashina xaridi"), "chiqimda 'Mashina xaridi' bo'lishi kerak");
+  assert.ok(nomlar.includes("Rasmiylashtirish (MRB, notarius)"));
+  assert.ok(nomlar.includes("Sotuv"));
+
+  // OMBOR moduli darhol yoqilgan.
+  const modul = await rawPrisma.tenantModule.findFirst({
+    where: { tenantId: tA.tenant.id, code: "OMBOR", isActive: true },
+  });
+  assert.ok(modul, "OMBOR moduli yoqilmagan");
+});
+
+test("computeNav: avto rejimida yorliqlar Avtopark / Mashina sotish bo'ladi", () => {
+  const items = registry.computeNav({
+    rol: "OWNER",
+    yoqilgan: new Set(["MOLIYA", "OMBOR", "BOSHQARUV"]),
+    omborli: true,
+    avto: true,
+  });
+  const byHref = Object.fromEntries(items.map((i: any) => [i.href, i.label]));
+  assert.equal(byHref["/app/ombor"], "Avtopark");
+  assert.equal(byHref["/app/sotuv"], "Mashina sotish");
+  // Umumiy rejimda eski nomlar saqlanadi.
+  const umumiy = registry.computeNav({
+    rol: "OWNER",
+    yoqilgan: new Set(["MOLIYA", "OMBOR"]),
+    omborli: true,
+  });
+  assert.equal(umumiy.find((i: any) => i.href === "/app/ombor").label, "Ombor");
+});
+
+// ---------- Mashina qabul qilish ----------
+
+test("naqdga olingan mashina: avtoparkka tushadi va chiqim yoziladi", async () => {
+  const mashina = await runWithTenant(tA.tenant.id, () =>
+    inventory.createAvtoMashina({
+      businessId: tA.business.id,
+      nomi: "Malibu 2",
+      olinganNarx: 200_000_000,
+      sotuvNarx: 230_000_000,
+      avtoYil: 2018,
+      avtoRaqam: "01A123BC",
+      avtoRang: "Oq",
+      tolovTuri: "naqd",
+      userId: tA.user.id,
+    })
+  );
+  assert.equal(mashina.miqdor, 1, "mashina avtoparkda turishi kerak");
+  assert.equal(mashina.avtoYil, 2018);
+  assert.equal(mashina.avtoRaqam, "01A123BC");
+
+  const chiqim = await runWithTenant(tA.tenant.id, () =>
+    prisma.transaction.findMany({
+      where: { businessId: tA.business.id, turi: "chiqim" },
+      include: { category: true },
+    })
+  );
+  assert.equal(chiqim.length, 1);
+  assert.equal(chiqim[0].summa, 200_000_000);
+  assert.equal(chiqim[0].category.nomi, "Mashina xaridi");
+});
+
+test("qarzga olingan mashina: chiqim yozilmaydi, 'beriladigan' qarz ochiladi", async () => {
+  const mashina = await runWithTenant(tA.tenant.id, () =>
+    inventory.createAvtoMashina({
+      businessId: tA.business.id,
+      nomi: "Cobalt",
+      olinganNarx: 120_000_000,
+      sotuvNarx: 135_000_000,
+      avtoRaqam: "01B777CC",
+      tolovTuri: "qarz",
+      egasiNomi: "Sardor aka",
+      egasiTel: "+998901112233",
+      userId: tA.user.id,
+    })
+  );
+
+  const qarzlar = await runWithTenant(tA.tenant.id, () =>
+    prisma.debt.findMany({ where: { businessId: tA.business.id, turi: "beriladigan" } })
+  );
+  assert.equal(qarzlar.length, 1);
+  assert.equal(qarzlar[0].mijozNomi, "Sardor aka");
+  assert.equal(qarzlar[0].jamiSumma, 120_000_000);
+  assert.equal(qarzlar[0].productId, mashina.id, "qarz mashinaga bog'lanishi kerak");
+
+  // Qarzga olishda pul chiqmaydi — chiqim tranzaksiyalari soni o'zgarmaydi.
+  const chiqimSoni = await runWithTenant(tA.tenant.id, () =>
+    prisma.transaction.count({ where: { businessId: tA.business.id, turi: "chiqim" } })
+  );
+  assert.equal(chiqimSoni, 1, "qarzga olishda yangi chiqim yozilmasligi kerak");
+});
+
+test("egasi nomisiz qarzga olish rad etiladi", async () => {
+  await assert.rejects(
+    () =>
+      runWithTenant(tA.tenant.id, () =>
+        inventory.createAvtoMashina({
+          businessId: tA.business.id,
+          nomi: "Nexia",
+          olinganNarx: 50_000_000,
+          tolovTuri: "qarz",
+          userId: tA.user.id,
+        })
+      ),
+    /egasining ismi/
+  );
+});
+
+// ---------- Sotuv va sof foyda ----------
+
+test("naqd sotuv: kirim yoziladi va sof foyda = sotuv − olingan narx", async () => {
+  const mashina = await runWithTenant(tA.tenant.id, () =>
+    prisma.product.findFirst({ where: { businessId: tA.business.id, nomi: "Malibu 2" } })
+  );
+  await runWithTenant(tA.tenant.id, () =>
+    inventory.createSale({
+      businessId: tA.business.id,
+      productId: mashina.id,
+      miqdor: 1,
+      tolovTuri: "naqd",
+      userId: tA.user.id,
+    })
+  );
+
+  const foyda = await runWithTenant(tA.tenant.id, () => queries.getProductProfitability(tA.business.id));
+  const malibu = foyda.find((p: any) => p.nomi === "Malibu 2");
+  assert.equal(malibu.daromad, 230_000_000);
+  assert.equal(malibu.tannarx, 200_000_000);
+  assert.equal(malibu.foyda, 30_000_000);
+  assert.equal(malibu.marja, 13);
+
+  const sotilgan = await runWithTenant(tA.tenant.id, () =>
+    prisma.product.findUnique({ where: { id: mashina.id } })
+  );
+  assert.equal(sotilgan.miqdor, 0, "sotilgan mashina avtoparkda qolmasligi kerak");
+});
+
+test("qarzga sotuv: 'olinadigan' qarz mashinaga bog'langan holda ochiladi", async () => {
+  const mashina = await runWithTenant(tA.tenant.id, () =>
+    prisma.product.findFirst({ where: { businessId: tA.business.id, nomi: "Cobalt" } })
+  );
+  await runWithTenant(tA.tenant.id, () =>
+    inventory.createSale({
+      businessId: tA.business.id,
+      productId: mashina.id,
+      miqdor: 1,
+      tolovTuri: "qarz",
+      mijozNomi: "Jasur",
+      mijozTel: "+998907776655",
+      userId: tA.user.id,
+    })
+  );
+
+  const qarz = await runWithTenant(tA.tenant.id, () =>
+    prisma.debt.findFirst({ where: { businessId: tA.business.id, mijozNomi: "Jasur" } })
+  );
+  assert.equal(qarz.turi, "olinadigan");
+  assert.equal(qarz.jamiSumma, 135_000_000);
+  assert.equal(qarz.productId, mashina.id);
+});
+
+// ---------- Ikki tomonlama qarzdorlik ----------
+
+test("getDebtTotals: olinadigan, beriladigan va sof holat to'g'ri hisoblanadi", async () => {
+  const jami = await runWithTenant(tA.tenant.id, () => queries.getDebtTotals(tA.business.id));
+  assert.equal(jami.olinadigan, 135_000_000, "Jasur qarzi");
+  assert.equal(jami.beriladigan, 120_000_000, "Sardor akaga qarz");
+  assert.equal(jami.sof, 15_000_000);
+});
+
+test("qarz to'lovi (olinadigan) kirim, (beriladigan) chiqim tranzaksiya yaratadi", async () => {
+  const olinadigan = await runWithTenant(tA.tenant.id, () =>
+    prisma.debt.findFirst({ where: { businessId: tA.business.id, turi: "olinadigan" } })
+  );
+  await runWithTenant(tA.tenant.id, () =>
+    inventory.recordDebtPayment({
+      businessId: tA.business.id,
+      debtId: olinadigan.id,
+      summa: 35_000_000,
+      userId: tA.user.id,
+    })
+  );
+
+  const beriladigan = await runWithTenant(tA.tenant.id, () =>
+    prisma.debt.findFirst({ where: { businessId: tA.business.id, turi: "beriladigan" } })
+  );
+  const yopilgan = await runWithTenant(tA.tenant.id, () =>
+    inventory.recordDebtPayment({
+      businessId: tA.business.id,
+      debtId: beriladigan.id,
+      summa: 120_000_000,
+      userId: tA.user.id,
+    })
+  );
+  assert.equal(yopilgan.isYopilgan, true, "to'liq to'langan qarz yopilishi kerak");
+
+  const txns = await runWithTenant(tA.tenant.id, () =>
+    prisma.transaction.findMany({
+      where: { businessId: tA.business.id },
+      include: { category: true },
+      orderBy: { createdAt: "desc" },
+      take: 2,
+    })
+  );
+  const qarzTolash = txns.find((t: any) => t.category.nomi === "Qarz to'lash");
+  const qarzTolovi = txns.find((t: any) => t.category.nomi === "Qarz to'lovi");
+  assert.ok(qarzTolash, "beriladigan qarz to'lovi chiqim sifatida yozilishi kerak");
+  assert.equal(qarzTolash.turi, "chiqim");
+  assert.equal(qarzTolash.summa, 120_000_000);
+  assert.ok(qarzTolovi, "olinadigan qarz to'lovi kirim sifatida yozilishi kerak");
+  assert.equal(qarzTolovi.turi, "kirim");
+  assert.equal(qarzTolovi.summa, 35_000_000);
+
+  const jami = await runWithTenant(tA.tenant.id, () => queries.getDebtTotals(tA.business.id));
+  assert.equal(jami.olinadigan, 100_000_000);
+  assert.equal(jami.beriladigan, 0);
+});
+
+test("createDebt: qo'lda ikki yo'nalishda qarz qo'shiladi, pul harakati yozilmaydi", async () => {
+  const oldin = await runWithTenant(tA.tenant.id, () =>
+    prisma.transaction.count({ where: { businessId: tA.business.id } })
+  );
+  await runWithTenant(tA.tenant.id, () =>
+    inventory.createDebt({
+      businessId: tA.business.id,
+      turi: "beriladigan",
+      mijozNomi: "Ustaxona",
+      jamiSumma: 5_000_000,
+      muddat: "2026-09-01",
+      izoh: "Ta'mirlash uchun",
+      userId: tA.user.id,
+    })
+  );
+  const keyin = await runWithTenant(tA.tenant.id, () =>
+    prisma.transaction.count({ where: { businessId: tA.business.id } })
+  );
+  assert.equal(keyin, oldin, "qo'lda qarz qo'shish tranzaksiya yaratmasligi kerak");
+
+  const royxat = await runWithTenant(tA.tenant.id, () => queries.listDebts(tA.business.id));
+  const ustaxona = royxat.find((d: any) => d.mijozNomi === "Ustaxona");
+  assert.equal(ustaxona.turi, "beriladigan");
+  assert.equal(ustaxona.qolgan, 5_000_000);
+  assert.ok(ustaxona.muddat, "muddat saqlanishi kerak");
+});
+
+test("createDebt: to'langan summa qarzdan ko'p bo'lsa rad etiladi", async () => {
+  await assert.rejects(
+    () =>
+      runWithTenant(tA.tenant.id, () =>
+        inventory.createDebt({
+          businessId: tA.business.id,
+          turi: "olinadigan",
+          mijozNomi: "Test",
+          jamiSumma: 1_000_000,
+          tolangan: 2_000_000,
+          userId: tA.user.id,
+        })
+      ),
+    /To'langan summa/
+  );
+});
+
+// ---------- Izolyatsiya ----------
+
+test("tenant izolyatsiyasi: B tenant A ning qarzlari va mashinalarini ko'rmaydi", async () => {
+  const bQarzlar = await runWithTenant(tB.tenant.id, () => queries.listDebts(tB.business.id));
+  assert.equal(bQarzlar.length, 0);
+
+  const bJami = await runWithTenant(tB.tenant.id, () => queries.getDebtTotals(tB.business.id));
+  assert.deepEqual(bJami, { olinadigan: 0, beriladigan: 0, sof: 0 });
+
+  const bMahsulotlar = await runWithTenant(tB.tenant.id, () =>
+    queries.listProducts(tB.business.id, { forKassir: false })
+  );
+  assert.equal(bMahsulotlar.length, 0);
+});
+
+// ---------- Matnlar ----------
+
+test("omborMatn: avto rejimida Avtopark, umumiyda Ombor", () => {
+  assert.equal(biznesTuri.omborMatn("avto").modul, "Avtopark");
+  assert.equal(biznesTuri.omborMatn("umumiy").modul, "Ombor");
+  assert.equal(biznesTuri.isAvto("avto"), true);
+  assert.equal(biznesTuri.isAvto(null), false);
+});

@@ -92,6 +92,9 @@ model Business {
   isActive     Boolean       @default(true)
   // Ombor (inventar) tizimi yoqilganmi — tovar sotadigan bizneslar uchun (masalan Salyut).
   omborli      Boolean       @default(false)
+  // Biznes turi: "umumiy" | "avto". Avto — olib-sotarlar uchun (ombor → avtopark).
+  // Faqat UI matnlari va sotuv qoidalariga ta'sir qiladi (lib/biznesTuri.ts).
+  turi         String        @default("umumiy")
   createdAt    DateTime      @default(now())
   tenantId     String
   tenant       Tenant        @relation(fields: [tenantId], references: [id])
@@ -268,6 +271,7 @@ model Budget {
 // ==== Ombor (inventar) moduli — faqat omborli bizneslar uchun ====
 
 /// Mahsulot turi (masalan salyut turlari) + narxlar + joriy qoldiq.
+/// Avto rejimida (Business.turi = "avto") bitta yozuv = bitta avtomobil (miqdor 0/1).
 model Product {
   id           String       @id @default(cuid())
   businessId   String
@@ -277,9 +281,15 @@ model Product {
   sotuvNarx    Int          @default(0) // sotuv narxi (birlik)
   miqdor       Int          @default(0) // ombordagi joriy qoldiq
   isActive     Boolean      @default(true)
+  izoh         String?
+  // Avto rejimi maydonlari — umumiy bizneslarda null.
+  avtoYil      Int?
+  avtoRaqam    String?
+  avtoRang     String?
   createdAt    DateTime     @default(now())
   stockEntries StockEntry[]
   sales        Sale[]
+  debts        Debt[]
 
   @@index([businessId])
 }
@@ -324,24 +334,35 @@ model Sale {
   @@index([productId])
 }
 
-/// Qarzdorlik — qarzga sotuvdan yaratiladi; to'lovlar bilan kamayadi.
+/// Qarzdorlik. Ikki yo'nalishli:
+///  - turi = "olinadigan" — bizga qarzdor (qarzga sotuvdan avtomatik yoki qo'lda);
+///  - turi = "beriladigan" — biz qarzdormiz (masalan mashina olindi, egasiga to'lanmadi).
+/// To'lovlar bilan kamayadi: olinadigan → kirim tranzaksiya, beriladigan → chiqim.
 model Debt {
   id         String        @id @default(cuid())
   businessId String
   business   Business      @relation(fields: [businessId], references: [id])
+  turi       String        @default("olinadigan")
   saleId     String?       @unique
   sale       Sale?         @relation(fields: [saleId], references: [id])
+  /// Qarz qaysi mahsulot/mashinaga tegishli (ixtiyoriy).
+  productId  String?
+  product    Product?      @relation(fields: [productId], references: [id])
   mijozNomi  String
   mijozTel   String?
   jamiSumma  Int
   tolangan   Int           @default(0)
   isYopilgan Boolean       @default(false)
+  /// Kelishilgan to'lov muddati (ixtiyoriy).
+  muddat     DateTime?
   izoh       String?
   userId     String
   createdAt  DateTime      @default(now())
   payments   DebtPayment[]
 
   @@index([businessId])
+  @@index([businessId, turi])
+  @@index([productId])
 }
 
 // ==== CRM moduli (BOS-2) ====

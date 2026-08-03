@@ -73,10 +73,10 @@ export async function getNotifications(
     }
   }
 
-  // Muddati o'tgan qarzlar (omborli biznes) — 30+ kun
+  // Muddati o'tgan qarzlar (omborli biznes) — 30+ kun (faqat bizga qarzdorlar)
   if (opts.omborli) {
     const debts = await prisma.debt.findMany({
-      where: { businessId, isYopilgan: false },
+      where: { businessId, isYopilgan: false, turi: "olinadigan" },
       select: { mijozNomi: true, jamiSumma: true, tolangan: true, createdAt: true },
     });
     const now = Date.now();
@@ -95,6 +95,21 @@ export async function getNotifications(
         severity: "warning",
         title: "Muddati o'tgan qarz (30+ kun)",
         message: `${overdue.length} ta mijoz to'lovni kechiktirmoqda`,
+        href: "/app/qarzlar",
+      });
+    }
+
+    // O'z qarzlarim — kelishilgan muddati o'tganlari.
+    const mening = await prisma.debt.findMany({
+      where: { businessId, isYopilgan: false, turi: "beriladigan", muddat: { lt: new Date() } },
+      select: { jamiSumma: true, tolangan: true },
+    });
+    if (mening.length > 0) {
+      const total = mening.reduce((a, d) => a + (d.jamiSumma - d.tolangan), 0);
+      out.push({
+        severity: "danger",
+        title: "To'lash muddati o'tdi",
+        message: `${mening.length} ta qarzingiz kechikdi, jami ${total.toLocaleString("ru-RU")} so'm`,
         href: "/app/qarzlar",
       });
     }

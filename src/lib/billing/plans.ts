@@ -18,6 +18,14 @@ export const PLANLAR: Plan[] = [
     modullar: ["MOLIYA", "OMBOR"],
   },
   {
+    code: "AVTO",
+    nomi: "Avto",
+    tavsif:
+      "Avto olib-sotarlar uchun: avtopark (har mashina alohida), har mashina bo'yicha sof foyda, ikki tomonlama qarzdorlik · Hisobotlar · Telegram bot",
+    oylikNarx: 200_000,
+    modullar: ["MOLIYA", "OMBOR"],
+  },
+  {
     code: "PRO",
     nomi: "Pro",
     oylikNarx: 399_000,

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getMonthSummary, getCategoryBreakdown, getTrend } from "@/lib/queries/dashboard";
-import { getOutstandingDebtTotal, listDebts } from "@/lib/queries/inventory";
+import { getDebtTotals, listDebts } from "@/lib/queries/inventory";
 import { currentMonthString } from "@/lib/date";
 
 /**
@@ -49,7 +49,8 @@ export const AI_TOOLLAR = [
   },
   {
     name: "qarzdorlik",
-    description: "Ochiq qarzdorlik: jami summa va eng katta qarzdorlar (OMBOR moduli).",
+    description:
+      "Ochiq qarzdorlik ikki yo'nalishda: menga qarzdorlar va men qarzdor bo'lganlarim, jami summalar va eng kattalari (OMBOR moduli).",
     input_schema: { type: "object" as const, properties: {} },
   },
   {
@@ -86,13 +87,22 @@ export async function runTool(name: string, input: Record<string, unknown>, ctx:
     case "qarzdorlik": {
       if (!ctx.yoqilganModullar.has("OMBOR")) return JSON.stringify({ xabar: "OMBOR moduli yoqilmagan" });
       const [jami, royxat] = await Promise.all([
-        getOutstandingDebtTotal(ctx.businessId),
+        getDebtTotals(ctx.businessId),
         listDebts(ctx.businessId),
       ]);
-      const ochiq = royxat.filter((d) => !d.isYopilgan).slice(0, 5);
+      const ochiq = royxat.filter((d) => !d.isYopilgan);
+      const eng = (turi: string) =>
+        ochiq
+          .filter((d) => d.turi === turi)
+          .sort((a, b) => b.qolgan - a.qolgan)
+          .slice(0, 5)
+          .map((d) => ({ tomon: d.mijozNomi, qolgan: d.qolgan, mahsulot: d.productNomi }));
       return JSON.stringify({
-        jamiQarzdorlik: jami,
-        engKattaQarzdorlar: ochiq.map((d) => ({ mijoz: d.mijozNomi, qolgan: d.jamiSumma - d.tolangan })),
+        mengaQarzdorJami: jami.olinadigan,
+        menQarzdormanJami: jami.beriladigan,
+        sofQarzHolati: jami.sof,
+        engKattaQarzdorlar: eng("olinadigan"),
+        engKattaQarzlarim: eng("beriladigan"),
       });
     }
     case "crm_holati": {

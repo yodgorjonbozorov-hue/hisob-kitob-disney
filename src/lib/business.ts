@@ -10,6 +10,8 @@ export interface BusinessDTO {
   nomi: string;
   isActive: boolean;
   omborli: boolean;
+  /** "umumiy" | "avto" — ombor moduli qaysi rejimda ko'rinadi (lib/biznesTuri.ts). */
+  turi: string;
 }
 
 /** Foydalanuvchi kira oladigan bizneslar: admin → barcha faol; kassir → faqat o'ziniki. */
@@ -18,14 +20,14 @@ export async function getAccessibleBusinesses(session: SessionData): Promise<Bus
     if (!session.businessId) return [];
     const b = await prisma.business.findUnique({
       where: { id: session.businessId },
-      select: { id: true, nomi: true, isActive: true, omborli: true },
+      select: { id: true, nomi: true, isActive: true, omborli: true, turi: true },
     });
     return b ? [b] : [];
   }
   // admin
   return prisma.business.findMany({
     where: { isActive: true },
-    select: { id: true, nomi: true, isActive: true, omborli: true },
+    select: { id: true, nomi: true, isActive: true, omborli: true, turi: true },
     orderBy: { nomi: "asc" },
   });
 }
@@ -63,7 +65,7 @@ export async function getActiveBusiness(session: SessionData): Promise<BusinessD
   if (!id) return null;
   return prisma.business.findUnique({
     where: { id },
-    select: { id: true, nomi: true, isActive: true, omborli: true },
+    select: { id: true, nomi: true, isActive: true, omborli: true, turi: true },
   });
 }
 
@@ -72,5 +74,16 @@ export async function requireOmborli(businessId: string): Promise<void> {
   const b = await prisma.business.findUnique({ where: { id: businessId }, select: { omborli: true } });
   if (!b?.omborli) {
     throw new BadRequestError("Bu biznesda ombor tizimi yoqilmagan");
+  }
+}
+
+/** Biznes avto rejimida ekanini tekshiradi (avtopark route'lari uchun). */
+export async function requireAvto(businessId: string): Promise<void> {
+  const b = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { omborli: true, turi: true },
+  });
+  if (!b?.omborli || b.turi !== "avto") {
+    throw new BadRequestError("Bu biznes avto rejimida emas");
   }
 }

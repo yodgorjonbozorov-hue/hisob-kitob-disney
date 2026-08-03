@@ -18,7 +18,7 @@ import {
   getTrend,
   getDailyDynamics,
 } from "@/lib/queries/dashboard";
-import { getOutstandingDebtTotal } from "@/lib/queries/inventory";
+import { getDebtTotals } from "@/lib/queries/inventory";
 import { getTodayTotals } from "@/lib/queries/shift";
 import { listTransactions } from "@/lib/queries/transactions";
 import { KassaHome } from "./KassaHome";
@@ -87,7 +87,7 @@ export default async function DashboardPage({
     getCategoryBreakdown(businessId, month, "chiqim"),
     getTrend(businessId, 6, month),
     getDailyDynamics(businessId, month),
-    business?.omborli ? getOutstandingDebtTotal(businessId) : Promise.resolve(0),
+    business?.omborli ? getDebtTotals(businessId) : Promise.resolve({ olinadigan: 0, beriladigan: 0, sof: 0 }),
     prisma.category.count({ where: { businessId } }),
   ]);
 
@@ -145,10 +145,17 @@ export default async function DashboardPage({
           accent={summary.sofFoyda >= 0 ? "income" : "expense"}
         />
         <StatCard
-          label="Qarzdorlik"
-          value={formatMoneyCompact(qarzTotal)}
-          accent={qarzTotal > 0 ? "expense" : "neutral"}
-        />
+          label="Menga qarzdor"
+          value={formatMoneyCompact(qarzTotal.olinadigan)}
+          accent={qarzTotal.olinadigan > 0 ? "expense" : "neutral"}
+        >
+          {qarzTotal.beriladigan > 0 && (
+            <p className="text-2xs mt-1 tnum text-muted">
+              Men qarzdorman:{" "}
+              <span className="font-medium text-expense">{formatMoneyCompact(qarzTotal.beriladigan)}</span>
+            </p>
+          )}
+        </StatCard>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

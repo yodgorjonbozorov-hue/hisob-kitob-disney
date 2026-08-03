@@ -5,6 +5,7 @@ import { requireModulePage } from "@/lib/modules/guard";
 import { getActiveBusiness } from "@/lib/business";
 import { listProducts, listRecentSales, type ProductKassirDTO } from "@/lib/queries/inventory";
 import { SotuvClient } from "./SotuvClient";
+import { isAvto } from "@/lib/biznesTuri";
 
 export default async function SotuvPage() {
   const ctx = await requireTenantPage();
@@ -31,12 +32,12 @@ export default async function SotuvPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-fg">Sotuv</h1>
+        <h1 className="text-2xl font-bold text-fg">{isAvto(business.turi) ? "Mashina sotish" : "Sotuv"}</h1>
         <p className="text-sm text-muted mt-1">
           Biznes: <span className="font-medium text-fg">{business.nomi}</span>
         </p>
       </div>
-      <SotuvClient products={products} initialSales={sales} />
+      <SotuvClient products={products} initialSales={sales} biznesTuri={business.turi} />
     </div>
   );
   });

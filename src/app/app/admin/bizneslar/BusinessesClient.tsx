@@ -6,11 +6,13 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
+import { BIZNES_TURLARI, isAvto } from "@/lib/biznesTuri";
 
 interface BusinessDTO {
   id: string;
   nomi: string;
   isActive: boolean;
+  turi: string;
   kategoriyalar: number;
   tranzaksiyalar: number;
 }
@@ -33,7 +35,22 @@ export function BusinessesClient({ initialBusinesses }: { initialBusinesses: Bus
     }
   }
 
-  function handleCreated(b: { id: string; nomi: string; isActive: boolean }) {
+  /** Biznes rejimi: umumiy ombor ↔ avto (olib-sotar). */
+  async function toggleTuri(b: BusinessDTO) {
+    const turi = isAvto(b.turi) ? "umumiy" : "avto";
+    const res = await fetch(`/api/businesses/${b.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ turi }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setBusinesses((prev) => prev.map((x) => (x.id === updated.id ? { ...x, turi: updated.turi } : x)));
+      router.refresh();
+    }
+  }
+
+  function handleCreated(b: { id: string; nomi: string; isActive: boolean; turi: string }) {
     setBusinesses((prev) => [
       ...prev,
       { ...b, kategoriyalar: 0, tranzaksiyalar: 0 },
@@ -53,6 +70,7 @@ export function BusinessesClient({ initialBusinesses }: { initialBusinesses: Bus
           <thead>
             <tr className="text-left text-faint text-xs uppercase">
               <th className="pb-2">Nomi</th>
+              <th className="pb-2">Rejim</th>
               <th className="pb-2 text-right">Kategoriyalar</th>
               <th className="pb-2 text-right">Tranzaksiyalar</th>
               <th className="pb-2">Holati</th>
@@ -63,12 +81,23 @@ export function BusinessesClient({ initialBusinesses }: { initialBusinesses: Bus
             {businesses.map((b) => (
               <tr key={b.id}>
                 <td className="py-2.5 font-medium">{b.nomi}</td>
+                <td className="py-2.5">
+                  <Badge tone={isAvto(b.turi) ? "kirim" : "neutral"}>
+                    {isAvto(b.turi) ? "Avto" : "Umumiy"}
+                  </Badge>
+                </td>
                 <td className="py-2.5 text-right text-muted">{b.kategoriyalar}</td>
                 <td className="py-2.5 text-right text-muted">{b.tranzaksiyalar}</td>
                 <td className="py-2.5">
                   <Badge tone={b.isActive ? "kirim" : "neutral"}>{b.isActive ? "Faol" : "Nofaol"}</Badge>
                 </td>
-                <td className="py-2.5 text-right">
+                <td className="py-2.5 text-right whitespace-nowrap">
+                  <button
+                    onClick={() => toggleTuri(b)}
+                    className="text-xs font-medium text-muted hover:text-brand mr-3"
+                  >
+                    {isAvto(b.turi) ? "Umumiy rejim" : "Avto rejim"}
+                  </button>
                   <button
                     onClick={() => toggleActive(b)}
                     className="text-xs font-medium text-muted hover:text-income"
@@ -92,9 +121,10 @@ function NewBusinessModal({
   onCreated,
 }: {
   onClose: () => void;
-  onCreated: (b: { id: string; nomi: string; isActive: boolean }) => void;
+  onCreated: (b: { id: string; nomi: string; isActive: boolean; turi: string }) => void;
 }) {
   const [nomi, setNomi] = useState("");
+  const [turi, setTuri] = useState<"umumiy" | "avto">("umumiy");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -105,7 +135,7 @@ function NewBusinessModal({
     const res = await fetch("/api/businesses", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nomi }),
+      body: JSON.stringify({ nomi, turi }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -128,6 +158,23 @@ function NewBusinessModal({
           autoFocus
           required
         />
+        <div>
+          <label className="block text-xs text-muted mb-1">Rejim</label>
+          <select
+            value={turi}
+            onChange={(e) => setTuri(e.target.value as "umumiy" | "avto")}
+            className="w-full rounded-lg border border-line px-3 py-2 text-sm bg-surface"
+          >
+            {BIZNES_TURLARI.map((t) => (
+              <option key={t.code} value={t.code}>
+                {t.nomi}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-faint mt-1">
+            {BIZNES_TURLARI.find((t) => t.code === turi)?.tavsif}
+          </p>
+        </div>
         <p className="text-xs text-faint">
           Yangi biznes bo'sh boshlanadi — kategoriyalarni "Kategoriyalar" bo'limida qo'shasiz.
         </p>

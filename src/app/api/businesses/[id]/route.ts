@@ -13,9 +13,11 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
     return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
   }
 
+  // Avto rejimi ombor tizimisiz ishlamaydi — birga yoqiladi.
+  const omborli = parsed.data.turi === "avto" ? { omborli: true } : {};
   const business = await prisma.business.update({
     where: { id: params.id },
-    data: parsed.data,
+    data: { ...parsed.data, ...omborli },
   });
 
   return NextResponse.json(business);

@@ -5,6 +5,7 @@ import { getAccessibleBusinesses, resolveActiveBusinessId } from "@/lib/business
 import { getNotificationCount } from "@/lib/queries/notifications";
 import { getEnabledModules } from "@/lib/modules/guard";
 import { computeNav, computeMobileTabs } from "@/lib/modules/registry";
+import { isAvto } from "@/lib/biznesTuri";
 import Sidebar from "@/components/nav/Sidebar";
 import MobileNav from "@/components/nav/MobileNav";
 import { BottomNav } from "@/components/nav/BottomNav";
@@ -33,13 +34,20 @@ export default async function ProtectedLayout({
   ]);
   const navBusinesses = businesses.map((b) => ({ id: b.id, nomi: b.nomi }));
   // Aktiv biznes omborli bo'lsa — Ombor/Sotuv/Qarzlar menyulari ko'rsatiladi.
-  const activeOmborli = businesses.find((b) => b.id === activeBusinessId)?.omborli ?? false;
+  const activeBusiness = businesses.find((b) => b.id === activeBusinessId);
+  const activeOmborli = activeBusiness?.omborli ?? false;
+  const activeAvto = isAvto(activeBusiness?.turi);
   const notifCount = activeBusinessId
     ? await getNotificationCount(activeBusinessId, { rol: session.rol, omborli: activeOmborli }).catch(() => 0)
     : 0;
 
   // Navigatsiya modul registry'sidan generatsiya qilinadi — BITTA manba.
-  const navHolati = { rol: session.rol, yoqilgan: yoqilganModullar, omborli: activeOmborli };
+  const navHolati = {
+    rol: session.rol,
+    yoqilgan: yoqilganModullar,
+    omborli: activeOmborli,
+    avto: activeAvto,
+  };
   const navItems = computeNav(navHolati);
   const mobileTabs = computeMobileTabs(navHolati);
   const menyu = navItems.map((n) => ({ label: n.label, href: n.href }));
