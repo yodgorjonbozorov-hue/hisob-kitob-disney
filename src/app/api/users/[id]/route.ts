@@ -37,20 +37,26 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
   const { parol, businessId, rol, ...rest } = parsed.data;
   const effectiveRol = rol ?? existing.rol;
 
-  // Biznesni rol asosida hal qilamiz: kassir → majburiy biznes; admin/sotuvchi → biznessiz.
+  // Biznesni rol asosida hal qilamiz:
+  //  - CASHIER → majburiy biznes.
+  //  - SELLER → ixtiyoriy biznes (biriktirilsa yozuvlari doim shu biznesga tushadi).
+  //  - OWNER/ADMIN → biznessiz (barcha bizneslar).
   let businessIdData: { businessId?: string | null } = {};
-  if (effectiveRol === "CASHIER") {
+  if (effectiveRol === "CASHIER" || effectiveRol === "SELLER") {
     const targetBiz = businessId !== undefined ? businessId : existing.businessId;
-    if (!targetBiz) {
+    if (effectiveRol === "CASHIER" && !targetBiz) {
       return NextResponse.json({ error: "Kassir uchun biznes tanlanishi shart" }, { status: 400 });
     }
-    const biz = await prisma.business.findUnique({ where: { id: targetBiz }, select: { id: true } });
-    if (!biz) {
-      return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });
+    if (targetBiz) {
+      const biz = await prisma.business.findUnique({ where: { id: targetBiz }, select: { id: true } });
+      if (!biz) {
+        return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });
+      }
+      businessIdData = { businessId: targetBiz };
+    } else {
+      businessIdData = { businessId: null };
     }
-    businessIdData = { businessId: targetBiz };
   } else {
-    // admin/sotuvchi barcha bizneslarni ko'radi — biriktirilgan biznes bo'lmaydi.
     businessIdData = { businessId: null };
   }
 

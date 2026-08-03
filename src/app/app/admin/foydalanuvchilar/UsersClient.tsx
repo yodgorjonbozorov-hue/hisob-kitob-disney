@@ -141,21 +141,22 @@ export function UsersClient({
                   )}
                 </td>
                 <td className="py-2.5 text-muted">
-                  {u.rol !== "CASHIER" ? (
-                    "Barcha"
-                  ) : (
+                  {u.rol === "CASHIER" || u.rol === "SELLER" ? (
                     <select
                       value={u.businessId ?? ""}
                       onChange={(e) => changeBusiness(u, e.target.value)}
                       className="rounded-lg border border-line px-2 py-1 text-sm"
                     >
-                      {u.businessId === null && <option value="">— (biriktirilmagan)</option>}
+                      {u.rol === "SELLER" && <option value="">Barcha bizneslar</option>}
+                      {u.rol === "CASHIER" && u.businessId === null && <option value="">— (biriktirilmagan)</option>}
                       {businesses.map((b) => (
                         <option key={b.id} value={b.id}>
                           {b.nomi}
                         </option>
                       ))}
                     </select>
+                  ) : (
+                    "Barcha"
                   )}
                 </td>
                 <td className="py-2.5">
@@ -213,7 +214,7 @@ function NewUserModal({
     const res = await fetch("/api/users", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ism, login, parol, rol, businessId: rol === "CASHIER" ? businessId : null }),
+      body: JSON.stringify({ ism, login, parol, rol, businessId: rol === "CASHIER" || rol === "SELLER" ? businessId || null : null }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -261,14 +262,17 @@ function NewUserModal({
           <option value="SELLER">Sotuvchi</option>
           <option value="OWNER">Direktor</option>
         </select>
-        {rol === "CASHIER" && (
+        {(rol === "CASHIER" || rol === "SELLER") && (
           <div>
-            <label className="block text-xs font-medium text-muted mb-1">Biznes</label>
+            <label className="block text-xs font-medium text-muted mb-1">
+              Biznes {rol === "SELLER" && <span className="text-faint">(ixtiyoriy)</span>}
+            </label>
             <select
               value={businessId}
               onChange={(e) => setBusinessId(e.target.value)}
               className="w-full rounded-lg border border-line px-3 py-2 text-sm"
             >
+              {rol === "SELLER" && <option value="">Barcha bizneslar (ko'p-biznesli)</option>}
               {businesses.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.nomi}
@@ -282,7 +286,8 @@ function NewUserModal({
         )}
         {rol === "SELLER" && (
           <p className="text-xs text-faint">
-            Sotuvchi barcha bizneslarni ko'radi va almashadi, faqat sotadi (kirim/sotuv/qarzlar) — sof foyda va hisobotlarni ko'rmaydi.
+            Sotuvchi faqat sotadi (kirim/chiqim/sotuv/qarzlar) — sof foyda va hisobotlarni ko'rmaydi. Biznes
+            tanlansa — yozuvlari doim shu biznesga tushadi (adashmaydi). Tanlanmasa — barcha bizneslarni ko'radi.
           </p>
         )}
         {error && <p className="text-expense text-sm">{error}</p>}
