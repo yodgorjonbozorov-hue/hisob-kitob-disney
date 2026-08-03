@@ -25,6 +25,7 @@ export function TransactionsClient({
   currentUserId,
   currentUserRol,
   hideProfit = false,
+  moveTargets = [],
   totals,
   filters,
 }: {
@@ -36,6 +37,7 @@ export function TransactionsClient({
   currentUserId: string;
   currentUserRol: Rol;
   hideProfit?: boolean;
+  moveTargets?: { id: string; nomi: string }[];
   totals: { jamiKirim: number; jamiChiqim: number; sof: number };
   filters: { from: string; to: string; turi: string; categoryId: string; q: string; minSumma: string; maxSumma: string };
 }) {
@@ -82,6 +84,29 @@ export function TransactionsClient({
       router.refresh();
     } else {
       toast({ message: "O'chirib bo'lmadi", tone: "error" });
+      router.refresh();
+    }
+  }
+
+  async function bulkMove(targetBusinessId: string) {
+    const ids = Array.from(selected);
+    if (ids.length === 0 || !targetBusinessId) return;
+    const target = moveTargets.find((b) => b.id === targetBusinessId);
+    if (!confirm(`${ids.length} ta yozuv "${target?.nomi}" biznesiga ko'chirilsinmi?`)) return;
+    setItems((prev) => prev.filter((i) => !selected.has(i.id)));
+    setTotal((prev) => Math.max(0, prev - ids.length));
+    setSelected(new Set());
+    const res = await fetch("/api/transactions/bulk-move", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids, targetBusinessId }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      toast({ message: `${data.moved} ta yozuv "${target?.nomi}" ga ko'chirildi`, tone: "success" });
+      router.refresh();
+    } else {
+      toast({ message: (await res.json()).error ?? "Ko'chirib bo'lmadi", tone: "error" });
       router.refresh();
     }
   }
@@ -138,7 +163,20 @@ export function TransactionsClient({
         <span className="text-sm text-muted">
           {selected.size > 0 ? `${selected.size} ta tanlandi` : `${total} ta yozuv`}
         </span>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {selected.size > 0 && moveTargets.length > 0 && (
+            <select
+              value=""
+              onChange={(e) => { if (e.target.value) bulkMove(e.target.value); e.target.value = ""; }}
+              className="text-sm rounded-lg border border-line bg-surface px-2 py-1 text-brand font-medium"
+              aria-label="Boshqa biznesga ko'chirish"
+            >
+              <option value="">Ko'chirish →</option>
+              {moveTargets.map((b) => (
+                <option key={b.id} value={b.id}>{b.nomi}</option>
+              ))}
+            </select>
+          )}
           {selected.size > 0 && (
             <button
               onClick={bulkDelete}

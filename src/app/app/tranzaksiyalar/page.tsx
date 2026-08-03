@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { requireTenantPage } from "@/lib/auth/tenant";
 import { runWithTenant } from "@/lib/db/tenantContext";
-import { resolveActiveBusinessId } from "@/lib/business";
+import { resolveActiveBusinessId, getAccessibleBusinesses } from "@/lib/business";
+import { isManager } from "@/lib/auth/roles";
 import { listTransactions } from "@/lib/queries/transactions";
 import { formatSom } from "@/lib/format";
 import { TransactionsClient } from "./TransactionsClient";
@@ -56,6 +57,14 @@ export default async function TranzaksiyalarPage({
     }),
   ]);
 
+  // Ko'chirish maqsadlari — direktor uchun joriy bizneskan boshqa bizneslar.
+  const canMove = isManager(session.rol);
+  const moveTargets = canMove
+    ? (await getAccessibleBusinesses(session))
+        .filter((b) => b.id !== businessId)
+        .map((b) => ({ id: b.id, nomi: b.nomi }))
+    : [];
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-fg">Tranzaksiyalar</h1>
@@ -68,6 +77,7 @@ export default async function TranzaksiyalarPage({
         currentUserId={session.userId}
         currentUserRol={session.rol}
         hideProfit={hideProfit}
+        moveTargets={moveTargets}
         totals={result.totals}
         filters={{
           from: searchParams.from ?? "",

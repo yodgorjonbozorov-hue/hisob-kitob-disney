@@ -85,3 +85,41 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
 
   return NextResponse.json(updated);
 });
+
+/**
+ * Foydalanuvchini butunlay o'chirish — faqat direktor. O'zini o'chira olmaydi.
+ * Yozuvlari (tranzaksiya) bo'lsa — o'chirilmaydi (data yo'qolmasin), o'rniga
+ * "Nofaollashtirish" tavsiya qilinadi. Yozuvi yo'q bo'lsa — butunlay o'chiriladi.
+ */
+export const DELETE = withTenant<{ params: { id: string } }>(async (request, { params }, { session: user }) => {
+  requireManager(user.rol);
+  const id = params.id;
+
+  if (id === user.userId) {
+    return NextResponse.json({ error: "O'zingizni o'chira olmaysiz" }, { status: 400 });
+  }
+
+  const target = await prisma.user.findUnique({ where: { id }, select: { id: true, ism: true, login: true } });
+  if (!target) return NextResponse.json({ error: "Foydalanuvchi topilmadi" }, { status: 404 });
+
+  const txCount = await prisma.transaction.count({ where: { userId: id } });
+  if (txCount > 0) {
+    return NextResponse.json(
+      {
+        error: `Bu foydalanuvchida ${txCount} ta yozuv bor. O'chirib bo'lmaydi — tarix saqlanishi kerak. Uni "Nofaollashtiring" (kirolmaydi, lekin yozuvlari qoladi).`,
+      },
+      { status: 409 }
+    );
+  }
+
+  await prisma.user.delete({ where: { id } });
+
+  await logAudit({
+    businessId: null, userId: user.userId, userIsm: user.ism,
+    action: "delete", entity: "user", entityId: id,
+    before: { ism: target.ism, login: target.login },
+    ip: getClientIp(request),
+  });
+
+  return NextResponse.json({ ok: true });
+});

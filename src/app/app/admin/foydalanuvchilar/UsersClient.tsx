@@ -60,6 +60,16 @@ export function UsersClient({
     }
   }
 
+  async function deleteUser(u: UserDTO) {
+    if (!confirm(`"${u.ism}" (${u.login}) foydalanuvchisini butunlay o'chirasizmi?\n\nYozuvlari bo'lsa — o'chmaydi (o'rniga "Nofaollashtiring").`)) return;
+    const res = await fetch(`/api/users/${u.id}`, { method: "DELETE" });
+    if (res.ok) {
+      setUsers((prev) => prev.filter((x) => x.id !== u.id));
+    } else {
+      alert((await res.json()).error ?? "O'chirib bo'lmadi");
+    }
+  }
+
   async function changeRol(u: UserDTO, rol: string) {
     const res = await fetch(`/api/users/${u.id}`, {
       method: "PATCH",
@@ -163,14 +173,22 @@ export function UsersClient({
                   <Badge tone={u.isActive ? "kirim" : "neutral"}>{u.isActive ? "Faol" : "Nofaol"}</Badge>
                 </td>
                 <td className="py-2.5 text-muted">{formatDateUZ(new Date(u.createdAt))}</td>
-                <td className="py-2.5 text-right">
+                <td className="py-2.5 text-right whitespace-nowrap">
                   {u.id !== currentUserId && (
-                    <button
-                      onClick={() => toggleActive(u)}
-                      className="text-xs font-medium text-muted hover:text-income"
-                    >
-                      {u.isActive ? "Nofaollashtirish" : "Faollashtirish"}
-                    </button>
+                    <>
+                      <button
+                        onClick={() => toggleActive(u)}
+                        className="text-xs font-medium text-muted hover:text-income mr-3"
+                      >
+                        {u.isActive ? "Nofaollashtirish" : "Faollashtirish"}
+                      </button>
+                      <button
+                        onClick={() => deleteUser(u)}
+                        className="text-xs font-medium text-muted hover:text-expense"
+                      >
+                        O'chirish
+                      </button>
+                    </>
                   )}
                 </td>
               </tr>
