@@ -37,20 +37,26 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
   const { parol, businessId, rol, ...rest } = parsed.data;
   const effectiveRol = rol ?? existing.rol;
 
-  // Biznesni rol asosida hal qilamiz: kassir → majburiy biznes; admin/sotuvchi → biznessiz.
+  // Biznesni rol asosida hal qilamiz:
+  //  - CASHIER → majburiy biznes.
+  //  - SELLER → ixtiyoriy biznes (biriktirilsa yozuvlari doim shu biznesga tushadi).
+  //  - OWNER/ADMIN → biznessiz (barcha bizneslar).
   let businessIdData: { businessId?: string | null } = {};
-  if (effectiveRol === "CASHIER") {
+  if (effectiveRol === "CASHIER" || effectiveRol === "SELLER") {
     const targetBiz = businessId !== undefined ? businessId : existing.businessId;
-    if (!targetBiz) {
+    if (effectiveRol === "CASHIER" && !targetBiz) {
       return NextResponse.json({ error: "Kassir uchun biznes tanlanishi shart" }, { status: 400 });
     }
-    const biz = await prisma.business.findUnique({ where: { id: targetBiz }, select: { id: true } });
-    if (!biz) {
-      return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });
+    if (targetBiz) {
+      const biz = await prisma.business.findUnique({ where: { id: targetBiz }, select: { id: true } });
+      if (!biz) {
+        return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });
+      }
+      businessIdData = { businessId: targetBiz };
+    } else {
+      businessIdData = { businessId: null };
     }
-    businessIdData = { businessId: targetBiz };
   } else {
-    // admin/sotuvchi barcha bizneslarni ko'radi — biriktirilgan biznes bo'lmaydi.
     businessIdData = { businessId: null };
   }
 
@@ -78,4 +84,54 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
   });
 
   return NextResponse.json(updated);
+});
+
+/**
+ * Foydalanuvchini butunlay o'chirish — faqat direktor. O'zini o'chira olmaydi.
+ * Yozuvlari (tranzaksiya) bo'lsa — o'chirilmaydi (data yo'qolmasin), o'rniga
+ * "Nofaollashtirish" tavsiya qilinadi. Yozuvi yo'q bo'lsa — butunlay o'chiriladi.
+ */
+export const DELETE = withTenant<{ params: { id: string } }>(async (request, { params }, { session: user }) => {
+  requireManager(user.rol);
+  const id = params.id;
+
+  if (id === user.userId) {
+    return NextResponse.json({ error: "O'zingizni o'chira olmaysiz" }, { status: 400 });
+  }
+
+  const target = await prisma.user.findUnique({ where: { id }, select: { id: true, ism: true, login: true } });
+  if (!target) return NextResponse.json({ error: "Foydalanuvchi topilmadi" }, { status: 404 });
+
+  const txCount = await prisma.transaction.count({ where: { userId: id } });
+  if (txCount > 0) {
+    return NextResponse.json(
+      {
+        error: `Bu foydalanuvchida ${txCount} ta yozuv bor. O'chirib bo'lmaydi — tarix saqlanishi kerak. Uni "Nofaollashtiring" (kirolmaydi, lekin yozuvlari qoladi).`,
+      },
+      { status: 409 }
+    );
+  }
+
+  try {
+    await prisma.user.delete({ where: { id } });
+  } catch (e) {
+    // Foydalanuvchi boshqa yozuvlarga bog'langan bo'lishi mumkin — 500 o'rniga do'stona xabar.
+    console.error("User delete xatosi:", e);
+    return NextResponse.json(
+      {
+        error:
+          "Bu foydalanuvchini butunlay o'chirib bo'lmadi (u boshqa yozuvlarga bog'langan bo'lishi mumkin). Uni \"Nofaollashtiring\" — u kirolmaydi, lekin tarixi saqlanadi.",
+      },
+      { status: 409 }
+    );
+  }
+
+  await logAudit({
+    businessId: null, userId: user.userId, userIsm: user.ism,
+    action: "delete", entity: "user", entityId: id,
+    before: { ism: target.ism, login: target.login },
+    ip: getClientIp(request),
+  });
+
+  return NextResponse.json({ ok: true });
 });

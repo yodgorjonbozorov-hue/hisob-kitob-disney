@@ -14,17 +14,20 @@ export interface BusinessDTO {
   turi: string;
 }
 
-/** Foydalanuvchi kira oladigan bizneslar: admin → barcha faol; kassir → faqat o'ziniki. */
+/**
+ * Foydalanuvchi kira oladigan bizneslar:
+ * - Biznesga biriktirilgan foydalanuvchi (businessId bor — kassir yoki biznesga
+ *   bog'langan sotuvchi) → faqat o'z biznesi.
+ * - Biriktirilmagan (direktor/admin, ko'p-biznesli sotuvchi) → barcha faol biznes.
+ */
 export async function getAccessibleBusinesses(session: SessionData): Promise<BusinessDTO[]> {
-  if (session.rol === "CASHIER") {
-    if (!session.businessId) return [];
+  if (session.businessId) {
     const b = await prisma.business.findUnique({
       where: { id: session.businessId },
       select: { id: true, nomi: true, isActive: true, omborli: true, turi: true },
     });
     return b ? [b] : [];
   }
-  // admin
   return prisma.business.findMany({
     where: { isActive: true },
     select: { id: true, nomi: true, isActive: true, omborli: true, turi: true },
@@ -34,13 +37,16 @@ export async function getAccessibleBusinesses(session: SessionData): Promise<Bus
 
 /**
  * Joriy so'rov uchun aktiv biznes id'sini hal qiladi.
- * - Kassir: doim o'z businessId'si (o'zgartira olmaydi).
- * - Admin: `active_business` cookie (mavjud va faol bo'lsa), aks holda birinchi faol biznes.
+ * - Biznesga biriktirilgan foydalanuvchi (businessId bor): DOIM o'z biznesi
+ *   (o'zgartira olmaydi) — kassir yoki biznesga bog'langan sotuvchi. Yozuvlari
+ *   doim shu biznesga tushadi (adashmaydi).
+ * - Biriktirilmagan (direktor/ko'p-biznesli sotuvchi): `active_business` cookie
+ *   (mavjud va faol bo'lsa), aks holda birinchi faol biznes.
  * Hech qanday biznes bo'lmasa null qaytaradi.
  */
 export async function resolveActiveBusinessId(session: SessionData): Promise<string | null> {
-  if (session.rol === "CASHIER") {
-    return session.businessId ?? null;
+  if (session.businessId) {
+    return session.businessId;
   }
 
   const cookieId = (await cookies()).get(ACTIVE_BUSINESS_COOKIE)?.value;

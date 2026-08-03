@@ -5,6 +5,7 @@ import { sendExpiryWarnings } from "@/lib/billing/notify";
 import { updateExpiredStatuses } from "@/lib/billing/subscribe";
 import { sendTaskReminders } from "@/lib/tasks/service";
 import { sendDailyDigest } from "@/lib/reports/dailyDigest";
+import { sendBackupToTelegram } from "@/lib/backup/send";
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { runWithTenant } from "@/lib/db/tenantContext";
 
@@ -19,7 +20,20 @@ export async function GET(req: Request) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  // Avval statuslar yangilanadi: davri tugagan ACTIVE -> PAST_DUE.
+  // ENG AVVAL zaxira: quyidagi biror qadam yiqilsa ham kunlik zaxira olinib bo'lgan bo'ladi.
+  const zaxira = await sendBackupToTelegram().catch((e) => {
+    console.error("Zaxira xatosi:", e);
+    return { holat: "xato" as const };
+  });
+
+  // `?only=backup` — zaxirani qo'lda tekshirish uchun. Qolgan qadamlar mijozlarga real
+  // Telegram xabar yuboradi (obuna ogohlantirishi, vazifa eslatmasi), shuning uchun
+  // tekshiruvda ular ataylab o'tkazib yuboriladi.
+  if (new URL(req.url).searchParams.get("only") === "backup") {
+    return new Response(`OK (faqat zaxira: ${zaxira.holat})`, { status: 200 });
+  }
+
+  // Keyin statuslar yangilanadi: davri tugagan ACTIVE -> PAST_DUE.
   const expired = await updateExpiredStatuses().catch((e) => {
     console.error("Status yangilash xatosi:", e);
     return 0;
@@ -56,7 +70,7 @@ export async function GET(req: Request) {
   });
 
   return new Response(
-    `OK (expired: ${expired}, recurring: ${recurringCount}, warned: ${warned}, tasks: ${taskReminders}, digest: ${digest})`,
+    `OK (zaxira: ${zaxira.holat}, expired: ${expired}, recurring: ${recurringCount}, warned: ${warned}, tasks: ${taskReminders}, digest: ${digest})`,
     { status: 200 }
   );
 }

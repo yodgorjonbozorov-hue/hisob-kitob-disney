@@ -14,6 +14,8 @@
     "bot": "node -r ts-node/register src/bot/index.ts",
     "superadmin:create": "node -r ts-node/register scripts/create-superadmin.ts",
     "client:create": "node -r ts-node/register scripts/create-client.ts",
+    "backup": "node -r ts-node/register scripts/backup.ts",
+    "restore": "node -r ts-node/register scripts/restore.ts",
     "test:isolation": "node -r ts-node/register tests/isolation.test.ts",
     "test:signup": "node -r ts-node/register tests/signup.test.ts",
     "test:billing": "node -r ts-node/register tests/billing.test.ts",
@@ -23,7 +25,8 @@
     "test:tasks": "node -r ts-node/register tests/tasks.test.ts",
     "test:ai": "node -r ts-node/register tests/ai.test.ts",
     "test:automation": "node -r ts-node/register tests/automation.test.ts",
-    "test:avto": "node -r ts-node/register tests/avto.test.ts"
+    "test:avto": "node -r ts-node/register tests/avto.test.ts",
+    "test:backup": "node -r ts-node/register tests/backup.test.ts"
   },
   "prisma": {
     "seed": "node -r ts-node/register prisma/seed.ts"

@@ -206,6 +206,8 @@ git push -u origin main
 | `TELEGRAM_BOT_USERNAME` | bot username |
 | `TELEGRAM_WEBHOOK_SECRET` | o'zingiz o'ylab topgan maxfiy satr |
 | `CRON_SECRET` | o'zingiz o'ylab topgan maxfiy satr |
+| `BACKUP_CHAT_ID` | kunlik zaxira yuboriladigan yopiq Telegram kanal id (qarang: [docs/MIGRATSIYA.md](docs/MIGRATSIYA.md)) |
+| `BACKUP_BOT_TOKEN` | zaxira kanaliga admin qilingan **alohida** bot tokeni |
 
 "Deploy" tugmasini bosing.
 
@@ -222,6 +224,12 @@ https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=https://<domenin
 ### 5. Vercel Cron
 
 `vercel.json` allaqachon loyihada mavjud — Vercel avtomatik ravishda `/api/cron/monthly-report` route'ini kuniga bir marta chaqiradi (Vercel loyiha sozlamalarida "Cron Jobs" bo'limida ko'rinadi). Alohida sozlash shart emas.
+
+### 6. Zaxira (backup)
+
+Kunlik cron eng birinchi ish sifatida butun bazani JSON+gzip qilib `BACKUP_CHAT_ID` kanaliga yuboradi.
+Qo'lda: `npm run backup`, tiklash: `npm run restore -- <fayl.json> --confirm`.
+To'liq tartib va server ko'chirish yo'riqnomasi — [docs/MIGRATSIYA.md](docs/MIGRATSIYA.md).
 
 ## Kelajakdagi ishlar (v1'da qasddan kiritilmagan)
 
