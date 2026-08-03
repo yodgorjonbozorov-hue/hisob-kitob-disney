@@ -68,6 +68,21 @@ npm run db:seed     # demo tenant, 2 biznes (Demo Xizmatlar + Salyut), kategoriy
 
 > Yangi migratsiya yaratish uchun (schema o'zgartirilganda): `npm run db:migrate:create -- --name <nom>` — bu faqat SQL faylini generatsiya qiladi, so'ng `npm run db:apply` bilan qo'llaysiz.
 
+### SUPERADMIN paneli
+
+Panelga (`/superadmin`) oddiy `/login` sahifasi orqali kiriladi — roli SUPERADMIN bo'lgan foydalanuvchi
+avtomatik panelga o'tkaziladi. Akkauntlar:
+
+```bash
+npm run superadmin:create -- <login> <parol> [ism]   # yangi superadmin
+npm run superadmin:reset                            # mavjud superadminlar ro'yxati
+npm run superadmin:reset -- <login> <yangi-parol>   # parolni tiklash (parol esdan chiqqanda)
+```
+
+`superadmin:reset` faqat roli SUPERADMIN bo'lgan akkauntga ta'sir qiladi. Production uchun buyruq
+Turso env (`DATABASE_URL`, `DATABASE_AUTH_TOKEN`) bilan ishga tushiriladi — masalan `npx vercel env pull`
+bilan olingan fayl orqali.
+
 ### Yangi mijoz (tenant) yaratish
 
 Eng oson yo'li — **`/superadmin` paneli → "Yangi mijoz" → "+ Mijoz qo'shish"**: kompaniya nomi, login, parol,
