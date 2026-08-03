@@ -14,6 +14,14 @@ import { runWithTenant } from "@/lib/db/tenantContext";
  * - Oylik hisobot: tenantlar bo'ylab aylanadi (funksiya ichida "bugun 1-sanami" tekshiruvi bor)
  * - Takroriy tranzaksiyalar: har tenant o'z kontekstida, bittasida xato chiqsa qolgani to'xtamaydi
  */
+
+/**
+ * Standart 10 soniya bu route uchun kam: zaxira butun bazani 23 ta ketma-ket so'rov bilan
+ * o'qiydi, ustiga oylik hisobot PDF'lari va Telegram yuborishlari bor. Funksiya va baza
+ * hozir turli qit'ada (iad1 / Tokio) — har so'rov ~160 ms. Limitsiz qoldirilsa zaxira
+ * jimgina timeout bo'lardi.
+ */
+export const maxDuration = 60;
 export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
