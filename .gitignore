@@ -16,6 +16,9 @@ next-env.d.ts
 # Vaqtinchalik (scratch) skriptlar — commit qilinmaydi
 scratch-*
 
+# Baza zaxiralari — MIJOZ MA'LUMOTI, hech qachon repoga tushmaydi
+prisma/backups/
+
 # Faqat mahalliy Windows muhitida npm o'rniga pnpm ishlatilgani uchun (README'ga qarang) —
 # Vercel'ning o'z (Linux) muhitida standart npm bilan o'rnatilishi uchun bularni commit qilmaymiz.
 pnpm-lock.yaml
