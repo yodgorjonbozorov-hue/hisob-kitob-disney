@@ -58,10 +58,21 @@ export const DELETE = withTenant<{ params: { id: string } }>(async (request, { p
   }
 
   // Bo'sh biznes — config yozuvlarini (kategoriya, budjet, takroriy) tozalab, biznesni o'chiramiz.
-  await prisma.budget.deleteMany({ where: { businessId: id } });
-  await prisma.recurringTransaction.deleteMany({ where: { businessId: id } });
-  await prisma.category.deleteMany({ where: { businessId: id } });
-  await prisma.business.delete({ where: { id } });
+  try {
+    await prisma.budget.deleteMany({ where: { businessId: id } });
+    await prisma.recurringTransaction.deleteMany({ where: { businessId: id } });
+    await prisma.category.deleteMany({ where: { businessId: id } });
+    await prisma.business.delete({ where: { id } });
+  } catch (e) {
+    console.error("Business delete xatosi:", e);
+    return NextResponse.json(
+      {
+        error:
+          "Biznesni o'chirib bo'lmadi (u boshqa yozuvlarga bog'langan bo'lishi mumkin). Uni \"Nofaollashtiring\".",
+      },
+      { status: 409 }
+    );
+  }
 
   await logAudit({
     businessId: id, userId: user.userId, userIsm: user.ism,

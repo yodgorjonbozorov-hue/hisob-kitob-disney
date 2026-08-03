@@ -112,7 +112,19 @@ export const DELETE = withTenant<{ params: { id: string } }>(async (request, { p
     );
   }
 
-  await prisma.user.delete({ where: { id } });
+  try {
+    await prisma.user.delete({ where: { id } });
+  } catch (e) {
+    // Foydalanuvchi boshqa yozuvlarga bog'langan bo'lishi mumkin — 500 o'rniga do'stona xabar.
+    console.error("User delete xatosi:", e);
+    return NextResponse.json(
+      {
+        error:
+          "Bu foydalanuvchini butunlay o'chirib bo'lmadi (u boshqa yozuvlarga bog'langan bo'lishi mumkin). Uni \"Nofaollashtiring\" — u kirolmaydi, lekin tarixi saqlanadi.",
+      },
+      { status: 409 }
+    );
+  }
 
   await logAudit({
     businessId: null, userId: user.userId, userIsm: user.ism,
