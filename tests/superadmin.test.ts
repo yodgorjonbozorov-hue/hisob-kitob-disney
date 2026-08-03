@@ -16,6 +16,7 @@ let manualProvider: any;
 let confirmPayment: any;
 let runWithTenant: any;
 let svc: any;
+let newClient: any;
 let bcrypt: any;
 
 const KUN_MS = 24 * 60 * 60 * 1000;
@@ -33,6 +34,7 @@ before(async () => {
   ({ confirmPayment } = await import("@/lib/billing/subscribe"));
   ({ runWithTenant } = await import("@/lib/db/tenantContext"));
   svc = await import("@/lib/superadmin/service");
+  newClient = await import("@/lib/superadmin/newClient");
   bcrypt = await import("bcryptjs");
 
   tA = await createTenantWithOwner({ kompaniyaNomi: "Sinov A", ism: "A", login: "+998911111100", parol: "parol12345" });
@@ -115,4 +117,78 @@ test("logSuperadminAction: audit jurnalga [SUPERADMIN] belgisi bilan yoziladi", 
   assert.equal(log.userIsm, "[SUPERADMIN] Egasi");
   assert.ok(log.after.includes("Faol B"));
   assert.equal(log.businessId, null);
+});
+
+// ---------- Yangi mijoz yaratish (panel + skript uchun umumiy servis) ----------
+
+test("createClientTenant: mijoz ACTIVE obuna, avto rejim va OWNER bilan yaratiladi", async () => {
+  const r = await newClient.createClientTenant({
+    nom: "Sinov Avto",
+    login: "SinovAvto",
+    parol: "sinovparol1",
+    tarif: "AVTO",
+    turi: "avto",
+    kunlar: 30,
+  });
+
+  assert.equal(r.tenant.status, "ACTIVE");
+  assert.equal(r.tenant.plan, "AVTO");
+  assert.equal(r.plan.oylikNarx, 200_000);
+  assert.ok(r.periodEnd && r.periodEnd.getTime() > Date.now());
+  assert.equal(r.user.rol, "OWNER");
+  assert.equal(r.user.login, "SinovAvto");
+  assert.equal(r.business.turi, "avto");
+  assert.equal(r.business.omborli, true);
+
+  // Obuna tarixi yozuvi ham yaratiladi (MRR/hisobot uchun).
+  const sub = await rawPrisma.subscription.findFirst({ where: { tenantId: r.tenant.id } });
+  assert.ok(sub);
+  assert.equal(sub.amount, 200_000);
+
+  // Parol hash'lanadi — ochiq matnda saqlanmaydi.
+  const user = await rawPrisma.user.findUnique({ where: { id: r.user.id } });
+  assert.notEqual(user.parolHash, "sinovparol1");
+  assert.ok(await bcrypt.compare("sinovparol1", user.parolHash));
+});
+
+test("createClientTenant: band login va qisqa parol rad etiladi", async () => {
+  await assert.rejects(
+    () =>
+      newClient.createClientTenant({
+        nom: "Takror",
+        login: "SinovAvto",
+        parol: "boshqaparol1",
+        tarif: "STANDARD",
+        turi: "umumiy",
+        kunlar: 30,
+      }),
+    /band/
+  );
+
+  await assert.rejects(
+    () =>
+      newClient.createClientTenant({
+        nom: "Qisqa parol",
+        login: "QisqaParol",
+        parol: "1234",
+        tarif: "STANDARD",
+        turi: "umumiy",
+        kunlar: 0,
+      }),
+    /8 belgi/
+  );
+});
+
+test("createClientTenant: kunlar 0 bo'lsa TRIAL holida qoladi", async () => {
+  const r = await newClient.createClientTenant({
+    nom: "Sinovdagi Mijoz",
+    login: "SinovTrial",
+    parol: "sinovparol1",
+    tarif: "STANDARD",
+    turi: "umumiy",
+    kunlar: 0,
+  });
+  assert.equal(r.tenant.status, "TRIAL");
+  assert.equal(r.periodEnd, null);
+  assert.ok(r.tenant.trialEndsAt);
 });

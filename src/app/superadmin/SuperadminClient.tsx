@@ -1,7 +1,9 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { PLANLAR } from "@/lib/billing/plans";
+import { BIZNES_TURLARI } from "@/lib/biznesTuri";
 
 interface Metrics {
   jamiTenant: number;
@@ -102,7 +104,7 @@ export function SuperadminClient({
   }
 
   async function tarif(t: TenantRow) {
-    const plan = prompt(`${t.name} tarifi (STANDARD yoki PRO):`, t.plan)?.trim().toUpperCase();
+    const plan = prompt(`${t.name} tarifi (${PLANLAR.map((p) => p.code).join(" / ")}):`, t.plan)?.trim().toUpperCase();
     if (!plan || plan === t.plan) return;
     const r = await call(`/api/superadmin/tenants/${t.id}/plan`, { plan });
     if (r) setXabar(`${t.name}: tarif ${plan} ga o'zgartirildi.`);
@@ -212,6 +214,9 @@ export function SuperadminClient({
           )}
         </div>
 
+        {/* Yangi mijoz */}
+        <YangiMijozForm btn={btn} onCreated={(x) => setXabar(x)} />
+
         {/* Tenantlar */}
         <div className="bg-surface rounded-2xl border border-line shadow-card p-5 overflow-x-auto">
           <h2 className="font-semibold text-fg mb-3">Tenantlar ({tenants.length})</h2>
@@ -303,6 +308,131 @@ export function SuperadminClient({
           </table>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Yangi mijoz (tenant) yaratish formasi — kompaniya + OWNER + biznes +
+ * kategoriyalar + obuna bitta amalda (POST /api/superadmin/tenants).
+ */
+function YangiMijozForm({ btn, onCreated }: { btn: string; onCreated: (xabar: string) => void }) {
+  const router = useRouter();
+  const [ochiq, setOchiq] = useState(false);
+  const [nom, setNom] = useState("");
+  const [login, setLogin] = useState("");
+  const [parol, setParol] = useState("");
+  const [tarif, setTarif] = useState(PLANLAR[0].code);
+  const [turi, setTuri] = useState<"umumiy" | "avto">("umumiy");
+  const [kunlar, setKunlar] = useState("30");
+  const [xato, setXato] = useState<string | null>(null);
+  const [natija, setNatija] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const inp = "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm";
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setXato(null);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/superadmin/tenants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nom, login, parol, tarif, turi, kunlar: Number(kunlar) || 0 }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setXato(data.error ?? "Xatolik");
+        return;
+      }
+      // Parol faqat shu yerda ko'rsatiladi — bazada hash saqlanadi.
+      setNatija(`${data.nom} — login: ${data.login} · parol: ${parol} · tarif: ${data.tarif}`);
+      onCreated(`Yangi mijoz yaratildi: ${data.nom} (${data.login}).`);
+      setNom("");
+      setLogin("");
+      setParol("");
+      router.refresh();
+    } catch {
+      setXato("Serverga ulanib bo'lmadi");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="bg-surface rounded-2xl border border-line shadow-card p-5">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="font-semibold text-fg">Yangi mijoz</h2>
+        <button className={btn} onClick={() => setOchiq(!ochiq)}>
+          {ochiq ? "Yopish" : "+ Mijoz qo'shish"}
+        </button>
+      </div>
+
+      {natija && (
+        <p className="mt-3 text-sm rounded-lg border border-line bg-income-soft/40 px-3 py-2">
+          ✅ {natija}
+          <span className="block text-xs text-muted mt-1">
+            Parol faqat shu yerda ko'rinadi — mijozga yetkazing.
+          </span>
+        </p>
+      )}
+
+      {ochiq && (
+        <form onSubmit={submit} className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs text-muted mb-1">Kompaniya nomi</label>
+            <input value={nom} onChange={(e) => setNom(e.target.value)} className={inp} required />
+          </div>
+          <div>
+            <label className="block text-xs text-muted mb-1">Login (telefon yoki nom)</label>
+            <input value={login} onChange={(e) => setLogin(e.target.value)} className={inp} required />
+          </div>
+          <div>
+            <label className="block text-xs text-muted mb-1">Parol (kamida 8 belgi)</label>
+            <input value={parol} onChange={(e) => setParol(e.target.value)} className={inp} required />
+          </div>
+          <div>
+            <label className="block text-xs text-muted mb-1">Tarif</label>
+            <select value={tarif} onChange={(e) => setTarif(e.target.value)} className={inp}>
+              {PLANLAR.map((p) => (
+                <option key={p.code} value={p.code}>
+                  {p.nomi} — {p.oylikNarx.toLocaleString("ru-RU")} so'm
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-muted mb-1">Biznes rejimi</label>
+            <select
+              value={turi}
+              onChange={(e) => setTuri(e.target.value as "umumiy" | "avto")}
+              className={inp}
+            >
+              {BIZNES_TURLARI.map((t) => (
+                <option key={t.code} value={t.code}>
+                  {t.nomi}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-muted mb-1">Obuna (kun, 0 → 14 kun sinov)</label>
+            <input
+              value={kunlar}
+              onChange={(e) => setKunlar(e.target.value.replace(/\D/g, ""))}
+              inputMode="numeric"
+              className={inp}
+            />
+          </div>
+          {xato && <p className="md:col-span-3 text-sm text-expense-fg">{xato}</p>}
+          <div className="md:col-span-3 flex justify-end">
+            <button type="submit" className={btn} disabled={loading}>
+              {loading ? "Yaratilmoqda..." : "Yaratish"}
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }

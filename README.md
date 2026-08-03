@@ -70,7 +70,10 @@ npm run db:seed     # demo tenant, 2 biznes (Demo Xizmatlar + Salyut), kategoriy
 
 ### Yangi mijoz (tenant) yaratish
 
-Superadmin panelisiz, bitta buyruq bilan — kompaniya + OWNER + biznes + kategoriyalar + obuna:
+Eng oson yo'li — **`/superadmin` paneli → "Yangi mijoz" → "+ Mijoz qo'shish"**: kompaniya nomi, login, parol,
+tarif, biznes rejimi (umumiy/avto) va obuna kunlari kiritiladi; parol bir marta ekranda ko'rsatiladi.
+
+Terminal orqali ham xuddi shu amal (bir xil servis):
 
 ```bash
 npm run client:create -- --nom "AvtoBalans" --login AvtoBalans --parol "avtobalans.uz" --tarif AVTO --turi avto --kunlar 30
