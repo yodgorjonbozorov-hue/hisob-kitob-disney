@@ -21,7 +21,7 @@ export async function GET(req: Request) {
   }
 
   // ENG AVVAL zaxira: quyidagi biror qadam yiqilsa ham kunlik zaxira olinib bo'lgan bo'ladi.
-  const zaxira = await sendBackupToTelegram(bot.api).catch((e) => {
+  const zaxira = await sendBackupToTelegram().catch((e) => {
     console.error("Zaxira xatosi:", e);
     return { holat: "xato" as const };
   });

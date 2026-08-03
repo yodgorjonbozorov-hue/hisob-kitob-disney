@@ -41,10 +41,18 @@ JSON+gzip qilib Telegramga hujjat sifatida yuboradi. Yoqish uchun bitta env kera
 
 | Env | Qiymat |
 |---|---|
-| `BACKUP_CHAT_ID` | zaxira yuboriladigan **shaxsiy** Telegram kanal/chat id |
+| `BACKUP_CHAT_ID` | zaxira yuboriladigan **yopiq** Telegram kanal id (`-100...`) |
+| `BACKUP_BOT_TOKEN` | o'sha kanalga **admin** qilingan alohida bot tokeni |
 
-Kanalni yopiq qiling va botni admin qiling. Env yo'q bo'lsa zaxira jim o'tkazib yuboriladi
-(cron yiqilmaydi), lekin logda ogohlantirish chiqadi — ya'ni **env qo'yilmasa zaxira YO'Q**.
+Zaxira ataylab **alohida botga** ajratilgan (mijozlar ishlatadigan asosiy botga emas): asosiy bot
+tokeni almashsa yoki bot bloklansa ham zaxira ishlashda davom etadi. `BACKUP_BOT_TOKEN` qo'yilmasa
+asosiy `TELEGRAM_BOT_TOKEN` ishlatiladi — u holda asosiy bot kanalga admin bo'lishi kerak.
+
+Env yo'q bo'lsa zaxira jim o'tkazib yuboriladi (cron yiqilmaydi), lekin logda ogohlantirish
+chiqadi — ya'ni **env qo'yilmasa zaxira YO'Q**.
+
+Joriy sozlama (2026-08-03): kanal `@balansauzmalumotlar` ("Balansa.uz Malumotlar"),
+bot `@balansa_malumotlar_bot`.
 
 ### Tiklash (va uni sinab ko'rish)
 

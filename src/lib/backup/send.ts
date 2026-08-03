@@ -1,38 +1,40 @@
 /**
  * Kunlik avtomatik zaxira: butun bazani JSON qilib, gzip'lab Telegramga hujjat sifatida yuboradi.
  *
- * Nega Telegram: bot va kanal allaqachon bor, qo'shimcha xizmat/hisob (S3, Blob) va
- * qo'shimcha to'lov talab qilinmaydi, fayl serverdan TASHQARIDA saqlanadi — server yoki
- * baza butunlay yo'qolsa ham zaxira qo'lda qoladi.
+ * Nega Telegram: qo'shimcha xizmat/hisob (S3, Blob) va qo'shimcha to'lov talab qilinmaydi,
+ * fayl serverdan TASHQARIDA saqlanadi — server yoki baza butunlay yo'qolsa ham zaxira qo'lda qoladi.
  *
- * Sozlash: `BACKUP_CHAT_ID` env — zaxira yuboriladigan shaxsiy kanal/chat id.
- * Env yo'q bo'lsa zaxira jim o'tkazib yuboriladi (cron yiqilmaydi), lekin log yoziladi.
+ * Nega ALOHIDA bot: zaxira mijozlar ishlatadigan asosiy botdan ajratilgan. Asosiy bot tokeni
+ * almashsa yoki bot bloklansa ham zaxira ishlashda davom etadi, va zaxira kanali mijoz
+ * yozishmalaridan butunlay boshqa botga tegishli bo'ladi.
+ *
+ * Env:
+ *   BACKUP_CHAT_ID   — zaxira yuboriladigan yopiq kanal id (masalan -1004319743561)
+ *   BACKUP_BOT_TOKEN — o'sha kanalga admin qilingan bot tokeni.
+ *                      Qo'yilmasa TELEGRAM_BOT_TOKEN (asosiy bot) ishlatiladi.
+ *
+ * Ikkalasi ham yo'q bo'lsa zaxira jim o'tkazib yuboriladi (cron yiqilmaydi), lekin log yoziladi.
  */
 import { gzipSync } from "node:zlib";
-import { InputFile } from "grammy";
 import { BRAND } from "@/lib/brand";
 import { createDump, jamiYozuvlar } from "./dump";
 
 /** Telegram bot hujjat limiti 50 MB — biroz zaxira bilan cheklaymiz. */
 const MAKS_BAYT = 45 * 1024 * 1024;
 
-type SendDocumentApi = {
-  sendDocument: (
-    chatId: string,
-    doc: InputFile,
-    opts?: { caption?: string }
-  ) => Promise<unknown>;
-};
-
 export type ZaxiraNatija =
   | { holat: "yuborildi"; bayt: number; yozuvlar: number }
   | { holat: "sozlanmagan" }
   | { holat: "juda-katta"; bayt: number };
 
-export async function sendBackupToTelegram(api: SendDocumentApi): Promise<ZaxiraNatija> {
+export async function sendBackupToTelegram(): Promise<ZaxiraNatija> {
   const chatId = process.env.BACKUP_CHAT_ID;
-  if (!chatId) {
-    console.warn("Zaxira o'tkazib yuborildi: BACKUP_CHAT_ID env sozlanmagan.");
+  const token = process.env.BACKUP_BOT_TOKEN ?? process.env.TELEGRAM_BOT_TOKEN;
+
+  if (!chatId || !token) {
+    console.warn(
+      "Zaxira o'tkazib yuborildi: BACKUP_CHAT_ID yoki bot tokeni sozlanmagan."
+    );
     return { holat: "sozlanmagan" };
   }
 
@@ -55,11 +57,25 @@ export async function sendBackupToTelegram(api: SendDocumentApi): Promise<Zaxira
     "Tiklash: npm run restore -- <fayl.json> --confirm",
   ].join("\n");
 
-  await api.sendDocument(
-    chatId,
-    new InputFile(gz, `balansa-zaxira-${sana}.json.gz`),
-    { caption }
+  const form = new FormData();
+  form.append("chat_id", chatId);
+  form.append("caption", caption);
+  form.append(
+    "document",
+    new Blob([gz], { type: "application/gzip" }),
+    `balansa-zaxira-${sana}.json.gz`
   );
+
+  const res = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
+    method: "POST",
+    body: form,
+  });
+
+  if (!res.ok) {
+    // Xato matnida token bo'lmaydi — Telegram faqat sabab qaytaradi (masalan "bot is not a member").
+    const sabab = await res.text();
+    throw new Error(`Telegram zaxirani qabul qilmadi (${res.status}): ${sabab.slice(0, 300)}`);
+  }
 
   return { holat: "yuborildi", bayt: gz.byteLength, yozuvlar };
 }

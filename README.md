@@ -183,6 +183,7 @@ git push -u origin main
 | `TELEGRAM_WEBHOOK_SECRET` | o'zingiz o'ylab topgan maxfiy satr |
 | `CRON_SECRET` | o'zingiz o'ylab topgan maxfiy satr |
 | `BACKUP_CHAT_ID` | kunlik zaxira yuboriladigan yopiq Telegram kanal id (qarang: [docs/MIGRATSIYA.md](docs/MIGRATSIYA.md)) |
+| `BACKUP_BOT_TOKEN` | zaxira kanaliga admin qilingan **alohida** bot tokeni |
 
 "Deploy" tugmasini bosing.
 
