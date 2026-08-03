@@ -26,6 +26,13 @@ export async function GET(req: Request) {
     return { holat: "xato" as const };
   });
 
+  // `?only=backup` — zaxirani qo'lda tekshirish uchun. Qolgan qadamlar mijozlarga real
+  // Telegram xabar yuboradi (obuna ogohlantirishi, vazifa eslatmasi), shuning uchun
+  // tekshiruvda ular ataylab o'tkazib yuboriladi.
+  if (new URL(req.url).searchParams.get("only") === "backup") {
+    return new Response(`OK (faqat zaxira: ${zaxira.holat})`, { status: 200 });
+  }
+
   // Keyin statuslar yangilanadi: davri tugagan ACTIVE -> PAST_DUE.
   const expired = await updateExpiredStatuses().catch((e) => {
     console.error("Status yangilash xatosi:", e);
