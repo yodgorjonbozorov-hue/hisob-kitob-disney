@@ -37,18 +37,21 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
     return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
   }
 
-  // Kassir uchun biznes majburiy; owner/seller uchun biznes yo'q (tenant ichidagi barcha bizneslar).
+  // Kassir uchun biznes MAJBURIY; sotuvchi uchun IXTIYORIY (biriktirilsa — yozuvlari
+  // doim shu biznesga tushadi; biriktirilmasa — ko'p-biznesli). Owner/admin — biznessiz.
   let businessId: string | null = null;
-  if (parsed.data.rol === "CASHIER") {
-    if (!parsed.data.businessId) {
+  if (parsed.data.rol === "CASHIER" || parsed.data.rol === "SELLER") {
+    if (parsed.data.rol === "CASHIER" && !parsed.data.businessId) {
       return NextResponse.json({ error: "Kassir uchun biznes tanlanishi shart" }, { status: 400 });
     }
-    // Tenant-scoped client: boshqa tenant biznesi bu yerda ko'rinmaydi (null qaytadi).
-    const biz = await prisma.business.findUnique({ where: { id: parsed.data.businessId }, select: { id: true } });
-    if (!biz) {
-      return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });
+    if (parsed.data.businessId) {
+      // Tenant-scoped client: boshqa tenant biznesi bu yerda ko'rinmaydi (null qaytadi).
+      const biz = await prisma.business.findUnique({ where: { id: parsed.data.businessId }, select: { id: true } });
+      if (!biz) {
+        return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });
+      }
+      businessId = biz.id;
     }
-    businessId = biz.id;
   }
 
   // Login BUTUN tizim bo'ylab unique — shuning uchun rawPrisma (tenantlar aro tekshiruv).

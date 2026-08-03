@@ -33,6 +33,17 @@ export function BusinessesClient({ initialBusinesses }: { initialBusinesses: Bus
     }
   }
 
+  async function deleteBusiness(b: BusinessDTO) {
+    if (!confirm(`"${b.nomi}" biznesini butunlay o'chirasizmi?\n\nFaqat BO'SH biznes o'chiriladi (yozuv/mahsulot/foydalanuvchi yo'q). Ma'lumot bor bo'lsa — o'chmaydi.`)) return;
+    const res = await fetch(`/api/businesses/${b.id}`, { method: "DELETE" });
+    if (res.ok) {
+      setBusinesses((prev) => prev.filter((x) => x.id !== b.id));
+      router.refresh();
+    } else {
+      alert((await res.json()).error ?? "O'chirib bo'lmadi");
+    }
+  }
+
   function handleCreated(b: { id: string; nomi: string; isActive: boolean }) {
     setBusinesses((prev) => [
       ...prev,
@@ -68,12 +79,18 @@ export function BusinessesClient({ initialBusinesses }: { initialBusinesses: Bus
                 <td className="py-2.5">
                   <Badge tone={b.isActive ? "kirim" : "neutral"}>{b.isActive ? "Faol" : "Nofaol"}</Badge>
                 </td>
-                <td className="py-2.5 text-right">
+                <td className="py-2.5 text-right whitespace-nowrap">
                   <button
                     onClick={() => toggleActive(b)}
-                    className="text-xs font-medium text-muted hover:text-income"
+                    className="text-xs font-medium text-muted hover:text-income mr-3"
                   >
                     {b.isActive ? "Nofaollashtirish" : "Faollashtirish"}
+                  </button>
+                  <button
+                    onClick={() => deleteBusiness(b)}
+                    className="text-xs font-medium text-muted hover:text-expense"
+                  >
+                    O'chirish
                   </button>
                 </td>
               </tr>
