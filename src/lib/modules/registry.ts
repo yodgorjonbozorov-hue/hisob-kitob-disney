@@ -85,6 +85,19 @@ export const MODULLAR: ModulTarifi[] = [
     ],
   },
   {
+    code: "TASDIQLASH",
+    nomi: "Tasdiqlash",
+    tavsif:
+      "Chegaradan oshgan chiqim darhol yozilmaydi — rahbar tasdig'ini kutadi. Tasdiqlash Telegramdagi tugma orqali ham mumkin.",
+    core: false,
+    // Xodim o'z so'rovini ko'radi; qaror faqat boshqaruvchida.
+    rollar: HAMMA,
+    nav: [
+      { href: "/app/tasdiqlash", label: "Tasdiqlash", icon: "approval", tartib: 25, rollar: HAMMA },
+      { href: "/app/tasdiqlash/qoidalar", label: "Tasdiq qoidalari", icon: "rule", tartib: 26, rollar: BOSHQARUVCHILAR },
+    ],
+  },
+  {
     code: "CRM",
     nomi: "CRM — mijozlar va bitimlar",
     tavsif: "Lead va bitimlar kanbani, kontaktlar, faoliyat tarixi. Yutilgan bitim 1 klikda kirimga aylanadi.",

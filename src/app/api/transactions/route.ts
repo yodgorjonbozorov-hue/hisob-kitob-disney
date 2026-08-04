@@ -2,7 +2,8 @@ import { withTenant } from "@/lib/auth/tenant";
 import { NextResponse } from "next/server";
 import { createTransactionSchema } from "@/lib/validation/transaction";
 import { listTransactions } from "@/lib/queries/transactions";
-import { createTransaction } from "@/lib/services/transactionService";
+import { chiqimYubor } from "@/lib/services/approval";
+import { getEnabledModules } from "@/lib/modules/guard";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { dashboardYangilandi } from "@/lib/cache";
@@ -31,7 +32,8 @@ export const GET = withTenant(async (request, _ctx, { session: user }) => {
   return NextResponse.json(result);
 });
 
-export const POST = withTenant(async (request, _ctx, { session: user }) => {
+export const POST = withTenant(async (request, _ctx, tenantCtx) => {
+  const user = tenantCtx.session;
 
   const businessId = await resolveActiveBusinessId(user);
   if (!businessId) return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });
@@ -43,8 +45,27 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
   }
 
 
-  const transaction = await createTransaction(user.userId, businessId, parsed.data);
+  // Chiqim tasdiqlash qoidasidan oshsa — yozuv emas, so'rov yaratiladi.
+  const modullar = parsed.data.turi === "chiqim" ? await getEnabledModules(tenantCtx) : null;
+  const natija = await chiqimYubor({
+    modulYoqilgan: modullar?.has("TASDIQLASH") ?? false,
+    businessId,
+    user: { id: user.userId, rol: user.rol, ism: user.ism ?? "Xodim" },
+    data: parsed.data,
+  });
+
+  if (natija.tasdiqKerak) {
+    // 202 — qabul qilindi, lekin hali yozilmadi.
+    return NextResponse.json(
+      {
+        tasdiqKutilmoqda: true,
+        request: natija.request,
+        message: `Summa tasdiqlash chegarasidan (${natija.chegara.toLocaleString("uz-UZ")} so'm) oshdi — rahbar tasdig'i kutilmoqda.`,
+      },
+      { status: 202 }
+    );
+  }
 
   dashboardYangilandi(businessId);
-  return NextResponse.json(transaction, { status: 201 });
+  return NextResponse.json(natija.transaction, { status: 201 });
 });

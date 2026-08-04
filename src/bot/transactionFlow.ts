@@ -3,7 +3,8 @@ import type { User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { formatSomLabel, parseSomInput, formatDateUZ } from "@/lib/format";
 import { todayDateOnlyString } from "@/lib/date";
-import { createTransaction } from "@/lib/services/transactionService";
+import { chiqimYubor } from "@/lib/services/approval";
+import { isModuleOnForTenant } from "@/lib/modules/guard";
 import { getFlow, setFlow, clearFlow, type TransactionFlowState } from "./state";
 
 function chatIdOf(ctx: Context): string {
@@ -267,17 +268,42 @@ async function finalizeTransaction(
     return;
   }
 
-  const transaction = await createTransaction(user.id, flow.businessId, {
-    turi: flow.turi,
-    categoryId: flow.categoryId,
-    summa: flow.summa,
-    sana: flow.sana,
-    izoh,
-    accountId: flow.accountId ?? null,
+  // Chiqim tasdiqlash chegarasidan oshsa — yozuv emas, so'rov yaratiladi.
+  const tasdiqYoqiq =
+    flow.turi === "chiqim" && !!user.tenantId
+      ? await isModuleOnForTenant(user.tenantId, "TASDIQLASH")
+      : false;
+
+  const natija = await chiqimYubor({
+    modulYoqilgan: tasdiqYoqiq,
+    businessId: flow.businessId,
+    user: { id: user.id, rol: user.rol, ism: user.ism },
+    data: {
+      turi: flow.turi,
+      categoryId: flow.categoryId,
+      summa: flow.summa,
+      sana: flow.sana,
+      izoh,
+      accountId: flow.accountId ?? null,
+    },
   });
 
   await clearFlow(chatId);
 
+  if (natija.tasdiqKerak) {
+    await ctx.reply(
+      [
+        "⏳ Tasdiq kutilmoqda",
+        `Summa: ${formatSomLabel(natija.request.summa)}`,
+        `Chegara: ${formatSomLabel(natija.chegara)}`,
+        "",
+        "Bu chiqim rahbar tasdiqlagandan keyin yoziladi.",
+      ].join("\n")
+    );
+    return;
+  }
+
+  const transaction = natija.transaction;
   await ctx.reply(
     [
       `✅ ${flow.turi === "kirim" ? "Kirim" : "Chiqim"} saqlandi`,

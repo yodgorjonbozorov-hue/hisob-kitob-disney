@@ -52,6 +52,8 @@ export const ZAXIRA_JADVALLARI = [
   "supplier",
   "purchaseOrder",
   "purchaseOrderItem",
+  "approvalRule",
+  "approvalRequest",
 ] as const;
 
 export type ZaxiraJadval = (typeof ZAXIRA_JADVALLARI)[number];

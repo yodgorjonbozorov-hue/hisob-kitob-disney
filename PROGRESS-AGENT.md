@@ -15,7 +15,7 @@ agent shu fayldan qayerda qolganini o'qib davom etadi.
 | 3 | Xavfsizlik + audit | `faza-3-xavfsizlik` | ✅ tugadi |
 | 4 | Kassa to'liqligi | `faza-4-kassa` | ✅ tugadi |
 | 5 | PostgreSQL + masshtab | `faza-5-postgres` | ⏸ kechiktirildi (sabab quyida) |
-| 6 | ERP modullari | `faza-6-*` | 🔄 1/6 modul: XARID ✅ |
+| 6 | ERP modullari | `faza-6-*` | 🔄 2/6 modul: XARID ✅, TASDIQLASH ✅ |
 
 ## ⚠️ MIGRATSIYA KUTILMOQDA (qo'lda apply qilinadi)
 
@@ -34,6 +34,7 @@ production/staging'da qo'lda bajariladi. **Avval zaxira oling.**
 | 7 | `20260804140000_sotuv_sana_bekor` | `Sale.sana` (NOT NULL), `deletedAt`, `cancelledBy`, `cancelReason` | O'rta — Sale qayta quriladi |
 | 8 | `20260804150000_sku_inventarizatsiya` | `Product.sku/birlik/minQoldiq`, `StockAdjustment` | O'rta — Product qayta quriladi |
 | 9 | `20260804160000_xarid_moduli` | `Supplier`, `PurchaseOrder`, `PurchaseOrderItem` | Past — faqat CREATE TABLE |
+| 10 | `20260804170000_tasdiqlash_moduli` | `ApprovalRule`, `ApprovalRequest` | Past — faqat CREATE TABLE |
 
 **⚠️ 6-migratsiyadan KEYIN majburiy:** `npm run kassa:migratsiya` — har biznesga
 default "Naqd kassa" ochadi va `accountId`siz eski tranzaksiyalarni bog'laydi.
@@ -626,3 +627,101 @@ rahbar tasdig'i).
       ombor qoldig'i va tranzaksiyalar ro'yxatini solishtiring
 - [ ] Qarzga xarid qiling → "Qarzlar" bo'limida `beriladigan` qarz paydo bo'ldimi
 - [ ] Ombor tizimi o'chirilgan biznesda sahifa ogohlantirish ko'rsatadimi
+
+---
+
+### 2026-08-04 — Faza 6, Modul 2: TASDIQLASH (tugadi)
+
+**Branch:** `faza-6-tasdiqlash`
+
+**Muammo:** kassir yoki sotuvchi istalgan summani chiqim qilib yozib
+yuborardi. Direktor buni ko'pincha faqat oy oxirida — hisobotda — ko'rardi.
+Pul allaqachon ketgan, yozuv allaqachon hisobotga kirgan bo'lardi.
+
+**Yechim:** `ApprovalRule` — biznes o'zi belgilaydigan chegara. Chegaradan
+**KATTA** chiqim darhol yozilmaydi: `ApprovalRequest` yaratiladi va
+tasdiqlovchilarga Telegramga inline tugmali xabar ketadi.
+
+**Asosiy invariant:** tasdiq kutayotgan so'rov — pul EMAS. U `Transaction`
+emas, alohida jadval; shuning uchun hisobotga, kassa qoldig'iga va budjetga
+umuman ta'sir qilmaydi. Haqiqiy yozuv faqat tasdiqlangan paytda, bitta
+`runBusinessTx` ichida tug'iladi va so'rovga `transactionId` bilan
+bog'lanadi — kim so'ragani va kim tasdiqlagani tarixda qoladi.
+
+**Qoidalar mantiqi:**
+- Kategoriyasiz qoida — barcha chiqimlarga; kategoriyali qoida — o'shanga.
+- Bir nechta qoida mos kelsa **eng qattig'i** (chegarasi eng pasti) ishlaydi.
+- Rol ierarxiyasi: OWNER(3) > ADMIN(2) > CASHIER/SELLER(1). So'rovchining
+  darajasi tasdiqlovchi darajasidan past bo'lmasa qoida qo'llanmaydi —
+  direktor o'z chiqimini o'zi tasdiqlab o'tirmaydi.
+- O'z so'rovini o'zi tasdiqlash ataylab taqiqlangan (ADMIN ham).
+- Rad etishda **sabab majburiy** — xodim nima uchun rad etilganini bilishi kerak.
+- Qoidani o'chirish yumshoq: shu qoida bo'yicha yaratilgan so'rovlar
+  "nega tasdiq so'ralgan edi?" degan savolsiz qolmasligi kerak.
+
+**Telegram:** `tsd:ok:<id>` / `tsd:no:<id>` inline tugmalari. Tasdiqlash bir
+bosishda; rad etishda bot sababni so'raydi (`tasdiq_rad` oqimi). Xabarnoma
+ataylab "best-effort" — Telegram ishlamasa ham so'rov bazada turadi va
+veb-saytda ko'rinadi, chiqim kiritish jarayoni buzilmaydi.
+
+**Yangi modellar:** `ApprovalRule`, `ApprovalRequest` — ikkalasi
+`BUSINESS_SCOPED` va `ZAXIRA_JADVALLARI` ro'yxatlarida.
+
+**Fayllar:**
+- `prisma/schema.prisma` + `prisma/migrations/20260804170000_tasdiqlash_moduli/`
+- `src/lib/validation/approval.ts`, `src/lib/services/approval.ts`, `src/lib/queries/approval.ts`
+- `src/app/api/tasdiqlash/qoidalar/route.ts`, `.../[id]/route.ts`
+- `src/app/api/tasdiqlash/sorovlar/[id]/route.ts`
+- `src/app/api/transactions/route.ts` — chiqim endi `chiqimYubor` orqali (202 javob)
+- `src/app/app/tasdiqlash/{page,loading,error}.tsx`, `TasdiqlashClient.tsx`, `RadModal.tsx`
+- `src/app/app/tasdiqlash/qoidalar/{page,loading}.tsx`, `QoidalarClient.tsx`
+- `src/bot/approvalFlow.ts` (yangi), `src/bot/bot.ts`, `src/bot/transactionFlow.ts`
+- `src/lib/modules/registry.ts`, `src/lib/billing/plans.ts`, `src/lib/services/audit.ts`
+- `src/lib/db/tenantDb.ts`, `src/lib/backup/dump.ts`, `src/components/nav/Sidebar.tsx`
+
+**Ruxsat:** modul PRO tarifda. So'rovlar sahifasi HAMMA uchun ochiq (xodim
+faqat O'Z so'rovlarini ko'radi — tranzaksiyalardagi qoida bilan bir xil),
+qaror va qoidalar sahifasi faqat BOSHQARUVCHILAR uchun.
+
+**Test:** `tests/tasdiqlash.test.ts` (20) — qoida CRUD, chegaraning aynan
+"kattasi" ishlashi, qattiqroq qoidaning ustunligi, modul o'chiq holat,
+kirimning tegilmasligi, tasdiq → tranzaksiya, rad → tranzaksiyasiz,
+qayta qaror, o'z so'rovini tasdiqlash, past rolning qaror chiqara olmasligi,
+ko'rinuvchanlik va tenant izolyatsiyasi.
+
+**Tekshirildi:** `npm run build` ✅ · `npx tsc --noEmit` ✅ ·
+27 test to'plami, jami **289 test**, 0 xato.
+
+**Keyingi qadam:** Faza 6, Modul 3 — HUJJATLAR (fayl ilova qilish). Diqqat:
+u tashqi fayl saqlagich (Vercel Blob yoki S3) talab qiladi — bu muhitda
+sinab bo'lmaydi, shuning uchun avval MIJOZLAR moduliga o'tish oqilonaroq.
+
+---
+
+## FAZA 6 / MODUL 2 TEKSHIRUV RO'YXATI
+
+**Avtomatik tekshirilgan**
+- [x] `npm run build` va `tsc --noEmit` o'tadi
+- [x] Chegaradan past va chegaraga TENG summa darhol yoziladi
+- [x] Chegaradan katta summa yozilmaydi — so'rov yaratiladi
+- [x] Direktorning o'z chiqimi tasdiq talab qilmaydi
+- [x] Kirim hech qachon tasdiq talab qilmaydi
+- [x] Kategoriyaga atalgan qattiqroq qoida umumiysidan ustun
+- [x] Tasdiqlash chiqim yozuvini yaratadi, yozuv SO'RAGAN xodim nomida
+- [x] Rad etish pul yozuvi yaratmaydi, sabab saqlanadi
+- [x] Qayta tasdiqlash/rad etish rad qilinadi
+- [x] O'z so'rovini o'zi tasdiqlay olmaydi
+- [x] Kassir qaror chiqara olmaydi
+- [x] Xodim faqat o'z so'rovlarini ko'radi
+- [x] Begona tenant so'rov va qoidalarni ko'rmaydi
+
+**Sizdan kutiladi (real muhitda)**
+- [ ] 10-migratsiyani apply qiling
+- [ ] Sozlamalar → Modullar bo'limida "Tasdiqlash" ni yoqing (PRO)
+- [ ] Qoida qo'ying (masalan 1 000 000 so'm, tasdiqlovchi — Direktor)
+- [ ] Kassir hisobidan 2 000 000 so'mlik chiqim kiriting → "tasdiq kutilmoqda"
+      xabari chiqadimi, hisobotda ko'rinmayotganini tekshiring
+- [ ] Direktor Telegramida tugmali xabar keldimi; "Tasdiqlash" bosilganda
+      chiqim yozuvi paydo bo'ladimi
+- [ ] "Rad etish" bosing → bot sabab so'raydi, sabab yozilgach so'rov rad etiladi
+- [ ] Botdagi /chiqim orqali ham chegaradan oshiring — xuddi shunday ishlaydimi
