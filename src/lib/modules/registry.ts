@@ -98,6 +98,17 @@ export const MODULLAR: ModulTarifi[] = [
     ],
   },
   {
+    code: "MIJOZLAR",
+    nomi: "Mijozlar",
+    tavsif:
+      "Mijoz kartochkasi: barcha sotuvlar, qarzlar va CRM bitimlari bitta sahifada. Qarz limiti — chegaradan oshgan qarzga sotuv rad etiladi.",
+    core: false,
+    rollar: HAMMA,
+    nav: [
+      { href: "/app/mijozlar", label: "Mijozlar", icon: "customers", tartib: 27, rollar: HAMMA },
+    ],
+  },
+  {
     code: "CRM",
     nomi: "CRM — mijozlar va bitimlar",
     tavsif: "Lead va bitimlar kanbani, kontaktlar, faoliyat tarixi. Yutilgan bitim 1 klikda kirimga aylanadi.",

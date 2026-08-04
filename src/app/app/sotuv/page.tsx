@@ -25,9 +25,16 @@ export default async function SotuvPage() {
   }
 
   // Kassir uchun ham, admin uchun ham sotuv formasi bir xil (miqdorsiz — faqat mavjudlik).
-  const [products, sales] = await Promise.all([
+  // MIJOZLAR moduli yoqiq bo'lsa — qarzga sotuvda mijoz kartochkasini tanlash
+  // mumkin (shunda qarz limiti ishlaydi). Yoqilmagan bo'lsa ro'yxat bo'sh.
+  const { getEnabledModules } = await import("@/lib/modules/guard");
+  const yoqilgan = await getEnabledModules(ctx);
+  const [products, sales, mijozlar] = await Promise.all([
     listProducts(business.id, { forKassir: true }) as Promise<ProductKassirDTO[]>,
     listRecentSales(business.id, 15),
+    yoqilgan.has("MIJOZLAR")
+      ? (await import("@/lib/queries/mijoz")).listMijozlar(business.id)
+      : Promise.resolve([]),
   ]);
 
   return (
@@ -43,6 +50,7 @@ export default async function SotuvPage() {
         initialSales={sales}
         biznesTuri={business.turi}
         bekorQilaOladi={isManager(session.rol)}
+        mijozlar={mijozlar}
       />
     </div>
   );

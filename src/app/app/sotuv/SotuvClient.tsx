@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 import { formatSom, formatSomLabel, parseSomInput, formatDateUZ } from "@/lib/format";
 import { isAvto, omborMatn } from "@/lib/biznesTuri";
 import type { ProductKassirDTO, SaleDTO } from "@/lib/queries/inventory";
+import type { MijozDTO } from "@/lib/queries/mijoz";
 import { todayDateOnlyString } from "@/lib/date";
 import { SotuvBekorModal } from "./SotuvBekorModal";
 
@@ -16,12 +17,15 @@ export function SotuvClient({
   initialSales,
   biznesTuri = "umumiy",
   bekorQilaOladi = false,
+  mijozlar = [],
 }: {
   products: ProductKassirDTO[];
   initialSales: SaleDTO[];
   biznesTuri?: string;
   /** Sotuvni bekor qilish faqat direktor/adminda (kassir o'z xatosini yashira olmasin). */
   bekorQilaOladi?: boolean;
+  /** MIJOZLAR moduli yoqiq bo'lsa — qarz limiti ishlaydigan mijoz kartochkalari. */
+  mijozlar?: MijozDTO[];
 }) {
   const router = useRouter();
   const avto = isAvto(biznesTuri);
@@ -32,6 +36,7 @@ export function SotuvClient({
   const [tolovTuri, setTolovTuri] = useState<"naqd" | "qarz">("naqd");
   // Avto: kelishilgan narx. Mashina tanlanganda rejadagi narx bilan to'ldiriladi.
   const [narx, setNarx] = useState("");
+  const [contactId, setContactId] = useState("");
   const [mijozNomi, setMijozNomi] = useState("");
   const [mijozTel, setMijozTel] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +96,7 @@ export function SotuvClient({
           productId: selected.id,
           miqdor: qty,
           tolovTuri,
+          contactId: tolovTuri === "qarz" && contactId ? contactId : undefined,
           mijozNomi: tolovTuri === "qarz" ? mijozNomi : undefined,
           mijozTel: tolovTuri === "qarz" ? mijozTel : undefined,
           narx: avto && kelishilgan > 0 ? kelishilgan : undefined,
@@ -122,6 +128,7 @@ export function SotuvClient({
         ...prev,
       ]);
       setMiqdor("1");
+      setContactId("");
       setMijozNomi("");
       setMijozTel("");
       setProductId("");
@@ -229,6 +236,40 @@ export function SotuvClient({
 
           {tolovTuri === "qarz" && (
             <div className="space-y-2">
+              {mijozlar.length > 0 && (
+                <div>
+                  <select
+                    value={contactId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setContactId(id);
+                      // Kartochka tanlansa ism/telefon undan olinadi — qo'lda
+                      // yozilgan nom bilan kartochka bir-biriga qarama-qarshi
+                      // bo'lib qolmasligi kerak.
+                      const m = mijozlar.find((x) => x.id === id);
+                      if (m) {
+                        setMijozNomi(m.ism);
+                        setMijozTel(m.tel ?? "");
+                      }
+                    }}
+                    className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+                    aria-label="Mijoz kartochkasi"
+                  >
+                    <option value="">Kartochkasiz (faqat ism yozish)</option>
+                    {mijozlar.map((m) => (
+                      <option key={m.id} value={m.id} disabled={m.limitToldi}>
+                        {m.ism}
+                        {m.qarzLimit !== null &&
+                          ` — qarz ${m.ochiqQarz.toLocaleString("uz-UZ")} / ${m.qarzLimit.toLocaleString("uz-UZ")}`}
+                        {m.limitToldi ? " (limit to'ldi)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-2xs text-faint mt-1">
+                    Kartochka tanlansa sotuv mijoz tarixiga tushadi va qarz limiti tekshiriladi.
+                  </p>
+                </div>
+              )}
               <input
                 type="text"
                 value={mijozNomi}

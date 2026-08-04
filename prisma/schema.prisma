@@ -520,6 +520,9 @@ model Sale {
   tannarx       Int // kelgan narx snapshot (marja hisobi uchun)
   jamiSumma     Int
   tolovTuri     String // "naqd" | "qarz"
+  /// Mijoz kartochkasiga bog'lanish (ixtiyoriy — eski yozuvlarda null).
+  contactId     String?
+  contact       Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
   mijozNomi     String?
   mijozTel      String?
   userId        String
@@ -536,6 +539,7 @@ model Sale {
   @@index([businessId, sana])
   @@index([businessId, deletedAt, sana])
   @@index([productId])
+  @@index([contactId])
 }
 
 /// Qarzdorlik. Ikki yo'nalishli:
@@ -552,6 +556,9 @@ model Debt {
   /// Qarz qaysi mahsulot/mashinaga tegishli (ixtiyoriy).
   productId  String?
   product    Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
+  /// Mijoz kartochkasiga bog'lanish (ixtiyoriy — eski yozuvlarda null).
+  contactId  String?
+  contact    Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
   mijozNomi  String
   mijozTel   String?
   jamiSumma  Int
@@ -566,7 +573,9 @@ model Debt {
 
   @@index([businessId, isYopilgan, turi])
   @@index([businessId, turi])
+  @@index([businessId, contactId, isYopilgan])
   @@index([productId])
+  @@index([contactId])
 }
 
 // ==== XARID moduli (Faza 6.1) ====
@@ -660,10 +669,15 @@ model Contact {
   telegram   String?
   izoh       String?
   createdBy  String
+  /// Ochiq qarz shu chegaradan oshsa yangi qarzga sotuv rad etiladi.
+  /// null — chegara yo'q (avvalgi xatti-harakat).
+  qarzLimit  Int?
   createdAt  DateTime   @default(now())
   deletedAt  DateTime?
   deals      Deal[]
   activities Activity[]
+  sales      Sale[]
+  debts      Debt[]
 
   @@index([businessId])
   @@index([businessId, tel])

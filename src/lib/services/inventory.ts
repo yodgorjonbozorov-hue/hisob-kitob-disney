@@ -5,6 +5,7 @@ import { runBusinessTx, type BusinessTx } from "@/lib/db/businessTx";
 import { todayDateOnlyString, dateOnlyStringToUTCDate } from "@/lib/date";
 import { isAvto } from "@/lib/biznesTuri";
 import { logAudit } from "@/lib/services/audit";
+import { qarzLimitTekshirTx } from "@/lib/services/mijoz";
 
 // Sotuv va qarz to'lovi uchun avtomatik ishlatiladigan kategoriyalar.
 const SOTUV_KATEGORIYA = "Sotuv";
@@ -120,6 +121,8 @@ export async function createSale(params: {
   productId: string;
   miqdor: number;
   tolovTuri: "naqd" | "qarz";
+  /** Mijoz kartochkasi (ixtiyoriy). Berilsa qarz limiti tekshiriladi. */
+  contactId?: string | null;
   mijozNomi?: string | null;
   mijozTel?: string | null;
   /**
@@ -145,6 +148,15 @@ export async function createSale(params: {
     }
     if (params.tolovTuri === "qarz" && !params.mijozNomi?.trim()) {
       throw new BadRequestError("Qarzga sotishda mijoz nomi kiritilishi shart");
+    }
+
+    // Qarz limiti — qoldiq kamaytirilishidan OLDIN tekshiriladi, shu bilan
+    // limitdan oshgan sotuv omborga umuman tegmaydi (tranzaksiya orqaga
+    // qaytadi, lekin tartib baribir aniq bo'lgani ma'qul).
+    if (params.tolovTuri === "qarz" && params.contactId) {
+      const narx =
+        kelishilganNarx && kelishilganNarx > 0 ? kelishilganNarx : product.sotuvNarx;
+      await qarzLimitTekshirTx(tx, params.businessId, params.contactId, narx * params.miqdor);
     }
 
     // Atomik shartli kamaytirish — yetarli qoldiq bo'lsagina bajariladi.
@@ -186,6 +198,7 @@ export async function createSale(params: {
         tannarx,
         jamiSumma,
         tolovTuri: params.tolovTuri,
+        contactId: params.contactId ?? undefined,
         mijozNomi: params.mijozNomi?.trim() || undefined,
         mijozTel: params.mijozTel?.trim() || undefined,
         sana: dateOnlyStringToUTCDate(sana),
@@ -212,6 +225,7 @@ export async function createSale(params: {
           turi: "olinadigan",
           saleId: sale.id,
           productId: product.id,
+          contactId: params.contactId ?? undefined,
           mijozNomi: params.mijozNomi!.trim(),
           mijozTel: params.mijozTel?.trim() || undefined,
           jamiSumma,

@@ -72,6 +72,8 @@ export const createSaleSchema = z.object({
   productId: z.string().min(1),
   miqdor: z.number().int().positive("Miqdor musbat bo'lishi kerak"),
   tolovTuri: z.enum(["naqd", "qarz"]),
+  /** Mijoz kartochkasi (MIJOZLAR moduli). Berilsa qarz limiti tekshiriladi. */
+  contactId: z.string().min(1).optional().nullable(),
   mijozNomi: z.string().max(100).optional().nullable(),
   mijozTel: z.string().max(50).optional().nullable(),
   // Kelishilgan narx (avto rejimida savdolashib belgilanadi).

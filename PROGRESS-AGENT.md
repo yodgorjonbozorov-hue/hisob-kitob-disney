@@ -15,7 +15,7 @@ agent shu fayldan qayerda qolganini o'qib davom etadi.
 | 3 | Xavfsizlik + audit | `faza-3-xavfsizlik` | ✅ tugadi |
 | 4 | Kassa to'liqligi | `faza-4-kassa` | ✅ tugadi |
 | 5 | PostgreSQL + masshtab | `faza-5-postgres` | ⏸ kechiktirildi (sabab quyida) |
-| 6 | ERP modullari | `faza-6-*` | 🔄 2/6 modul: XARID ✅, TASDIQLASH ✅ |
+| 6 | ERP modullari | `faza-6-*` | 🔄 3/6 modul: XARID ✅, TASDIQLASH ✅, MIJOZLAR ✅ |
 
 ## ⚠️ MIGRATSIYA KUTILMOQDA (qo'lda apply qilinadi)
 
@@ -35,6 +35,7 @@ production/staging'da qo'lda bajariladi. **Avval zaxira oling.**
 | 8 | `20260804150000_sku_inventarizatsiya` | `Product.sku/birlik/minQoldiq`, `StockAdjustment` | O'rta — Product qayta quriladi |
 | 9 | `20260804160000_xarid_moduli` | `Supplier`, `PurchaseOrder`, `PurchaseOrderItem` | Past — faqat CREATE TABLE |
 | 10 | `20260804170000_tasdiqlash_moduli` | `ApprovalRule`, `ApprovalRequest` | Past — faqat CREATE TABLE |
+| 11 | `20260804180000_mijozlar_moduli` | `Contact.qarzLimit`, `Sale.contactId`, `Debt.contactId` | O'rta — Sale va Debt qayta quriladi |
 
 **⚠️ 6-migratsiyadan KEYIN majburiy:** `npm run kassa:migratsiya` — har biznesga
 default "Naqd kassa" ochadi va `accountId`siz eski tranzaksiyalarni bog'laydi.
@@ -725,3 +726,95 @@ sinab bo'lmaydi, shuning uchun avval MIJOZLAR moduliga o'tish oqilonaroq.
       chiqim yozuvi paydo bo'ladimi
 - [ ] "Rad etish" bosing → bot sabab so'raydi, sabab yozilgach so'rov rad etiladi
 - [ ] Botdagi /chiqim orqali ham chegaradan oshiring — xuddi shunday ishlaydimi
+
+---
+
+### 2026-08-04 — Faza 6, Modul 3: MIJOZLAR (tugadi)
+
+**Branch:** `faza-6-mijozlar`
+
+**Muammo:** sotuv va qarzda mijoz faqat ERKIN MATN edi — "Akmal",
+"akmal aka", "Akmal 90-...". Tizim bularning bitta odam ekanini bilmasdi,
+shuning uchun "bu odam bizga qancha qarz?" degan savolga javob yo'q edi.
+Qarz esa hech qanday chegarasiz o'saverardi.
+
+**Yechim:** `Sale.contactId` va `Debt.contactId` — sotuv va qarz mijoz
+kartochkasiga bog'lanadi. `Contact.qarzLimit` — ochiq qarz chegarasi.
+
+**Qarz limiti mantiqi:**
+- `null` — chegara yo'q (avvalgi xatti-harakat, eski yozuvlar buzilmaydi).
+- `0` — mijozga umuman qarzga sotilmaydi (faqat naqd).
+- Chegaraga **teng** qarz o'tadi, undan **oshadigani** rad etiladi.
+- Faqat `olinadigan` va yopilmagan qarzlar hisobga olinadi; to'langan qism
+  qoldiqdan chiqadi, ya'ni to'lov qilingach limitda joy bo'shaydi.
+- Naqd sotuvga limit ta'sir qilmaydi.
+
+**Nega tekshiruv tranzaksiya ichida:** limit tekshiruvi bilan qarz yozuvi
+orasida boshqa sotuv o'tib ketsa, ikkalasi ham "limit yetadi" deb qaror
+qilardi va mijoz chegaradan oshib ketardi. `qarzLimitTekshirTx` sotuv
+tranzaksiyasi ichida, qoldiq kamaytirilishidan OLDIN chaqiriladi — rad
+etilgan sotuv ombordan tovar ham olmaydi.
+
+**Kartochka sahifasi** (`/app/mijozlar/[id]`): jami sotuv, ochiq qarz va
+limit yakunlari + uch bo'lim (sotuvlar, qarzlar, CRM bitimlari). Ro'yxat
+sahifasida qidiruv va limit to'lganlar belgisi.
+
+**Sotuv formasi:** MIJOZLAR moduli yoqiq bo'lsa qarzga sotuvda kartochka
+tanlash select'i chiqadi. Limit to'lgan mijoz select'da o'chirilgan
+(`disabled`) — xato server javobini kutmasdan ko'rinadi.
+
+**Fayllar:**
+- `prisma/schema.prisma` + `prisma/migrations/20260804180000_mijozlar_moduli/`
+- `src/lib/validation/mijoz.ts`, `src/lib/services/mijoz.ts`, `src/lib/queries/mijoz.ts`
+- `src/app/api/mijozlar/route.ts`, `.../[id]/route.ts`
+- `src/app/app/mijozlar/{page,loading,error}.tsx`, `MijozlarClient.tsx`, `MijozModal.tsx`
+- `src/app/app/mijozlar/[id]/{page,loading}.tsx`, `KartochkaClient.tsx`
+- `src/lib/services/inventory.ts` — `createSale` endi `contactId` qabul qiladi
+- `src/lib/validation/inventory.ts`, `src/app/api/sales/route.ts`
+- `src/app/app/sotuv/page.tsx`, `SotuvClient.tsx` — mijoz tanlash
+- `src/lib/modules/registry.ts`, `src/lib/billing/plans.ts`, `src/lib/services/audit.ts`
+- `src/components/nav/Sidebar.tsx`
+
+**Yangi model yo'q** — `Contact` allaqachon `BUSINESS_SCOPED` va
+`ZAXIRA_JADVALLARI` ro'yxatlarida, shuning uchun ro'yxatlar o'zgarmadi.
+
+**Ruxsat:** modul PRO tarifda, HAMMA rol uchun ochiq. Qarz limitini
+o'zgartirish va mijozni o'chirish — faqat boshqaruvchilar.
+
+**Test:** `tests/mijozlar.test.ts` (15) — kartochka CRUD, naqd sotuvning
+kartochkaga bog'lanishi, limitdan past/teng/oshgan qarz, rad etilgan
+sotuvning ombordan tovar olmasligi, to'lovdan keyin joy bo'shashi,
+limitsiz va limit=0 holatlari, kartochkasiz sotuvning avvalgidek ishlashi,
+yopilmagan qarzli mijozning o'chirilmasligi, tenant izolyatsiyasi.
+
+**Tekshirildi:** `npm run build` ✅ · `npx tsc --noEmit` ✅ ·
+28 test to'plami, jami **304 test**, 0 xato.
+
+**Keyingi qadam:** Faza 6 ning qolgan modullari — HUJJATLAR (tashqi fayl
+saqlagich kerak: Vercel Blob yoki S3), HR-LITE, AI OCR.
+
+---
+
+## FAZA 6 / MODUL 3 TEKSHIRUV RO'YXATI
+
+**Avtomatik tekshirilgan**
+- [x] `npm run build` va `tsc --noEmit` o'tadi
+- [x] Naqd sotuv kartochkaga bog'lanadi, jami sotuvga qo'shiladi
+- [x] Limitdan past va limitga TENG qarz o'tadi
+- [x] Limitdan oshadigan qarz rad etiladi va ombordan tovar olinmaydi
+- [x] Limit to'lgach eng kichik qarz ham o'tmaydi
+- [x] Naqd sotuvga limit ta'sir qilmaydi
+- [x] To'lov qilingach limitda joy bo'shaydi
+- [x] Limitsiz (null) va limit=0 holatlari to'g'ri ishlaydi
+- [x] Kartochkasiz qarzga sotuv avvalgidek ishlaydi (eski xatti-harakat)
+- [x] Yopilmagan qarzi bor mijoz o'chirilmaydi; o'chirilganda tarix qoladi
+- [x] Begona tenant kartochkani ko'rmaydi
+
+**Sizdan kutiladi (real muhitda)**
+- [ ] 11-migratsiyani apply qiling (Sale va Debt qayta quriladi — ZAXIRA OLING)
+- [ ] Sozlamalar → Modullar bo'limida "Mijozlar" ni yoqing (PRO)
+- [ ] Mijoz qo'shing, qarz limiti belgilang
+- [ ] Sotuv sahifasida qarzga sotishda mijoz select'i chiqadimi
+- [ ] Limitdan oshiring — xato xabari aniq va tushunarli chiqadimi
+- [ ] Mijoz kartochkasida sotuv/qarz/bitim bo'limlari to'g'ri to'ladimi
+- [ ] Qarz to'lovi kiritilgach kartochkadagi "ochiq qarz" kamaydimi
