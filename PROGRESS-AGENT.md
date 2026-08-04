@@ -10,32 +10,42 @@ agent shu fayldan qayerda qolganini o'qib davom etadi.
 | Faza | Nomi | Branch | Holat |
 |---|---|---|---|
 | 0 | CLAUDE.md yaratish | `faza-0-claude-md` | ✅ tugadi |
-| 1 | Kritik tuzatishlar | `faza-1-kritik` | ✅ kod tayyor — **loyiha egasi tekshiruvi kutilmoqda** |
-| 2 | Unumdorlik + UX | `faza-2-perf` | ⏳ boshlanmagan |
+| 1 | Kritik tuzatishlar | `faza-1-kritik` | ✅ tugadi |
+| 2 | Unumdorlik + UX | `faza-2-perf` | ✅ tugadi |
 | 3 | Xavfsizlik + audit | `faza-3-xavfsizlik` | ⏳ boshlanmagan |
 | 4 | Kassa to'liqligi | `faza-4-kassa` | ⏳ boshlanmagan |
-| 5 | PostgreSQL + masshtab | `faza-5-postgres` | 🔒 loyiha egasidan aniq ruxsat kutiladi |
+| 5 | PostgreSQL + masshtab | `faza-5-postgres` | 🔓 ruxsat berildi (2026-08-04) |
 | 6 | ERP modullari | `faza-6-*` | ⏳ boshlanmagan |
 
 ## ⚠️ MIGRATSIYA KUTILMOQDA (qo'lda apply qilinadi)
 
-Ikkala migratsiya `--create-only` uslubida yozildi, **apply QILINMADI**.
-Production bazada qo'llashdan oldin **albatta zaxira oling**.
+Uchala migratsiya `--create-only` uslubida yozildi, **apply QILINMADI**.
+Bu muhitda baza ulanmagan (`DATABASE_URL` yo'q), shuning uchun qo'llash
+production/staging'da qo'lda bajariladi. **Avval zaxira oling.**
 
 | # | Papka | Nima qiladi | Xavf |
 |---|---|---|---|
-| 1 | `prisma/migrations/20260804090000_bot_suhbat_holati` | `BotConversation` jadvalini yaratadi | Past — faqat CREATE TABLE |
-| 2 | `prisma/migrations/20260804091000_ondelete_siyosati` | 23 ta jadvalni FK siyosati bilan qayta quradi | **O'rta** — jadval qayta qurish |
+| 1 | `20260804090000_bot_suhbat_holati` | `BotConversation` jadvalini yaratadi | Past — faqat CREATE TABLE |
+| 2 | `20260804091000_ondelete_siyosati` | 23 ta jadvalni FK siyosati bilan qayta quradi | **O'rta** — jadval qayta qurish |
+| 3 | `20260804100000_kompozit_indekslar` | Indekslarni almashtiradi, `Payment.externalId` ni UNIQUE qiladi | **O'rta** — dublikat bo'lsa to'xtaydi |
 
-**2-migratsiya haqida:** SQLite'da FK o'zgartirish jadvalni qayta qurishni
-talab qiladi. SQL har jadvalni `INSERT ... SELECT` bilan to'liq ko'chiradi.
-Scratch bazada ma'lumot bilan sinaldi: barcha yozuvlar saqlandi,
-`PRAGMA foreign_key_check` toza, `ON DELETE RESTRICT` o'rnida.
 Qo'llash: `npm run db:apply` (yoki `node scripts/db-migrate.mjs`).
 
-Migratsiyadan keyin diqqat qiling: endi moliyaviy yozuvi bor biznesni
-o'chirish FK bilan **rad etiladi** (bu ataylab). Ilova darajasidagi tekshiruv
-allaqachon bor (`/api/businesses/[id]` DELETE), FK ikkinchi himoya qatlami.
+**2-migratsiya:** SQLite'da FK o'zgartirish jadvalni qayta qurishni talab
+qiladi. SQL har jadvalni `INSERT ... SELECT` bilan to'liq ko'chiradi.
+Scratch bazada ma'lumot bilan sinaldi: barcha yozuvlar saqlandi,
+`PRAGMA foreign_key_check` toza, `ON DELETE RESTRICT` o'rnida.
+Keyin diqqat: endi moliyaviy yozuvi bor biznesni o'chirish FK bilan **rad
+etiladi** (ataylab; ilova darajasidagi tekshiruv allaqachon bor, FK — ikkinchi qatlam).
+
+**3-migratsiya:** `Payment.externalId` UNIQUE bo'ladi. Bazada takroriy
+qiymat bo'lsa migratsiya "UNIQUE constraint failed" bilan **to'xtaydi**
+(ma'lumot buzilmaydi). Avval tekshiring:
+
+```sql
+SELECT externalId, COUNT(*) c FROM "Payment"
+WHERE externalId IS NOT NULL GROUP BY externalId HAVING c > 1;
+```
 
 ---
 
@@ -168,6 +178,117 @@ Kod tomondan bajarilgani `[x]`, sizdan real ma'lumot bilan sinash kutilayotgani 
 - [ ] Telegram webhook secret bilan ishlaydi (Vercel env tekshiring)
 - [ ] Sotuv paytida serverni to'xtatib (dev'da throw qo'shib) tekshiring: qoldiq qaytadi
 
-**Keyingi qadam:** Faza 2 (`faza-2-perf`) — kompozit indekslar, dashboard
-so'rovlarini yig'ish, N+1 tuzatish, `loading.tsx`, `error.tsx`, kesh,
-`Button type`. Faza 1 tekshirilib merge qilingandan keyin boshlanadi.
+### 2026-08-04 — Faza 2, Prompt 2.1 (tugadi)
+
+**VAZIFA 1 — kompozit indekslar (H-5, H-10)**
+- `Transaction`: 6 ta bitta-ustunli indeks o'rniga
+  `[businessId, deletedAt, sana]`, `[businessId, turi, deletedAt, sana]`,
+  `[businessId, categoryId, sana]`, `[businessId, userId, sana]`.
+  `[categoryId]` va `[userId]` FILTR uchun emas, `onDelete: Restrict`
+  tekshiruvi uchun saqlab qolindi (aks holda har o'chirishda to'liq skanerlash).
+- `Sale [businessId, createdAt]`, `Debt [businessId, isYopilgan, turi]`,
+  `AuditLog [businessId, createdAt]`, `Payment.externalId @unique`.
+- `EXPLAIN QUERY PLAN` bilan tekshirildi — barcha asosiy so'rovlar yangi
+  indekslarni ishlatadi, yozuvlar ro'yxati endi `ORDER BY` uchun temp
+  b-tree qurmaydi.
+
+**VAZIFA 2 — agregat so'rovlar (6.1, 6.3)**
+- Yangi: `src/lib/db/businessRaw.ts`. Xom SQL tenant extension'idan
+  O'TMAYDI, shuning uchun tenant sharti SQL'ning o'ziga `JOIN "Business"`
+  orqali kiritiladi — qo'shimcha so'rovsiz, himoya baza darajasida.
+  `sanaKalit()` ikkala DateTime saqlash formatini (ISO matn / ms INTEGER)
+  qo'llab-quvvatlaydi.
+- `getMonthSummary`: 4 aggregate → **1** (joriy + oldingi oy bitta oraliqda).
+- `getTrend(6)`: 12 aggregate → **1**.
+- `getDailyDynamics`: butun oyni RAM'ga yuklash → SQL `GROUP BY`.
+- `getProductProfitability`: BARCHA sotuvlarni RAM'ga yuklash → SQL
+  `GROUP BY` (`SUM(tannarx * miqdor)` — Prisma bunga qodir emas).
+- Dashboard sahifasi: ~21 so'rov → **7**.
+
+**VAZIFA 3 — N+1 va tozalash (6.2, B-3)**
+- `bulk-move`: har yozuvga alohida `update` (500 tagacha ketma-ket) →
+  maqsad kategoriyasi bo'yicha guruhlab `updateMany`. Kategoriya `upsert`.
+  Fayldagi **NUL bayt** olib tashlandi (`"nomi::turi"`).
+- `recurring.ts`: takroriy yozuv endi O'SHA biznes boshqaruvchisiga
+  yoziladi (ilgari tenantdagi ixtiyoriy boshqaruvchiga); yaratish +
+  `lastGenerated` belgilash atomik; oy o'rtasida qo'shilgan andoza
+  o'tib ketgan kun uchun darhol yozuv yaratmaydi.
+- Kirill harflar tuzatildi: `biznesда`, `tenantда`, `mantiqи`.
+  (Payme'ning `ru` xabarlari va signup slug regexidagi kirill — ataylab, protokol talabi.)
+
+**Test:** `tests/agregat.test.ts` (7) — natijalar to'g'riligi + **xom SQL
+tenant izolyatsiyasi** (boshqa tenant kontekstida nol qaytishi).
+
+**Fayllar:** `prisma/schema.prisma`, `prisma/migrations/20260804100000_kompozit_indekslar/`,
+`src/lib/db/businessRaw.ts`, `src/lib/queries/dashboard.ts`, `src/lib/queries/inventory.ts`,
+`src/app/api/transactions/bulk-move/route.ts`, `src/lib/services/recurring.ts`,
+`src/lib/billing/payme.ts`, `tests/agregat.test.ts`, `package.json`
+
+### 2026-08-04 — Faza 2, Prompt 2.2 (tugadi)
+
+**VAZIFA 1 — `loading.tsx` (U-1)**
+- 18 ta `loading.tsx` (ilgari 26 sahifada 0 ta edi): `/app`, tranzaksiyalar,
+  hisobot, ombor, sotuv, qarzlar, crm, crm/kontaktlar, vazifalar, byudjet,
+  ai, smena, takroriy, bildirishnomalar, admin (umumiy), sozlamalar,
+  billing, superadmin.
+- `Skeleton.tsx` ga sahifa bloklari qo'shildi: `SkeletonHeader`,
+  `SkeletonStats`, `SkeletonChart`, `SkeletonTable`, `SkeletonFilters`,
+  `SkeletonBoard`. Har `loading.tsx` sahifaning haqiqiy tuzilishini
+  takrorlaydi — generik spinner emas, yuklangach sahifa sakramaydi.
+
+**VAZIFA 2 — `error.tsx` (U-2)**
+- 9 ta modulga: ombor, crm, hisobot, qarzlar, sotuv, vazifalar, byudjet,
+  ai, admin. Umumiy `components/ui/ModuleError.tsx` — "Qayta urinish" va
+  "Bosh sahifa" tugmalari. Xato butun kabinetni emas, faqat bo'limni almashtiradi.
+
+**VAZIFA 3 — kesh (H-8)**
+- Yangi: `src/lib/cache.ts` — `keshlangan()` yordamchisi, `revalidate: 60`,
+  teg `dashboard:{businessId}`.
+  **Tenant xavfsizligi:** `unstable_cache` callback'i so'rov kontekstidan
+  tashqarida chaqilishi mumkin, shuning uchun `tenantId` kesh kalitiga
+  ANIQ kiritiladi va callback ichida `runWithTenant` QAYTA chaqiriladi.
+- `src/lib/queries/dashboardCached.ts` — keshlangan variantlar; sahifa
+  shulardan foydalanadi. `queries/dashboard.ts` keshsiz qoladi (test, bot,
+  cron va hisobot har doim eng yangi raqamni oladi).
+- 13 ta mutatsiya nuqtasida `dashboardYangilandi(businessId)` — foydalanuvchi
+  yozuv qo'shgach 60 soniya kutmaydi (tranzaksiya CRUD, bulk, bulk-move,
+  restore, sotuv, qarz to'lovi, avto mashina/xarajat).
+
+**VAZIFA 4 — `Button` turi**
+- `type="button"` default qilindi. HTML'da default `"submit"` — forma
+  ichidagi har qanday tugma (masalan "Bekor qilish") formani yuborib
+  yuborardi. 23 ta formaning hammasi tekshirildi: yuboruvchi tugmalarda
+  `type="submit"` allaqachon aniq yozilgan edi, ya'ni regressiya yo'q.
+- Qo'shimcha: `focus-visible:ring` (audit U-4 — klaviatura navigatsiyasi).
+
+**Fayllar:** 18 ta `loading.tsx`, 9 ta `error.tsx`,
+`src/components/ui/Skeleton.tsx`, `src/components/ui/ModuleError.tsx`,
+`src/components/ui/Button.tsx`, `src/lib/cache.ts`,
+`src/lib/queries/dashboardCached.ts`, `src/app/app/page.tsx`,
+13 ta `src/app/api/**/route.ts`
+
+---
+
+## FAZA 2 TEKSHIRUV RO'YXATI
+
+**Avtomatik tekshirilgan**
+- [x] `npm run build` o'tadi
+- [x] 18 test to'plami, jami **196 test**, 0 xato
+- [x] `EXPLAIN QUERY PLAN`: oylik agregat, yozuvlar ro'yxati, tur bo'yicha
+      yig'indi va qarzlar so'rovi — hammasi yangi kompozit indeksni ishlatadi
+- [x] Dashboard so'rovlari soni ~21 → 7 (kesh bilan takroriy yuklashda 0)
+- [x] Agregat natijalari eski mantiq bilan bir xil (`test:agregat`)
+- [x] Xom SQL boshqa tenant ma'lumotini ko'rsatmaydi (`test:agregat`)
+- [x] Tenant konteksti yo'q bo'lsa agregat so'rov xato beradi (`test:agregat`)
+
+**Sizdan kutiladi (real muhitda)**
+- [ ] `20260804100000_kompozit_indekslar` migratsiyasini apply qiling
+      (avval yuqoridagi dublikat `externalId` so'rovini bajaring)
+- [ ] Dashboard birinchi yuklanish < 1 s (Turso bilan)
+- [ ] Navigatsiyada darhol skeleton ko'rinadi (oq ekran yo'q)
+- [ ] Yozuv qo'shgach dashboard DARHOL yangilanadi (revalidateTag ishlaydi)
+- [ ] Ombor/CRM sahifalarida ataylab xato chiqarib `error.tsx` ni ko'ring
+
+**Keyingi qadam:** Faza 3 (`faza-3-xavfsizlik`) — audit jurnalini
+`tenantDb.ts` extension darajasiga ko'chirish (8/66 → 100%), rate limit'ni
+bazaga, xavfsizlik header'lari, AI suhbat tarixini serverga.
