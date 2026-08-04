@@ -72,6 +72,19 @@ export const MODULLAR: ModulTarifi[] = [
     ],
   },
   {
+    code: "XARID",
+    nomi: "Xarid",
+    tavsif:
+      "Ta'minotchilar reyestri, xarid buyurtmasi va qabul qilish. Qabul qilinganda tovar omborga tushadi, chiqim yoki ta'minotchiga qarz avtomatik yoziladi.",
+    core: false,
+    // Xarid — pul va ombor qarori, shuning uchun faqat boshqaruvchilar.
+    rollar: BOSHQARUVCHILAR,
+    nav: [
+      { href: "/app/xarid", label: "Xarid", icon: "purchase", tartib: 23, rollar: BOSHQARUVCHILAR },
+      { href: "/app/xarid/taminotchilar", label: "Ta'minotchilar", icon: "supplier", tartib: 24, rollar: BOSHQARUVCHILAR },
+    ],
+  },
+  {
     code: "CRM",
     nomi: "CRM — mijozlar va bitimlar",
     tavsif: "Lead va bitimlar kanbani, kontaktlar, faoliyat tarixi. Yutilgan bitim 1 klikda kirimga aylanadi.",

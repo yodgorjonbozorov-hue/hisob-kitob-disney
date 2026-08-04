@@ -41,6 +41,10 @@ const BUSINESS_SCOPED = new Set([
   "Account",
   "AccountTransfer",
   "StockAdjustment",
+  // Xarid (Faza 6.1)
+  "Supplier",
+  "PurchaseOrder",
+  "PurchaseOrderItem",
 ]);
 // AuditLog: businessId nullable — biznesga bog'langan yozuvlar tenant bo'yicha filtrlanadi.
 const AUDIT_MODEL = "AuditLog";

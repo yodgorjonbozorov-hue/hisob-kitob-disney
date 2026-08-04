@@ -49,6 +49,9 @@ export const ZAXIRA_JADVALLARI = [
   "activity",
   "accountTransfer",
   "stockAdjustment",
+  "supplier",
+  "purchaseOrder",
+  "purchaseOrderItem",
 ] as const;
 
 export type ZaxiraJadval = (typeof ZAXIRA_JADVALLARI)[number];

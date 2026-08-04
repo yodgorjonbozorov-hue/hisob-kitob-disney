@@ -14,12 +14,12 @@ agent shu fayldan qayerda qolganini o'qib davom etadi.
 | 2 | Unumdorlik + UX | `faza-2-perf` | ✅ tugadi |
 | 3 | Xavfsizlik + audit | `faza-3-xavfsizlik` | ✅ tugadi |
 | 4 | Kassa to'liqligi | `faza-4-kassa` | ✅ tugadi |
-| 5 | PostgreSQL + masshtab | `faza-5-postgres` | 🔓 ruxsat berildi (2026-08-04) |
-| 6 | ERP modullari | `faza-6-*` | ⏳ boshlanmagan |
+| 5 | PostgreSQL + masshtab | `faza-5-postgres` | ⏸ kechiktirildi (sabab quyida) |
+| 6 | ERP modullari | `faza-6-*` | 🔄 1/6 modul: XARID ✅ |
 
 ## ⚠️ MIGRATSIYA KUTILMOQDA (qo'lda apply qilinadi)
 
-Uchala migratsiya `--create-only` uslubida yozildi, **apply QILINMADI**.
+Migratsiyalar `--create-only` uslubida yozildi, **apply QILINMADI**.
 Bu muhitda baza ulanmagan (`DATABASE_URL` yo'q), shuning uchun qo'llash
 production/staging'da qo'lda bajariladi. **Avval zaxira oling.**
 
@@ -33,6 +33,7 @@ production/staging'da qo'lda bajariladi. **Avval zaxira oling.**
 | 6 | `20260804130000_kassa_hisob_raqamlar` | `Account`, `AccountTransfer`, `Transaction.accountId` | O'rta — Transaction qayta quriladi |
 | 7 | `20260804140000_sotuv_sana_bekor` | `Sale.sana` (NOT NULL), `deletedAt`, `cancelledBy`, `cancelReason` | O'rta — Sale qayta quriladi |
 | 8 | `20260804150000_sku_inventarizatsiya` | `Product.sku/birlik/minQoldiq`, `StockAdjustment` | O'rta — Product qayta quriladi |
+| 9 | `20260804160000_xarid_moduli` | `Supplier`, `PurchaseOrder`, `PurchaseOrderItem` | Past — faqat CREATE TABLE |
 
 **⚠️ 6-migratsiyadan KEYIN majburiy:** `npm run kassa:migratsiya` — har biznesga
 default "Naqd kassa" ochadi va `accountId`siz eski tranzaksiyalarni bog'laydi.
@@ -525,3 +526,103 @@ audit testi qo'shildi (22 ta bo'ldi).
 cron'ni bo'lish. Loyiha egasi ruxsat bergan (2026-08-04), lekin bu **eng
 xatarli faza**: avval staging'da to'liq sinash kerak. Undan keyin Faza 6
 (ERP modullari: XARID → TASDIQLASH → HUJJATLAR → MIJOZLAR → HR-LITE → AI OCR).
+
+---
+
+### 2026-08-04 — Faza 5 haqida qaror (kechiktirildi)
+
+Loyiha egasi ruxsat berdi, lekin faza **boshlanmadi** — sabab texnik, xohish emas:
+
+- Bu muhitda baza umuman ulanmagan: `.env` yo'q, `DATABASE_URL` yo'q,
+  `prisma/dev.db` tegilmaydigan fayl. PostgreSQL'ga ko'chirishni **sinab
+  bo'lmaydi** — faqat yozib qo'yish mumkin edi, bu esa "ishlaydi" degan
+  yolg'on tuyg'u beradi.
+- Undan ham muhimi: **9 ta migratsiya hali apply qilinmagan.** SQLite sxemasi
+  bilan haqiqiy baza sxemasi hozir bir xil emas. Shu holatda provayderni
+  almashtirish — apply qilinmagan migratsiyalarni PostgreSQL sintaksisida
+  qayta yozishni ham talab qiladi, ya'ni ikki karra ish va ikki karra xavf.
+- To'g'ri tartib: (1) egasi 9 ta migratsiyani staging'da apply qiladi,
+  (2) `npm run kassa:migratsiya` ishga tushadi, (3) shundan keyin
+  `faza-5-postgres` ochiladi va staging'da to'liq sinaladi.
+
+Shuning uchun Faza 6 (ERP modullari) boshlandi — u sxemaga qo'shimcha
+qiladi, mavjudini buzmaydi, va SQLite'da to'liq sinaladi.
+
+---
+
+### 2026-08-04 — Faza 6, Modul 1: XARID (tugadi)
+
+**Branch:** `faza-6-xarid`
+
+**Muammo:** tovar omborga faqat qo'lda "kirim" bilan tushardi. Kimdan
+olingani, qancha turgani, to'landimi yoki qarzga olindimi — hech qayerda
+yozilmasdi. Ta'minotchi bilan hisob-kitob daftar yoki xotirada qolardi.
+
+**Yechim — uch bosqichli oqim:** `qoralama → tasdiqlangan → qabul_qilingan`
+(yoki `bekor`). Reja bilan haqiqat ataylab ajratilgan: qoralama va
+tasdiqlangan buyurtma ombor qoldig'iga ham, pulga ham **tegmaydi**. Faqat
+"Qabul qilish" haqiqiy voqea hisoblanadi.
+
+**Qabul qilish — bitta `runBusinessTx` ichida:**
+1. har satr uchun `StockEntry` (qoldiq oshadi, tannarx snapshot saqlanadi);
+2. `Product.miqdor` += miqdor, `Product.kelganNarx` = yangi xarid narxi;
+3. **naqd** bo'lsa — "Tovar xaridi" kategoriyasiga chiqim tranzaksiya;
+   **qarzga** bo'lsa — `beriladigan` turdagi qarz (pul chiqimi to'lov
+   paytida yoziladi, ikki marta emas).
+
+Qabul qilingan buyurtma qulflanadi: qayta qabul qilib ham, tahrirlab ham,
+bekor qilib ham bo'lmaydi — ombor va pul yozuvlari allaqachon ketgan.
+
+**Sxema (yangi modellar):** `Supplier`, `PurchaseOrder`, `PurchaseOrderItem`.
+Uchalasi `tenantDb.ts` dagi `BUSINESS_SCOPED` va `dump.ts` dagi
+`ZAXIRA_JADVALLARI` ro'yxatiga qo'shildi.
+
+**Fayllar:**
+- `prisma/schema.prisma` + `prisma/migrations/20260804160000_xarid_moduli/`
+- `src/lib/validation/xarid.ts` — zod sxemalari, holatlar ro'yxati
+- `src/lib/services/xarid.ts` — ta'minotchi CRUD, buyurtma, `qabulQilish`
+- `src/lib/queries/xarid.ts` — ro'yxatlar (2 ta `groupBy`, N+1 yo'q) + statistika
+- `src/app/api/xarid/suppliers/route.ts`, `.../[id]/route.ts`
+- `src/app/api/xarid/orders/route.ts`, `.../[id]/route.ts`
+- `src/app/app/xarid/{page,loading,error}.tsx`, `XaridClient.tsx`, `BuyurtmaModal.tsx`
+- `src/app/app/xarid/taminotchilar/{page,loading}.tsx`, `TaminotchilarClient.tsx`
+- `src/lib/modules/registry.ts` (XARID moduli), `src/lib/billing/plans.ts` (PRO)
+- `src/lib/db/tenantDb.ts`, `src/lib/backup/dump.ts`
+
+**Ruxsat:** modul faqat BOSHQARUVCHILAR uchun (kassir ko'rmaydi), PRO tarifda.
+Har route `withTenant(..., { module: "XARID" })` + `requireManager`.
+
+**Test:** `tests/xarid.test.ts` (13) — ta'minotchi CRUD, qoralama hech
+narsaga tegmasligi, naqd qabul (StockEntry + tannarx + chiqim), qarzga
+qabul (qarz yoziladi, tranzaksiya yozilmaydi), qayta qabulning rad etilishi,
+begona tenant/mahsulot izolyatsiyasi, statistika.
+
+**Tekshirildi:** `npm run build` ✅ · `npx tsc --noEmit` ✅ ·
+26 test to'plami, jami **269 test**, 0 xato.
+
+**Keyingi qadam:** Faza 6, Modul 2 — TASDIQLASH (katta summali chiqimlarga
+rahbar tasdig'i).
+
+---
+
+## FAZA 6 / MODUL 1 TEKSHIRUV RO'YXATI
+
+**Avtomatik tekshirilgan**
+- [x] `npm run build` va `tsc --noEmit` o'tadi
+- [x] Qoralama va tasdiqlangan buyurtma ombor qoldig'ini o'zgartirmaydi
+- [x] Naqd qabul: qoldiq oshdi, tannarx yangilandi, chiqim yozildi, qarz yozilmadi
+- [x] Qarzga qabul: qoldiq oshdi, `beriladigan` qarz yozildi, tranzaksiya yozilmadi
+- [x] Qayta qabul qilish rad etiladi va qoldiqni ikki marta oshirmaydi
+- [x] Qabul qilingan buyurtma tahrirlanmaydi va bekor qilinmaydi
+- [x] Ochiq buyurtmasi bor ta'minotchi o'chirilmaydi; o'chirilgani yumshoq
+- [x] Begona tenant ta'minotchi/buyurtmalarni ko'rmaydi va tahrirlay olmaydi
+- [x] Begona biznes mahsuloti bilan buyurtma yaratib bo'lmaydi
+
+**Sizdan kutiladi (real muhitda)**
+- [ ] 9-migratsiyani apply qiling
+- [ ] PRO tarifdagi biznesda menyuda "Xarid" ko'rinishini tekshiring
+- [ ] Kassir hisobida "Xarid" **ko'rinmasligini** tekshiring
+- [ ] Ta'minotchi qo'shing → buyurtma yarating → qabul qiling →
+      ombor qoldig'i va tranzaksiyalar ro'yxatini solishtiring
+- [ ] Qarzga xarid qiling → "Qarzlar" bo'limida `beriladigan` qarz paydo bo'ldimi
+- [ ] Ombor tizimi o'chirilgan biznesda sahifa ogohlantirish ko'rsatadimi
