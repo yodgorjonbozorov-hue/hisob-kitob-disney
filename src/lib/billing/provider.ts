@@ -1,6 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { planByCode } from "./plans";
 import { BadRequestError } from "@/lib/auth/guard";
+// Adapterlar faqat TIP darajasida provider.ts ga bog'liq (import type) —
+// aylanma runtime bog'liqlik yo'q.
+import { paymeProvider, paymeConfig } from "./payme";
+import { clickProvider, clickConfig } from "./click";
 
 /**
  * PROVIDER-AGNOSTIK to'lov qatlami.
@@ -53,14 +57,44 @@ export const manualProvider: PaymentProvider = {
   },
 };
 
-const providers: Record<ProviderCode, PaymentProvider | null> = {
-  MANUAL: manualProvider,
-  PAYME: null, // rasmiy shartnomadan keyin adapter yoziladi
-  CLICK: null,
-};
+export function isProviderCode(v: unknown): v is ProviderCode {
+  return v === "MANUAL" || v === "PAYME" || v === "CLICK";
+}
+
+/**
+ * Provider'lar registri. Onlayn provider'lar FAQAT env sozlangan bo'lsa ochiq —
+ * shartnoma imzolangunicha kod turaveradi, mijozga ko'rinmaydi.
+ */
+function providers(): Record<ProviderCode, PaymentProvider | null> {
+  return {
+    MANUAL: manualProvider,
+    PAYME: paymeConfig() ? paymeProvider : null,
+    CLICK: clickConfig() ? clickProvider : null,
+  };
+}
 
 export function getProvider(code: ProviderCode): PaymentProvider {
-  const p = providers[code];
+  const p = providers()[code];
   if (!p) throw new BadRequestError(`${code} to'lov usuli hali ulanmagan`);
   return p;
+}
+
+export interface ProviderInfo {
+  code: ProviderCode;
+  nomi: string;
+  tavsif: string;
+}
+
+const PROVIDER_MATN: Record<ProviderCode, { nomi: string; tavsif: string }> = {
+  MANUAL: { nomi: "O'tkazma orqali", tavsif: "Rekvizitlarga o'tkazasiz, administrator tasdiqlaydi" },
+  PAYME: { nomi: "Payme", tavsif: "Karta orqali onlayn — obuna darhol uzayadi" },
+  CLICK: { nomi: "Click", tavsif: "Karta orqali onlayn — obuna darhol uzayadi" },
+};
+
+/** Mijozga ko'rsatiladigan to'lov usullari (onlayn — faqat sozlanganlari). */
+export function mavjudProviderlar(): ProviderInfo[] {
+  const reg = providers();
+  return (Object.keys(reg) as ProviderCode[])
+    .filter((code) => reg[code] !== null)
+    .map((code) => ({ code, ...PROVIDER_MATN[code] }));
 }

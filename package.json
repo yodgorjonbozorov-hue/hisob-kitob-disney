@@ -29,7 +29,8 @@
     "test:automation": "node -r ts-node/register tests/automation.test.ts",
     "test:avto": "node -r ts-node/register tests/avto.test.ts",
     "test:backup": "node -r ts-node/register tests/backup.test.ts",
-    "test:bot-avto": "node -r ts-node/register tests/bot-avto.test.ts"
+    "test:bot-avto": "node -r ts-node/register tests/bot-avto.test.ts",
+    "test:tolov": "node -r ts-node/register tests/tolov.test.ts"
   },
   "prisma": {
     "seed": "node -r ts-node/register prisma/seed.ts"

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { withTenant } from "@/lib/auth/tenant";
 import { requireManager } from "@/lib/auth/guard";
-import { getProvider } from "@/lib/billing/provider";
+import { getProvider, isProviderCode } from "@/lib/billing/provider";
 import { planByCode, PLANLAR } from "@/lib/billing/plans";
 
 /**
@@ -19,7 +19,9 @@ export const POST = withTenant(
       return NextResponse.json({ error: "Noma'lum tarif" }, { status: 400 });
     }
 
-    const provider = getProvider("MANUAL");
+    // Provider mijoz tanlaydi; sozlanmagan onlayn usul tanlansa getProvider rad etadi.
+    const providerCode = isProviderCode(body?.provider) ? body.provider : "MANUAL";
+    const provider = getProvider(providerCode);
     const result = await provider.initiateCheckout({ planCode });
 
     return NextResponse.json(result, { status: 201 });

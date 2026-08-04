@@ -49,6 +49,13 @@ SESSION_SECRET="kamida-32-belgidan-iborat-tasodifiy-maxfiy-satr"
 TELEGRAM_BOT_TOKEN="@BotFather'dan olingan token"
 TELEGRAM_BOT_USERNAME="bot_username (ixtiyoriy, ulanish yo'riqnomasida ko'rsatiladi)"
 NEXT_PUBLIC_APP_URL="https://balansa.uz"
+
+# Onlayn to'lov (ixtiyoriy — qo'yilmasa faqat "O'tkazma orqali" usuli ko'rinadi)
+PAYME_MERCHANT_ID="Payme kabinetidagi merchant id"
+PAYME_KEY="Payme merchant kaliti (Basic auth paroli)"
+CLICK_SERVICE_ID="Click service_id"
+CLICK_MERCHANT_ID="Click merchant_id"
+CLICK_SECRET_KEY="Click SECRET_KEY"
 ```
 
 `NEXT_PUBLIC_APP_URL` — OG-image va metadata uchun absolyut manzil. O'rnatilmasa `https://balansa.uz` ishlatiladi.
@@ -56,6 +63,25 @@ NEXT_PUBLIC_APP_URL="https://balansa.uz"
 Lokal ishlashda `DATABASE_AUTH_TOKEN` bo'sh qoldirilishi mumkin (fayl-based SQLite token talab qilmaydi). Production (Turso) uchun quyidagi "Production'ga deploy qilish" bo'limiga qarang.
 
 `SESSION_SECRET` — sessiya cookie'sini shifrlash uchun ishlatiladi, production'da albatta o'zgartiring va hech kimga oshkor qilmang. `TELEGRAM_BOT_TOKEN` ham maxfiy qiymat — uni hech qachon ochiq chatda yoki kodga qattiq yozib qo'ymang, faqat `.env` faylida saqlang (`.env` `.gitignore`ga kiritilgan).
+
+### Onlayn to'lov (Payme / Click)
+
+Kod ikkala provider uchun ham tayyor va **env sozlangandagina** yoqiladi — shartnoma imzolanmagan bo'lsa mijoz faqat "O'tkazma orqali" usulini ko'radi. To'lov tasdiqlangach obuna **avtomatik** uzayadi (qo'lda tasdiqlash bilan bir xil `confirmPayment` funksiyasi).
+
+Kabinetda ko'rsatiladigan manzillar (`<domen>` — sizning domeningiz):
+
+| Provider | Endpoint | Izoh |
+| --- | --- | --- |
+| Payme | `https://<domen>/api/billing/payme` | Merchant API (JSON-RPC), Basic auth `Paycom:<PAYME_KEY>` |
+| Click | `https://<domen>/api/billing/click/prepare` | Prepare (action=0) |
+| Click | `https://<domen>/api/billing/click/complete` | Complete (action=1) |
+
+Tafsilotlar:
+
+- Payme summani **tiyin**da yuboradi (199 000 so'm → 19 900 000), hisob maydoni `payment_id` (bizdagi `Payment.id`).
+- Click imzosi `md5(click_trans_id + service_id + SECRET_KEY + merchant_trans_id [+ merchant_prepare_id] + amount + action + sign_time)` bo'yicha tekshiriladi; imzo mos kelmasa `-1` qaytadi.
+- Takroriy so'rovlar (provider qayta yuborsa) obunani ikkinchi marta uzaytirmaydi — idempotentlik testlar bilan qoplangan (`npm run test:tolov`).
+- Payme bajarilgan to'lovni bekor qilsa (`state -2`), to'lov `REFUNDED` bo'ladi va superadmin panelida ko'rinadi — obuna muddati avtomatik qisqartirilmaydi, qarorni siz qabul qilasiz.
 
 ## Migratsiya va boshlang'ich ma'lumotlar (seed)
 

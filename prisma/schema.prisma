@@ -80,9 +80,18 @@ model Payment {
   izoh       String?
   paidAt     DateTime?
   createdAt  DateTime  @default(now())
+  /// Onlayn provider tranzaksiyasi holati. Payme: 1 (yaratildi), 2 (bajarildi),
+  /// -1 (yaratilgach bekor), -2 (bajarilgach bekor). Click: 1/2/-1.
+  providerState Int?
+  /// Provider tranzaksiyasi yaratilgan payt (Payme create_time).
+  providerCreatedAt DateTime?
+  cancelTime DateTime?
+  /// Payme bekor qilish sababi kodi.
+  cancelReason Int?
 
   @@index([tenantId])
   @@index([status])
+  @@index([externalId])
 }
 
 /// Biznes (kompaniya bo'limi). Har bir biznesning o'z kategoriyalari, tranzaksiyalari va dashboard'i.
