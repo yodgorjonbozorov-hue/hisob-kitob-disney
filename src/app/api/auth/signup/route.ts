@@ -15,7 +15,7 @@ import { getClientIp } from "@/lib/services/audit";
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request) ?? "unknown";
   // Bir IP dan soatiga 5 ta ro'yxatdan o'tish urinishi.
-  const rl = rateLimit(`signup:${ip}`, 5, 60 * 60 * 1000);
+  const rl = await rateLimit(`signup:${ip}`, 5, 60 * 60 * 1000);
   if (!rl.ok) {
     return NextResponse.json(
       { error: `Juda ko'p urinish. ${rl.retryAfter} soniyadan keyin qayta urining.` },

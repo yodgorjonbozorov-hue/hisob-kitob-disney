@@ -4,9 +4,20 @@ import { isManager } from "@/lib/auth/roles";
 import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { withTenant } from "@/lib/auth/tenant";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
+import { rateLimit } from "@/lib/rateLimit";
 
 /** Global qidiruv — aktiv biznes bo'yicha tranzaksiya/qarzdor/mahsulot/kategoriya. */
 export const GET = withTenant(async (request, _ctx, { session: user }) => {
+  // Qidiruv indekssiz `contains` bo'yicha 4 jadvalni skanerlaydi — cheklanmagan
+  // parallel so'rov DoS bo'lishi mumkin (S-8). Foydalanuvchi bo'yicha 20/daqiqa.
+  const rl = await rateLimit(`search:${user.userId}`, 20, 60 * 1000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: `Juda ko'p qidiruv. ${rl.retryAfter} soniyadan keyin qayta urining.` },
+      { status: 429 }
+    );
+  }
+
   const businessId = await resolveActiveBusinessId(user);
   if (!businessId) return NextResponse.json({ transactions: [], debtors: [], products: [], categories: [] });
 

@@ -12,7 +12,7 @@ agent shu fayldan qayerda qolganini o'qib davom etadi.
 | 0 | CLAUDE.md yaratish | `faza-0-claude-md` | ✅ tugadi |
 | 1 | Kritik tuzatishlar | `faza-1-kritik` | ✅ tugadi |
 | 2 | Unumdorlik + UX | `faza-2-perf` | ✅ tugadi |
-| 3 | Xavfsizlik + audit | `faza-3-xavfsizlik` | ⏳ boshlanmagan |
+| 3 | Xavfsizlik + audit | `faza-3-xavfsizlik` | ✅ tugadi |
 | 4 | Kassa to'liqligi | `faza-4-kassa` | ⏳ boshlanmagan |
 | 5 | PostgreSQL + masshtab | `faza-5-postgres` | 🔓 ruxsat berildi (2026-08-04) |
 | 6 | ERP modullari | `faza-6-*` | ⏳ boshlanmagan |
@@ -28,6 +28,8 @@ production/staging'da qo'lda bajariladi. **Avval zaxira oling.**
 | 1 | `20260804090000_bot_suhbat_holati` | `BotConversation` jadvalini yaratadi | Past — faqat CREATE TABLE |
 | 2 | `20260804091000_ondelete_siyosati` | 23 ta jadvalni FK siyosati bilan qayta quradi | **O'rta** — jadval qayta qurish |
 | 3 | `20260804100000_kompozit_indekslar` | Indekslarni almashtiradi, `Payment.externalId` ni UNIQUE qiladi | **O'rta** — dublikat bo'lsa to'xtaydi |
+| 4 | `20260804110000_audit_tenant` | `AuditLog.tenantId` ustuni + eski yozuvlarni to'ldirish | Past |
+| 5 | `20260804120000_ai_suhbat` | `AiConversation` jadvalini yaratadi | Past — faqat CREATE TABLE |
 
 Qo'llash: `npm run db:apply` (yoki `node scripts/db-migrate.mjs`).
 
@@ -289,6 +291,107 @@ tenant izolyatsiyasi** (boshqa tenant kontekstida nol qaytishi).
 - [ ] Yozuv qo'shgach dashboard DARHOL yangilanadi (revalidateTag ishlaydi)
 - [ ] Ombor/CRM sahifalarida ataylab xato chiqarib `error.tsx` ni ko'ring
 
-**Keyingi qadam:** Faza 3 (`faza-3-xavfsizlik`) — audit jurnalini
-`tenantDb.ts` extension darajasiga ko'chirish (8/66 → 100%), rate limit'ni
-bazaga, xavfsizlik header'lari, AI suhbat tarixini serverga.
+### 2026-08-04 — Faza 3, Prompt 3.1 (tugadi)
+
+**VAZIFA 1 — auditni avtomatlashtirish (H-2)**
+- Yangi: `src/lib/db/auditWriter.ts`. Audit endi `lib/db/tenantDb.ts`
+  extension'ida: har `create/createMany/update/updateMany/upsert/delete/
+  deleteMany` avtomatik ushlanadi. Ya'ni yangi route yozganda "audit
+  qo'shishni unutish" TEXNIK JIHATDAN imkonsiz.
+- `before` qiymati qo'shimcha so'rovsiz olinadi: extension IDOR himoyasi
+  uchun baribir `findFirst` qilardi — undan `select: {id}` olib tashlandi.
+- `deletedAt` qo'yilishi `delete`, olib tashlanishi `restore` deb yoziladi.
+- **Parol hash va boshqa sirlar jurnalga tushmaydi** (`YASHIRIN_MAYDONLAR`).
+- `AuditLog`ning o'zi va o'qish amallari audit qilinmaydi (cheksiz sikl yo'q).
+- Audit yozish xatosi asosiy amalni BUZMAYDI (try/catch + console.error).
+- Aktor `AsyncLocalStorage`ga qo'shildi: `runWithTenant(tenantId, fn, aktor)`.
+  `withTenant` uni sessiyadan (userId, ism, IP) to'ldiradi.
+  ⚠️ Prisma promise'i dangasa — so'rov `runWithTenant` ICHIDA await qilinishi
+  shart, aks holda aktor konteksti yo'qoladi. Bu `tenantContext.ts` da izohlangan.
+- `AuditLog.tenantId` ustuni qo'shildi (migratsiya). Ilgari biznesga
+  bog'lanmagan yozuvlar (`businessId: null`) tenant filtridan o'tmay
+  **hech kimga ko'rinmasdi**. Endi o'qish `tenantId` YOKI `business.tenantId`
+  bo'yicha filtrlanadi.
+- 7 ta route'dagi qo'lda `logAudit` olib tashlandi (takror bo'lmasin).
+  Qolgani: `bulk-move` (maxsus semantika: qaysi biznesdan qaysi biznesga) va
+  superadmin jurnali (`logSuperadminAction` — platforma darajasi).
+- `shift-close` dagi `entity: "sale"` xatosi yo'qoldi — extension endi model
+  nomini o'zi yozadi (`shiftClose`).
+- `runBusinessTx` xom `tx` delegatlarini ishlatgani uchun extension'dan
+  o'tmaydi. Shuning uchun `inventory.ts` dagi 7 ta servis biznes hodisasini
+  o'zi yozadi: sotuv, qarz, qarz to'lovi, mashina, mashina xarajati
+  (yaratish va o'chirish), ombor kirimi.
+
+**VAZIFA 2 — rate limit bazaga (H-4, S-3)**
+- `lib/rateLimit.ts` xotiradagi `Map`dan `AppSetting` jadvaliga ko'chdi.
+  Vercel'da har lambda alohida xotiraga ega edi — parallel so'rov yuborgan
+  hujumchi uchun brute-force amalda cheklanmasdi.
+- Kalit ichida vaqt oynasi: `rl:{key}:{windowMs}:{oyna}` — oyna o'tishi bilan
+  hisoblagich o'z-o'zidan nolga qaytadi.
+- **ATOMIKLIK:** `UPDATE ... value + 1 RETURNING value`. `RETURNING` shart —
+  alohida `SELECT` bilan parallel so'rovlar HAMMASI oxirgi yig'ilgan qiymatni
+  o'qib qolardi (test: 10 parallel so'rovdan aynan 4 tasi o'tishi kerak).
+- Ulangan joylar: login (IP va login bo'yicha), signup, `/api/search`
+  (20/daqiqa), telegram kod so'rash (10/soat), botdagi kod tekshirish
+  (chatId bo'yicha 5 urinish/10 daqiqa).
+- Eskirgan hisoblagichlar cron'da tozalanadi.
+
+**VAZIFA 3 — xavfsizlik header'lari (H-15)**
+- `next.config.mjs` da `headers()`: `X-Frame-Options: DENY`,
+  `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`,
+  CSP **report-only** (recharts/Next inline style buzilmasin — avval
+  buzilishlarni ko'ramiz, keyin majburlaymiz), HSTS faqat production'da.
+
+**VAZIFA 4 — mayda xavfsizlik**
+- Telegram bog'lash kodi: `Math.random` → `crypto.randomInt`
+  (`Math.random` kriptografik emas — kod bashorat qilinishi mumkin edi).
+- AI suhbat tarixi **serverda** (`AiConversation` jadvali, `lib/ai/suhbat.ts`).
+  Ilgari tarix mijozdan kelardi — soxta `assistant` xabari bilan modelni
+  chalg'itish mumkin edi (prompt injection). Mijoz endi faqat savol yuboradi.
+- `aiLimitTekshir` atomik qilindi (`RETURNING` bilan) — parallel so'rovlar
+  kunlik limitdan oshib ketmaydi.
+
+**Test:** `tests/audit.test.ts` (12). `tests/isolation.test.ts` ga avtomatik
+audit testi qo'shildi (22 ta bo'ldi).
+
+**Fayllar:** `src/lib/db/auditWriter.ts`, `src/lib/db/tenantDb.ts`,
+`src/lib/db/tenantContext.ts`, `src/lib/auth/tenant.ts`,
+`src/lib/services/audit.ts`, `src/lib/services/inventory.ts`,
+`src/lib/rateLimit.ts`, `src/lib/ai/limit.ts`, `src/lib/ai/suhbat.ts`,
+`src/app/api/ai/chat/route.ts`, `src/app/app/ai/AiClient.tsx`,
+`src/app/api/search/route.ts`, `src/app/api/me/telegram-link-code/route.ts`,
+`src/app/api/auth/login/route.ts`, `src/app/api/auth/signup/route.ts`,
+`src/bot/auth.ts`, `src/bot/bot.ts`, `next.config.mjs`,
+`prisma/schema.prisma`, 2 ta migratsiya, `src/lib/backup/dump.ts`,
+7 ta route'dan qo'lda `logAudit` olib tashlandi
+
+---
+
+## FAZA 3 TEKSHIRUV RO'YXATI
+
+**Avtomatik tekshirilgan**
+- [x] `npm run build` o'tadi
+- [x] 19 test to'plami, jami **210 test**, 0 xato
+- [x] Kategoriya/foydalanuvchi/tranzaksiya yaratish, tahrirlash va o'chirish
+      jurnalga tushadi; `before`/`after` to'g'ri (`test:audit`)
+- [x] Sotuv va mashina xarajati (tranzaksiya ichidagi amallar) ham jurnalda
+- [x] Parol hash jurnalga TUSHMAYDI (`test:audit`)
+- [x] Audit yozuvida tenantId, businessId, userId, ism va IP bor
+- [x] Rate limit 10 parallel so'rovdan aynan 4 tasini o'tkazadi (`test:audit`)
+- [x] AI suhbat tarixi serverda saqlanadi va cheklanadi (`test:audit`)
+- [x] Tenant izolyatsiyasi audit o'qishda ham saqlanadi (`test:isolation`)
+
+**Sizdan kutiladi (real muhitda)**
+- [ ] `20260804110000_audit_tenant` va `20260804120000_ai_suhbat` migratsiyalari
+- [ ] Har qanday yozuv/tahrir/o'chirish audit sahifasida ko'rinadi
+      (sotuv, qarz, foydalanuvchi, kategoriya, modul)
+- [ ] Login'ga 10 marta noto'g'ri parol → 429 (ikkita brauzer/qurilmadan ham)
+- [ ] `securityheaders.com` da A baho (CSP report-only bo'lgani uchun
+      "A" bo'lishi mumkin, "A+" uchun CSP majburlanishi kerak)
+- [ ] Brauzer konsolida CSP report-only ogohlantirishlarini ko'rib chiqing —
+      toza bo'lsa `Content-Security-Policy` ga o'tkazing
+- [ ] AI suhbatida "Yangi suhbat" oqimi ishlaydi
+
+**Keyingi qadam:** Faza 4 (`faza-4-kassa`) — 4 ta prompt: kassa/hisob-raqamlar
+(`Account`, `AccountTransfer`), sotuvni bekor qilish + sotuv sanasi, SKU va
+inventarizatsiya (`StockAdjustment`), chek PDF + CSV import.

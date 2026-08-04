@@ -16,25 +16,28 @@ const TAYYOR_SAVOLLAR = [
 
 /** AI suhbat oynasi — oddiy so'rov/javob (v1, streaming'siz). */
 export function AiClient() {
+  // Ekrandagi xabarlar faqat KO'RSATISH uchun. Modelga yuboriladigan tarix
+  // serverda saqlanadi (lib/ai/suhbat.ts) — mijoz soxta "assistant" xabari
+  // bilan modelni chalg'ita olmasligi uchun.
   const [xabarlar, setXabarlar] = useState<Xabar[]>([]);
   const [savol, setSavol] = useState("");
   const [kutilmoqda, setKutilmoqda] = useState(false);
   const [xato, setXato] = useState<string | null>(null);
   const pastRef = useRef<HTMLDivElement>(null);
 
-  async function yuborish(matn: string) {
+  async function yuborish(matn: string, yangiSuhbat = false) {
     const s = matn.trim();
     if (!s || kutilmoqda) return;
     setXato(null);
     setSavol("");
-    const yangiTarix: Xabar[] = [...xabarlar, { rol: "user", matn: s }];
+    const yangiTarix: Xabar[] = yangiSuhbat ? [{ rol: "user", matn: s }] : [...xabarlar, { rol: "user", matn: s }];
     setXabarlar(yangiTarix);
     setKutilmoqda(true);
     try {
       const res = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ savol: s, tarix: xabarlar }),
+        body: JSON.stringify({ savol: s, ...(yangiSuhbat ? { yangiSuhbat: true } : {}) }),
       });
       const data = await res.json();
       if (!res.ok) {

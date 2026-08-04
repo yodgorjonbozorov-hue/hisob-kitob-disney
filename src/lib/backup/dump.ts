@@ -59,6 +59,8 @@ export type ZaxiraJadval = (typeof ZAXIRA_JADVALLARI)[number];
 export const ZAXIRASIZ_JADVALLAR = [
   // Telegram botdagi yarim tugallangan suhbat holati, 24 soatdan keyin tozalanadi.
   "botConversation",
+  // AI yordamchi suhbati — vaqtinchalik kontekst, tiklashning ma'nosi yo'q.
+  "aiConversation",
 ] as const;
 
 export type Zaxira = {

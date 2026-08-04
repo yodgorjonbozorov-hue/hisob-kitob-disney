@@ -9,6 +9,7 @@ import { rawPrisma } from "@/lib/db/rawPrisma";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { bearerTogri } from "@/lib/security/compare";
 import { cleanupOldConversations } from "@/bot/conversationStore";
+import { cleanupRateLimits } from "@/lib/rateLimit";
 
 /**
  * Vercel Cron kuniga bir marta shu route'ni chaqiradi.
@@ -94,16 +95,20 @@ export async function GET(req: Request) {
     return 0;
   });
 
-  // Tashlab ketilgan bot suhbatlarini tozalash (24 soatdan eski holatlar).
+  // Tashlab ketilgan bot suhbatlarini va eskirgan rate limit hisoblagichlarini tozalash.
   const tozalangan = await cleanupOldConversations().catch((e) => {
     console.error("Bot suhbatlarini tozalash xatosi:", e);
+    return 0;
+  });
+  const rlTozalangan = await cleanupRateLimits().catch((e) => {
+    console.error("Rate limit tozalash xatosi:", e);
     return 0;
   });
 
   return new Response(
     `OK (zaxira: ${zaxira.holat}, expired: ${expired}, recurring: ${recurringCount}, ` +
       `eslatma: ${eslatma.yuborilgan}, telegramsiz: ${eslatma.telegramsiz.length}, ` +
-      `tasks: ${taskReminders}, digest: ${digest}, suhbat tozalandi: ${tozalangan})`,
+      `tasks: ${taskReminders}, digest: ${digest}, suhbat: ${tozalangan}, rl: ${rlTozalangan})`,
     { status: 200 }
   );
 }

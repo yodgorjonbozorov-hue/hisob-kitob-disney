@@ -5,7 +5,6 @@ import { listTransactions } from "@/lib/queries/transactions";
 import { createTransaction } from "@/lib/services/transactionService";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { transactionScopeUserId } from "@/lib/auth/visibility";
-import { logAudit, getClientIp } from "@/lib/services/audit";
 import { dashboardYangilandi } from "@/lib/cache";
 
 export const GET = withTenant(async (request, _ctx, { session: user }) => {
@@ -45,13 +44,6 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
 
 
   const transaction = await createTransaction(user.userId, businessId, parsed.data);
-
-  await logAudit({
-    businessId, userId: user.userId, userIsm: user.ism,
-    action: "create", entity: "transaction", entityId: transaction.id,
-    after: { turi: parsed.data.turi, summa: parsed.data.summa, categoryId: parsed.data.categoryId },
-    ip: getClientIp(request),
-  });
 
   dashboardYangilandi(businessId);
   return NextResponse.json(transaction, { status: 201 });

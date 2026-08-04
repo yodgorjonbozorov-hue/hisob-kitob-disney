@@ -155,6 +155,7 @@ bot.command("kod", async (ctx) => {
       not_found: "Bunday kod topilmadi. Veb-saytda yangi kod oling.",
       expired: "Kod muddati o'tgan. Veb-saytda yangi kod oling.",
       chat_already_linked: "Bu Telegram hisobi allaqachon boshqa foydalanuvchiga bog'langan.",
+      juda_kop_urinish: "Juda ko'p urinish. 10 daqiqadan keyin qayta urining.",
     };
     await ctx.reply(messages[result.reason]);
     return;

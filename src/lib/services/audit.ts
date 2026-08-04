@@ -1,11 +1,43 @@
-import { prisma } from "@/lib/prisma";
 import type { NextRequest } from "next/server";
+import { maybeTenantId } from "@/lib/db/tenantContext";
+import { auditYoz, type AuditAmal } from "@/lib/db/auditWriter";
 
-export type AuditAction = "create" | "update" | "delete" | "restore";
-export type AuditEntity = "transaction" | "user" | "category" | "sale" | "debt" | "business" | "budget";
+/**
+ * QO'LDA AUDIT YOZISH.
+ *
+ * Odatda audit AVTOMATIK yoziladi — `lib/db/tenantDb.ts` extension'i har
+ * `create/update/delete/updateMany/deleteMany` amalini ushlaydi. Shu fayl
+ * faqat MAXSUS SEMANTIKALI hodisalar uchun qoladi: xom amallar
+ * ketma-ketligidan kelib chiqmaydigan biznes voqeasi (masalan "yozuvlar
+ * boshqa biznesga ko'chirildi", "sotuv qilindi") yoki tranzaksiya ichidagi
+ * (runBusinessTx — extension'dan o'tmaydigan) amallar.
+ *
+ * Yangi oddiy route yozayotgan bo'lsangiz — bu funksiyani chaqirish SHART EMAS.
+ */
+
+export type AuditAction = AuditAmal;
+
+/**
+ * Audit sub'ekti. Avtomatik audit model nomini ishlatadi
+ * ("transaction", "sale", "shiftClose"...), qo'lda yozishda quyidagi
+ * biznes-hodisa nomlari ham mumkin.
+ */
+export type AuditEntity =
+  | "transaction"
+  | "user"
+  | "category"
+  | "sale"
+  | "debt"
+  | "debtPayment"
+  | "business"
+  | "budget"
+  | "product"
+  | "productExpense"
+  | "shift";
 
 interface AuditInput {
   businessId?: string | null;
+  /** Aktor endi kontekstdan olinadi (runWithTenant) — bu maydonlar e'tiborsiz. */
   userId?: string | null;
   userIsm?: string | null;
   action: AuditAction;
@@ -28,21 +60,13 @@ export function getClientIp(request: NextRequest): string | null {
  * (audit yozuv muvaffaqiyatsizligi foydalanuvchi amalini buzmasligi kerak).
  */
 export async function logAudit(input: AuditInput): Promise<void> {
-  try {
-    await prisma.auditLog.create({
-      data: {
-        businessId: input.businessId ?? null,
-        userId: input.userId ?? null,
-        userIsm: input.userIsm ?? null,
-        action: input.action,
-        entity: input.entity,
-        entityId: input.entityId,
-        before: input.before !== undefined ? JSON.stringify(input.before) : null,
-        after: input.after !== undefined ? JSON.stringify(input.after) : null,
-        ip: input.ip ?? null,
-      },
-    });
-  } catch (e) {
-    console.error("Audit log yozib bo'lmadi:", e);
-  }
+  await auditYoz({
+    tenantId: maybeTenantId(),
+    businessId: input.businessId ?? null,
+    amal: input.action,
+    entity: input.entity,
+    entityId: input.entityId,
+    before: input.before,
+    after: input.after,
+  });
 }

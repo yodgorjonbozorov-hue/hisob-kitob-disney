@@ -17,7 +17,7 @@ import { rmSync } from "node:fs";
 // Prisma bilan bog'liq modullar env o'rnatilgandan KEYIN dinamik yuklanadi.
 let rawPrisma: any;
 let prisma: any;
-let runWithTenant: <T>(tenantId: string, fn: () => T) => T;
+let runWithTenant: <T>(tenantId: string, fn: () => T, aktor?: { userId: string; ism: string | null }) => T;
 let ForbiddenError: any;
 let forbidSeller: any;
 let requireManager: any;
@@ -211,7 +211,54 @@ test("listAuditLogs faqat berilgan biznes yozuvlarini qaytaradi", async () => {
 
 test("AuditLog o'qish tenant bo'yicha ham cheklanadi (extension)", async () => {
   const rows = await runWithTenant(T_A, () => prisma.auditLog.findMany());
-  assert.deepEqual(rows.map((r: any) => r.entityId), [TX_A]);
+  // A tenantining yozuvi ko'rinadi...
+  assert.ok(
+    rows.some((r: any) => r.entityId === TX_A),
+    "o'z tenantining audit yozuvi ko'rinishi kerak"
+  );
+  // ...B tenantiniki esa hech qachon.
+  const bYozuvlari = await rawPrisma.auditLog.findMany({ where: { businessId: BIZ_B1 } });
+  const bIdlar = new Set(bYozuvlari.map((r: any) => r.id));
+  assert.ok(
+    rows.every((r: any) => !bIdlar.has(r.id)),
+    "boshqa tenant audit yozuvi sizib chiqmasligi kerak"
+  );
+  // Har bir ko'ringan yozuv A tenantiga tegishli (tenantId yoki biznes orqali).
+  for (const r of rows) {
+    const tegishli =
+      r.tenantId === T_A ||
+      (r.businessId != null &&
+        (await rawPrisma.business.findFirst({ where: { id: r.businessId, tenantId: T_A } })) != null);
+    assert.ok(tegishli, `audit yozuvi ${r.id} A tenantiga tegishli emas`);
+  }
+});
+
+test("avtomatik audit: extension orqali yozish amali jurnalga tushadi", async () => {
+  const oldin = await rawPrisma.auditLog.count();
+  // DIQQAT: Prisma promise'i DANGASA — u `await` qilingan joyda bajariladi.
+  // Shuning uchun so'rov runWithTenant ICHIDA await qilinishi shart, aks holda
+  // aktor konteksti yo'qoladi (real kodda withTenant/sahifalar aynan shunday qiladi).
+  const cat = await runWithTenant(
+    T_A,
+    async () =>
+      await prisma.category.create({ data: { businessId: BIZ_A1, nomi: "Audit sinovi", turi: "kirim" } }),
+    { userId: "u_audit", ism: "Audit tekshiruvchi" }
+  );
+  const keyin = await rawPrisma.auditLog.count();
+  assert.equal(keyin, oldin + 1, "kategoriya yaratilishi audit jurnaliga tushishi kerak");
+
+  const yozuv = await rawPrisma.auditLog.findFirst({
+    where: { entity: "category", entityId: cat.id },
+  });
+  assert.ok(yozuv, "audit yozuvi topilmadi");
+  assert.equal(yozuv.action, "create");
+  assert.equal(yozuv.tenantId, T_A, "tenantId yozilishi kerak");
+  assert.equal(yozuv.businessId, BIZ_A1);
+  assert.equal(yozuv.userId, "u_audit", "aktor kontekstdan olinishi kerak");
+  assert.equal(yozuv.userIsm, "Audit tekshiruvchi");
+  assert.match(String(yozuv.after), /Audit sinovi/);
+
+  await rawPrisma.category.delete({ where: { id: cat.id } });
 });
 
 // ---------- 8. Rol guard'lari ----------

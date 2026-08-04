@@ -3,6 +3,7 @@ import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { createTransactionTx } from "@/lib/services/transactionService";
 import { runBusinessTx, type BusinessTx } from "@/lib/db/businessTx";
 import { todayDateOnlyString } from "@/lib/date";
+import { logAudit } from "@/lib/services/audit";
 
 // Sotuv va qarz to'lovi uchun avtomatik ishlatiladigan kategoriyalar.
 const SOTUV_KATEGORIYA = "Sotuv";
@@ -96,7 +97,17 @@ async function createStockEntryTx(tx: BusinessTx, params: StockEntryParams) {
 
 /** Ombor kirimi — mahsulot qoldig'ini oshiradi. Chiqim tranzaksiya YARATMAYDI. */
 export async function createStockEntry(params: StockEntryParams) {
-  return runBusinessTx(params.businessId, (tx) => createStockEntryTx(tx, params));
+  const entry = await runBusinessTx(params.businessId, (tx) => createStockEntryTx(tx, params));
+  // runBusinessTx xom `tx` delegatlarini ishlatadi — tenant extension'idagi
+  // avtomatik audit u yerda ishlamaydi, shuning uchun biznes hodisasi qo'lda yoziladi.
+  await logAudit({
+    businessId: params.businessId,
+    action: "create",
+    entity: "product",
+    entityId: params.productId,
+    after: { omborKirimi: true, miqdor: params.miqdor, stockEntryId: entry.id },
+  });
+  return entry;
 }
 
 /**
@@ -118,7 +129,7 @@ export async function createSale(params: {
   narx?: number | null;
   userId: string;
 }) {
-  return runBusinessTx(params.businessId, async (tx) => {
+  const sotuv = await runBusinessTx(params.businessId, async (tx) => {
     const product = await tx.product.findFirst({
       where: { id: params.productId, businessId: params.businessId, isActive: true },
     });
@@ -200,6 +211,21 @@ export async function createSale(params: {
       include: { product: { select: { nomi: true } } },
     });
   });
+
+  await logAudit({
+    businessId: params.businessId,
+    action: "create",
+    entity: "sale",
+    entityId: sotuv?.id ?? "?",
+    after: {
+      productId: params.productId,
+      miqdor: params.miqdor,
+      jamiSumma: sotuv?.jamiSumma,
+      tolovTuri: params.tolovTuri,
+      mijozNomi: sotuv?.mijozNomi,
+    },
+  });
+  return sotuv;
 }
 
 /**
@@ -213,7 +239,7 @@ export async function recordDebtPayment(params: {
   summa: number;
   userId: string;
 }) {
-  return runBusinessTx(params.businessId, async (tx) => {
+  const qarz = await runBusinessTx(params.businessId, async (tx) => {
     const debt = await tx.debt.findFirst({
       where: { id: params.debtId, businessId: params.businessId },
     });
@@ -271,6 +297,15 @@ export async function recordDebtPayment(params: {
 
     return tx.debt.findUniqueOrThrow({ where: { id: debt.id } });
   });
+
+  await logAudit({
+    businessId: params.businessId,
+    action: "create",
+    entity: "debtPayment",
+    entityId: params.debtId,
+    after: { summa: params.summa, tolangan: qarz.tolangan, isYopilgan: qarz.isYopilgan },
+  });
+  return qarz;
 }
 
 /**
@@ -328,7 +363,15 @@ async function createDebtTx(tx: BusinessTx, params: CreateDebtParams) {
 }
 
 export async function createDebt(params: CreateDebtParams) {
-  return runBusinessTx(params.businessId, (tx) => createDebtTx(tx, params));
+  const qarz = await runBusinessTx(params.businessId, (tx) => createDebtTx(tx, params));
+  await logAudit({
+    businessId: params.businessId,
+    action: "create",
+    entity: "debt",
+    entityId: qarz.id,
+    after: { turi: qarz.turi, mijozNomi: qarz.mijozNomi, jamiSumma: qarz.jamiSumma },
+  });
+  return qarz;
 }
 
 /**
@@ -361,7 +404,7 @@ export async function createAvtoMashina(params: {
     throw new BadRequestError("Qarzga olishda mashina egasining ismi kiritilishi shart");
   }
 
-  return runBusinessTx(params.businessId, async (tx) => {
+  const mashina = await runBusinessTx(params.businessId, async (tx) => {
     const product = await tx.product.create({
       data: {
         businessId: params.businessId,
@@ -417,6 +460,20 @@ export async function createAvtoMashina(params: {
 
     return tx.product.findUniqueOrThrow({ where: { id: product.id } });
   });
+
+  await logAudit({
+    businessId: params.businessId,
+    action: "create",
+    entity: "product",
+    entityId: mashina.id,
+    after: {
+      nomi: mashina.nomi,
+      avtoRaqam: mashina.avtoRaqam,
+      olinganNarx: params.olinganNarx,
+      tolovTuri: params.tolovTuri,
+    },
+  });
+  return mashina;
 }
 
 /**
@@ -443,7 +500,7 @@ export async function addProductExpense(params: {
 }) {
   if (params.summa <= 0) throw new BadRequestError("Summa musbat bo'lishi kerak");
 
-  return runBusinessTx(params.businessId, async (tx) => {
+  const xarajat = await runBusinessTx(params.businessId, async (tx) => {
     const product = await tx.product.findFirst({
       where: { id: params.productId, businessId: params.businessId },
     });
@@ -503,6 +560,15 @@ export async function addProductExpense(params: {
       },
     });
   });
+
+  await logAudit({
+    businessId: params.businessId,
+    action: "create",
+    entity: "productExpense",
+    entityId: xarajat.id,
+    after: { productId: params.productId, turi: params.turi, summa: params.summa, qarzga: !!xarajat.debtId },
+  });
+  return xarajat;
 }
 
 /**
@@ -515,7 +581,7 @@ export async function deleteProductExpense(params: {
   expenseId: string;
   userId: string;
 }) {
-  return runBusinessTx(params.businessId, async (tx) => {
+  const natija = await runBusinessTx(params.businessId, async (tx) => {
     const expense = await tx.productExpense.findFirst({
       where: { id: params.expenseId, businessId: params.businessId },
     });
@@ -539,6 +605,15 @@ export async function deleteProductExpense(params: {
     }
 
     await tx.productExpense.delete({ where: { id: expense.id } });
-    return { ok: true };
+    return { ok: true, summa: expense.summa, productId: expense.productId };
   });
+
+  await logAudit({
+    businessId: params.businessId,
+    action: "delete",
+    entity: "productExpense",
+    entityId: params.expenseId,
+    before: { productId: natija.productId, summa: natija.summa },
+  });
+  return { ok: true };
 }

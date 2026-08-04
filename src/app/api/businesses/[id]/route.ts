@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import { requireManager } from "@/lib/auth/guard";
 import { withTenant } from "@/lib/auth/tenant";
 import { updateBusinessSchema } from "@/lib/validation/business";
-import { logAudit, getClientIp } from "@/lib/services/audit";
 
 export const PATCH = withTenant<{ params: { id: string } }>(async (request, { params }, { session: user }) => {
   requireManager(user.rol);
@@ -75,13 +74,6 @@ export const DELETE = withTenant<{ params: { id: string } }>(async (request, { p
       { status: 409 }
     );
   }
-
-  await logAudit({
-    businessId: id, userId: user.userId, userIsm: user.ism,
-    action: "delete", entity: "business", entityId: id,
-    before: { nomi: biz.nomi },
-    ip: getClientIp(request),
-  });
 
   return NextResponse.json({ ok: true });
 });

@@ -170,6 +170,28 @@ model AppSetting {
   value String
 }
 
+/// AI YORDAMCHI SUHBATI — server tomonda saqlanadi.
+///
+/// Nega: ilgari suhbat tarixi mijozdan (brauzerdan) kelardi. Foydalanuvchi
+/// soxta `assistant` xabarini yuborib modelni chalg'itishi mumkin edi
+/// (prompt injection). Endi mijoz faqat SAVOL yuboradi, tarix esa shu
+/// jadvaldan olinadi.
+///
+/// Bitta foydalanuvchi + biznes uchun bitta faol suhbat.
+model AiConversation {
+  id         String   @id @default(cuid())
+  tenantId   String
+  businessId String
+  userId     String
+  /// Xabarlar JSON massivi: [{ rol: "user" | "assistant", matn: string }]
+  xabarlar   String
+  updatedAt  DateTime @updatedAt
+  createdAt  DateTime @default(now())
+
+  @@unique([businessId, userId])
+  @@index([tenantId, updatedAt])
+}
+
 /// Telegram botdagi ko'p qadamli suhbat holati (/kirim, /lead, /mashina, /sotish).
 ///
 /// Nega bazada: production'da bot serverless webhook orqali ishlaydi — har so'rov
@@ -240,6 +262,10 @@ model Transaction {
 /// Audit izi — har bir muhim o'zgarish (kim, nima, oldin→keyin) yoziladi.
 model AuditLog {
   id         String    @id @default(cuid())
+  /// Qaysi kompaniya (tenant) jurnaliga tegishli. SUPERADMIN amallarida null.
+  /// businessId'siz yozuvlar (foydalanuvchi, biznes, modul) ham shu ustun
+  /// orqali tenant bo'yicha filtrlanadi.
+  tenantId   String?
   businessId String?
   business   Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
   userId     String?
@@ -252,6 +278,7 @@ model AuditLog {
   ip         String?
   createdAt  DateTime  @default(now())
 
+  @@index([tenantId, createdAt])
   @@index([businessId, createdAt])
   @@index([entity])
   @@index([createdAt])
