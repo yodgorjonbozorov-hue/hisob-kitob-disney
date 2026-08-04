@@ -15,6 +15,17 @@ import {
 } from "./transactionFlow";
 import { startMonthlyReport, handleReportBusinessCallback, sendReportDocument } from "./report";
 import { startLeadFlow, handleLeadBusinessCallback, handleLeadText, clearLeadFlow } from "./leadFlow";
+import {
+  startMashinaFlow,
+  startXarajatFlow,
+  handleMashinaBusinessCallback,
+  handleMashinaTolovCallback,
+  handleXarajatBusinessCallback,
+  handleXarajatMashinaCallback,
+  handleXarajatTuriCallback,
+  handleAvtoText,
+  clearAvtoFlow,
+} from "./avtoFlow";
 import { isModuleOnForTenant } from "@/lib/modules/guard";
 import { modulByCode } from "@/lib/modules/registry";
 import { BRAND } from "@/lib/brand";
@@ -27,9 +38,33 @@ if (!token) {
 
 export const bot = new Bot(token);
 
-function buyruqlarRoyxati(rol: string): string {
-  const base = "Buyruqlar:\n/kirim — kirim kiritish\n/chiqim — chiqim kiritish\n/lead — yangi mijoz/bitim (CRM)";
-  return isManager(rol) ? `${base}\n/hisobot — joriy oy hisoboti` : base;
+/**
+ * Buyruqlar ro'yxati. Avto rejimidagi kompaniyada mashina/xarajat buyruqlari
+ * ham ko'rsatiladi (boshqalarda ular keraksiz).
+ */
+async function buyruqlarRoyxati(user: { rol: string; tenantId: string | null }): Promise<string> {
+  const qatorlar = [
+    "Buyruqlar:",
+    "/kirim — kirim kiritish",
+    "/chiqim — chiqim kiritish",
+    "/lead — yangi mijoz/bitim (CRM)",
+  ];
+
+  if (isManager(user.rol) && user.tenantId) {
+    const avtoBiznes = await rawPrisma.business.findFirst({
+      where: { tenantId: user.tenantId, turi: "avto", isActive: true },
+      select: { id: true },
+    });
+    if (avtoBiznes) {
+      qatorlar.push(
+        "/mashina — avtoparkka mashina qabul qilish",
+        "/xarajat — mashinaga xarajat yozish",
+        "   tez yo'l: «xarajat: Cobalt, ta'mirlash 2 mln»"
+      );
+    }
+  }
+  if (isManager(user.rol)) qatorlar.push("/hisobot — joriy oy hisoboti");
+  return qatorlar.join("\n");
 }
 
 /**
@@ -88,7 +123,9 @@ bot.command("start", async (ctx) => {
   const chatId = String(ctx.chat.id);
   const user = await findUserByChatId(chatId);
   if (user) {
-    await ctx.reply(`Salom, ${user.ism}! Siz allaqachon tizimga ulangansiz.\n\n${buyruqlarRoyxati(user.rol)}`);
+    await ctx.reply(
+      `Salom, ${user.ism}! Siz allaqachon tizimga ulangansiz.\n\n${await buyruqlarRoyxati(user)}`
+    );
     return;
   }
   await ctx.reply(
@@ -118,7 +155,9 @@ bot.command("kod", async (ctx) => {
     return;
   }
 
-  await ctx.reply(`✅ Muvaffaqiyatli bog'landingiz, ${result.user.ism}!\n\n${buyruqlarRoyxati(result.user.rol)}`);
+  await ctx.reply(
+    `✅ Muvaffaqiyatli bog'landingiz, ${result.user.ism}!\n\n${await buyruqlarRoyxati(result.user)}`
+  );
 });
 
 bot.command("kirim", tenantHandler((ctx, user) => startTransactionFlow(ctx, user, "kirim"), { yozish: true }));
@@ -143,13 +182,65 @@ bot.command(
   })
 );
 
+/** OMBOR moduli yoqiqligini tekshiradi (avto buyruqlari shu modulga tegishli). */
+async function omborKerak(ctx: Context, user: User): Promise<boolean> {
+  if (await isModuleOnForTenant(user.tenantId!, "OMBOR")) return true;
+  await ctx.reply("Ombor/Avtopark moduli yoqilmagan. Veb-saytda Sozlamalar → Modullar bo'limidan yoqing.");
+  return false;
+}
+
+bot.command(
+  "mashina",
+  tenantHandler(
+    async (ctx, user) => {
+      if (!(await omborKerak(ctx, user))) return;
+      await startMashinaFlow(ctx, user);
+    },
+    { managerOnly: true, yozish: true }
+  )
+);
+
+bot.command(
+  "xarajat",
+  tenantHandler(
+    async (ctx, user) => {
+      if (!(await omborKerak(ctx, user))) return;
+      await startXarajatFlow(ctx, user);
+    },
+    { managerOnly: true, yozish: true }
+  )
+);
+
 bot.command("bekor", async (ctx) => {
   clearFlow(String(ctx.chat.id));
   clearLeadFlow(String(ctx.chat.id));
+  clearAvtoFlow(String(ctx.chat.id));
   await ctx.reply("Amal bekor qilindi.");
 });
 
 bot.callbackQuery(/^lbiz:/, tenantHandler((ctx) => handleLeadBusinessCallback(ctx)));
+
+// Avto: mashina qabul qilish va xarajat yozish (faqat direktor/administrator).
+bot.callbackQuery(
+  /^amb:/,
+  tenantHandler((ctx) => handleMashinaBusinessCallback(ctx), { managerOnly: true, yozish: true })
+);
+bot.callbackQuery(
+  /^mtol:/,
+  tenantHandler((ctx, user) => handleMashinaTolovCallback(ctx, user), { managerOnly: true, yozish: true })
+);
+bot.callbackQuery(
+  /^axb:/,
+  tenantHandler((ctx) => handleXarajatBusinessCallback(ctx), { managerOnly: true, yozish: true })
+);
+bot.callbackQuery(
+  /^axm:/,
+  tenantHandler((ctx) => handleXarajatMashinaCallback(ctx), { managerOnly: true, yozish: true })
+);
+bot.callbackQuery(
+  /^axt:/,
+  tenantHandler((ctx) => handleXarajatTuriCallback(ctx), { managerOnly: true, yozish: true })
+);
 bot.callbackQuery(/^biz:/, tenantHandler((ctx) => handleBusinessCallback(ctx), { yozish: true }));
 bot.callbackQuery(/^cat:/, tenantHandler((ctx) => handleCategoryCallback(ctx), { yozish: true }));
 bot.callbackQuery(/^sana:/, tenantHandler((ctx) => handleDateCallback(ctx), { yozish: true }));
@@ -180,6 +271,8 @@ bot.on(
   tenantHandler(
     async (ctx, user) => {
       if (await handleLeadText(ctx, user)) return;
+      // Avto oqimi va «xarajat: ...» tez buyrug'i — faol kirim/chiqim oqimiga aralashmaydi.
+      if (await handleAvtoText(ctx, user)) return;
       await handleFlowText(ctx, user);
     },
     { yozish: true }
