@@ -9,6 +9,7 @@ import type { TransactionDTO } from "@/lib/queries/transactions";
 import type { Rol } from "@/lib/auth/session";
 import { formatMoney } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
+import { ImportModal } from "./ImportModal";
 
 interface CategoryOption {
   id: string;
@@ -49,6 +50,8 @@ export function TransactionsClient({
   const [items, setItems] = useState(initialItems);
   const [total, setTotal] = useState(initialTotal);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // CSV import (Faza 4.4) — faqat boshqaruvchilar uchun.
+  const [importOpen, setImportOpen] = useState(false);
 
   // Server ma'lumoti yangilanganda (router.refresh) lokal holatni sinxronlaymiz.
   useEffect(() => setItems(initialItems), [initialItems]);
@@ -158,7 +161,21 @@ export function TransactionsClient({
 
   return (
     <div className="space-y-4">
+      {importOpen && <ImportModal onClose={() => setImportOpen(false)} />}
       <TransactionForm categories={categories} accounts={accounts} onCreated={handleCreated} />
+
+      {moveTargets !== undefined && currentUserRol !== "CASHIER" && currentUserRol !== "SELLER" && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => setImportOpen(true)}
+            className="text-sm text-brand hover:underline"
+          >
+            CSV import
+          </button>
+        </div>
+      )}
+
       <TransactionFilters categories={categories} initial={filters} />
 
       <div className="flex items-center justify-between">

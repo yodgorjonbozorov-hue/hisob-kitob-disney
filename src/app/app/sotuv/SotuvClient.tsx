@@ -265,13 +265,13 @@ export function SotuvClient({
                 <th className="pb-2">{M.birlikBosh}</th>
                 <th className="pb-2 text-right">Summa</th>
                 <th className="pb-2">To&apos;lov</th>
-                {bekorQilaOladi && <th className="pb-2" />}
+                <th className="pb-2" />
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
               {sales.length === 0 && (
                 <tr>
-                  <td colSpan={bekorQilaOladi ? 5 : 4} className="text-center text-faint py-6">
+                  <td colSpan={5} className="text-center text-faint py-6">
                     Hali sotuv yo'q
                   </td>
                 </tr>
@@ -294,19 +294,27 @@ export function SotuvClient({
                       {s.tolovTuri === "naqd" ? "Naqd" : "Qarz"}
                     </Badge>
                   </td>
-                  {bekorQilaOladi && (
-                    <td className="py-2 text-right">
-                      {!s.bekorQilingan && (
-                        <button
-                          type="button"
-                          onClick={() => setBekorId(s.id)}
-                          className="text-2xs text-expense hover:underline"
-                        >
-                          Bekor qilish
-                        </button>
-                      )}
-                    </td>
-                  )}
+                  <td className="py-2 text-right whitespace-nowrap">
+                    {!s.bekorQilingan && (
+                      <a
+                        href={`/api/sales/${s.id}/receipt`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-2xs text-brand hover:underline"
+                      >
+                        Chek
+                      </a>
+                    )}
+                    {bekorQilaOladi && !s.bekorQilingan && (
+                      <button
+                        type="button"
+                        onClick={() => setBekorId(s.id)}
+                        className="text-2xs text-expense hover:underline ml-3"
+                      >
+                        Bekor qilish
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

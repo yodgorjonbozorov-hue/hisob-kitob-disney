@@ -13,7 +13,7 @@ agent shu fayldan qayerda qolganini o'qib davom etadi.
 | 1 | Kritik tuzatishlar | `faza-1-kritik` | ✅ tugadi |
 | 2 | Unumdorlik + UX | `faza-2-perf` | ✅ tugadi |
 | 3 | Xavfsizlik + audit | `faza-3-xavfsizlik` | ✅ tugadi |
-| 4 | Kassa to'liqligi | `faza-4-kassa` | ⏳ boshlanmagan |
+| 4 | Kassa to'liqligi | `faza-4-kassa` | ✅ tugadi |
 | 5 | PostgreSQL + masshtab | `faza-5-postgres` | 🔓 ruxsat berildi (2026-08-04) |
 | 6 | ERP modullari | `faza-6-*` | ⏳ boshlanmagan |
 
@@ -30,6 +30,17 @@ production/staging'da qo'lda bajariladi. **Avval zaxira oling.**
 | 3 | `20260804100000_kompozit_indekslar` | Indekslarni almashtiradi, `Payment.externalId` ni UNIQUE qiladi | **O'rta** — dublikat bo'lsa to'xtaydi |
 | 4 | `20260804110000_audit_tenant` | `AuditLog.tenantId` ustuni + eski yozuvlarni to'ldirish | Past |
 | 5 | `20260804120000_ai_suhbat` | `AiConversation` jadvalini yaratadi | Past — faqat CREATE TABLE |
+| 6 | `20260804130000_kassa_hisob_raqamlar` | `Account`, `AccountTransfer`, `Transaction.accountId` | O'rta — Transaction qayta quriladi |
+| 7 | `20260804140000_sotuv_sana_bekor` | `Sale.sana` (NOT NULL), `deletedAt`, `cancelledBy`, `cancelReason` | O'rta — Sale qayta quriladi |
+| 8 | `20260804150000_sku_inventarizatsiya` | `Product.sku/birlik/minQoldiq`, `StockAdjustment` | O'rta — Product qayta quriladi |
+
+**⚠️ 6-migratsiyadan KEYIN majburiy:** `npm run kassa:migratsiya` — har biznesga
+default "Naqd kassa" ochadi va `accountId`siz eski tranzaksiyalarni bog'laydi.
+Skriptsiz kassa qoldig'i haqiqiy pulni ko'rsatmaydi. Skript idempotent.
+
+**7-migratsiya haqida:** `Sale.sana` NOT NULL, shuning uchun eski yozuvlar
+uchun u `createdAt` dan to'ldiriladi (UTC yarim tuniga keltirilib). Hisobotlar
+avvalgidek qoladi.
 
 Qo'llash: `npm run db:apply` (yoki `node scripts/db-migrate.mjs`).
 
@@ -392,6 +403,125 @@ audit testi qo'shildi (22 ta bo'ldi).
       toza bo'lsa `Content-Security-Policy` ga o'tkazing
 - [ ] AI suhbatida "Yangi suhbat" oqimi ishlaydi
 
-**Keyingi qadam:** Faza 4 (`faza-4-kassa`) — 4 ta prompt: kassa/hisob-raqamlar
-(`Account`, `AccountTransfer`), sotuvni bekor qilish + sotuv sanasi, SKU va
-inventarizatsiya (`StockAdjustment`), chek PDF + CSV import.
+### 2026-08-04 — Faza 4, Prompt 4.1 (tugadi)
+
+**Kassa va hisob-raqamlar**
+- Ilgari hamma pul bitta "qop"da edi: naqd sotuv, plastik to'lov va bankdagi
+  pul bir joyda ko'rinardi — direktor "kassada qancha naqd bor?" degan eng
+  oddiy savolga javob ololmasdi.
+- Yangi `Account` (naqd/plastik/bank) va `AccountTransfer`;
+  `Transaction.accountId` (nullable — eski yozuvlar uchun).
+- **Muhim qaror:** pul ko'chirish `Transaction` YOZMAYDI. Bu kirim ham,
+  chiqim ham emas — pul biznes ichida joyini o'zgartirdi. Tranzaksiya
+  yozilsa kunlik aylanma sun'iy oshib ketardi. Test buni tekshiradi.
+- `/app/kassa` sahifasi: har kassa qoldig'i (kirim − chiqim ± transferlar),
+  kassa CRUD, pul ko'chirish modali. Dashboardga "Kassa qoldig'i" kartasi.
+- `TransactionForm` va bot oqimida kassa tanlash — **bitta kassali biznesda
+  bu qadam umuman ko'rsatilmaydi** (ortiqcha bosish yo'q).
+- Himoya: yozuvi bor kassa o'chirilmaydi (nofaol qilinadi), oxirgi faol kassa
+  nofaol qilinmaydi, nofaol kassa bilan pul ko'chirilmaydi.
+- `scripts/kassa-migratsiya.ts` — mavjud bizneslar uchun (idempotent).
+- Yo'l-yo'lakay: `deleteEmptyTenant` kassalarni ham o'chiradi, `tenantsWithData`
+  transferlarni ham hisobga oladi (aks holda FK cheklovi ishga tushardi).
+
+**Test:** `tests/kassa.test.ts` (11)
+
+### 2026-08-04 — Faza 4, Prompt 4.2 (tugadi)
+
+**Sotuv sanasi (B-5)**
+- `Sale`da faqat `createdAt` bor edi — kechagi sotuvni bugun kiritsangiz u
+  kechagi hisobotga tushmasdi. Endi alohida `sana` maydoni.
+- Naqd sotuvning kirim tranzaksiyasi ham O'SHA sanaga yoziladi — aks holda
+  sotuv iyunda, pul iyulda ko'rinardi.
+- Hisobotlar va ro'yxatlar `createdAt` emas, `sana` bo'yicha ishlaydi.
+
+**Sotuvni bekor qilish (B-4)**
+- Ilgari bu umuman mumkin emas edi: kassir xato sotuv kiritsa omborda tovar
+  kam, kassada pul ko'p bo'lib qolardi. `DELETE /api/sales/[id]` — faqat
+  manager, sabab majburiy. Bitta atomik amalda: Sale soft-delete, bog'langan
+  kirim soft-delete, qarz o'chirish (to'lovi bo'lmasa), qoldiq qaytarish.
+- Bekor qilingan sotuv foydalilik hisobiga ham, oylik hisobotga ham kirmaydi;
+  ro'yxatda chizilgan holda sabab bilan qoladi.
+
+**Narx buzilishi (H-1)**
+- Kelishilgan narx katalogni buzardi: 500 dona tovardan bittasini chegirma
+  bilan sotsangiz butun katalog narxi o'zgarib, keyingi barcha sotuvlar
+  chegirma narxida ketardi. Endi kartochka narxi faqat AVTO rejimida
+  yangilanadi (u yerda 1 yozuv = 1 mashina).
+
+**Test:** `tests/sotuv-bekor.test.ts` (11)
+
+### 2026-08-04 — Faza 4, Prompt 4.3 (tugadi)
+
+**SKU, birlik, minimal qoldiq**
+- `Product`: `sku` (artikul), `birlik` (dona/kg/litr/metr/quti/paket), `minQoldiq`.
+- "Kam qoldi" ogohlantirishi ilgari butun tizim uchun bitta sobit chegara
+  (5 dona) edi — tuxum sotuvchiga ham, avtomobil sotuvchiga ham bir xil.
+  Endi har mahsulotning o'z chegarasi (0 = ogohlantirish yo'q).
+
+**Inventarizatsiya va hisobdan chiqarish**
+- `StockAdjustment`: "inventarizatsiya" (farq ±) va "chiqarish" (faqat kamaytiradi).
+- Ilgari qoldiqni to'g'rilashning yagona yo'li mahsulotni qo'lda tahrirlash
+  edi — kim, qachon va NEGA o'zgartirgani hech qayerda qolmasdi. Endi sabab
+  majburiy, har to'g'rilash audit jurnaliga tushadi.
+- Ataylab pul tranzaksiyasi yozilmaydi: bu tovar hodisasi, yo'qotishning
+  moliyaviy ta'siri tannarx orqali allaqachon hisobga olingan.
+- `POST /api/stock/adjust` — faqat manager (kassir kamomadni o'zi "tuzatib"
+  qo'ymasligi kerak).
+
+**Test:** `tests/inventarizatsiya.test.ts` (11)
+
+### 2026-08-04 — Faza 4, Prompt 4.4 (tugadi)
+
+**Sotuv cheki (PDF)**
+- `lib/pdf/ReceiptDocument.tsx` — 80 mm termal printer formati (226.77 pt,
+  balandlik kontentga moslashadi). Biznes nomi, sana, chek raqami, kassir,
+  mahsulot × narx, jami, to'lov turi, qarzga bo'lsa qolgan summa.
+- `GET /api/sales/[id]/receipt` → PDF. Sotuvlar ro'yxatida "Chek" havolasi.
+
+**CSV import**
+- `POST /api/transactions/import` — ikki bosqichli: avval `tekshirish: true`
+  bilan tahlil qilinadi (nechta to'g'ri, nechta xato, ilk 10 qator ko'rsatiladi),
+  foydalanuvchi ko'rgandan keyingina yoziladi. 200 qatorni ko'r-ko'rona
+  yozib yuborish xavfi yo'q.
+- Har qator alohida tekshiriladi (xato sabab va qator raqami bilan qaytadi),
+  to'g'ri qatorlar esa BITTA tranzaksiyada yoziladi — yarim import bo'lmaydi.
+- Qo'shtirnoq ichidagi vergul hurmat qilinadi ("Iyul, avans bilan"),
+  "1 250 000" / "1,250,000" / "1250000.00" — hammasi tushuniladi.
+- Kategoriya nom+tur bo'yicha topiladi yoki yaratiladi (`upsert`).
+- UI: tranzaksiyalar sahifasida "CSV import" — namuna fayl yuklab olish,
+  oldindan ko'rish, xatolar ro'yxati.
+
+**Test:** `tests/csv-import.test.ts` (13)
+
+---
+
+## FAZA 4 TEKSHIRUV RO'YXATI
+
+**Avtomatik tekshirilgan**
+- [x] `npm run build` o'tadi
+- [x] 25 test to'plami, jami **256 test**, 0 xato
+- [x] Ikki kassali biznesda plastik sotuv plastik kassaga tushadi (`test:kassa`)
+- [x] Pul ko'chirish qoldiqlarni ko'chiradi, LEKIN kirim/chiqimga ta'sir qilmaydi
+- [x] Sotuvni bekor qilganda ombor qoldig'i qaytadi, kirim yo'qoladi (`test:sotuv-bekor`)
+- [x] Qarzi to'langan sotuv bekor qilinmaydi (tranzaksiya orqaga qaytadi)
+- [x] Kechagi sanada sotuv kechagi hisobotga tushadi
+- [x] Ombor rejimida chegirma katalog narxini buzmaydi, avtoda esa saqlanadi
+- [x] Inventarizatsiya/chiqarish sabab bilan yoziladi va audit qilinadi
+- [x] 505 qatorli CSV — 500 tasi olinadi, ortig'i xato sifatida qaytadi
+- [x] Xato qatorlar aniq sabab va qator raqami bilan ajratiladi
+
+**Sizdan kutiladi (real muhitda)**
+- [ ] 6, 7, 8-migratsiyalarni apply qiling (zaxiradan keyin)
+- [ ] **`npm run kassa:migratsiya`** — bu qadamsiz kassa qoldig'i noto'g'ri
+- [ ] Ikki kassali biznes: plastik sotuv plastik kassaga, qoldiqlar to'g'ri
+- [ ] Sotuvni bekor qiling → ombor qoldig'i qaytdi, kirim yo'qoldi, hisobot to'g'ri
+- [ ] Kechagi sanada sotuv kiriting → kechagi hisobotda ko'rinadi
+- [ ] 200 qatorli CSV import muvaffaqiyatli
+- [ ] Chekni 80 mm termal printerda chop etib ko'ring (o'lchov mos keladimi)
+- [ ] Botda `/kirim` da ikki kassali biznesda kassa tanlash qadami chiqadi
+
+**Keyingi qadam:** Faza 5 (`faza-5-postgres`) — PostgreSQL'ga ko'chish va
+cron'ni bo'lish. Loyiha egasi ruxsat bergan (2026-08-04), lekin bu **eng
+xatarli faza**: avval staging'da to'liq sinash kerak. Undan keyin Faza 6
+(ERP modullari: XARID → TASDIQLASH → HUJJATLAR → MIJOZLAR → HR-LITE → AI OCR).
