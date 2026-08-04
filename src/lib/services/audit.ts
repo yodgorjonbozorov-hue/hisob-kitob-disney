@@ -35,7 +35,9 @@ export type AuditEntity =
   | "productExpense"
   | "shift"
   | "account"
-  | "accountTransfer";
+  | "accountTransfer"
+  | "supplier"
+  | "purchaseOrder";
 
 interface AuditInput {
   businessId?: string | null;

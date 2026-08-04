@@ -133,6 +133,9 @@ model Business {
   accounts        Account[]
   transfers       AccountTransfer[]
   adjustments     StockAdjustment[]
+  suppliers       Supplier[]
+  purchaseOrders  PurchaseOrder[]
+  purchaseItems   PurchaseOrderItem[]
 
   @@index([tenantId])
 }
@@ -392,33 +395,34 @@ model Budget {
 /// Mahsulot turi (masalan salyut turlari) + narxlar + joriy qoldiq.
 /// Avto rejimida (Business.turi = "avto") bitta yozuv = bitta avtomobil (miqdor 0/1).
 model Product {
-  id           String            @id @default(cuid())
-  businessId   String
-  business     Business          @relation(fields: [businessId], references: [id], onDelete: Restrict)
-  nomi         String
-  kelganNarx   Int               @default(0) // tannarx (birlik)
-  sotuvNarx    Int               @default(0) // sotuv narxi (birlik)
-  miqdor       Int               @default(0) // ombordagi joriy qoldiq
-  isActive     Boolean           @default(true)
-  izoh         String?
+  id            String              @id @default(cuid())
+  businessId    String
+  business      Business            @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  nomi          String
+  kelganNarx    Int                 @default(0) // tannarx (birlik)
+  sotuvNarx     Int                 @default(0) // sotuv narxi (birlik)
+  miqdor        Int                 @default(0) // ombordagi joriy qoldiq
+  isActive      Boolean             @default(true)
+  izoh          String?
   /// Ombor kodi (artikul). Ixtiyoriy, biznes ichida takrorlanmasin.
-  sku          String?
+  sku           String?
   /// O'lchov birligi: "dona" | "kg" | "litr" | "metr" | "quti" | "paket".
-  birlik       String            @default("dona")
+  birlik        String              @default("dona")
   /// Shu miqdordan kam qolsa bildirishnoma chiqadi. 0 = ogohlantirish yo'q.
   /// Ilgari butun tizim uchun bitta sobit chegara (5 dona) ishlatilardi —
   /// tuxum sotuvchiga ham, avtomobil sotuvchiga ham bir xil edi.
-  minQoldiq    Int               @default(0)
+  minQoldiq     Int                 @default(0)
   // Avto rejimi maydonlari — umumiy bizneslarda null.
-  avtoYil      Int?
-  avtoRaqam    String?
-  avtoRang     String?
-  createdAt    DateTime          @default(now())
-  stockEntries StockEntry[]
-  sales        Sale[]
-  debts        Debt[]
-  expenses     ProductExpense[]
-  adjustments  StockAdjustment[]
+  avtoYil       Int?
+  avtoRaqam     String?
+  avtoRang      String?
+  createdAt     DateTime            @default(now())
+  stockEntries  StockEntry[]
+  sales         Sale[]
+  debts         Debt[]
+  expenses      ProductExpense[]
+  adjustments   StockAdjustment[]
+  xaridSatrlari PurchaseOrderItem[]
 
   @@index([businessId])
   @@index([businessId, sku])
@@ -554,6 +558,85 @@ model Debt {
   @@index([businessId, isYopilgan, turi])
   @@index([businessId, turi])
   @@index([productId])
+}
+
+// ==== XARID moduli (Faza 6.1) ====
+
+/// TA'MINOTCHI — kimdan tovar olamiz.
+///
+/// CRM'dagi `Contact` mijozlar uchun; ta'minotchi esa boshqa tomon: undan
+/// tovar olamiz va UNGA qarzdor bo'lamiz. Ikkalasini aralashtirish qarzdorlik
+/// yo'nalishini chalkashtirardi.
+model Supplier {
+  id         String          @id @default(cuid())
+  businessId String
+  business   Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  nomi       String
+  tel        String?
+  manzil     String?
+  izoh       String?
+  isActive   Boolean         @default(true)
+  createdAt  DateTime        @default(now())
+  deletedAt  DateTime?
+  orders     PurchaseOrder[]
+
+  @@index([businessId, isActive])
+  @@index([businessId, nomi])
+}
+
+/// XARID BUYURTMASI.
+///
+/// Holat oqimi: "qoralama" → "tasdiqlangan" → "qabul_qilingan" (yoki "bekor").
+/// QABUL QILINGANDA (va faqat o'shanda) ombor va pul harakati yoziladi:
+///   - har satr uchun StockEntry (qoldiq oshadi, tannarx snapshot);
+///   - naqd bo'lsa chiqim tranzaksiya, qarzga bo'lsa "beriladigan" qarz.
+/// Qoralama va tasdiqlangan buyurtma hech narsaga ta'sir qilmaydi — bu
+/// ataylab: reja bilan haqiqat aralashmasligi kerak.
+model PurchaseOrder {
+  id            String              @id @default(cuid())
+  businessId    String
+  business      Business            @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  supplierId    String
+  supplier      Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  /// "qoralama" | "tasdiqlangan" | "qabul_qilingan" | "bekor"
+  holat         String              @default("qoralama")
+  /// Buyurtma sanasi (reja).
+  sana          DateTime
+  /// Haqiqiy qabul qilingan payt.
+  qabulSana     DateTime?
+  /// "naqd" | "qarz" — qabul qilishda pul harakati shunga qarab yoziladi.
+  tolovTuri     String              @default("naqd")
+  /// Satrlar yig'indisi (qabul paytida qayta hisoblanadi).
+  jamiSumma     Int                 @default(0)
+  izoh          String?
+  userId        String
+  /// Qabul qilinganda yozilgan chiqim tranzaksiyasi (naqd bo'lsa).
+  transactionId String?
+  /// Qabul qilinganda ochilgan "beriladigan" qarz (qarzga bo'lsa).
+  debtId        String?
+  createdAt     DateTime            @default(now())
+  items         PurchaseOrderItem[]
+
+  @@index([businessId, holat, sana])
+  @@index([supplierId])
+}
+
+/// Xarid buyurtmasi satri — qaysi mahsulotdan qancha va qanday narxda.
+model PurchaseOrderItem {
+  id         String        @id @default(cuid())
+  businessId String
+  business   Business      @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  orderId    String
+  order      PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+  miqdor     Int
+  /// Birlik narxi (tannarx). Qabul qilishda Product.kelganNarx shunga yangilanadi.
+  birlikNarx Int
+  jamiSumma  Int
+
+  @@index([orderId])
+  @@index([businessId])
 }
 
 // ==== CRM moduli (BOS-2) ====
