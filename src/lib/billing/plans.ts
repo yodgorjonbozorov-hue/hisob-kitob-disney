@@ -31,7 +31,7 @@ export const PLANLAR: Plan[] = [
     oylikNarx: 399_000,
     tavsif:
       "Standart'dagi hammasi + Xarid (ta'minotchi, buyurtma, qabul qilish) + CRM (bitimlar kanbani, kontaktlar) + Vazifalar + AI yordamchi",
-    modullar: ["MOLIYA", "OMBOR", "XARID", "TASDIQLASH", "CRM", "VAZIFALAR", "AI"],
+    modullar: ["MOLIYA", "OMBOR", "XARID", "TASDIQLASH", "MIJOZLAR", "CRM", "VAZIFALAR", "AI"],
   },
 ];
 

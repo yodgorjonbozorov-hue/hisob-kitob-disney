@@ -39,7 +39,8 @@ export type AuditEntity =
   | "supplier"
   | "purchaseOrder"
   | "approvalRule"
-  | "approvalRequest";
+  | "approvalRequest"
+  | "contact";
 
 interface AuditInput {
   businessId?: string | null;
