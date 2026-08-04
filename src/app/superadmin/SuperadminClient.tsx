@@ -27,6 +27,7 @@ interface TenantRow {
   pendingPayments: number;
   takrorMi: boolean;
   bosh: boolean;
+  telegramUlangan: boolean;
 }
 interface PaymentRow {
   id: string;
@@ -282,6 +283,15 @@ export function SuperadminClient({
                       </span>
                       {t.accessMode !== "FULL" && (
                         <p className="text-2xs text-expense-fg mt-0.5">{t.accessMode}</p>
+                      )}
+                      {/* Telegram ulanmagan bo'lsa obuna eslatmalari yetib bormaydi. */}
+                      {!t.telegramUlangan && (
+                        <p
+                          className="text-2xs text-muted mt-0.5"
+                          title="Direktor Telegramni ulamagan — obuna eslatmasi yetib bormaydi, qo'ng'iroq qilish kerak"
+                        >
+                          TG yo&apos;q
+                        </p>
                       )}
                     </td>
                     <td className="py-2.5 text-muted">{sana(t.createdAt)}</td>

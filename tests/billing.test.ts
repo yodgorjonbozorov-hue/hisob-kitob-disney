@@ -190,3 +190,113 @@ test("Payment/Subscription boshqa tenantga ko'rinmaydi", async () => {
   assert.equal(payments.length, 0);
   assert.equal(subs.length, 0);
 });
+
+// ---------- Obuna eslatmalari (3 kun / 1 kun / tugadi / kechikdi) ----------
+
+test("eslatmaNuqtasi: to'rtta nuqta to'g'ri aniqlanadi", async () => {
+  const { eslatmaNuqtasi } = await import("@/lib/billing/notify");
+  assert.equal(eslatmaNuqtasi(10), null, "hali erta");
+  assert.equal(eslatmaNuqtasi(3), "3kun");
+  assert.equal(eslatmaNuqtasi(2), "3kun", "cron bir kun ishlamasa ham o'tkazib yubormaydi");
+  assert.equal(eslatmaNuqtasi(1), "1kun");
+  assert.equal(eslatmaNuqtasi(0), "tugadi");
+  assert.equal(eslatmaNuqtasi(-1), "tugadi");
+  assert.equal(eslatmaNuqtasi(-3), "kechikdi");
+  assert.equal(eslatmaNuqtasi(-30), null, "juda eski — bezovta qilinmaydi");
+  assert.equal(eslatmaNuqtasi(null), null);
+});
+
+test("eslatma matnida to'lov havolasi va tarif narxi bo'ladi", async () => {
+  const { eslatmaMatni } = await import("@/lib/billing/notify");
+  const matn = eslatmaMatni("1kun", {
+    tenantNomi: "RedFlora",
+    trial: true,
+    kunQoldi: 1,
+    narx: 199_000,
+    havola: "https://balansa.uz/billing",
+  });
+  assert.match(matn, /RedFlora/);
+  assert.match(matn, /ERTAGA/);
+  assert.match(matn, /https:\/\/balansa\.uz\/billing/);
+  assert.match(matn, /199 000/);
+});
+
+test("sendExpiryWarnings: Telegram ulanmagan mijoz ro'yxatga tushadi, xabar yuborilmaydi", async () => {
+  const { sendExpiryWarnings } = await import("@/lib/billing/notify");
+
+  const trial = await createTenantWithOwner({
+    kompaniyaNomi: "Sinov Tugayapti",
+    ism: "Egasi",
+    login: "+998900000091",
+    parol: "parol12345",
+  });
+  const now = new Date();
+  // Sinov muddati ertaga tugaydi.
+  await rawPrisma.tenant.update({
+    where: { id: trial.tenant.id },
+    data: { status: "TRIAL", trialEndsAt: new Date(now.getTime() + KUN_MS) },
+  });
+
+  const yuborilgan: { chatId: string; text: string }[] = [];
+  const fakeBot: any = {
+    api: {
+      sendMessage: async (chatId: string, text: string) => {
+        yuborilgan.push({ chatId, text });
+      },
+    },
+  };
+
+  const r1 = await sendExpiryWarnings(fakeBot, now);
+  assert.equal(yuborilgan.length, 0, "Telegram ulanmagan — xabar yuborilmaydi");
+  assert.ok(r1.telegramsiz.includes("Sinov Tugayapti"), "qo'ng'iroq qilinadiganlar ro'yxatida bo'lishi kerak");
+
+  // Endi direktor Telegramni ulaydi.
+  await rawPrisma.user.update({
+    where: { id: trial.user.id },
+    data: { telegramChatId: "555000111" },
+  });
+
+  const r2 = await sendExpiryWarnings(fakeBot, now);
+  assert.equal(r2.yuborilgan, 1);
+  assert.match(yuborilgan[0].text, /ERTAGA/);
+  assert.match(yuborilgan[0].text, /billing/);
+
+  // Takroriy chaqiruv — shu nuqta ikkinchi marta yuborilmaydi.
+  const r3 = await sendExpiryWarnings(fakeBot, now);
+  assert.equal(r3.yuborilgan, 0, "bir nuqta bir marta yuboriladi");
+
+  // Muddat tugadi — bu boshqa nuqta, yangi xabar ketadi.
+  const keyin = new Date(now.getTime() + KUN_MS + 60_000);
+  const r4 = await sendExpiryWarnings(fakeBot, keyin);
+  assert.equal(r4.yuborilgan, 1, "'tugadi' nuqtasi alohida yuboriladi");
+  assert.match(yuborilgan[yuborilgan.length - 1].text, /tugadi/i);
+});
+
+test("bloklangan tenantga eslatma yuborilmaydi", async () => {
+  const { sendExpiryWarnings } = await import("@/lib/billing/notify");
+  const bloklangan = await createTenantWithOwner({
+    kompaniyaNomi: "Bloklangan Mijoz",
+    ism: "Egasi",
+    login: "+998900000092",
+    parol: "parol12345",
+  });
+  const now = new Date();
+  await rawPrisma.tenant.update({
+    where: { id: bloklangan.tenant.id },
+    data: { status: "BLOCKED", trialEndsAt: new Date(now.getTime() + KUN_MS) },
+  });
+  await rawPrisma.user.update({
+    where: { id: bloklangan.user.id },
+    data: { telegramChatId: "555000222" },
+  });
+
+  const yuborilgan: string[] = [];
+  const fakeBot: any = {
+    api: { sendMessage: async (_c: string, t: string) => void yuborilgan.push(t) },
+  };
+  await sendExpiryWarnings(fakeBot, now);
+  assert.equal(
+    yuborilgan.filter((t) => t.includes("Bloklangan Mijoz")).length,
+    0
+  );
+});

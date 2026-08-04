@@ -4,6 +4,7 @@ import { planByCode } from "@/lib/billing/plans";
 import { hashPassword } from "@/lib/auth/password";
 import { BadRequestError } from "@/lib/auth/guard";
 import { normalizeKompaniyaNomi } from "@/lib/services/signup";
+import { MANAGER_ROLLAR } from "@/lib/auth/roles";
 
 /**
  * SUPERADMIN xizmat qatlami — barcha amallar rawPrisma bilan (tenantlar aro)
@@ -51,6 +52,11 @@ export interface TenantOverview {
   takrorMi: boolean;
   /** Ma'lumot kiritilmagan (tranzaksiya/mahsulot/qarz yo'q) — xavfsiz o'chirsa bo'ladi. */
   bosh: boolean;
+  /**
+   * Telegram ulagan direktor bormi. Yo'q bo'lsa obuna eslatmalari yetib
+   * bormaydi — bunday mijozga qo'ng'iroq qilish kerak.
+   */
+  telegramUlangan: boolean;
 }
 
 /** Barcha tenantlar ro'yxati (panel jadvali uchun). */
@@ -58,7 +64,7 @@ export async function listTenantsOverview(): Promise<TenantOverview[]> {
   const tenants = await rawPrisma.tenant.findMany({
     orderBy: { createdAt: "desc" },
     include: {
-      users: { select: { lastLoginAt: true } },
+      users: { select: { lastLoginAt: true, rol: true, telegramChatId: true, isActive: true } },
       _count: { select: { users: true, businesses: true } },
     },
   });
@@ -100,6 +106,9 @@ export async function listTenantsOverview(): Promise<TenantOverview[]> {
       pendingPayments: pendingMap.get(t.id) ?? 0,
       takrorMi: (nomSoni.get(normalizeKompaniyaNomi(t.name)) ?? 0) > 1,
       bosh: !bandTenantlar.has(t.id),
+      telegramUlangan: t.users.some(
+        (u) => u.isActive && !!u.telegramChatId && MANAGER_ROLLAR.includes(u.rol as never)
+      ),
     };
   });
 }
