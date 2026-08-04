@@ -122,6 +122,8 @@ async function tenantsWithData(): Promise<Set<string>> {
   const bizneslar = await rawPrisma.business.findMany({
     select: {
       tenantId: true,
+      // Biznesga bog'lanadigan BARCHA "ish" yozuvlari — biror joyda yozuv bo'lsa
+      // tenant bo'sh emas (aks holda o'chirishda FK cheklovi ishga tushardi).
       _count: {
         select: {
           transactions: true,
@@ -131,6 +133,9 @@ async function tenantsWithData(): Promise<Set<string>> {
           contacts: true,
           deals: true,
           tasks: true,
+          budgets: true,
+          shiftCloses: true,
+          recurrings: true,
         },
       },
     },
