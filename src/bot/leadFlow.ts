@@ -3,6 +3,7 @@ import type { User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createDeal } from "@/lib/crm/service";
 import { formatMoney, parseSomInput } from "@/lib/format";
+import { flowStore } from "./conversationStore";
 
 /**
  * TELEGRAM LEAD KANALI (BOS-5): xodim botdan 30 soniyada yangi mijoz + bitim
@@ -21,14 +22,15 @@ interface LeadFlowState {
   nomi?: string;
 }
 
-const leadConversations = new Map<string, LeadFlowState>();
+// Holat bazada saqlanadi (serverless webhook) — batafsil: ./conversationStore.ts
+const leadConversations = flowStore<LeadFlowState>("lead");
 
-export function getLeadFlow(chatId: string): LeadFlowState | undefined {
+export function getLeadFlow(chatId: string): Promise<LeadFlowState | undefined> {
   return leadConversations.get(chatId);
 }
 
-export function clearLeadFlow(chatId: string): void {
-  leadConversations.delete(chatId);
+export function clearLeadFlow(chatId: string): Promise<void> {
+  return leadConversations.delete(chatId);
 }
 
 /** /lead — oqimni boshlaydi. Kassir biriktirilgan biznesda; boshqalar tanlaydi. */
@@ -36,7 +38,7 @@ export async function startLeadFlow(ctx: Context, user: User) {
   const chatId = String(ctx.chat!.id);
 
   if (user.businessId) {
-    leadConversations.set(chatId, { step: "ism", businessId: user.businessId });
+    await leadConversations.set(chatId, { step: "ism", businessId: user.businessId });
     await ctx.reply("Yangi lead 📇\nMijoz ismini yozing:");
     return;
   }
@@ -50,12 +52,12 @@ export async function startLeadFlow(ctx: Context, user: User) {
     return;
   }
   if (businesses.length === 1) {
-    leadConversations.set(chatId, { step: "ism", businessId: businesses[0].id });
+    await leadConversations.set(chatId, { step: "ism", businessId: businesses[0].id });
     await ctx.reply("Yangi lead 📇\nMijoz ismini yozing:");
     return;
   }
 
-  leadConversations.set(chatId, { step: "business" });
+  await leadConversations.set(chatId, { step: "business" });
   const keyboard = new InlineKeyboard();
   businesses.forEach((b, i) => {
     keyboard.text(b.nomi, `lbiz:${b.id}`);
@@ -67,7 +69,7 @@ export async function startLeadFlow(ctx: Context, user: User) {
 /** lbiz:<businessId> callback. */
 export async function handleLeadBusinessCallback(ctx: Context) {
   const chatId = String(ctx.chat!.id);
-  const flow = leadConversations.get(chatId);
+  const flow = await leadConversations.get(chatId);
   const data = ctx.callbackQuery?.data ?? "";
   const businessId = data.startsWith("lbiz:") ? data.slice(5) : null;
 
@@ -83,7 +85,7 @@ export async function handleLeadBusinessCallback(ctx: Context) {
     return;
   }
 
-  leadConversations.set(chatId, { step: "ism", businessId: business.id });
+  await leadConversations.set(chatId, { step: "ism", businessId: business.id });
   await ctx.answerCallbackQuery();
   await ctx.editMessageText("Yangi lead 📇\nMijoz ismini yozing:");
 }
@@ -91,7 +93,7 @@ export async function handleLeadBusinessCallback(ctx: Context) {
 /** Matn qadamlari. Lead oqimi faol bo'lsa true qaytaradi (router uchun). */
 export async function handleLeadText(ctx: Context, user: User): Promise<boolean> {
   const chatId = String(ctx.chat!.id);
-  const flow = leadConversations.get(chatId);
+  const flow = await leadConversations.get(chatId);
   if (!flow) return false;
 
   const text = ctx.message?.text?.trim() ?? "";
@@ -101,14 +103,14 @@ export async function handleLeadText(ctx: Context, user: User): Promise<boolean>
       await ctx.reply("Mijoz ismini yozing:");
       return true;
     }
-    leadConversations.set(chatId, { ...flow, step: "tel", ism: text });
+    await leadConversations.set(chatId, { ...flow, step: "tel", ism: text });
     await ctx.reply("Telefon raqami (bo'lmasa «-» yozing):");
     return true;
   }
 
   if (flow.step === "tel") {
     const tel = text === "-" ? null : text;
-    leadConversations.set(chatId, { ...flow, step: "nomi", tel });
+    await leadConversations.set(chatId, { ...flow, step: "nomi", tel });
     await ctx.reply("Bitim nomi (masalan: 50 ta stol buyurtmasi):");
     return true;
   }
@@ -118,7 +120,7 @@ export async function handleLeadText(ctx: Context, user: User): Promise<boolean>
       await ctx.reply("Bitim nomini yozing:");
       return true;
     }
-    leadConversations.set(chatId, { ...flow, step: "summa", nomi: text });
+    await leadConversations.set(chatId, { ...flow, step: "summa", nomi: text });
     await ctx.reply("Taxminiy summa (so'm) yoki «-»:");
     return true;
   }
@@ -139,7 +141,7 @@ export async function handleLeadText(ctx: Context, user: User): Promise<boolean>
       manba: "telegram",
       userId: user.id,
     });
-    clearLeadFlow(chatId);
+    await clearLeadFlow(chatId);
 
     await ctx.reply(
       [

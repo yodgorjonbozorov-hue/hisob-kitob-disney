@@ -4,6 +4,7 @@ import { planByCode } from "./plans";
 import { confirmPayment } from "./subscribe";
 import { BadRequestError } from "@/lib/auth/guard";
 import type { PaymentProvider } from "./provider";
+import { secretlarTeng } from "@/lib/security/compare";
 
 /**
  * CLICK (SHOP API) adapteri.
@@ -167,7 +168,7 @@ export async function handleClickPrepare(req: ClickRequest, now: Date = new Date
   const cfg = clickConfig();
   if (!cfg) return javob(req, CLICK_ERROR.SOROV_XATOSI);
   if (String(req.action) !== "0") return javob(req, CLICK_ERROR.AMAL_TOPILMADI);
-  if (req.sign_string !== clickSign(req, cfg.secretKey, false)) {
+  if (!secretlarTeng(String(req.sign_string ?? ""), clickSign(req, cfg.secretKey, false))) {
     return javob(req, CLICK_ERROR.IMZO_XATO);
   }
 
@@ -197,7 +198,7 @@ export async function handleClickComplete(req: ClickRequest, now: Date = new Dat
   const cfg = clickConfig();
   if (!cfg) return javob(req, CLICK_ERROR.SOROV_XATOSI);
   if (String(req.action) !== "1") return javob(req, CLICK_ERROR.AMAL_TOPILMADI);
-  if (req.sign_string !== clickSign(req, cfg.secretKey, true)) {
+  if (!secretlarTeng(String(req.sign_string ?? ""), clickSign(req, cfg.secretKey, true))) {
     return javob(req, CLICK_ERROR.IMZO_XATO);
   }
 

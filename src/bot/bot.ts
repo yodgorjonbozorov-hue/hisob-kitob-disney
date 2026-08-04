@@ -33,7 +33,7 @@ import {
 import { isModuleOnForTenant } from "@/lib/modules/guard";
 import { modulByCode } from "@/lib/modules/registry";
 import { BRAND } from "@/lib/brand";
-import { clearFlow } from "./state";
+import { clearAllFlows } from "./conversationStore";
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) {
@@ -228,9 +228,7 @@ bot.command(
 );
 
 bot.command("bekor", async (ctx) => {
-  clearFlow(String(ctx.chat.id));
-  clearLeadFlow(String(ctx.chat.id));
-  clearAvtoFlow(String(ctx.chat.id));
+  await clearAllFlows(String(ctx.chat.id));
   await ctx.reply("Amal bekor qilindi.");
 });
 

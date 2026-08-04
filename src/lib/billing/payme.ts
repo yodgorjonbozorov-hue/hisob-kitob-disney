@@ -3,6 +3,7 @@ import { planByCode } from "./plans";
 import { confirmPayment } from "./subscribe";
 import { BadRequestError } from "@/lib/auth/guard";
 import type { PaymentProvider } from "./provider";
+import { secretlarTeng } from "@/lib/security/compare";
 
 /**
  * PAYME (Paycom) MERCHANT API adapteri.
@@ -171,7 +172,8 @@ export function paymeAuthOk(authHeader: string | null, key: string): boolean {
   if (ajratgich < 0) return false;
   const login = decoded.slice(0, ajratgich);
   const parol = decoded.slice(ajratgich + 1);
-  return login === "Paycom" && parol === key;
+  // Timing-safe: `===` birinchi farqda to'xtaydi va kalitni bayt-bayt topishga yo'l ochadi.
+  return login === "Paycom" && secretlarTeng(parol, key);
 }
 
 const ms = (d: Date | null | undefined): number => (d ? d.getTime() : 0);

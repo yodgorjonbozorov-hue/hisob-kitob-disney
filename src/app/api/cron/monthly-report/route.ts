@@ -7,6 +7,8 @@ import { sendDailyDigest } from "@/lib/reports/dailyDigest";
 import { sendBackupToTelegram } from "@/lib/backup/send";
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { runWithTenant } from "@/lib/db/tenantContext";
+import { bearerTogri } from "@/lib/security/compare";
+import { cleanupOldConversations } from "@/bot/conversationStore";
 
 /**
  * Vercel Cron kuniga bir marta shu route'ni chaqiradi.
@@ -22,8 +24,14 @@ import { runWithTenant } from "@/lib/db/tenantContext";
  */
 export const maxDuration = 60;
 export async function GET(req: Request) {
-  const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  // FAIL-CLOSED: CRON_SECRET sozlanmagan bo'lsa route umuman ishlamaydi.
+  // Ilgari taqqoslash `"Bearer undefined"` bilan mos kelib ketardi — har kim
+  // zaxira olishi, obuna statuslarini o'zgartirishi va barcha mijozlarga
+  // Telegram xabar yuborishi mumkin edi.
+  if (!process.env.CRON_SECRET) {
+    return new Response("Cron sozlanmagan", { status: 503 });
+  }
+  if (!bearerTogri(req.headers.get("authorization"), process.env.CRON_SECRET)) {
     return new Response("Unauthorized", { status: 401 });
   }
 
@@ -86,10 +94,16 @@ export async function GET(req: Request) {
     return 0;
   });
 
+  // Tashlab ketilgan bot suhbatlarini tozalash (24 soatdan eski holatlar).
+  const tozalangan = await cleanupOldConversations().catch((e) => {
+    console.error("Bot suhbatlarini tozalash xatosi:", e);
+    return 0;
+  });
+
   return new Response(
     `OK (zaxira: ${zaxira.holat}, expired: ${expired}, recurring: ${recurringCount}, ` +
       `eslatma: ${eslatma.yuborilgan}, telegramsiz: ${eslatma.telegramsiz.length}, ` +
-      `tasks: ${taskReminders}, digest: ${digest})`,
+      `tasks: ${taskReminders}, digest: ${digest}, suhbat tozalandi: ${tozalangan})`,
     { status: 200 }
   );
 }

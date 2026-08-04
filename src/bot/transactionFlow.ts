@@ -19,7 +19,7 @@ export async function startTransactionFlow(ctx: Context, user: User, turi: "kiri
   const chatId = chatIdOf(ctx);
 
   if (user.businessId) {
-    setFlow(chatId, { step: "category", turi, businessId: user.businessId });
+    await setFlow(chatId, { step: "category", turi, businessId: user.businessId });
     await showCategories(ctx, chatId, turi, user.businessId, false);
     return;
   }
@@ -34,7 +34,7 @@ export async function startTransactionFlow(ctx: Context, user: User, turi: "kiri
     return;
   }
 
-  setFlow(chatId, { step: "business", turi });
+  await setFlow(chatId, { step: "business", turi });
   const keyboard = new InlineKeyboard();
   businesses.forEach((b, i) => {
     keyboard.text(b.nomi, `biz:${b.id}`);
@@ -59,7 +59,7 @@ async function showCategories(
 
   if (categories.length === 0) {
     const msg = "Bu biznesda bu turdagi kategoriyalar hali sozlanmagan. Admin panel orqali qo'shing.";
-    clearFlow(chatId);
+    await clearFlow(chatId);
     if (edit) await ctx.editMessageText(msg);
     else await ctx.reply(msg);
     return;
@@ -78,7 +78,7 @@ async function showCategories(
 
 export async function handleBusinessCallback(ctx: Context) {
   const chatId = chatIdOf(ctx);
-  const flow = getFlow(chatId);
+  const flow = await getFlow(chatId);
   const data = ctx.callbackQuery?.data ?? "";
   const businessId = data.startsWith("biz:") ? data.slice(4) : null;
 
@@ -96,14 +96,14 @@ export async function handleBusinessCallback(ctx: Context) {
     return;
   }
 
-  setFlow(chatId, { ...flow, step: "category", businessId: business.id });
+  await setFlow(chatId, { ...flow, step: "category", businessId: business.id });
   await ctx.answerCallbackQuery();
   await showCategories(ctx, chatId, flow.turi, business.id, true);
 }
 
 export async function handleCategoryCallback(ctx: Context) {
   const chatId = chatIdOf(ctx);
-  const flow = getFlow(chatId);
+  const flow = await getFlow(chatId);
   const data = ctx.callbackQuery?.data ?? "";
   const categoryId = data.startsWith("cat:") ? data.slice(4) : null;
 
@@ -118,7 +118,7 @@ export async function handleCategoryCallback(ctx: Context) {
     return;
   }
 
-  setFlow(chatId, { ...flow, step: "summa", categoryId: category.id, categoryNomi: category.nomi });
+  await setFlow(chatId, { ...flow, step: "summa", categoryId: category.id, categoryNomi: category.nomi });
   await ctx.answerCallbackQuery();
   await ctx.editMessageText(
     `Kategoriya: ${category.nomi}\nEndi summani kiriting (masalan: 1250000 yoki 1 250 000):`
@@ -127,7 +127,7 @@ export async function handleCategoryCallback(ctx: Context) {
 
 export async function handleDateCallback(ctx: Context) {
   const chatId = chatIdOf(ctx);
-  const flow = getFlow(chatId);
+  const flow = await getFlow(chatId);
   const data = ctx.callbackQuery?.data ?? "";
 
   if (!flow || flow.step !== "sana") {
@@ -138,19 +138,19 @@ export async function handleDateCallback(ctx: Context) {
   await ctx.answerCallbackQuery();
 
   if (data === "sana:bugun") {
-    setFlow(chatId, { ...flow, step: "izoh", sana: todayDateOnlyString() });
+    await setFlow(chatId, { ...flow, step: "izoh", sana: todayDateOnlyString() });
     await ctx.editMessageText("Izoh yozing (ixtiyoriy) yoki tugmani bosing:", {
       reply_markup: new InlineKeyboard().text("O'tkazib yuborish", "izoh:skip"),
     });
   } else if (data === "sana:custom") {
-    setFlow(chatId, { ...flow, step: "sana_custom" });
+    await setFlow(chatId, { ...flow, step: "sana_custom" });
     await ctx.editMessageText("Sanani KUN.OY.YIL formatida yozing (masalan: 15.06.2026):");
   }
 }
 
 export async function handleSkipIzohCallback(ctx: Context, user: User) {
   const chatId = chatIdOf(ctx);
-  const flow = getFlow(chatId);
+  const flow = await getFlow(chatId);
   if (!flow || flow.step !== "izoh") {
     await ctx.answerCallbackQuery({ text: "Bu so'rov eskirgan, qaytadan boshlang." });
     return;
@@ -162,7 +162,7 @@ export async function handleSkipIzohCallback(ctx: Context, user: User) {
 /** Matn xabarlarni joriy suhbat holatiga qarab qayta ishlaydi. Agar aktiv flow bo'lmasa false qaytaradi. */
 export async function handleFlowText(ctx: Context, user: User): Promise<boolean> {
   const chatId = chatIdOf(ctx);
-  const flow = getFlow(chatId);
+  const flow = await getFlow(chatId);
   if (!flow) return false;
 
   const text = ctx.message?.text?.trim() ?? "";
@@ -173,7 +173,7 @@ export async function handleFlowText(ctx: Context, user: User): Promise<boolean>
       await ctx.reply("Summani to'g'ri kiriting (masalan: 1250000).");
       return true;
     }
-    setFlow(chatId, { ...flow, step: "sana", summa });
+    await setFlow(chatId, { ...flow, step: "sana", summa });
     await ctx.reply(`Summa: ${formatSomLabel(summa)}\nSanani tanlang:`, {
       reply_markup: new InlineKeyboard().text("Bugun", "sana:bugun").text("Boshqa sana", "sana:custom"),
     });
@@ -188,7 +188,7 @@ export async function handleFlowText(ctx: Context, user: User): Promise<boolean>
     }
     const [, dd, mm, yyyy] = match;
     const sana = `${yyyy}-${mm}-${dd}`;
-    setFlow(chatId, { ...flow, step: "izoh", sana });
+    await setFlow(chatId, { ...flow, step: "izoh", sana });
     await ctx.reply("Izoh yozing (ixtiyoriy) yoki tugmani bosing:", {
       reply_markup: new InlineKeyboard().text("O'tkazib yuborish", "izoh:skip"),
     });
@@ -212,7 +212,7 @@ async function finalizeTransaction(
   const chatId = chatIdOf(ctx);
   if (!flow.businessId || !flow.categoryId || !flow.summa || !flow.sana) {
     await ctx.reply("Xatolik yuz berdi, qaytadan /kirim yoki /chiqim buyrug'ini yuboring.");
-    clearFlow(chatId);
+    await clearFlow(chatId);
     return;
   }
 
@@ -224,7 +224,7 @@ async function finalizeTransaction(
     izoh,
   });
 
-  clearFlow(chatId);
+  await clearFlow(chatId);
 
   await ctx.reply(
     [

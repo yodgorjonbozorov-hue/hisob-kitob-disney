@@ -42,7 +42,7 @@ model Tenant {
 model TenantModule {
   id         String   @id @default(cuid())
   tenantId   String
-  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   code       String   // registry'dagi modul kodi (masalan "OMBOR")
   isActive   Boolean  @default(true)
   sozlamalar String?  // modul-spetsifik sozlamalar (JSON)
@@ -57,7 +57,7 @@ model TenantModule {
 model Subscription {
   id          String   @id @default(cuid())
   tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   plan        String
   status      String   @default("ACTIVE")
   periodStart DateTime
@@ -74,7 +74,7 @@ model Subscription {
 model Payment {
   id         String    @id @default(cuid())
   tenantId   String
-  tenant     Tenant    @relation(fields: [tenantId], references: [id])
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   amount     Int
   provider   String    @default("MANUAL")
   externalId String?
@@ -110,7 +110,7 @@ model Business {
   turi         String        @default("umumiy")
   createdAt    DateTime      @default(now())
   tenantId     String
-  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   categories   Category[]
   transactions Transaction[]
   users        User[]
@@ -149,11 +149,11 @@ model User {
 
   // Tenant a'zoligi. Faqat SUPERADMIN (platforma egasi) uchun null.
   tenantId          String?
-  tenant            Tenant?       @relation(fields: [tenantId], references: [id])
+  tenant            Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   // Kassir bitta biznesga biriktiriladi; owner/admin/seller uchun null (tenant ichidagi barcha bizneslar).
   businessId        String?
-  business          Business?     @relation(fields: [businessId], references: [id])
+  business          Business?     @relation(fields: [businessId], references: [id], onDelete: SetNull)
 
   telegramChatId    String?       @unique
   linkCode          String?
@@ -169,6 +169,25 @@ model AppSetting {
   value String
 }
 
+/// Telegram botdagi ko'p qadamli suhbat holati (/kirim, /lead, /mashina, /sotish).
+///
+/// Nega bazada: production'da bot serverless webhook orqali ishlaydi — har so'rov
+/// boshqa instansiyaga tushishi mumkin, xotiradagi Map bilan oqim o'rtada uziladi.
+/// Bitta chat bir vaqtda bitta oqimda bo'ladi, shuning uchun kalit — chatId.
+///
+/// Bu VAQTINCHALIK holat: zaxira ro'yxatiga (lib/backup/dump.ts) ATAYLAB
+/// qo'shilmagan va 24 soatdan keyin cron tomonidan tozalanadi.
+model BotConversation {
+  chatId    String   @id
+  /// Qaysi oqim: "transaction" | "lead" | "avto"
+  flow      String
+  /// Oqim holati (JSON)
+  state     String
+  updatedAt DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+
 model Category {
   id           String        @id @default(cuid())
   nomi         String
@@ -177,7 +196,7 @@ model Category {
   isActive     Boolean       @default(true)
   createdAt    DateTime      @default(now())
   businessId   String
-  business     Business      @relation(fields: [businessId], references: [id])
+  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
   transactions Transaction[]
   budgets      Budget[]
   recurrings   RecurringTransaction[]
@@ -191,14 +210,14 @@ model Transaction {
   id         String   @id @default(cuid())
   turi       String
   categoryId String
-  category   Category @relation(fields: [categoryId], references: [id])
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   businessId String
-  business   Business @relation(fields: [businessId], references: [id])
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
   summa      Int
   sana       DateTime
   izoh       String?
   userId     String
-  user       User     @relation(fields: [userId], references: [id])
+  user       User     @relation(fields: [userId], references: [id], onDelete: Restrict)
   filial     String?
   createdAt  DateTime @default(now())
   // Soft delete — o'chirilgan yozuv shu vaqt bilan belgilanadi (undo/savat uchun).
@@ -216,7 +235,7 @@ model Transaction {
 model AuditLog {
   id         String    @id @default(cuid())
   businessId String?
-  business   Business? @relation(fields: [businessId], references: [id])
+  business   Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
   userId     String?
   userIsm    String?
   action     String // "create" | "update" | "delete" | "restore"
@@ -236,7 +255,7 @@ model AuditLog {
 model ShiftClose {
   id           String   @id @default(cuid())
   businessId   String
-  business     Business @relation(fields: [businessId], references: [id])
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
   userId       String
   userIsm      String?
   sana         DateTime
@@ -253,9 +272,9 @@ model ShiftClose {
 model RecurringTransaction {
   id            String   @id @default(cuid())
   businessId    String
-  business      Business @relation(fields: [businessId], references: [id])
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   categoryId    String
-  category      Category @relation(fields: [categoryId], references: [id])
+  category      Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   turi          String
   summa         Int
   izoh          String?
@@ -271,9 +290,9 @@ model RecurringTransaction {
 model Budget {
   id         String   @id @default(cuid())
   businessId String
-  business   Business @relation(fields: [businessId], references: [id])
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   categoryId String
-  category   Category @relation(fields: [categoryId], references: [id])
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   oy         String
   limitSumma Int
   createdAt  DateTime @default(now())
@@ -289,7 +308,7 @@ model Budget {
 model Product {
   id           String       @id @default(cuid())
   businessId   String
-  business     Business     @relation(fields: [businessId], references: [id])
+  business     Business     @relation(fields: [businessId], references: [id], onDelete: Restrict)
   nomi         String
   kelganNarx   Int          @default(0) // tannarx (birlik)
   sotuvNarx    Int          @default(0) // sotuv narxi (birlik)
@@ -314,9 +333,9 @@ model Product {
 model ProductExpense {
   id            String   @id @default(cuid())
   businessId    String
-  business      Business @relation(fields: [businessId], references: [id])
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
   productId     String
-  product       Product  @relation(fields: [productId], references: [id])
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
   /// "tamirlash" | "boyoq" | "yuvish" | "rasmiylashtirish" | "ehtiyot_qism" | "boshqa"
   turi          String
   summa         Int
@@ -336,9 +355,9 @@ model ProductExpense {
 model StockEntry {
   id         String   @id @default(cuid())
   businessId String
-  business   Business @relation(fields: [businessId], references: [id])
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
   productId  String
-  product    Product  @relation(fields: [productId], references: [id])
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
   miqdor     Int
   birlikNarx Int // o'sha paytdagi tannarx snapshot
   userId     String
@@ -353,9 +372,9 @@ model StockEntry {
 model Sale {
   id            String   @id @default(cuid())
   businessId    String
-  business      Business @relation(fields: [businessId], references: [id])
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
   productId     String
-  product       Product  @relation(fields: [productId], references: [id])
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
   miqdor        Int
   birlikNarx    Int // sotuv narxi snapshot
   tannarx       Int // kelgan narx snapshot (marja hisobi uchun)
@@ -379,13 +398,13 @@ model Sale {
 model Debt {
   id         String        @id @default(cuid())
   businessId String
-  business   Business      @relation(fields: [businessId], references: [id])
+  business   Business      @relation(fields: [businessId], references: [id], onDelete: Restrict)
   turi       String        @default("olinadigan")
   saleId     String?       @unique
-  sale       Sale?         @relation(fields: [saleId], references: [id])
+  sale       Sale?         @relation(fields: [saleId], references: [id], onDelete: Restrict)
   /// Qarz qaysi mahsulot/mashinaga tegishli (ixtiyoriy).
   productId  String?
-  product    Product?      @relation(fields: [productId], references: [id])
+  product    Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
   mijozNomi  String
   mijozTel   String?
   jamiSumma  Int
@@ -409,7 +428,7 @@ model Debt {
 model Contact {
   id         String    @id @default(cuid())
   businessId String
-  business   Business  @relation(fields: [businessId], references: [id])
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
   ism        String
   tel        String?
   telegram   String?
@@ -428,7 +447,7 @@ model Contact {
 model Stage {
   id         String   @id @default(cuid())
   businessId String
-  business   Business @relation(fields: [businessId], references: [id])
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   nomi       String
   tartib     Int      @default(0)
   turi       String   @default("OPEN")
@@ -442,13 +461,13 @@ model Stage {
 model Deal {
   id            String    @id @default(cuid())
   businessId    String
-  business      Business  @relation(fields: [businessId], references: [id])
+  business      Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
   contactId     String?
-  contact       Contact?  @relation(fields: [contactId], references: [id])
+  contact       Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
   nomi          String
   summa         Int       @default(0)
   stageId       String
-  stage         Stage     @relation(fields: [stageId], references: [id])
+  stage         Stage     @relation(fields: [stageId], references: [id], onDelete: Restrict)
   masulId       String    // mas'ul foydalanuvchi
   manba         String?   // "qolda" | "telegram" | ...
   muddat        DateTime?
@@ -470,14 +489,14 @@ model Deal {
 model Task {
   id          String    @id @default(cuid())
   businessId  String
-  business    Business  @relation(fields: [businessId], references: [id])
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
   nomi        String
   izoh        String?
   holat       String    @default("OCHIQ")
   masulId     String    // mas'ul foydalanuvchi
   muddat      DateTime?
   dealId      String?   // CRM bitimiga bog'lash (ixtiyoriy)
-  deal        Deal?     @relation(fields: [dealId], references: [id])
+  deal        Deal?     @relation(fields: [dealId], references: [id], onDelete: SetNull)
   createdBy   String
   bajarildiAt DateTime?
   createdAt   DateTime  @default(now())
@@ -492,11 +511,11 @@ model Task {
 model Activity {
   id         String   @id @default(cuid())
   businessId String
-  business   Business @relation(fields: [businessId], references: [id])
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   contactId  String?
-  contact    Contact? @relation(fields: [contactId], references: [id])
+  contact    Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
   dealId     String?
-  deal       Deal?    @relation(fields: [dealId], references: [id])
+  deal       Deal?    @relation(fields: [dealId], references: [id], onDelete: SetNull)
   turi       String   // "izoh" | "qongiroq" | "uchrashuv" | "tizim"
   matn       String
   userId     String
@@ -510,9 +529,9 @@ model Activity {
 model DebtPayment {
   id            String   @id @default(cuid())
   debtId        String
-  debt          Debt     @relation(fields: [debtId], references: [id])
+  debt          Debt     @relation(fields: [debtId], references: [id], onDelete: Restrict)
   businessId    String
-  business      Business @relation(fields: [businessId], references: [id])
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
   summa         Int
   userId        String
   transactionId String?

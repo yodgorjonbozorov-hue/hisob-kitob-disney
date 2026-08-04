@@ -50,6 +50,17 @@ export const ZAXIRA_JADVALLARI = [
 
 export type ZaxiraJadval = (typeof ZAXIRA_JADVALLARI)[number];
 
+/**
+ * ATAYLAB zaxiraga kirmaydigan jadvallar — vaqtinchalik holat.
+ * Ularni tiklashning ma'nosi yo'q (va ba'zilari shaxsiy ma'lumot saqlaydi).
+ * Yangi model qo'shsangiz: yo ZAXIRA_JADVALLARI ga, yo shu ro'yxatga — uchinchi
+ * variant yo'q (`tests/backup.test.ts` buni majburlaydi).
+ */
+export const ZAXIRASIZ_JADVALLAR = [
+  // Telegram botdagi yarim tugallangan suhbat holati, 24 soatdan keyin tozalanadi.
+  "botConversation",
+] as const;
+
 export type Zaxira = {
   version: number;
   /** ISO sana — zaxira olingan payt */

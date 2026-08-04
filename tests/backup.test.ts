@@ -87,7 +87,10 @@ after(async () => {
 test("ZAXIRA_JADVALLARI schema'dagi BARCHA modellarni qamrab oladi", () => {
   const schema = readFileSync("prisma/schema.prisma", "utf8");
   const modellar = [...schema.matchAll(/^model\s+(\w+)\s*\{/gm)].map((m) => m[1]);
-  const kutilgan = modellar.map((m) => m[0].toLowerCase() + m.slice(1));
+  const kutilgan = modellar
+    .map((m) => m[0].toLowerCase() + m.slice(1))
+    // Vaqtinchalik holat jadvallari ataylab zaxiraga kirmaydi (dump.ts da ro'yxat bor).
+    .filter((m) => !backup.ZAXIRASIZ_JADVALLAR.includes(m));
 
   const yoq = kutilgan.filter((m) => !backup.ZAXIRA_JADVALLARI.includes(m));
   assert.deepEqual(
@@ -95,7 +98,7 @@ test("ZAXIRA_JADVALLARI schema'dagi BARCHA modellarni qamrab oladi", () => {
     [],
     `Bu modellar zaxiraga tushmaydi — src/lib/backup/dump.ts dagi ZAXIRA_JADVALLARI ga qo'shing: ${yoq.join(", ")}`
   );
-  assert.equal(backup.ZAXIRA_JADVALLARI.length, modellar.length);
+  assert.equal(backup.ZAXIRA_JADVALLARI.length + backup.ZAXIRASIZ_JADVALLAR.length, modellar.length);
 });
 
 test("createDump: barcha tenantlar ma'lumotini oladi", async () => {

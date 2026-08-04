@@ -13,20 +13,27 @@ let handleUpdate: UpdateHandler | null = null;
  * yuklash bilan build env'siz ham o'tadi, token faqat haqiqiy webhook so'rovida
  * kerak bo'ladi.
  */
-async function getHandler(): Promise<UpdateHandler> {
+async function getHandler(secretToken: string): Promise<UpdateHandler> {
   if (!handleUpdate) {
     const { bot } = await import("@/bot/bot");
-    handleUpdate = webhookCallback(bot, "std/http", {
-      secretToken: process.env.TELEGRAM_WEBHOOK_SECRET,
-    }) as UpdateHandler;
+    handleUpdate = webhookCallback(bot, "std/http", { secretToken }) as UpdateHandler;
   }
   return handleUpdate;
 }
 
 /** Production'da Telegram shu route'ga so'rov yuboradi (long-polling emas). */
 export async function POST(req: Request) {
+  // FAIL-CLOSED: secret yo'q bo'lsa grammy'ga `undefined` uzatilardi va u
+  // tekshiruvni BUTUNLAY o'tkazib yuborardi — istalgan odam soxta "yangilanish"
+  // yuborib bot nomidan amal bajara olardi.
+  const secretToken = process.env.TELEGRAM_WEBHOOK_SECRET;
+  if (!secretToken) {
+    console.error("TELEGRAM_WEBHOOK_SECRET sozlanmagan — webhook o'chirilgan.");
+    return new Response("Webhook sozlanmagan", { status: 503 });
+  }
+
   try {
-    const handler = await getHandler();
+    const handler = await getHandler(secretToken);
     return await handler(req);
   } catch (error) {
     console.error("Webhook xatosi:", error);
