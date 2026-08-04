@@ -3,6 +3,7 @@ import { computeAccess } from "@/lib/billing/access";
 import { planByCode } from "@/lib/billing/plans";
 import { hashPassword } from "@/lib/auth/password";
 import { BadRequestError } from "@/lib/auth/guard";
+import { normalizeKompaniyaNomi } from "@/lib/services/signup";
 
 /**
  * SUPERADMIN xizmat qatlami — barcha amallar rawPrisma bilan (tenantlar aro)
@@ -46,6 +47,10 @@ export interface TenantOverview {
   businessCount: number;
   lastActivity: Date | null;
   pendingPayments: number;
+  /** Shu nomdagi boshqa kompaniya ham bor — ehtimoliy takror ro'yxatdan o'tish. */
+  takrorMi: boolean;
+  /** Ma'lumot kiritilmagan (tranzaksiya/mahsulot/qarz yo'q) — xavfsiz o'chirsa bo'ladi. */
+  bosh: boolean;
 }
 
 /** Barcha tenantlar ro'yxati (panel jadvali uchun). */
@@ -63,6 +68,17 @@ export async function listTenantsOverview(): Promise<TenantOverview[]> {
     _count: { _all: true },
   });
   const pendingMap = new Map(pending.map((p) => [p.tenantId, p._count._all]));
+
+  // Bir xil nomli kompaniyalar — takror ro'yxatdan o'tish belgisi (masalan
+  // "RedFlora" va "RedFlora" ikki marta). Nom registr/apostrofsiz solishtiriladi.
+  const nomSoni = new Map<string, number>();
+  for (const t of tenants) {
+    const kalit = normalizeKompaniyaNomi(t.name);
+    nomSoni.set(kalit, (nomSoni.get(kalit) ?? 0) + 1);
+  }
+
+  // Qaysi tenantlarda umuman ish ma'lumoti bor — bo'sh dublikatni ajratish uchun.
+  const bandTenantlar = await tenantsWithData();
 
   return tenants.map((t) => {
     const lastActivity = t.users.reduce<Date | null>((acc, u) => {
@@ -82,8 +98,80 @@ export async function listTenantsOverview(): Promise<TenantOverview[]> {
       businessCount: t._count.businesses,
       lastActivity,
       pendingPayments: pendingMap.get(t.id) ?? 0,
+      takrorMi: (nomSoni.get(normalizeKompaniyaNomi(t.name)) ?? 0) > 1,
+      bosh: !bandTenantlar.has(t.id),
     };
   });
+}
+
+/**
+ * Ish ma'lumoti (tranzaksiya, mahsulot, sotuv, qarz, kontakt, bitim, vazifa)
+ * kiritilgan tenantlar to'plami. Bo'sh tenant — xatoga ochilgan dublikat.
+ */
+async function tenantsWithData(): Promise<Set<string>> {
+  const bandlar = new Set<string>();
+  const bizneslar = await rawPrisma.business.findMany({
+    select: {
+      tenantId: true,
+      _count: {
+        select: {
+          transactions: true,
+          products: true,
+          sales: true,
+          debts: true,
+          contacts: true,
+          deals: true,
+          tasks: true,
+        },
+      },
+    },
+  });
+  for (const b of bizneslar) {
+    const jami = Object.values(b._count).reduce((a, n) => a + n, 0);
+    if (jami > 0) bandlar.add(b.tenantId);
+  }
+  return bandlar;
+}
+
+/**
+ * BO'SH tenantni butunlay o'chiradi — faqat xatoga ochilgan takror yozuvlar uchun.
+ * Ish ma'lumoti (tranzaksiya/mahsulot/sotuv/qarz/CRM/vazifa) yoki tasdiqlangan
+ * to'lovi bo'lsa o'chirilmaydi: bunday tenantni bloklash kerak, o'chirish emas.
+ */
+export async function deleteEmptyTenant(tenantId: string): Promise<{ name: string }> {
+  const tenant = await rawPrisma.tenant.findUnique({ where: { id: tenantId }, select: { id: true, name: true } });
+  if (!tenant) throw new BadRequestError("Kompaniya topilmadi");
+
+  const band = await tenantsWithData();
+  if (band.has(tenantId)) {
+    throw new BadRequestError(
+      "Bu kompaniyada ish ma'lumotlari bor — o'chirib bo'lmaydi. Kerak bo'lsa bloklang."
+    );
+  }
+  const tolov = await rawPrisma.payment.count({ where: { tenantId, status: "CONFIRMED" } });
+  if (tolov > 0) {
+    throw new BadRequestError("Bu kompaniyada tasdiqlangan to'lov bor — o'chirib bo'lmaydi.");
+  }
+
+  const bizneslar = await rawPrisma.business.findMany({ where: { tenantId }, select: { id: true } });
+  const businessIds = bizneslar.map((b) => b.id);
+
+  // Bog'liq yozuvlar chetdan markazga: kategoriya/audit -> biznes -> tenant.
+  await rawPrisma.$transaction(async (tx) => {
+    if (businessIds.length > 0) {
+      await tx.category.deleteMany({ where: { businessId: { in: businessIds } } });
+      await tx.auditLog.deleteMany({ where: { businessId: { in: businessIds } } });
+      await tx.stage.deleteMany({ where: { businessId: { in: businessIds } } });
+    }
+    await tx.user.deleteMany({ where: { tenantId } });
+    await tx.business.deleteMany({ where: { tenantId } });
+    await tx.tenantModule.deleteMany({ where: { tenantId } });
+    await tx.subscription.deleteMany({ where: { tenantId } });
+    await tx.payment.deleteMany({ where: { tenantId } });
+    await tx.tenant.delete({ where: { id: tenantId } });
+  });
+
+  return { name: tenant.name };
 }
 
 export interface Metrics {

@@ -36,6 +36,7 @@ export const ZAXIRA_JADVALLARI = [
   "recurringTransaction",
   "budget",
   "product",
+  "productExpense",
   "stockEntry",
   "sale",
   "debt",

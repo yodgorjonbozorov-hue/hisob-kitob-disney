@@ -65,6 +65,40 @@ async function uniqueSlug(base: string): Promise<string> {
   return `${base}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/**
+ * Kompaniya nomini taqqoslash uchun soddalashtiradi: registr, apostrof va
+ * ortiqcha bo'shliqlar hisobga olinmaydi ("RedFlora" ≈ "red flora").
+ */
+export function normalizeKompaniyaNomi(nomi: string): string {
+  return nomi
+    .toLowerCase()
+    .replace(/['ʼ’`]/g, "")
+    .replace(/[^a-z0-9а-яё]+/gi, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+/** Takroriy ro'yxatdan o'tishni ushlash oynasi (daqiqa). */
+export const TAKROR_OYNA_DAQIQA = 10;
+
+/**
+ * Shu nom bilan YAQINDA ochilgan kompaniyani topadi — tugma ikki marta
+ * bosilgani yoki so'rov qayta yuborilgani natijasida ikkinchi tenant
+ * ochilib ketmasligi uchun. Eski (bir necha kun oldingi) bir xil nomlar
+ * bloklanmaydi: ular haqiqiy boshqa mijoz bo'lishi mumkin — ular superadmin
+ * panelida "takror?" belgisi bilan ko'rinadi.
+ */
+export async function findRecentDuplicateTenant(kompaniyaNomi: string, daqiqa = TAKROR_OYNA_DAQIQA) {
+  const normal = normalizeKompaniyaNomi(kompaniyaNomi);
+  if (!normal) return null;
+  const chegara = new Date(Date.now() - daqiqa * 60 * 1000);
+  const yaqinda = await rawPrisma.tenant.findMany({
+    where: { createdAt: { gte: chegara } },
+    select: { id: true, name: true, slug: true, createdAt: true },
+  });
+  return yaqinda.find((t) => normalizeKompaniyaNomi(t.name) === normal) ?? null;
+}
+
 export interface SignupParams {
   kompaniyaNomi: string;
   ism: string;

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { getSession } from "@/lib/auth/session";
 import { signupSchema, normalizePhone } from "@/lib/validation/auth";
-import { createTenantWithOwner } from "@/lib/services/signup";
+import { createTenantWithOwner, findRecentDuplicateTenant } from "@/lib/services/signup";
 import { rateLimit } from "@/lib/rateLimit";
 import { getClientIp } from "@/lib/services/audit";
 
@@ -39,6 +39,20 @@ export async function POST(request: NextRequest) {
   if (existing) {
     return NextResponse.json(
       { error: "Bu telefon raqam allaqachon ro'yxatdan o'tgan. Tizimga kiring." },
+      { status: 409 }
+    );
+  }
+
+  // Takroriy yuborish himoyasi: shu nomdagi kompaniya hozirgina ochilgan bo'lsa
+  // ikkinchi tenant yaratilmaydi (tugma ikki marta bosilgan yoki so'rov qaytarilgan).
+  const takror = await findRecentDuplicateTenant(parsed.data.kompaniya);
+  if (takror) {
+    return NextResponse.json(
+      {
+        error:
+          "Bu nomdagi kompaniya hozirgina ro'yxatdan o'tdi. Tizimga kiring — ikkinchi marta " +
+          "ro'yxatdan o'tish shart emas.",
+      },
       { status: 409 }
     );
   }
