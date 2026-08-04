@@ -180,7 +180,7 @@ const ms = (d: Date | null | undefined): number => (d ? d.getTime() : 0);
 
 /**
  * Payme JSON-RPC so'rovini bajaradi. HTTP qatlami (route) faqat auth va
- * JSON parse bilan shug'ullanadi — protokol mantiqи shu yerda (test qilinadi).
+ * JSON parse bilan shug'ullanadi — protokol mantigi shu yerda (test qilinadi).
  */
 export async function handlePaymeRequest(
   body: RpcRequest,

@@ -1,4 +1,6 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { businessQueryRaw, businessScope, songa } from "@/lib/db/businessRaw";
 
 export interface ProductAdminDTO {
   id: string;
@@ -178,45 +180,52 @@ export interface ProductProfitDTO {
  * Avto rejimida sof foyda = sotilgan narx − olingan narx − mashinaga qilingan xarajatlar.
  */
 export async function getProductProfitability(businessId: string): Promise<ProductProfitDTO[]> {
-  const [sales, xarajatlar] = await Promise.all([
-    prisma.sale.findMany({
-      where: { businessId },
-      include: { product: { select: { nomi: true } } },
-    }),
-    prisma.productExpense.groupBy({
-      by: ["productId"],
-      where: { businessId },
-      _sum: { summa: true },
-    }),
-  ]);
-  const xarajatMap = new Map(xarajatlar.map((x) => [x.productId, x._sum.summa ?? 0]));
+  // Ilgari BARCHA sotuvlar RAM'ga yuklanib JS'da guruhlanardi — 100 000 sotuvli
+  // biznesda bu serverni yiqitardi. Endi guruhlash SQL'da (`SUM(tannarx*miqdor)`
+  // ni Prisma qila olmaydi, shuning uchun xom so'rov — tenant sharti SQL ichida).
+  const rows = await businessQueryRaw<{
+    productId: string;
+    nomi: string;
+    sotilgan: unknown;
+    daromad: unknown;
+    tannarx: unknown;
+    xarajat: unknown;
+  }>(Prisma.sql`
+    SELECT
+      s."productId"                     AS productId,
+      p."nomi"                          AS nomi,
+      SUM(s."miqdor")                   AS sotilgan,
+      SUM(s."jamiSumma")                AS daromad,
+      SUM(s."tannarx" * s."miqdor")     AS tannarx,
+      COALESCE((
+        SELECT SUM(e."summa") FROM "ProductExpense" e
+        WHERE e."productId" = s."productId" AND e."businessId" = s."businessId"
+      ), 0)                             AS xarajat
+    FROM "Sale" s
+    JOIN "Business" b ON b."id" = s."businessId"
+    JOIN "Product" p ON p."id" = s."productId"
+    WHERE ${businessScope("s", businessId)}
+    GROUP BY s."productId", p."nomi"
+  `);
 
-  const map = new Map<string, ProductProfitDTO>();
-  for (const s of sales) {
-    let p = map.get(s.productId);
-    if (!p) {
-      p = {
-        productId: s.productId,
-        nomi: s.product.nomi,
-        sotilgan: 0,
-        daromad: 0,
-        tannarx: 0,
-        xarajat: xarajatMap.get(s.productId) ?? 0,
-        foyda: 0,
-        marja: 0,
+  return rows
+    .map((r) => {
+      const daromad = songa(r.daromad);
+      const tannarx = songa(r.tannarx);
+      const xarajat = songa(r.xarajat);
+      const foyda = daromad - tannarx - xarajat;
+      return {
+        productId: r.productId,
+        nomi: r.nomi,
+        sotilgan: songa(r.sotilgan),
+        daromad,
+        tannarx,
+        xarajat,
+        foyda,
+        marja: daromad > 0 ? Math.round((foyda / daromad) * 100) : 0,
       };
-      map.set(s.productId, p);
-    }
-    p.sotilgan += s.miqdor;
-    p.daromad += s.jamiSumma;
-    p.tannarx += s.tannarx * s.miqdor;
-  }
-  const list = Array.from(map.values());
-  list.forEach((p) => {
-    p.foyda = p.daromad - p.tannarx - p.xarajat;
-    p.marja = p.daromad > 0 ? Math.round((p.foyda / p.daromad) * 100) : 0;
-  });
-  return list.sort((a, b) => b.foyda - a.foyda);
+    })
+    .sort((a, b) => b.foyda - a.foyda);
 }
 
 export interface ProductExpenseDTO {
