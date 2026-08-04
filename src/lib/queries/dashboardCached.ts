@@ -1,0 +1,24 @@
+import { keshlangan } from "@/lib/cache";
+import {
+  getMonthSummary,
+  getCategoryBreakdown,
+  getTrend,
+  getDailyDynamics,
+} from "@/lib/queries/dashboard";
+
+/**
+ * Dashboard so'rovlarining KESHLANGAN variantlari (60 s).
+ *
+ * Nega alohida fayl: `next/cache` faqat Next runtime'ida ishlaydi, shuning
+ * uchun `queries/dashboard.ts` toza (keshsiz) qoladi — testlar, bot va
+ * cron o'sha yerdan to'g'ridan-to'g'ri chaqiradi va har doim eng yangi
+ * raqamni oladi. Sahifalar esa shu yerdan oladi.
+ *
+ * Yozuv o'zgarganda kesh `dashboardYangilandi(businessId)` bilan bekor
+ * qilinadi (lib/cache.ts) — foydalanuvchi 60 soniya kutmaydi.
+ */
+
+export const getMonthSummaryKesh = keshlangan("dashboard:oylik-xulosa", getMonthSummary);
+export const getCategoryBreakdownKesh = keshlangan("dashboard:kategoriya", getCategoryBreakdown);
+export const getTrendKesh = keshlangan("dashboard:trend", getTrend);
+export const getDailyDynamicsKesh = keshlangan("dashboard:kunlik", getDailyDynamics);

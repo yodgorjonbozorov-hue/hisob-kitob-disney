@@ -5,6 +5,7 @@ import { createSaleSchema } from "@/lib/validation/inventory";
 import { resolveActiveBusinessId, requireOmborli } from "@/lib/business";
 import { createSale } from "@/lib/services/inventory";
 import { listRecentSales } from "@/lib/queries/inventory";
+import { dashboardYangilandi } from "@/lib/cache";
 
 export const GET = withTenant(async (_request, _ctx, { session: user }) => {
   forbidSeller(user.rol);
@@ -42,5 +43,6 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
     userId: user.userId,
   });
 
+  dashboardYangilandi(businessId);
   return NextResponse.json(sale, { status: 201 });
 }, { module: "OMBOR" });

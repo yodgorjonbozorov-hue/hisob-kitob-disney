@@ -6,6 +6,7 @@ import { createTransaction } from "@/lib/services/transactionService";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { logAudit, getClientIp } from "@/lib/services/audit";
+import { dashboardYangilandi } from "@/lib/cache";
 
 export const GET = withTenant(async (request, _ctx, { session: user }) => {
 
@@ -52,5 +53,6 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
     ip: getClientIp(request),
   });
 
+  dashboardYangilandi(businessId);
   return NextResponse.json(transaction, { status: 201 });
 });

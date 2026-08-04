@@ -13,12 +13,14 @@ import { runWithTenant } from "@/lib/db/tenantContext";
 import { isManager } from "@/lib/auth/roles";
 import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
+// Dashboard raqamlari 60 soniya keshlanadi; yozuv o'zgarganda kesh darhol
+// bekor qilinadi (lib/cache.ts -> dashboardYangilandi).
 import {
-  getMonthSummary,
-  getCategoryBreakdown,
-  getTrend,
-  getDailyDynamics,
-} from "@/lib/queries/dashboard";
+  getMonthSummaryKesh,
+  getCategoryBreakdownKesh,
+  getTrendKesh,
+  getDailyDynamicsKesh,
+} from "@/lib/queries/dashboardCached";
 import { getDebtTotals } from "@/lib/queries/inventory";
 import { getTodayTotals } from "@/lib/queries/shift";
 import { listTransactions } from "@/lib/queries/transactions";
@@ -85,11 +87,11 @@ export default async function DashboardPage({
 
   const business = await getActiveBusiness(session);
   const [summary, kirimBreakdown, chiqimBreakdown, trend, daily, qarzTotal, categoryCount] = await Promise.all([
-    getMonthSummary(businessId, month),
-    getCategoryBreakdown(businessId, month, "kirim"),
-    getCategoryBreakdown(businessId, month, "chiqim"),
-    getTrend(businessId, 6, month),
-    getDailyDynamics(businessId, month),
+    getMonthSummaryKesh(businessId, month),
+    getCategoryBreakdownKesh(businessId, month, "kirim"),
+    getCategoryBreakdownKesh(businessId, month, "chiqim"),
+    getTrendKesh(businessId, 6, month),
+    getDailyDynamicsKesh(businessId, month),
     business?.omborli ? getDebtTotals(businessId) : Promise.resolve({ olinadigan: 0, beriladigan: 0, sof: 0 }),
     prisma.category.count({ where: { businessId } }),
   ]);

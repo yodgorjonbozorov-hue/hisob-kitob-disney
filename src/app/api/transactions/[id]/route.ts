@@ -7,6 +7,7 @@ import { updateTransactionSchema } from "@/lib/validation/transaction";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { logAudit, getClientIp } from "@/lib/services/audit";
+import { dashboardYangilandi } from "@/lib/cache";
 
 export const PATCH = withTenant<{ params: { id: string } }>(async (request, { params }, { session: user }) => {
   const businessId = await resolveActiveBusinessId(user);
@@ -68,6 +69,7 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
     ip: getClientIp(request),
   });
 
+  dashboardYangilandi(existing.businessId);
   return NextResponse.json(updated);
 });
 
@@ -95,6 +97,7 @@ export const DELETE = withTenant<{ params: { id: string } }>(async (request, { p
       before: { turi: existing.turi, summa: existing.summa, permanent: true },
       ip: getClientIp(request),
     });
+    dashboardYangilandi(existing.businessId);
     return NextResponse.json({ ok: true, permanent: true });
   }
 
@@ -106,5 +109,6 @@ export const DELETE = withTenant<{ params: { id: string } }>(async (request, { p
     before: { turi: existing.turi, summa: existing.summa, categoryId: existing.categoryId },
     ip: getClientIp(request),
   });
+  dashboardYangilandi(existing.businessId);
   return NextResponse.json({ ok: true });
 });

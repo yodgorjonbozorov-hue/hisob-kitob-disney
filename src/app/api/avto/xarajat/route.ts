@@ -5,6 +5,7 @@ import { createProductExpenseSchema } from "@/lib/validation/inventory";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { addProductExpense } from "@/lib/services/inventory";
 import { listProductExpenses } from "@/lib/queries/inventory";
+import { dashboardYangilandi } from "@/lib/cache";
 
 /**
  * Mashinaga xarajat qo'shish (ta'mirlash, bo'yoq, yuvish, rasmiylashtirish...).
@@ -34,6 +35,7 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
     userId: user.userId,
   });
 
+  dashboardYangilandi(businessId);
   return NextResponse.json(xarajat, { status: 201 });
 }, { module: "OMBOR" });
 
