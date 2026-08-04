@@ -1,4 +1,3 @@
-import { bot } from "@/bot/bot";
 import { checkAndSendMonthlyReport } from "@/bot/scheduler";
 import { generateDueRecurring } from "@/lib/services/recurring";
 import { sendExpiryWarnings } from "@/lib/billing/notify";
@@ -27,6 +26,11 @@ export async function GET(req: Request) {
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return new Response("Unauthorized", { status: 401 });
   }
+
+  // Bot moduli TELEGRAM_BOT_TOKEN'ni import paytida talab qiladi — shuning uchun
+  // statik emas, shu yerda yuklanadi (build env'siz ham o'tsin; lib/tasks/service.ts
+  // dagi bilan bir xil usul).
+  const { bot } = await import("@/bot/bot");
 
   // ENG AVVAL zaxira: quyidagi biror qadam yiqilsa ham kunlik zaxira olinib bo'lgan bo'ladi.
   const zaxira = await sendBackupToTelegram().catch((e) => {
