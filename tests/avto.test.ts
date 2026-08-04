@@ -544,3 +544,89 @@ test("tenant izolyatsiyasi: B tenant A ning mashinasiga xarajat yoza olmaydi", a
     )
   );
 });
+
+// ---------- Kelishilgan narx bilan sotuv ----------
+
+test("kelishilgan narx sotuvda ishlatiladi va kartochkada saqlanadi", async () => {
+  const mashina = await runWithTenant(tA.tenant.id, () =>
+    inventory.createAvtoMashina({
+      businessId: tA.business.id,
+      nomi: "Tracker",
+      olinganNarx: 180_000_000,
+      sotuvNarx: 210_000_000, // reja
+      tolovTuri: "naqd",
+      userId: tA.user.id,
+    })
+  );
+
+  await runWithTenant(tA.tenant.id, () =>
+    inventory.createSale({
+      businessId: tA.business.id,
+      productId: mashina.id,
+      miqdor: 1,
+      tolovTuri: "naqd",
+      narx: 203_000_000, // savdolashib kelishildi
+      userId: tA.user.id,
+    })
+  );
+
+  const foyda = await runWithTenant(tA.tenant.id, () => queries.getProductProfitability(tA.business.id));
+  const tracker = foyda.find((p: any) => p.nomi === "Tracker");
+  assert.equal(tracker.daromad, 203_000_000);
+  assert.equal(tracker.foyda, 23_000_000);
+
+  const kartochka = await runWithTenant(tA.tenant.id, () =>
+    prisma.product.findUnique({ where: { id: mashina.id } })
+  );
+  assert.equal(kartochka.sotuvNarx, 203_000_000, "haqiqiy narx kartochkada turishi kerak");
+
+  // Naqd kirim ham kelishilgan summa bo'yicha yozilishi kerak.
+  const kirim = await runWithTenant(tA.tenant.id, () =>
+    prisma.transaction.findFirst({
+      where: { businessId: tA.business.id, turi: "kirim", summa: 203_000_000 },
+    })
+  );
+  assert.ok(kirim, "kirim kelishilgan summada yozilmadi");
+});
+
+test("narxsiz mashinani narx ko'rsatib sotish mumkin", async () => {
+  const mashina = await runWithTenant(tA.tenant.id, () =>
+    inventory.createAvtoMashina({
+      businessId: tA.business.id,
+      nomi: "Tico",
+      olinganNarx: 30_000_000,
+      // sotuvNarx qo'yilmagan
+      tolovTuri: "naqd",
+      userId: tA.user.id,
+    })
+  );
+
+  // Narxsiz sotib bo'lmaydi.
+  await assert.rejects(
+    () =>
+      runWithTenant(tA.tenant.id, () =>
+        inventory.createSale({
+          businessId: tA.business.id,
+          productId: mashina.id,
+          miqdor: 1,
+          tolovTuri: "naqd",
+          userId: tA.user.id,
+        })
+      ),
+    /narx/i
+  );
+
+  // Narx ko'rsatilsa — sotiladi.
+  await runWithTenant(tA.tenant.id, () =>
+    inventory.createSale({
+      businessId: tA.business.id,
+      productId: mashina.id,
+      miqdor: 1,
+      tolovTuri: "naqd",
+      narx: 35_000_000,
+      userId: tA.user.id,
+    })
+  );
+  const foyda = await runWithTenant(tA.tenant.id, () => queries.getProductProfitability(tA.business.id));
+  assert.equal(foyda.find((p: any) => p.nomi === "Tico").foyda, 5_000_000);
+});

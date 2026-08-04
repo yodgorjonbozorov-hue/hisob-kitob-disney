@@ -254,3 +254,133 @@ test("bot orqali kiritilgan xarajat sof foydaga ta'sir qiladi", async () => {
   // 170 − 150 − 3 = 17 mln (xarajatsiz 20 mln ko'rinardi).
   assert.equal(g.foyda, 17_000_000);
 });
+
+// ---------- /sotish oqimi ----------
+
+test("/sotish: kelishilgan narx bilan sotiladi va sof foyda xarajatlardan keyin", async () => {
+  const chatId = "790";
+  // Yangi mashina: 100 mln ga olindi, rejada 120 mln.
+  const mashina = await runWithTenant(tA.tenant.id, () =>
+    inventory.createAvtoMashina({
+      businessId: tA.business.id,
+      nomi: "Lacetti",
+      olinganNarx: 100_000_000,
+      sotuvNarx: 120_000_000,
+      tolovTuri: "naqd",
+      userId: tA.user.id,
+    })
+  );
+  await runWithTenant(tA.tenant.id, () =>
+    inventory.addProductExpense({
+      businessId: tA.business.id,
+      productId: mashina.id,
+      turi: "tamirlash",
+      summa: 4_000_000,
+      userId: tA.user.id,
+    })
+  );
+
+  const boshCtx = fakeCtx(chatId);
+  await runWithTenant(tA.tenant.id, () => avtoFlow.startSotishFlow(boshCtx, tA.user));
+  assert.match(boshCtx.replies[0], /qaysi mashina sotildi/i);
+
+  const mashinaCtx: any = fakeCtx(chatId);
+  mashinaCtx.callbackQuery = { data: `sxm:${mashina.id}` };
+  mashinaCtx.answerCallbackQuery = async () => {};
+  let korsatilgan = "";
+  mashinaCtx.editMessageText = async (t: string) => { korsatilgan = t; };
+  await runWithTenant(tA.tenant.id, () => avtoFlow.handleSotishMashinaCallback(mashinaCtx));
+  assert.match(korsatilgan, /Xarajatlar/, "tanlashda xarajat ko'rsatilishi kerak");
+
+  // Savdolashib 115 mln ga kelishildi (rejadagi 120 emas).
+  await runWithTenant(tA.tenant.id, () => avtoFlow.handleAvtoText(fakeCtx(chatId, "115 mln"), tA.user));
+
+  const tolovCtx: any = fakeCtx(chatId);
+  tolovCtx.callbackQuery = { data: "stol:naqd" };
+  tolovCtx.answerCallbackQuery = async () => {};
+  tolovCtx.editMessageText = async () => {};
+  await runWithTenant(tA.tenant.id, () => avtoFlow.handleSotishTolovCallback(tolovCtx, tA.user));
+
+  // Javobda sof foyda: 115 − 100 − 4 = 11 mln.
+  assert.match(tolovCtx.replies.join("\n"), /SOF FOYDA/);
+  assert.match(tolovCtx.replies.join("\n"), /11 000 000/);
+
+  const foyda = await runWithTenant(tA.tenant.id, () => queries.getProductProfitability(tA.business.id));
+  const lacetti = foyda.find((p: any) => p.nomi === "Lacetti");
+  assert.equal(lacetti.daromad, 115_000_000, "kelishilgan narx yozilishi kerak");
+  assert.equal(lacetti.xarajat, 4_000_000);
+  assert.equal(lacetti.foyda, 11_000_000);
+
+  const sotilgan = await runWithTenant(tA.tenant.id, () =>
+    prisma.product.findUnique({ where: { id: mashina.id } })
+  );
+  assert.equal(sotilgan.miqdor, 0, "mashina avtoparkdan chiqishi kerak");
+  assert.equal(sotilgan.sotuvNarx, 115_000_000, "kartochkada haqiqiy narx turishi kerak");
+});
+
+test("/sotish: qarzga sotilganda xaridor nomi bilan qarzdorlik ochiladi", async () => {
+  const chatId = "791";
+  const mashina = await runWithTenant(tA.tenant.id, () =>
+    inventory.createAvtoMashina({
+      businessId: tA.business.id,
+      nomi: "Matiz",
+      olinganNarx: 50_000_000,
+      tolovTuri: "naqd",
+      userId: tA.user.id,
+    })
+  );
+
+  await runWithTenant(tA.tenant.id, () => avtoFlow.startSotishFlow(fakeCtx(chatId), tA.user));
+  const mashinaCtx: any = fakeCtx(chatId);
+  mashinaCtx.callbackQuery = { data: `sxm:${mashina.id}` };
+  mashinaCtx.answerCallbackQuery = async () => {};
+  mashinaCtx.editMessageText = async () => {};
+  await runWithTenant(tA.tenant.id, () => avtoFlow.handleSotishMashinaCallback(mashinaCtx));
+
+  await runWithTenant(tA.tenant.id, () => avtoFlow.handleAvtoText(fakeCtx(chatId, "58 mln"), tA.user));
+
+  const tolovCtx: any = fakeCtx(chatId);
+  tolovCtx.callbackQuery = { data: "stol:qarz" };
+  tolovCtx.answerCallbackQuery = async () => {};
+  tolovCtx.editMessageText = async () => {};
+  await runWithTenant(tA.tenant.id, () => avtoFlow.handleSotishTolovCallback(tolovCtx, tA.user));
+
+  const oxirgi = fakeCtx(chatId, "Sardor aka");
+  await runWithTenant(tA.tenant.id, () => avtoFlow.handleAvtoText(oxirgi, tA.user));
+  assert.match(oxirgi.replies.join("\n"), /Sardor aka/);
+
+  const qarz = await runWithTenant(tA.tenant.id, () =>
+    prisma.debt.findFirst({ where: { businessId: tA.business.id, mijozNomi: "Sardor aka" } })
+  );
+  assert.equal(qarz.turi, "olinadigan", "xaridor bizga qarzdor");
+  assert.equal(qarz.jamiSumma, 58_000_000);
+});
+
+test("/sotish: narx noto'g'ri kiritilsa sotuv bo'lmaydi", async () => {
+  const chatId = "792";
+  const mashina = await runWithTenant(tA.tenant.id, () =>
+    inventory.createAvtoMashina({
+      businessId: tA.business.id,
+      nomi: "Damas",
+      olinganNarx: 80_000_000,
+      tolovTuri: "naqd",
+      userId: tA.user.id,
+    })
+  );
+  await runWithTenant(tA.tenant.id, () => avtoFlow.startSotishFlow(fakeCtx(chatId), tA.user));
+  const mashinaCtx: any = fakeCtx(chatId);
+  mashinaCtx.callbackQuery = { data: `sxm:${mashina.id}` };
+  mashinaCtx.answerCallbackQuery = async () => {};
+  mashinaCtx.editMessageText = async () => {};
+  await runWithTenant(tA.tenant.id, () => avtoFlow.handleSotishMashinaCallback(mashinaCtx));
+
+  const xatoCtx = fakeCtx(chatId, "kelishamiz");
+  await runWithTenant(tA.tenant.id, () => avtoFlow.handleAvtoText(xatoCtx, tA.user));
+  assert.match(xatoCtx.replies[0], /narxni to'g'ri/i);
+
+  const hali = await runWithTenant(tA.tenant.id, () =>
+    prisma.product.findUnique({ where: { id: mashina.id } })
+  );
+  assert.equal(hali.miqdor, 1, "mashina hali avtoparkda turishi kerak");
+  avtoFlow.clearAvtoFlow(chatId);
+});

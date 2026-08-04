@@ -68,6 +68,8 @@ export const createSaleSchema = z.object({
   tolovTuri: z.enum(["naqd", "qarz"]),
   mijozNomi: z.string().max(100).optional().nullable(),
   mijozTel: z.string().max(50).optional().nullable(),
+  // Kelishilgan narx (avto rejimida savdolashib belgilanadi).
+  narx: z.number().int().positive().optional().nullable(),
 });
 
 export const debtPaymentSchema = z.object({

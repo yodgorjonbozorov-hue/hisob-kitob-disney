@@ -1,7 +1,13 @@
 import { InlineKeyboard, type Context } from "grammy";
 import type { User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { createAvtoMashina, addProductExpense, XARAJAT_TURLARI, type XarajatTuri } from "@/lib/services/inventory";
+import {
+  createAvtoMashina,
+  addProductExpense,
+  createSale,
+  XARAJAT_TURLARI,
+  type XarajatTuri,
+} from "@/lib/services/inventory";
 import { formatMoney, parseSummaText } from "@/lib/format";
 import { getFlow } from "./state";
 
@@ -27,7 +33,12 @@ type AvtoStep =
   | "x_business"
   | "x_mashina"
   | "x_turi"
-  | "x_summa";
+  | "x_summa"
+  | "s_business"
+  | "s_mashina"
+  | "s_narx"
+  | "s_tolov"
+  | "s_xaridor";
 
 interface AvtoFlowState {
   step: AvtoStep;
@@ -41,6 +52,8 @@ interface AvtoFlowState {
   productId?: string;
   productNomi?: string;
   turi?: XarajatTuri;
+  // Sotuv
+  sotuvSummasi?: number;
 }
 
 const avtoConversations = new Map<string, AvtoFlowState>();
@@ -113,7 +126,7 @@ async function bizneslarniSora(
   user: User,
   chatId: string,
   keyingiStep: "m_nomi" | "x_mashina",
-  prefiks: "amb" | "axb"
+  prefiks: "amb" | "axb" | "sxb"
 ): Promise<string | null> {
   const bizneslar = await avtoBizneslar(user);
   if (bizneslar.length === 0) {
@@ -347,6 +360,155 @@ async function xarajatniSaqla(
 }
 
 // ---------------------------------------------------------------------------
+// /sotish — mashinani sotish
+// ---------------------------------------------------------------------------
+
+export async function startSotishFlow(ctx: Context, user: User) {
+  const chatId = String(ctx.chat!.id);
+  const businessId = await bizneslarniSora(ctx, user, chatId, "x_mashina", "sxb");
+  if (!businessId) return;
+  await sotuvMashinalariniKorsat(ctx, chatId, businessId);
+}
+
+async function sotuvMashinalariniKorsat(ctx: Context, chatId: string, businessId: string) {
+  const mashinalar = await avtoparkMashinalar(businessId);
+  if (mashinalar.length === 0) {
+    await ctx.reply("Avtoparkda sotuvdagi mashina yo'q.");
+    return;
+  }
+
+  avtoConversations.set(chatId, { step: "s_mashina", businessId });
+  const keyboard = new InlineKeyboard();
+  mashinalar.forEach((m) => {
+    keyboard.text(mashinaBelgi(m), `sxm:${m.id}`).row();
+  });
+  await ctx.reply("Qaysi mashina sotildi?", { reply_markup: keyboard });
+}
+
+/** sxb:<businessId> */
+export async function handleSotishBusinessCallback(ctx: Context) {
+  const chatId = String(ctx.chat!.id);
+  const businessId = (ctx.callbackQuery?.data ?? "").slice(4);
+  const business = await prisma.business.findFirst({
+    where: { id: businessId, isActive: true },
+    select: { id: true },
+  });
+  if (!business) {
+    await ctx.answerCallbackQuery({ text: "Biznes topilmadi" });
+    return;
+  }
+  await ctx.answerCallbackQuery();
+  await sotuvMashinalariniKorsat(ctx, chatId, business.id);
+}
+
+/** sxm:<productId> — mashina tanlandi, narx so'raladi. */
+export async function handleSotishMashinaCallback(ctx: Context) {
+  const chatId = String(ctx.chat!.id);
+  const productId = (ctx.callbackQuery?.data ?? "").slice(4);
+
+  const mashina = await prisma.product.findFirst({ where: { id: productId } });
+  if (!mashina) {
+    await ctx.answerCallbackQuery({ text: "Mashina topilmadi" });
+    return;
+  }
+
+  const xarajat = await prisma.productExpense.aggregate({
+    where: { businessId: mashina.businessId, productId: mashina.id },
+    _sum: { summa: true },
+  });
+  const xarajatJami = xarajat._sum.summa ?? 0;
+
+  avtoConversations.set(chatId, {
+    step: "s_narx",
+    businessId: mashina.businessId,
+    productId: mashina.id,
+    productNomi: mashina.nomi,
+  });
+  await ctx.answerCallbackQuery();
+  await ctx.editMessageText(
+    [
+      `${mashinaBelgi(mashina)}`,
+      `Olingan narx: ${formatMoney(mashina.kelganNarx)}`,
+      xarajatJami > 0 ? `Xarajatlar: ${formatMoney(xarajatJami)}` : null,
+      mashina.sotuvNarx > 0 ? `Rejadagi narx: ${formatMoney(mashina.sotuvNarx)}` : null,
+      "",
+      "Necha pulga sotildi? (masalan: 148 mln)",
+    ]
+      .filter(Boolean)
+      .join("\n")
+  );
+}
+
+/** stol:<naqd|qarz> */
+export async function handleSotishTolovCallback(ctx: Context, user: User) {
+  const chatId = String(ctx.chat!.id);
+  const flow = avtoConversations.get(chatId);
+  const tolovTuri = (ctx.callbackQuery?.data ?? "").slice(5) as "naqd" | "qarz";
+
+  if (!flow || flow.step !== "s_tolov") {
+    await ctx.answerCallbackQuery({ text: "Bu so'rov eskirgan, /sotish bilan qaytadan boshlang." });
+    return;
+  }
+
+  if (tolovTuri === "qarz") {
+    avtoConversations.set(chatId, { ...flow, step: "s_xaridor" });
+    await ctx.answerCallbackQuery();
+    await ctx.editMessageText("Xaridor ismi? (qarzdorlik shu nom bilan yuritiladi)");
+    return;
+  }
+
+  await ctx.answerCallbackQuery();
+  await sotuvniSaqla(ctx, user, flow, "naqd");
+}
+
+async function sotuvniSaqla(
+  ctx: Context,
+  user: User,
+  flow: AvtoFlowState,
+  tolovTuri: "naqd" | "qarz",
+  xaridor?: string
+) {
+  const chatId = String(ctx.chat!.id);
+  const mashina = await prisma.product.findFirst({ where: { id: flow.productId! } });
+  if (!mashina) {
+    await ctx.reply("Mashina topilmadi.");
+    clearAvtoFlow(chatId);
+    return;
+  }
+
+  await createSale({
+    businessId: flow.businessId!,
+    productId: flow.productId!,
+    miqdor: 1,
+    tolovTuri,
+    mijozNomi: xaridor ?? null,
+    narx: flow.sotuvSummasi,
+    userId: user.id,
+  });
+
+  const xarajat = await prisma.productExpense.aggregate({
+    where: { businessId: flow.businessId!, productId: flow.productId! },
+    _sum: { summa: true },
+  });
+  const xarajatJami = xarajat._sum.summa ?? 0;
+  const sof = flow.sotuvSummasi! - mashina.kelganNarx - xarajatJami;
+
+  clearAvtoFlow(chatId);
+  await ctx.reply(
+    [
+      `✅ Sotildi: ${flow.productNomi}`,
+      `Sotilgan narx: ${formatMoney(flow.sotuvSummasi!)}`,
+      `Olingan narx: ${formatMoney(mashina.kelganNarx)}`,
+      xarajatJami > 0 ? `Xarajatlar: ${formatMoney(xarajatJami)}` : null,
+      `${sof >= 0 ? "SOF FOYDA" : "ZARAR"}: ${formatMoney(Math.abs(sof))}`,
+      tolovTuri === "qarz" ? `Qarzdorlik ochildi: ${xaridor}` : "Kirim yozildi (naqd).",
+    ]
+      .filter(Boolean)
+      .join("\n")
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Matn qadamlari + bir qatorli tez buyruq
 // ---------------------------------------------------------------------------
 
@@ -468,6 +630,28 @@ export async function handleAvtoText(ctx: Context, user: User): Promise<boolean>
       return true;
     }
     await mashinaniSaqla(ctx, user, flow, matn);
+    return true;
+  }
+
+  if (flow.step === "s_narx") {
+    const summa = parseSummaText(matn);
+    if (summa <= 0) {
+      await ctx.reply("Sotilgan narxni to'g'ri kiriting (masalan: 148 mln):");
+      return true;
+    }
+    avtoConversations.set(chatId, { ...flow, step: "s_tolov", sotuvSummasi: summa });
+    await ctx.reply("To'lov qanday?", {
+      reply_markup: new InlineKeyboard().text("Naqd olindi", "stol:naqd").text("Qarzga", "stol:qarz"),
+    });
+    return true;
+  }
+
+  if (flow.step === "s_xaridor") {
+    if (!matn) {
+      await ctx.reply("Xaridor ismini yozing:");
+      return true;
+    }
+    await sotuvniSaqla(ctx, user, flow, "qarz", matn);
     return true;
   }
 

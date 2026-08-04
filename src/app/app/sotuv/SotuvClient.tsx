@@ -25,6 +25,8 @@ export function SotuvClient({
   // Avto rejimida bitta yozuv = bitta mashina — miqdor har doim 1.
   const [miqdor, setMiqdor] = useState("1");
   const [tolovTuri, setTolovTuri] = useState<"naqd" | "qarz">("naqd");
+  // Avto: kelishilgan narx. Mashina tanlanganda rejadagi narx bilan to'ldiriladi.
+  const [narx, setNarx] = useState("");
   const [mijozNomi, setMijozNomi] = useState("");
   const [mijozTel, setMijozTel] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +36,19 @@ export function SotuvClient({
 
   const selected = useMemo(() => products.find((p) => p.id === productId), [products, productId]);
   const qty = avto ? 1 : parseSomInput(miqdor);
-  const jami = selected ? selected.sotuvNarx * qty : 0;
+  const kelishilgan = parseSomInput(narx);
+  const jami = avto
+    ? kelishilgan || (selected?.sotuvNarx ?? 0)
+    : selected
+      ? selected.sotuvNarx * qty
+      : 0;
+
+  // Mashina tanlanganda maydonni rejadagi narx bilan to'ldiramiz (kerak bo'lsa tahrirlanadi).
+  function mashinaTanlandi(id: string) {
+    setProductId(id);
+    const p = products.find((x) => x.id === id);
+    setNarx(p && p.sotuvNarx > 0 ? formatSom(p.sotuvNarx) : "");
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -52,6 +66,10 @@ export function SotuvClient({
       setError("Miqdorni kiriting");
       return;
     }
+    if (avto && kelishilgan <= 0) {
+      setError("Kelishilgan narxni kiriting");
+      return;
+    }
     if (tolovTuri === "qarz" && !mijozNomi.trim()) {
       setError("Qarzga sotishda mijoz nomini kiriting");
       return;
@@ -67,6 +85,7 @@ export function SotuvClient({
           tolovTuri,
           mijozNomi: tolovTuri === "qarz" ? mijozNomi : undefined,
           mijozTel: tolovTuri === "qarz" ? mijozTel : undefined,
+          narx: avto && kelishilgan > 0 ? kelishilgan : undefined,
         }),
       });
       const data = await res.json();
@@ -110,7 +129,7 @@ export function SotuvClient({
             <label className="block text-xs font-medium text-muted mb-1">{M.birlikBosh}</label>
             <select
               value={productId}
-              onChange={(e) => setProductId(e.target.value)}
+              onChange={(e) => (avto ? mashinaTanlandi(e.target.value) : setProductId(e.target.value))}
               className="w-full rounded-lg border border-line px-3 py-2 text-sm"
             >
               <option value="">Tanlang...</option>
@@ -125,12 +144,20 @@ export function SotuvClient({
 
           {avto ? (
             <div>
-              <label className="block text-xs font-medium text-muted mb-1">Sotuv summasi</label>
-              <div className="rounded-lg bg-surface-2 px-3 py-2 text-sm font-medium text-fg">
-                {formatSomLabel(jami)}
-              </div>
+              <label className="block text-xs font-medium text-muted mb-1">
+                Kelishilgan narx (sotilgan summa)
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={narx}
+                onChange={(e) => setNarx(e.target.value ? formatSom(parseSomInput(e.target.value)) : "")}
+                placeholder="0"
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+              />
               <p className="text-xs text-faint mt-1">
-                Narxni o'zgartirish kerak bo'lsa — Avtopark bo'limida sotuv narxini tahrirlang.
+                Savdolashib boshqa narxga kelishilgan bo'lsa — shu yerga yozing, mashina kartochkasi
+                ham yangilanadi.
               </p>
             </div>
           ) : (
