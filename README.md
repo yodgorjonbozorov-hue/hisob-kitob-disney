@@ -161,7 +161,8 @@ Biznes **turi** "avto" bo'lsa (Admin panel → Bizneslar → *Avto rejim*), ombo
 
 - Bitta yozuv = **bitta mashina** (model, yil, davlat raqami, rang; qoldiq 0/1 — "Sotuvda"/"Sotildi").
 - **Mashina qabul qilish**: *naqd* olinsa darhol chiqim yoziladi ("Mashina xaridi"); *qarzga* olinsa egasiga "Men qarzdorman" qarzdorligi ochiladi va chiqim to'lov paytida yoziladi (kassa usuli).
-- **Sof foyda**: har mashina bo'yicha sotilgan narx − olingan narx, hamda avtopark sahifasida umumiy yakun (sotilgan mashinalar, tushum, tannarx, sof foyda).
+- **Mashina xarajatlari**: avtopark jadvalidagi *Xarajat* tugmasi orqali ta'mirlash / bo'yoq / yuvish / rasmiylashtirish / ehtiyot qism summasi **aynan o'sha mashinaga** yoziladi. Naqd to'langan bo'lsa "Mashina xarajati" chiqimi avtomatik yoziladi (qo'lda takror kiritish shart emas); "keyin to'lanadi" tanlansa ustaga "Men qarzdorman" qarzdorligi ochiladi.
+- **Sof foyda**: har mashina bo'yicha sotilgan narx − olingan narx − **shu mashinaga qilingan xarajatlar**, hamda avtopark sahifasida umumiy yakun (sotilgan mashinalar, tushum, tannarx, xarajat, sof foyda). Sotilmagan mashinaga tikilgan xarajat avtopark qiymatiga qo'shiladi.
 - Kategoriyalar avto biznesga moslangan: rasmiylashtirish (MRB, notarius), ta'mirlash, sug'urta, evakuator, maydon ijarasi va h.k.
 - Tarif: **Avto — 200 000 so'm/oy** (Moliya + Avtopark modullari).
 
@@ -191,6 +192,13 @@ npm run bot
    - `/chiqim` — chiqim tranzaksiyasini kiritish
    - `/hisobot` — joriy oy bo'yicha qisqa hisobot va PDF/Excel yuklab olish tugmalari
    - `/bekor` — joriy suhbat/amalni bekor qilish
+   - `/lead` — yangi mijoz/bitim (CRM moduli yoqilgan bo'lsa)
+
+Avto rejimidagi kompaniyalarda direktor/administrator uchun qo'shimcha buyruqlar (bozorda turib kiritish uchun):
+
+   - `/mashina` — avtoparkka mashina qabul qilish (model → olingan narx → sotuv narxi → naqd/qarzga)
+   - `/xarajat` — mashinani tugmadan tanlab xarajat yozish (turi → summa)
+   - Bir qatorli tez yo'l: **`xarajat: Cobalt, ta'mirlash 2 mln`** — mashinani nomi yoki davlat raqami bo'yicha topadi, summani "2 mln / 500 ming / 2 500 000" ko'rinishida tushunadi va javobda shu mashinaning yangilangan sof foydasini qaytaradi.
 
 Har bir Telegram chat faqat bitta tizim foydalanuvchisiga bog'lanadi (parol Telegram orqali hech qachon yuborilmaydi — faqat bir martalik kod orqali bog'lanadi).
 
