@@ -1,6 +1,7 @@
 import { withTenant } from "@/lib/auth/tenant";
 import { NextResponse } from "next/server";
 import { resolveActiveBusinessId } from "@/lib/business";
+import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { listAllTransactions } from "@/lib/queries/transactions";
 import { buildTransactionsWorkbook } from "@/lib/excel/transactionsWorkbook";
 
@@ -12,6 +13,8 @@ export const GET = withTenant(async (request, _ctx, { session: user }) => {
   const { searchParams } = new URL(request.url);
   const items = await listAllTransactions({
     businessId,
+    // Eksport ham ekrandagi bilan bir xil chegarada: xodim — faqat o'zi kiritganini.
+    userId: transactionScopeUserId(user),
     from: searchParams.get("from"),
     to: searchParams.get("to"),
     turi: searchParams.get("turi"),

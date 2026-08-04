@@ -4,6 +4,7 @@ import { createTransactionSchema } from "@/lib/validation/transaction";
 import { listTransactions } from "@/lib/queries/transactions";
 import { createTransaction } from "@/lib/services/transactionService";
 import { resolveActiveBusinessId } from "@/lib/business";
+import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { logAudit, getClientIp } from "@/lib/services/audit";
 
 export const GET = withTenant(async (request, _ctx, { session: user }) => {
@@ -14,6 +15,8 @@ export const GET = withTenant(async (request, _ctx, { session: user }) => {
   const { searchParams } = new URL(request.url);
   const result = await listTransactions({
     businessId,
+    // Xodim faqat o'zi kiritgan yozuvlarni ko'radi, direktor — barchasini.
+    userId: transactionScopeUserId(user),
     from: searchParams.get("from"),
     to: searchParams.get("to"),
     turi: searchParams.get("turi"),

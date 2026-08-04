@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isManager } from "@/lib/auth/roles";
+import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { withTenant } from "@/lib/auth/tenant";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 
@@ -17,12 +18,15 @@ export const GET = withTenant(async (request, _ctx, { session: user }) => {
   const business = await getActiveBusiness(user);
   // Sotuvchi faqat kirim/chiqim bilan ishlaydi — qarzdor/mahsulot qidiruvi unga yopiq.
   const omborli = (business?.omborli ?? false) && user.rol !== "SELLER";
+  const scopeUserId = transactionScopeUserId(user);
 
   const [transactions, debtors, products, categories] = await Promise.all([
     prisma.transaction.findMany({
       where: {
         businessId,
         deletedAt: null,
+        // Xodimga qidiruvda ham faqat o'zi kiritgan yozuvlar chiqadi.
+        ...(scopeUserId ? { userId: scopeUserId } : {}),
         OR: [{ izoh: { contains: q } }, { category: { nomi: { contains: q } } }],
       },
       include: { category: { select: { nomi: true } } },

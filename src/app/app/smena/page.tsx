@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { requireTenantPage } from "@/lib/auth/tenant";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
+import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { getExpectedCash, listShiftCloses } from "@/lib/queries/shift";
 import { todayDateOnlyString } from "@/lib/date";
 import { SmenaClient } from "./SmenaClient";
@@ -18,8 +19,12 @@ export default async function SmenaPage() {
   const business = await getActiveBusiness(session);
   const today = todayDateOnlyString();
 
+  // Kassir o'z smenasini yakunlaydi — kutilgan naqd ham faqat uning kirimlaridan.
   const [kutilgan, recent] = businessId
-    ? await Promise.all([getExpectedCash(businessId, today), listShiftCloses(businessId)])
+    ? await Promise.all([
+        getExpectedCash(businessId, today, transactionScopeUserId(session)),
+        listShiftCloses(businessId),
+      ])
     : [0, []];
 
   return (

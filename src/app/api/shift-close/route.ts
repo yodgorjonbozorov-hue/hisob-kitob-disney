@@ -3,6 +3,7 @@ import { withTenant } from "@/lib/auth/tenant";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveActiveBusinessId } from "@/lib/business";
+import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { getExpectedCash } from "@/lib/queries/shift";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { logAudit, getClientIp } from "@/lib/services/audit";
@@ -26,7 +27,8 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
     return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
   }
 
-  const kutilganNaqd = await getExpectedCash(businessId, parsed.data.sana);
+  // Sahifadagi ko'rsatkich bilan bir xil chegara: kassir — o'z kirimlari bo'yicha.
+  const kutilganNaqd = await getExpectedCash(businessId, parsed.data.sana, transactionScopeUserId(user));
   const farq = parsed.data.sanalganNaqd - kutilganNaqd;
 
   const shift = await prisma.shiftClose.create({

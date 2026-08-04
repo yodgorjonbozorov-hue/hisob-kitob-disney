@@ -18,6 +18,7 @@
     "backup": "node -r ts-node/register scripts/backup.ts",
     "restore": "node -r ts-node/register scripts/restore.ts",
     "test:isolation": "node -r ts-node/register tests/isolation.test.ts",
+    "test:visibility": "node -r ts-node/register tests/visibility.test.ts",
     "test:signup": "node -r ts-node/register tests/signup.test.ts",
     "test:billing": "node -r ts-node/register tests/billing.test.ts",
     "test:superadmin": "node -r ts-node/register tests/superadmin.test.ts",

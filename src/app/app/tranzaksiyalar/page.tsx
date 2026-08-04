@@ -3,6 +3,7 @@ import { requireTenantPage } from "@/lib/auth/tenant";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { resolveActiveBusinessId, getAccessibleBusinesses } from "@/lib/business";
 import { isManager } from "@/lib/auth/roles";
+import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { listTransactions } from "@/lib/queries/transactions";
 import { formatSom } from "@/lib/format";
 import { TransactionsClient } from "./TransactionsClient";
@@ -42,6 +43,8 @@ export default async function TranzaksiyalarPage({
   const [result, categories] = await Promise.all([
     listTransactions({
       businessId,
+      // Xodim faqat o'zi kiritgan yozuvlarni ko'radi, direktor — barchasini.
+      userId: transactionScopeUserId(session),
       from: searchParams.from,
       to: searchParams.to,
       turi: searchParams.turi,

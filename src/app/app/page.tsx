@@ -11,6 +11,7 @@ import { currentMonthString, todayDateOnlyString } from "@/lib/date";
 import { requireTenantPage } from "@/lib/auth/tenant";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { isManager } from "@/lib/auth/roles";
+import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import {
   getMonthSummary,
@@ -44,9 +45,11 @@ export default async function DashboardPage({
       );
     }
     const today = todayDateOnlyString();
+    // Kassir/sotuvchi ekrani — bugungi jami ham, lenta ham faqat o'z yozuvlaridan.
+    const scopeUserId = transactionScopeUserId(session);
     const [bugun, recentRes] = await Promise.all([
-      getTodayTotals(bId, today),
-      listTransactions({ businessId: bId, page: 1, pageSize: 12 }),
+      getTodayTotals(bId, today, scopeUserId),
+      listTransactions({ businessId: bId, userId: scopeUserId, page: 1, pageSize: 12 }),
     ]);
     const recent = recentRes.items.map((t) => ({
       id: t.id,
