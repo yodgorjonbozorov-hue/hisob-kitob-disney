@@ -20,7 +20,8 @@ export interface MonthSummary extends MonthTotals {
 async function sumByType(businessId: string, from: Date, to: Date, turi: "kirim" | "chiqim"): Promise<number> {
   const result = await prisma.transaction.aggregate({
     _sum: { summa: true },
-    where: { businessId, turi, sana: { gte: from, lt: to } },
+    // deletedAt: null — o'chirilgan yozuv hech qanday moliyaviy raqamga kirmasligi shart.
+    where: { businessId, turi, deletedAt: null, sana: { gte: from, lt: to } },
   });
   return result._sum.summa ?? 0;
 }
@@ -76,7 +77,7 @@ export async function getCategoryBreakdown(
   const { from, to } = monthRangeUTC(monthStr);
   const grouped = await prisma.transaction.groupBy({
     by: ["categoryId"],
-    where: { businessId, turi, sana: { gte: from, lt: to } },
+    where: { businessId, turi, deletedAt: null, sana: { gte: from, lt: to } },
     _sum: { summa: true },
   });
 
@@ -140,7 +141,7 @@ export async function getDailyDynamics(
 ): Promise<DailyPoint[]> {
   const { from, to } = monthRangeUTC(monthStr);
   const transactions = await prisma.transaction.findMany({
-    where: { businessId, sana: { gte: from, lt: to } },
+    where: { businessId, deletedAt: null, sana: { gte: from, lt: to } },
     select: { sana: true, turi: true, summa: true },
   });
 

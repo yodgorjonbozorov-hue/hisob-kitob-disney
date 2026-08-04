@@ -24,7 +24,11 @@ invariantlari — ular buzilsa mahsulot ishonchliligi yo'qoladi.
 - Komponent maksimal 250 satr; oshsa fayllarga bo'linadi.
 - `any` taqiqlangan (faqat `lib/db/` dagi mavjud 7 joydan tashqari).
 - Barcha izohlar va UI matnlari o'zbek tilida (lotin). Kirill harflari kodda taqiqlangan.
-- Har moliyaviy ko'p qadamli amal `prisma.$transaction` ichida.
+- Har moliyaviy ko'p qadamli amal atomik bo'lishi shart. Buning yagona yo'li —
+  `runBusinessTx(businessId, (tx) => ...)` (`src/lib/db/businessTx.ts`).
+  Tranzaksiya ichida xom `tx` delegatlari ishlatiladi, shuning uchun HAR so'rovga
+  `businessId` sharti QO'LDA yoziladi. Biznes egaligi tranzaksiyadan oldin bir
+  marta tekshiriladi — bu tenant izolyatsiyasiga qo'yilgan yagona istisno.
 - Har tranzaksiya so'rovida `deletedAt: null` (soft-delete filtri) — ataylab
   o'chirilganlarni ko'rsatadigan joylardan tashqari (`listDeletedTransactions`).
 - Yangi model qo'shilsa:
