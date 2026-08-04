@@ -23,6 +23,10 @@ import {
   handleXarajatBusinessCallback,
   handleXarajatMashinaCallback,
   handleXarajatTuriCallback,
+  startSotishFlow,
+  handleSotishBusinessCallback,
+  handleSotishMashinaCallback,
+  handleSotishTolovCallback,
   handleAvtoText,
   clearAvtoFlow,
 } from "./avtoFlow";
@@ -59,7 +63,8 @@ async function buyruqlarRoyxati(user: { rol: string; tenantId: string | null }):
       qatorlar.push(
         "/mashina — avtoparkka mashina qabul qilish",
         "/xarajat — mashinaga xarajat yozish",
-        "   tez yo'l: «xarajat: Cobalt, ta'mirlash 2 mln»"
+        "   tez yo'l: «xarajat: Cobalt, ta'mirlash 2 mln»",
+        "/sotish — mashinani sotish (sof foyda darhol ko'rinadi)"
       );
     }
   }
@@ -211,6 +216,17 @@ bot.command(
   )
 );
 
+bot.command(
+  "sotish",
+  tenantHandler(
+    async (ctx, user) => {
+      if (!(await omborKerak(ctx, user))) return;
+      await startSotishFlow(ctx, user);
+    },
+    { managerOnly: true, yozish: true }
+  )
+);
+
 bot.command("bekor", async (ctx) => {
   clearFlow(String(ctx.chat.id));
   clearLeadFlow(String(ctx.chat.id));
@@ -240,6 +256,18 @@ bot.callbackQuery(
 bot.callbackQuery(
   /^axt:/,
   tenantHandler((ctx) => handleXarajatTuriCallback(ctx), { managerOnly: true, yozish: true })
+);
+bot.callbackQuery(
+  /^sxb:/,
+  tenantHandler((ctx) => handleSotishBusinessCallback(ctx), { managerOnly: true, yozish: true })
+);
+bot.callbackQuery(
+  /^sxm:/,
+  tenantHandler((ctx) => handleSotishMashinaCallback(ctx), { managerOnly: true, yozish: true })
+);
+bot.callbackQuery(
+  /^stol:/,
+  tenantHandler((ctx, user) => handleSotishTolovCallback(ctx, user), { managerOnly: true, yozish: true })
 );
 bot.callbackQuery(/^biz:/, tenantHandler((ctx) => handleBusinessCallback(ctx), { yozish: true }));
 bot.callbackQuery(/^cat:/, tenantHandler((ctx) => handleCategoryCallback(ctx), { yozish: true }));

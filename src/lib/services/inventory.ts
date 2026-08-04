@@ -83,14 +83,22 @@ export async function createSale(params: {
   tolovTuri: "naqd" | "qarz";
   mijozNomi?: string | null;
   mijozTel?: string | null;
+  /**
+   * Haqiqiy kelishilgan narx (birlik uchun). Avto rejimida narx deyarli har doim
+   * savdolashib belgilanadi — berilsa shu narx ishlatiladi va mahsulot kartochkasi
+   * ham yangilanadi. Berilmasa rejadagi sotuv narxi olinadi.
+   */
+  narx?: number | null;
   userId: string;
 }) {
   const product = await prisma.product.findFirst({
     where: { id: params.productId, businessId: params.businessId, isActive: true },
   });
   if (!product) throw new ForbiddenError("Mahsulot topilmadi");
-  if (product.sotuvNarx <= 0) {
-    throw new BadRequestError("Bu mahsulotning sotuv narxi hali qo'yilmagan");
+
+  const kelishilganNarx = params.narx && params.narx > 0 ? Math.round(params.narx) : null;
+  if (!kelishilganNarx && product.sotuvNarx <= 0) {
+    throw new BadRequestError("Sotuv narxi kiritilmagan");
   }
   if (params.tolovTuri === "qarz" && !params.mijozNomi?.trim()) {
     throw new BadRequestError("Qarzga sotishda mijoz nomi kiritilishi shart");
@@ -105,9 +113,17 @@ export async function createSale(params: {
     throw new BadRequestError("Omborda yetarli emas");
   }
 
-  const birlikNarx = product.sotuvNarx;
+  const birlikNarx = kelishilganNarx ?? product.sotuvNarx;
   const tannarx = product.kelganNarx;
   const jamiSumma = birlikNarx * params.miqdor;
+
+  // Kelishilgan narx boshqa bo'lsa — kartochkada ham haqiqiy narx tursin.
+  if (kelishilganNarx && kelishilganNarx !== product.sotuvNarx) {
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { sotuvNarx: kelishilganNarx },
+    });
+  }
 
   const sale = await prisma.sale.create({
     data: {
