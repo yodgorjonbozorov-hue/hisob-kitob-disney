@@ -54,6 +54,11 @@ export async function buildMonthlyReportWorkbook(report: MonthlyReport): Promise
     color: { argb: report.sofFoyda >= 0 ? INCOME_ARGB : EXPENSE_ARGB },
   };
 
+  // Avto rejimi: sotilgan mashinalar alohida varaqda (har mashina bo'yicha sof foyda).
+  if (report.avto && report.avto.qatorlar.length > 0) {
+    addAvtoSheet(workbook, report.avto, monthLabel);
+  }
+
   sheet.addRow([]);
   addCategorySection(sheet, "Kirim taqsimoti", report.kirimByCategory);
   sheet.addRow([]);
@@ -64,6 +69,66 @@ export async function buildMonthlyReportWorkbook(report: MonthlyReport): Promise
   footerRow.font = { size: 9, color: { argb: FAINT_ARGB } };
 
   return workbook.xlsx.writeBuffer();
+}
+
+/** "Sotilgan mashinalar" varag'i: olingan narx, xarajat, sotilgan narx, sof foyda. */
+function addAvtoSheet(
+  workbook: ExcelJS.Workbook,
+  yakun: NonNullable<MonthlyReport["avto"]>,
+  monthLabel: string
+) {
+  const sheet = workbook.addWorksheet("Sotilgan mashinalar");
+  sheet.columns = [
+    { header: "", key: "a", width: 28 },
+    { header: "", key: "b", width: 16 },
+    { header: "", key: "c", width: 16 },
+    { header: "", key: "d", width: 16 },
+    { header: "", key: "e", width: 16 },
+    { header: "", key: "f", width: 12 },
+  ];
+
+  sheet.mergeCells("A1:F1");
+  sheet.getCell("A1").value = `Sotilgan mashinalar bo'yicha sof foyda — ${monthLabel}`;
+  sheet.getCell("A1").font = { bold: true, size: 14 };
+  sheet.addRow([]);
+
+  const header = sheet.addRow(["Mashina", "Olingan narx", "Xarajat", "Sotilgan narx", "Sof foyda", "Marja"]);
+  header.font = { bold: true };
+
+  for (const q of yakun.qatorlar) {
+    const row = sheet.addRow([
+      q.avtoRaqam ? `${q.nomi} (${q.avtoRaqam})` : q.nomi,
+      q.olinganNarx,
+      q.xarajat,
+      q.sotilganNarx,
+      q.sofFoyda,
+      q.sotilganNarx > 0 ? q.sofFoyda / q.sotilganNarx : 0,
+    ]);
+    [2, 3, 4, 5].forEach((c) => (row.getCell(c).numFmt = SOM_FORMAT));
+    row.getCell(6).numFmt = "0.0%";
+    row.getCell(5).font = { color: { argb: q.sofFoyda >= 0 ? INCOME_ARGB : EXPENSE_ARGB } };
+  }
+
+  const jamiSotilganSumma = yakun.jamiTannarx + yakun.jamiXarajat + yakun.jamiSofFoyda;
+  const jami = sheet.addRow([
+    `Jami: ${yakun.jamiSotilgan} ta mashina`,
+    yakun.jamiTannarx,
+    yakun.jamiXarajat,
+    jamiSotilganSumma,
+    yakun.jamiSofFoyda,
+    jamiSotilganSumma > 0 ? yakun.jamiSofFoyda / jamiSotilganSumma : 0,
+  ]);
+  jami.font = { bold: true };
+  [2, 3, 4, 5].forEach((c) => (jami.getCell(c).numFmt = SOM_FORMAT));
+  jami.getCell(6).numFmt = "0.0%";
+  jami.getCell(5).font = {
+    bold: true,
+    color: { argb: yakun.jamiSofFoyda >= 0 ? INCOME_ARGB : EXPENSE_ARGB },
+  };
+
+  sheet.addRow([]);
+  const footerRow = sheet.addRow([BRAND_SIGNATURE]);
+  footerRow.font = { size: 9, color: { argb: FAINT_ARGB } };
 }
 
 function addCategorySection(
