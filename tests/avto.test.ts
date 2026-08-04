@@ -361,3 +361,186 @@ test("omborMatn: avto rejimida Avtopark, umumiyda Ombor", () => {
   assert.equal(biznesTuri.isAvto("avto"), true);
   assert.equal(biznesTuri.isAvto(null), false);
 });
+
+// ---------- Mashina xarajatlari (sof foyda = sotuv − olingan narx − xarajat) ----------
+
+test("naqd xarajat: mashinaga bog'lanadi va chiqim tranzaksiya yoziladi", async () => {
+  const mashina = await runWithTenant(tA.tenant.id, () =>
+    inventory.createAvtoMashina({
+      businessId: tA.business.id,
+      nomi: "Nexia 3",
+      olinganNarx: 100_000_000,
+      sotuvNarx: 118_000_000,
+      tolovTuri: "naqd",
+      userId: tA.user.id,
+    })
+  );
+
+  await runWithTenant(tA.tenant.id, () =>
+    inventory.addProductExpense({
+      businessId: tA.business.id,
+      productId: mashina.id,
+      turi: "tamirlash",
+      summa: 3_000_000,
+      izoh: "dvigatel",
+      userId: tA.user.id,
+    })
+  );
+
+  const xarajatlar = await runWithTenant(tA.tenant.id, () =>
+    queries.listProductExpenses(tA.business.id, mashina.id)
+  );
+  assert.equal(xarajatlar.length, 1);
+  assert.equal(xarajatlar[0].summa, 3_000_000);
+  assert.equal(xarajatlar[0].qarzga, false);
+
+  // Chiqim tranzaksiya "Mashina xarajati" kategoriyasida yozilgan bo'lishi kerak.
+  const txn = await runWithTenant(tA.tenant.id, () =>
+    prisma.transaction.findFirst({
+      where: { businessId: tA.business.id, summa: 3_000_000, turi: "chiqim" },
+      include: { category: true },
+    })
+  );
+  assert.ok(txn, "chiqim tranzaksiya yozilmadi");
+  assert.equal(txn.category.nomi, "Mashina xarajati");
+});
+
+test("qarzga xarajat: chiqim yozilmaydi, ustaga 'beriladigan' qarz ochiladi", async () => {
+  const mashina = await runWithTenant(tA.tenant.id, () =>
+    prisma.product.findFirst({ where: { businessId: tA.business.id, nomi: "Nexia 3" } })
+  );
+
+  await runWithTenant(tA.tenant.id, () =>
+    inventory.addProductExpense({
+      businessId: tA.business.id,
+      productId: mashina.id,
+      turi: "boyoq",
+      summa: 2_000_000,
+      tolovTuri: "qarz",
+      kimga: "Usta Aziz",
+      userId: tA.user.id,
+    })
+  );
+
+  const qarz = await runWithTenant(tA.tenant.id, () =>
+    prisma.debt.findFirst({ where: { businessId: tA.business.id, mijozNomi: "Usta Aziz" } })
+  );
+  assert.equal(qarz.turi, "beriladigan");
+  assert.equal(qarz.jamiSumma, 2_000_000);
+  assert.equal(qarz.productId, mashina.id);
+
+  const txn = await runWithTenant(tA.tenant.id, () =>
+    prisma.transaction.findFirst({ where: { businessId: tA.business.id, summa: 2_000_000 } })
+  );
+  assert.equal(txn, null, "qarzga xarajatda pul harakati yozilmasligi kerak");
+});
+
+test("kimga to'lanishi ko'rsatilmasa qarzga xarajat rad etiladi", async () => {
+  const mashina = await runWithTenant(tA.tenant.id, () =>
+    prisma.product.findFirst({ where: { businessId: tA.business.id, nomi: "Nexia 3" } })
+  );
+  await assert.rejects(
+    () =>
+      runWithTenant(tA.tenant.id, () =>
+        inventory.addProductExpense({
+          businessId: tA.business.id,
+          productId: mashina.id,
+          turi: "yuvish",
+          summa: 100_000,
+          tolovTuri: "qarz",
+          userId: tA.user.id,
+        })
+      ),
+    /kimga/i
+  );
+});
+
+test("sof foyda xarajatlardan keyin hisoblanadi", async () => {
+  const mashina = await runWithTenant(tA.tenant.id, () =>
+    prisma.product.findFirst({ where: { businessId: tA.business.id, nomi: "Nexia 3" } })
+  );
+  await runWithTenant(tA.tenant.id, () =>
+    inventory.createSale({
+      businessId: tA.business.id,
+      productId: mashina.id,
+      miqdor: 1,
+      tolovTuri: "naqd",
+      userId: tA.user.id,
+    })
+  );
+
+  const foyda = await runWithTenant(tA.tenant.id, () => queries.getProductProfitability(tA.business.id));
+  const nexia = foyda.find((p: any) => p.nomi === "Nexia 3");
+  assert.equal(nexia.daromad, 118_000_000);
+  assert.equal(nexia.tannarx, 100_000_000);
+  assert.equal(nexia.xarajat, 5_000_000, "3 mln ta'mirlash + 2 mln bo'yoq");
+  // Xarajatsiz 18 mln ko'rinardi — aslida 13 mln.
+  assert.equal(nexia.foyda, 13_000_000);
+  assert.equal(nexia.marja, 11);
+});
+
+test("avtopark ro'yxatida har mashina bo'yicha xarajat ko'rinadi", async () => {
+  const mahsulotlar = await runWithTenant(tA.tenant.id, () =>
+    queries.listProducts(tA.business.id, { forKassir: false })
+  );
+  const nexia = mahsulotlar.find((p: any) => p.nomi === "Nexia 3");
+  assert.equal(nexia.xarajat, 5_000_000);
+  const malibu = mahsulotlar.find((p: any) => p.nomi === "Malibu 2");
+  assert.equal(malibu.xarajat, 0, "xarajatsiz mashinada 0 bo'lishi kerak");
+});
+
+test("naqd xarajatni o'chirish bog'langan chiqimni ham bekor qiladi", async () => {
+  const mashina = await runWithTenant(tA.tenant.id, () =>
+    inventory.createAvtoMashina({
+      businessId: tA.business.id,
+      nomi: "Spark",
+      olinganNarx: 70_000_000,
+      tolovTuri: "naqd",
+      userId: tA.user.id,
+    })
+  );
+  const xarajat = await runWithTenant(tA.tenant.id, () =>
+    inventory.addProductExpense({
+      businessId: tA.business.id,
+      productId: mashina.id,
+      turi: "yuvish",
+      summa: 150_000,
+      userId: tA.user.id,
+    })
+  );
+
+  await runWithTenant(tA.tenant.id, () =>
+    inventory.deleteProductExpense({
+      businessId: tA.business.id,
+      expenseId: xarajat.id,
+      userId: tA.user.id,
+    })
+  );
+
+  const qolgan = await runWithTenant(tA.tenant.id, () =>
+    queries.listProductExpenses(tA.business.id, mashina.id)
+  );
+  assert.equal(qolgan.length, 0);
+
+  const txn = await runWithTenant(tA.tenant.id, () =>
+    prisma.transaction.findFirst({ where: { businessId: tA.business.id, summa: 150_000 } })
+  );
+  assert.ok(txn.deletedAt, "bog'langan chiqim bekor qilinishi kerak");
+});
+
+test("tenant izolyatsiyasi: B tenant A ning mashinasiga xarajat yoza olmaydi", async () => {
+  const aMashina = await runWithTenant(tA.tenant.id, () =>
+    prisma.product.findFirst({ where: { businessId: tA.business.id, nomi: "Spark" } })
+  );
+  await assert.rejects(() =>
+    runWithTenant(tB.tenant.id, () =>
+      inventory.addProductExpense({
+        businessId: tB.business.id,
+        productId: aMashina.id,
+        turi: "tamirlash",
+        summa: 1_000_000,
+        userId: tB.user.id,
+      })
+    )
+  );
+});

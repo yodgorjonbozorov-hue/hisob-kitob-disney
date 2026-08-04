@@ -59,11 +59,16 @@ export async function GET(req: Request) {
     }
   }
 
-  // Obuna/sinov muddati tugashiga oz qolgan tenantlarga Telegram ogohlantirish.
-  const warned = await sendExpiryWarnings(bot).catch((e) => {
-    console.error("Ogohlantirish xatosi:", e);
-    return 0;
+  // Obuna/sinov muddati bo'yicha eslatmalar (3 kun / 1 kun / tugadi / kechikdi).
+  const eslatma = await sendExpiryWarnings(bot).catch((e) => {
+    console.error("Eslatma xatosi:", e);
+    return { yuborilgan: 0, telegramsiz: [] as string[] };
   });
+  // Telegram ulanmagan mijozlarga xabar yetmaydi — ularni qo'lda bog'lanish uchun log'ga chiqaramiz
+  // (superadmin panelida ham "TG yo'q" belgisi bilan ko'rinadi).
+  if (eslatma.telegramsiz.length > 0) {
+    console.warn("Telegram ulanmagan (eslatma yetmadi):", eslatma.telegramsiz.join(", "));
+  }
 
   // Muddati kelgan vazifalar bo'yicha mas'ullarga eslatma (kuniga bir marta).
   const taskReminders = await sendTaskReminders(bot.api).catch((e) => {
@@ -78,7 +83,9 @@ export async function GET(req: Request) {
   });
 
   return new Response(
-    `OK (zaxira: ${zaxira.holat}, expired: ${expired}, recurring: ${recurringCount}, warned: ${warned}, tasks: ${taskReminders}, digest: ${digest})`,
+    `OK (zaxira: ${zaxira.holat}, expired: ${expired}, recurring: ${recurringCount}, ` +
+      `eslatma: ${eslatma.yuborilgan}, telegramsiz: ${eslatma.telegramsiz.length}, ` +
+      `tasks: ${taskReminders}, digest: ${digest})`,
     { status: 200 }
   );
 }

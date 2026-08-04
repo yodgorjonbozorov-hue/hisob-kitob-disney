@@ -25,6 +25,9 @@ interface TenantRow {
   businessCount: number;
   lastActivity: string | null;
   pendingPayments: number;
+  takrorMi: boolean;
+  bosh: boolean;
+  telegramUlangan: boolean;
 }
 interface PaymentRow {
   id: string;
@@ -72,12 +75,16 @@ export function SuperadminClient({
   const [openUsers, setOpenUsers] = useState<string | null>(null);
   const [xabar, setXabar] = useState<string | null>(null);
 
-  async function call(url: string, body?: unknown): Promise<Record<string, unknown> | null> {
+  async function call(
+    url: string,
+    body?: unknown,
+    method: "POST" | "DELETE" = "POST"
+  ): Promise<Record<string, unknown> | null> {
     setBusy(url);
     setXabar(null);
     try {
       const res = await fetch(url, {
-        method: "POST",
+        method,
         headers: { "Content-Type": "application/json" },
         body: body !== undefined ? JSON.stringify(body) : undefined,
       });
@@ -115,6 +122,20 @@ export function SuperadminClient({
     if (blocked && !confirm(`${t.name} bloklansinmi? Mijoz faqat /billing sahifasini ochadi.`)) return;
     const r = await call(`/api/superadmin/tenants/${t.id}/block`, { blocked });
     if (r) setXabar(`${t.name}: ${blocked ? "bloklandi" : `blokdan chiqarildi (${r.status})`}.`);
+  }
+
+  /** Faqat bo'sh (xatoga ochilgan takror) kompaniyani o'chirish. */
+  async function ochirish(t: TenantRow) {
+    if (
+      !confirm(
+        `${t.name} (${t.slug}) butunlay o'chirilsinmi?\n\n` +
+          "Bu kompaniyada ish ma'lumoti yo'q. Amalni qaytarib bo'lmaydi."
+      )
+    ) {
+      return;
+    }
+    const r = await call(`/api/superadmin/tenants/${t.id}`, undefined, "DELETE");
+    if (r) setXabar(`${t.name} o'chirildi.`);
   }
 
   async function kirish(t: TenantRow) {
@@ -237,9 +258,20 @@ export function SuperadminClient({
                 <Fragment key={t.id}>
                   <tr>
                     <td className="py-2.5">
-                      <p className="font-medium text-fg">{t.name}</p>
+                      <p className="font-medium text-fg">
+                        {t.name}
+                        {t.takrorMi && (
+                          <span
+                            className="ml-2 px-1.5 py-0.5 rounded text-2xs bg-expense-soft text-expense-fg align-middle"
+                            title="Shu nomdagi boshqa kompaniya ham bor — takror ro'yxatdan o'tgan bo'lishi mumkin"
+                          >
+                            takror?
+                          </span>
+                        )}
+                      </p>
                       <p className="text-xs text-faint">
                         {t.slug} · {t.businessCount} biznes
+                        {t.bosh && <span> · ma&apos;lumot kiritilmagan</span>}
                         {t.pendingPayments > 0 && (
                           <span className="text-expense-fg"> · {t.pendingPayments} to'lov kutilmoqda</span>
                         )}
@@ -251,6 +283,15 @@ export function SuperadminClient({
                       </span>
                       {t.accessMode !== "FULL" && (
                         <p className="text-2xs text-expense-fg mt-0.5">{t.accessMode}</p>
+                      )}
+                      {/* Telegram ulanmagan bo'lsa obuna eslatmalari yetib bormaydi. */}
+                      {!t.telegramUlangan && (
+                        <p
+                          className="text-2xs text-muted mt-0.5"
+                          title="Direktor Telegramni ulamagan — obuna eslatmasi yetib bormaydi, qo'ng'iroq qilish kerak"
+                        >
+                          TG yo&apos;q
+                        </p>
                       )}
                     </td>
                     <td className="py-2.5 text-muted">{sana(t.createdAt)}</td>
@@ -278,6 +319,16 @@ export function SuperadminClient({
                         <button className={btn} disabled={!!busy} onClick={() => kirish(t)}>
                           Kirish →
                         </button>
+                        {/* O'chirish faqat ma'lumoti yo'q takror yozuvlar uchun ochiq. */}
+                        {t.bosh && t.takrorMi && (
+                          <button
+                            className={`${btn} text-expense-fg`}
+                            disabled={!!busy}
+                            onClick={() => ochirish(t)}
+                          >
+                            O&apos;chirish
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

@@ -1,6 +1,6 @@
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { BadRequestError } from "@/lib/auth/guard";
-import { createTenantWithOwner } from "@/lib/services/signup";
+import { createTenantWithOwner, findRecentDuplicateTenant } from "@/lib/services/signup";
 import { planByCode } from "@/lib/billing/plans";
 
 const KUN_MS = 24 * 60 * 60 * 1000;
@@ -45,6 +45,14 @@ export async function createClientTenant(params: YangiMijozParams) {
 
   const band = await rawPrisma.user.findUnique({ where: { login }, select: { id: true } });
   if (band) throw new BadRequestError(`'${login}' logini allaqachon band`);
+
+  // Tugma ikki marta bosilsa ikkinchi mijoz ochilib ketmasin.
+  const takror = await findRecentDuplicateTenant(nom);
+  if (takror) {
+    throw new BadRequestError(
+      `'${takror.name}' hozirgina yaratilgan (${takror.slug}). Takror yaratilmadi — ro'yxatni tekshiring.`
+    );
+  }
 
   // eslint-disable-next-line prefer-const -- tenant obuna yoqilganda yangilanadi
   let { tenant, user, business } = await createTenantWithOwner({

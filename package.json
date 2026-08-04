@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/db-migrate.mjs && next build",
+    "build": "node scripts/db-migrate.mjs && node scripts/bootstrap-superadmin.mjs && next build",
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate",
@@ -14,6 +14,7 @@
     "bot": "node -r ts-node/register src/bot/index.ts",
     "superadmin:create": "node -r ts-node/register scripts/create-superadmin.ts",
     "superadmin:reset": "node -r ts-node/register scripts/reset-superadmin.ts",
+    "superadmin:bootstrap": "node scripts/bootstrap-superadmin.mjs",
     "client:create": "node -r ts-node/register scripts/create-client.ts",
     "backup": "node -r ts-node/register scripts/backup.ts",
     "restore": "node -r ts-node/register scripts/restore.ts",
@@ -28,7 +29,9 @@
     "test:ai": "node -r ts-node/register tests/ai.test.ts",
     "test:automation": "node -r ts-node/register tests/automation.test.ts",
     "test:avto": "node -r ts-node/register tests/avto.test.ts",
-    "test:backup": "node -r ts-node/register tests/backup.test.ts"
+    "test:backup": "node -r ts-node/register tests/backup.test.ts",
+    "test:bot-avto": "node -r ts-node/register tests/bot-avto.test.ts",
+    "test:tolov": "node -r ts-node/register tests/tolov.test.ts"
   },
   "prisma": {
     "seed": "node -r ts-node/register prisma/seed.ts"

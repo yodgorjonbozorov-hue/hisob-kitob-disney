@@ -7,6 +7,7 @@ import { PLANLAR } from "@/lib/billing/plans";
 import { formatDateUZ } from "@/lib/format";
 import { Logo } from "@/components/Logo";
 import { BillingClient } from "./BillingClient";
+import { mavjudProviderlar } from "@/lib/billing/provider";
 
 export const metadata = { title: "Obuna va to'lov" };
 
@@ -28,6 +29,8 @@ export default async function BillingPage() {
     const st = STATUS_LABEL[tenant.status] ?? { text: tenant.status, cls: "bg-surface-2 text-fg" };
     const deadline = tenant.status === "TRIAL" ? tenant.trialEndsAt : tenant.currentPeriodEnd;
     const manager = isManager(session.rol);
+    // Onlayn to'lov usullari faqat env sozlangan bo'lsa ko'rinadi.
+    const providerlar = mavjudProviderlar();
 
     return (
       <div className="min-h-screen bg-app px-4 py-10">
@@ -75,7 +78,7 @@ export default async function BillingPage() {
               </div>
               <div className="mt-4">
                 {manager ? (
-                  <BillingClient planCode={plan.code} />
+                  <BillingClient planCode={plan.code} providerlar={providerlar} />
                 ) : (
                   <p className="text-sm text-faint">To'lov qilish uchun direktorga murojaat qiling.</p>
                 )}

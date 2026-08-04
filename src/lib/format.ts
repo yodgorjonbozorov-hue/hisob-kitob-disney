@@ -77,6 +77,25 @@ export function parseSomInput(raw: string): number {
   return parseInt(cleaned, 10);
 }
 
+/**
+ * Erkin matndan summa o'qiydi — Telegram botda odam qanday yozsa shunday:
+ * "2 mln" → 2 000 000, "2.5 mln" → 2 500 000, "500 ming" → 500 000,
+ * "2 500 000" → 2 500 000. Tushunarsiz bo'lsa 0 qaytadi.
+ */
+export function parseSummaText(raw: string): number {
+  const s = raw.toLowerCase().replace(/\s+/g, " ").trim();
+  const m = s.match(/^(\d+(?:[.,]\d+)?)\s*(mlrd|milliard|mln|million|mil|ming|k)\b/);
+  if (!m) return parseSomInput(s);
+  const son = parseFloat(m[1].replace(",", "."));
+  const kof =
+    m[2] === "mlrd" || m[2] === "milliard"
+      ? 1_000_000_000
+      : m[2] === "ming" || m[2] === "k"
+        ? 1_000
+        : 1_000_000;
+  return Math.round(son * kof);
+}
+
 export function formatPercent(value: number | null): string {
   if (value === null || Number.isNaN(value)) return "—";
   const sign = value > 0 ? "+" : "";

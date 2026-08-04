@@ -49,6 +49,13 @@ SESSION_SECRET="kamida-32-belgidan-iborat-tasodifiy-maxfiy-satr"
 TELEGRAM_BOT_TOKEN="@BotFather'dan olingan token"
 TELEGRAM_BOT_USERNAME="bot_username (ixtiyoriy, ulanish yo'riqnomasida ko'rsatiladi)"
 NEXT_PUBLIC_APP_URL="https://balansa.uz"
+
+# Onlayn to'lov (ixtiyoriy — qo'yilmasa faqat "O'tkazma orqali" usuli ko'rinadi)
+PAYME_MERCHANT_ID="Payme kabinetidagi merchant id"
+PAYME_KEY="Payme merchant kaliti (Basic auth paroli)"
+CLICK_SERVICE_ID="Click service_id"
+CLICK_MERCHANT_ID="Click merchant_id"
+CLICK_SECRET_KEY="Click SECRET_KEY"
 ```
 
 `NEXT_PUBLIC_APP_URL` — OG-image va metadata uchun absolyut manzil. O'rnatilmasa `https://balansa.uz` ishlatiladi.
@@ -56,6 +63,25 @@ NEXT_PUBLIC_APP_URL="https://balansa.uz"
 Lokal ishlashda `DATABASE_AUTH_TOKEN` bo'sh qoldirilishi mumkin (fayl-based SQLite token talab qilmaydi). Production (Turso) uchun quyidagi "Production'ga deploy qilish" bo'limiga qarang.
 
 `SESSION_SECRET` — sessiya cookie'sini shifrlash uchun ishlatiladi, production'da albatta o'zgartiring va hech kimga oshkor qilmang. `TELEGRAM_BOT_TOKEN` ham maxfiy qiymat — uni hech qachon ochiq chatda yoki kodga qattiq yozib qo'ymang, faqat `.env` faylida saqlang (`.env` `.gitignore`ga kiritilgan).
+
+### Onlayn to'lov (Payme / Click)
+
+Kod ikkala provider uchun ham tayyor va **env sozlangandagina** yoqiladi — shartnoma imzolanmagan bo'lsa mijoz faqat "O'tkazma orqali" usulini ko'radi. To'lov tasdiqlangach obuna **avtomatik** uzayadi (qo'lda tasdiqlash bilan bir xil `confirmPayment` funksiyasi).
+
+Kabinetda ko'rsatiladigan manzillar (`<domen>` — sizning domeningiz):
+
+| Provider | Endpoint | Izoh |
+| --- | --- | --- |
+| Payme | `https://<domen>/api/billing/payme` | Merchant API (JSON-RPC), Basic auth `Paycom:<PAYME_KEY>` |
+| Click | `https://<domen>/api/billing/click/prepare` | Prepare (action=0) |
+| Click | `https://<domen>/api/billing/click/complete` | Complete (action=1) |
+
+Tafsilotlar:
+
+- Payme summani **tiyin**da yuboradi (199 000 so'm → 19 900 000), hisob maydoni `payment_id` (bizdagi `Payment.id`).
+- Click imzosi `md5(click_trans_id + service_id + SECRET_KEY + merchant_trans_id [+ merchant_prepare_id] + amount + action + sign_time)` bo'yicha tekshiriladi; imzo mos kelmasa `-1` qaytadi.
+- Takroriy so'rovlar (provider qayta yuborsa) obunani ikkinchi marta uzaytirmaydi — idempotentlik testlar bilan qoplangan (`npm run test:tolov`).
+- Payme bajarilgan to'lovni bekor qilsa (`state -2`), to'lov `REFUNDED` bo'ladi va superadmin panelida ko'rinadi — obuna muddati avtomatik qisqartirilmaydi, qarorni siz qabul qilasiz.
 
 ## Migratsiya va boshlang'ich ma'lumotlar (seed)
 
@@ -82,6 +108,27 @@ npm run superadmin:reset -- <login> <yangi-parol>   # parolni tiklash (parol esd
 `superadmin:reset` faqat roli SUPERADMIN bo'lgan akkauntga ta'sir qiladi. Production uchun buyruq
 Turso env (`DATABASE_URL`, `DATABASE_AUTH_TOKEN`) bilan ishga tushiriladi — masalan `npx vercel env pull`
 bilan olingan fayl orqali.
+
+#### Production'ga env orqali kirish (Turso ulanmasdan)
+
+Agar production'da "Login yoki parol noto'g'ri" chiqsa — bazada SUPERADMIN yo'q yoki parol boshqa.
+Turso'ga qo'l bilan ulanmasdan tiklash uchun Vercel → Project → Settings → Environment Variables'da
+quyidagilarni qo'yib, qayta deploy qiling (build vaqtida `scripts/bootstrap-superadmin.mjs` ishlaydi):
+
+| Env | Ma'nosi |
+| --- | --- |
+| `SUPERADMIN_LOGIN` | login (masalan `superadmin`) |
+| `SUPERADMIN_PAROL` | parol, kamida 8 belgi |
+| `SUPERADMIN_ISM` | ism (ixtiyoriy, default "Platforma egasi") |
+| `SUPERADMIN_RESET` | `1` — mavjud superadmin parolini ALMASHTIRISH (parol esdan chiqqanda) |
+
+Xulq-atvor: login topilmasa — yangi SUPERADMIN yaratiladi; mavjud bo'lsa va `SUPERADMIN_RESET` qo'yilmagan
+bo'lsa — tegilmaydi; `SUPERADMIN_RESET=1` bo'lsa — parol almashtiriladi va akkaunt faollashtiriladi.
+Login SUPERADMIN bo'lmagan (mijoz) foydalanuvchiga tegishli bo'lsa hech narsa o'zgarmaydi.
+Konfiguratsiya bo'lmasa qadam jimgina o'tkazib yuboriladi va build to'xtamaydi.
+
+**Kirgandan keyin `SUPERADMIN_PAROL` va `SUPERADMIN_RESET` ni Vercel'dan o'chirib tashlang** — aks holda
+har deploy'da parol qayta o'rnatiladi va sir env'da saqlanib qoladi.
 
 ### Yangi mijoz (tenant) yaratish
 
@@ -152,7 +199,8 @@ Biznes **turi** "avto" bo'lsa (Admin panel → Bizneslar → *Avto rejim*), ombo
 
 - Bitta yozuv = **bitta mashina** (model, yil, davlat raqami, rang; qoldiq 0/1 — "Sotuvda"/"Sotildi").
 - **Mashina qabul qilish**: *naqd* olinsa darhol chiqim yoziladi ("Mashina xaridi"); *qarzga* olinsa egasiga "Men qarzdorman" qarzdorligi ochiladi va chiqim to'lov paytida yoziladi (kassa usuli).
-- **Sof foyda**: har mashina bo'yicha sotilgan narx − olingan narx, hamda avtopark sahifasida umumiy yakun (sotilgan mashinalar, tushum, tannarx, sof foyda).
+- **Mashina xarajatlari**: avtopark jadvalidagi *Xarajat* tugmasi orqali ta'mirlash / bo'yoq / yuvish / rasmiylashtirish / ehtiyot qism summasi **aynan o'sha mashinaga** yoziladi. Naqd to'langan bo'lsa "Mashina xarajati" chiqimi avtomatik yoziladi (qo'lda takror kiritish shart emas); "keyin to'lanadi" tanlansa ustaga "Men qarzdorman" qarzdorligi ochiladi.
+- **Sof foyda**: har mashina bo'yicha sotilgan narx − olingan narx − **shu mashinaga qilingan xarajatlar**, hamda avtopark sahifasida umumiy yakun (sotilgan mashinalar, tushum, tannarx, xarajat, sof foyda). Sotilmagan mashinaga tikilgan xarajat avtopark qiymatiga qo'shiladi.
 - Kategoriyalar avto biznesga moslangan: rasmiylashtirish (MRB, notarius), ta'mirlash, sug'urta, evakuator, maydon ijarasi va h.k.
 - Tarif: **Avto — 200 000 so'm/oy** (Moliya + Avtopark modullari).
 
@@ -182,6 +230,13 @@ npm run bot
    - `/chiqim` — chiqim tranzaksiyasini kiritish
    - `/hisobot` — joriy oy bo'yicha qisqa hisobot va PDF/Excel yuklab olish tugmalari
    - `/bekor` — joriy suhbat/amalni bekor qilish
+   - `/lead` — yangi mijoz/bitim (CRM moduli yoqilgan bo'lsa)
+
+Avto rejimidagi kompaniyalarda direktor/administrator uchun qo'shimcha buyruqlar (bozorda turib kiritish uchun):
+
+   - `/mashina` — avtoparkka mashina qabul qilish (model → olingan narx → sotuv narxi → naqd/qarzga)
+   - `/xarajat` — mashinani tugmadan tanlab xarajat yozish (turi → summa)
+   - Bir qatorli tez yo'l: **`xarajat: Cobalt, ta'mirlash 2 mln`** — mashinani nomi yoki davlat raqami bo'yicha topadi, summani "2 mln / 500 ming / 2 500 000" ko'rinishida tushunadi va javobda shu mashinaning yangilangan sof foydasini qaytaradi.
 
 Har bir Telegram chat faqat bitta tizim foydalanuvchisiga bog'lanadi (parol Telegram orqali hech qachon yuborilmaydi — faqat bir martalik kod orqali bog'lanadi).
 

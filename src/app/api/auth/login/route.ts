@@ -8,6 +8,26 @@ import { loginSchema } from "@/lib/validation/auth";
 import { rateLimit, rateLimitReset } from "@/lib/rateLimit";
 import { getClientIp } from "@/lib/services/audit";
 
+/**
+ * Loginni topadi: avval aniq moslik, topilmasa registr (katta/kichik harf)
+ * e'tiborga olinmagan holda. Mobil klaviaturalar birinchi harfni avtomatik
+ * kattalashtiradi ("superadmin" -> "Superadmin"), SQLite esa registrga sezgir.
+ *
+ * Xavfsizlik: registrsiz moslik FAQAT bitta foydalanuvchi topilgandagina
+ * qabul qilinadi — "Admin"/"admin" kabi ikki xil akkaunt bo'lsa hech biri
+ * tanlanmaydi (noto'g'ri akkauntga kirib qolishning oldi olinadi).
+ */
+async function findUserByLogin(login: string) {
+  const exact = await prisma.user.findUnique({ where: { login } });
+  if (exact) return exact;
+
+  const matches = await prisma.$queryRaw<Array<{ id: string }>>`
+    SELECT "id" FROM "User" WHERE "login" = ${login} COLLATE NOCASE LIMIT 2
+  `;
+  if (matches.length !== 1) return null;
+  return prisma.user.findUnique({ where: { id: matches[0].id } });
+}
+
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request) ?? "unknown";
   const rlKey = `login:${ip}`;
@@ -41,7 +61,7 @@ export async function POST(request: NextRequest) {
 
   const genericError = NextResponse.json({ error: "Login yoki parol noto'g'ri" }, { status: 401 });
 
-  const user = await prisma.user.findUnique({ where: { login } });
+  const user = await findUserByLogin(login);
   if (!user || !user.isActive) {
     return genericError;
   }

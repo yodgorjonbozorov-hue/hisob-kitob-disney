@@ -71,7 +71,8 @@ const AVTO: OmborMatn = {
   dona: "ta",
   turlarSoni: "Avtoparkdagi mashinalar",
   jamiQoldiq: "Sotuvda turibdi",
-  omborQiymati: "Avtopark qiymati (olingan narx)",
+  // Qiymatga mashinaga qilingan xarajatlar ham qo'shiladi — yorliq shuni aytadi.
+  omborQiymati: "Avtoparkka tikilgan pul (narx + xarajat)",
   yangi: "+ Mashina qo'shish",
   koproq: "Ko'p mashina qo'shish",
   nomiPlaceholder: "Model (masalan: Malibu 2)",
