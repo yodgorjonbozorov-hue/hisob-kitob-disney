@@ -139,6 +139,7 @@ async function tenantsWithData(): Promise<Set<string>> {
           budgets: true,
           shiftCloses: true,
           recurrings: true,
+          transfers: true,
         },
       },
     },
@@ -179,7 +180,12 @@ export async function deleteEmptyTenant(tenantId: string): Promise<{ name: strin
       await tx.category.deleteMany({ where: { businessId: { in: businessIds } } });
       await tx.auditLog.deleteMany({ where: { businessId: { in: businessIds } } });
       await tx.stage.deleteMany({ where: { businessId: { in: businessIds } } });
+      // Kassalar (Faza 4.1) — har biznesda kamida bittasi bo'ladi, shuning uchun
+      // ular ham biznesdan OLDIN o'chirilishi shart (Account.businessId Restrict).
+      await tx.accountTransfer.deleteMany({ where: { businessId: { in: businessIds } } });
+      await tx.account.deleteMany({ where: { businessId: { in: businessIds } } });
     }
+    await tx.auditLog.deleteMany({ where: { tenantId } });
     await tx.user.deleteMany({ where: { tenantId } });
     await tx.business.deleteMany({ where: { tenantId } });
     await tx.tenantModule.deleteMany({ where: { tenantId } });

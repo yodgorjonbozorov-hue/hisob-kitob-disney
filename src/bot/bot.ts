@@ -10,6 +10,7 @@ import {
   handleBusinessCallback,
   handleCategoryCallback,
   handleDateCallback,
+  handleAccountCallback,
   handleSkipIzohCallback,
   handleFlowText,
 } from "./transactionFlow";
@@ -271,6 +272,7 @@ bot.callbackQuery(
 bot.callbackQuery(/^biz:/, tenantHandler((ctx) => handleBusinessCallback(ctx), { yozish: true }));
 bot.callbackQuery(/^cat:/, tenantHandler((ctx) => handleCategoryCallback(ctx), { yozish: true }));
 bot.callbackQuery(/^sana:/, tenantHandler((ctx) => handleDateCallback(ctx), { yozish: true }));
+bot.callbackQuery(/^kassa:/, tenantHandler((ctx) => handleAccountCallback(ctx), { yozish: true }));
 
 bot.callbackQuery(
   /^rbiz:/,

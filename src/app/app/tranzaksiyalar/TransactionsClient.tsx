@@ -22,6 +22,7 @@ export function TransactionsClient({
   page,
   pageSize,
   categories,
+  accounts,
   currentUserId,
   currentUserRol,
   hideProfit = false,
@@ -34,6 +35,7 @@ export function TransactionsClient({
   page: number;
   pageSize: number;
   categories: CategoryOption[];
+  accounts: { id: string; nomi: string }[];
   currentUserId: string;
   currentUserRol: Rol;
   hideProfit?: boolean;
@@ -156,7 +158,7 @@ export function TransactionsClient({
 
   return (
     <div className="space-y-4">
-      <TransactionForm categories={categories} onCreated={handleCreated} />
+      <TransactionForm categories={categories} accounts={accounts} onCreated={handleCreated} />
       <TransactionFilters categories={categories} initial={filters} />
 
       <div className="flex items-center justify-between">

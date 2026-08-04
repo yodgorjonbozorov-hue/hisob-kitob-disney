@@ -29,6 +29,7 @@ export const ZAXIRA_JADVALLARI = [
   "subscription",
   "payment",
   "appSetting",
+  "account",
   "category",
   "transaction",
   "auditLog",
@@ -46,6 +47,7 @@ export const ZAXIRA_JADVALLARI = [
   "deal",
   "task",
   "activity",
+  "accountTransfer",
 ] as const;
 
 export type ZaxiraJadval = (typeof ZAXIRA_JADVALLARI)[number];

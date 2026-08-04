@@ -138,14 +138,68 @@ export async function handleDateCallback(ctx: Context) {
   await ctx.answerCallbackQuery();
 
   if (data === "sana:bugun") {
-    await setFlow(chatId, { ...flow, step: "izoh", sana: todayDateOnlyString() });
-    await ctx.editMessageText("Izoh yozing (ixtiyoriy) yoki tugmani bosing:", {
-      reply_markup: new InlineKeyboard().text("O'tkazib yuborish", "izoh:skip"),
-    });
+    await sanadanKeyin(ctx, chatId, { ...flow, sana: todayDateOnlyString() }, true);
   } else if (data === "sana:custom") {
     await setFlow(chatId, { ...flow, step: "sana_custom" });
     await ctx.editMessageText("Sanani KUN.OY.YIL formatida yozing (masalan: 15.06.2026):");
   }
+}
+
+/**
+ * Sana tanlangandan keyingi qadam.
+ *
+ * Biznesda BIRDAN ORTIQ faol kassa bo'lsa — qaysi kassaga tushgani so'raladi.
+ * Bitta kassa bo'lsa bu qadam umuman ko'rsatilmaydi (ortiqcha bosish yo'q) —
+ * server birinchi faol kassani o'zi tanlaydi.
+ */
+async function sanadanKeyin(
+  ctx: Context,
+  chatId: string,
+  flow: TransactionFlowState,
+  edit: boolean
+) {
+  const kassalar = flow.businessId
+    ? await prisma.account.findMany({
+        where: { businessId: flow.businessId, isActive: true },
+        orderBy: [{ tartib: "asc" }, { createdAt: "asc" }],
+        select: { id: true, nomi: true },
+      })
+    : [];
+
+  if (kassalar.length > 1) {
+    await setFlow(chatId, { ...flow, step: "kassa" });
+    const keyboard = new InlineKeyboard();
+    kassalar.forEach((k, i) => {
+      keyboard.text(k.nomi, `kassa:${k.id}`);
+      if (i % 2 === 1) keyboard.row();
+    });
+    const matn = "Qaysi kassaga tushdi?";
+    if (edit) await ctx.editMessageText(matn, { reply_markup: keyboard });
+    else await ctx.reply(matn, { reply_markup: keyboard });
+    return;
+  }
+
+  await setFlow(chatId, { ...flow, step: "izoh" });
+  const matn = "Izoh yozing (ixtiyoriy) yoki tugmani bosing:";
+  const keyboard = new InlineKeyboard().text("O'tkazib yuborish", "izoh:skip");
+  if (edit) await ctx.editMessageText(matn, { reply_markup: keyboard });
+  else await ctx.reply(matn, { reply_markup: keyboard });
+}
+
+export async function handleAccountCallback(ctx: Context) {
+  const chatId = chatIdOf(ctx);
+  const flow = await getFlow(chatId);
+  if (!flow || flow.step !== "kassa") {
+    await ctx.answerCallbackQuery({ text: "Bu so'rov eskirgan, qaytadan boshlang." });
+    return;
+  }
+  await ctx.answerCallbackQuery();
+
+  const accountId = (ctx.callbackQuery?.data ?? "").slice("kassa:".length);
+  await setFlow(chatId, { ...flow, step: "izoh", accountId });
+  await ctx.editMessageText("Izoh yozing (ixtiyoriy) yoki tugmani bosing:", {
+    reply_markup: new InlineKeyboard().text("O'tkazib yuborish", "izoh:skip"),
+  });
 }
 
 export async function handleSkipIzohCallback(ctx: Context, user: User) {
@@ -188,10 +242,7 @@ export async function handleFlowText(ctx: Context, user: User): Promise<boolean>
     }
     const [, dd, mm, yyyy] = match;
     const sana = `${yyyy}-${mm}-${dd}`;
-    await setFlow(chatId, { ...flow, step: "izoh", sana });
-    await ctx.reply("Izoh yozing (ixtiyoriy) yoki tugmani bosing:", {
-      reply_markup: new InlineKeyboard().text("O'tkazib yuborish", "izoh:skip"),
-    });
+    await sanadanKeyin(ctx, chatId, { ...flow, sana }, false);
     return true;
   }
 
@@ -222,6 +273,7 @@ async function finalizeTransaction(
     summa: flow.summa,
     sana: flow.sana,
     izoh,
+    accountId: flow.accountId ?? null,
   });
 
   await clearFlow(chatId);

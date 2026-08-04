@@ -1,6 +1,6 @@
 import { flowStore } from "./conversationStore";
 
-export type FlowStep = "business" | "category" | "summa" | "sana" | "sana_custom" | "izoh";
+export type FlowStep = "business" | "category" | "summa" | "sana" | "sana_custom" | "kassa" | "izoh";
 
 export interface TransactionFlowState {
   step: FlowStep;
@@ -10,6 +10,8 @@ export interface TransactionFlowState {
   categoryNomi?: string;
   summa?: number;
   sana?: string; // YYYY-MM-DD
+  /** Qaysi kassaga tushdi. Bitta kassali biznesda bu qadam so'ralmaydi. */
+  accountId?: string;
 }
 
 /**

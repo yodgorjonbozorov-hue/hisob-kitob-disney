@@ -130,6 +130,8 @@ model Business {
   crmActivities   Activity[]
   tasks           Task[]
   productExpenses ProductExpense[]
+  accounts        Account[]
+  transfers       AccountTransfer[]
 
   @@index([tenantId])
 }
@@ -211,6 +213,51 @@ model BotConversation {
   @@index([updatedAt])
 }
 
+/// PUL MANBAI — kassa yoki hisob-raqam (naqd, plastik, bank).
+///
+/// Ilgari hamma pul bitta "qop"da edi: naqd sotuv ham, plastik ham, bankdagi
+/// pul ham bir joyda ko'rinardi. Endi har tranzaksiya qaysi kassaga
+/// tushganini bildiradi va har kassaning o'z qoldig'i bo'ladi.
+model Account {
+  id           String            @id @default(cuid())
+  businessId   String
+  business     Business          @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  nomi         String
+  /// "naqd" | "plastik" | "bank"
+  turi         String            @default("naqd")
+  isActive     Boolean           @default(true)
+  tartib       Int               @default(0)
+  createdAt    DateTime          @default(now())
+  transactions Transaction[]
+  chiqishlar   AccountTransfer[] @relation("transferFrom")
+  kirishlar    AccountTransfer[] @relation("transferTo")
+
+  @@unique([businessId, nomi])
+  @@index([businessId, isActive, tartib])
+}
+
+/// KASSALAR ARO PUL KO'CHIRISH (masalan kassadan bankka).
+///
+/// Ataylab Transaction YOZMAYDI: bu kirim ham, chiqim ham emas — pul biznes
+/// ichida joyini o'zgartirdi. Aks holda kunlik kirim/chiqim sun'iy oshib
+/// ketardi. Kassa qoldig'i hisobida esa alohida hisobga olinadi.
+model AccountTransfer {
+  id            String   @id @default(cuid())
+  businessId    String
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  fromAccountId String
+  fromAccount   Account  @relation("transferFrom", fields: [fromAccountId], references: [id], onDelete: Restrict)
+  toAccountId   String
+  toAccount     Account  @relation("transferTo", fields: [toAccountId], references: [id], onDelete: Restrict)
+  summa         Int
+  sana          DateTime
+  izoh          String?
+  userId        String
+  createdAt     DateTime @default(now())
+
+  @@index([businessId, sana])
+}
+
 model Category {
   id           String                 @id @default(cuid())
   nomi         String
@@ -236,6 +283,10 @@ model Transaction {
   category   Category  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   businessId String
   business   Business  @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  /// Qaysi kassa/hisob-raqamga tushdi. Eski yozuvlar uchun null — migratsiya
+  /// skripti (scripts/kassa-migratsiya.ts) ularni default kassaga bog'laydi.
+  accountId  String?
+  account    Account?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
   summa      Int
   sana       DateTime
   izoh       String?
@@ -257,6 +308,7 @@ model Transaction {
   // kategoriya/foydalanuvchi o'chirilayotganda SQLite bola jadvalni skanerlaydi.
   @@index([categoryId])
   @@index([userId])
+  @@index([businessId, accountId, sana])
 }
 
 /// Audit izi — har bir muhim o'zgarish (kim, nima, oldin→keyin) yoziladi.
