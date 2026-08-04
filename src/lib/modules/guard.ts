@@ -1,3 +1,4 @@
+import { perRequestCache } from "@/lib/perRequestCache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ForbiddenError } from "@/lib/auth/guard";
@@ -13,9 +14,12 @@ import { MODULLAR, modulByCode } from "./registry";
  * Rol matritsasi (registry.rollar) API darajasida ham tekshiriladi.
  */
 
-/** Tenant uchun yoqilgan modul kodlari. Tenant kontekstida chaqirilishi shart. */
-export async function getEnabledModules(ctx: TenantContext): Promise<Set<string>> {
-  const plan = planByCode(ctx.tenant.plan);
+/**
+ * Yoqilgan modullar layout navigatsiyasi va har bir modul guard'i tomonidan
+ * chaqiriladi — bitta so'rov ichida BIR MARTA o'qiladi (React cache).
+ */
+const enabledModules = perRequestCache(async function enabledModules(planCode: string): Promise<Set<string>> {
+  const plan = planByCode(planCode);
   const planModullari = new Set(plan?.modullar ?? []);
 
   const yoqilgan = new Set<string>();
@@ -31,6 +35,11 @@ export async function getEnabledModules(ctx: TenantContext): Promise<Set<string>
     }
   }
   return yoqilgan;
+});
+
+/** Tenant uchun yoqilgan modul kodlari. Tenant kontekstida chaqirilishi shart. */
+export async function getEnabledModules(ctx: TenantContext): Promise<Set<string>> {
+  return enabledModules(ctx.tenant.plan);
 }
 
 /** API uchun: modul yoqilmagan yoki rol ruxsatsiz bo'lsa ForbiddenError. */

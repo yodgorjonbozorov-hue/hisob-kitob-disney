@@ -1,3 +1,4 @@
+import { perRequestCache } from "@/lib/perRequestCache";
 import { cookies } from "next/headers";
 import { getIronSession, type IronSession, type SessionOptions } from "iron-session";
 import { redirect } from "next/navigation";
@@ -36,9 +37,15 @@ export const sessionOptions: SessionOptions = {
   },
 };
 
-export async function getSession(): Promise<IronSession<SessionData>> {
+/**
+ * Sessiya cookie'sini deshifrlash — bitta so'rov ichida BIR MARTA (React cache).
+ * Layout + sahifa + guard'lar `getSession`ni bir necha bor chaqiradi; memoizatsiyasiz
+ * har chaqiruv qaytadan kripto ishini bajarardi. Qaytariladigan obyekt bir xil
+ * (mutable) instans — `session.save()` avvalgidek ishlaydi.
+ */
+export const getSession = perRequestCache(async function getSession(): Promise<IronSession<SessionData>> {
   return getIronSession<SessionData>(await cookies(), sessionOptions);
-}
+});
 
 /** Sessiyada userId yo'q bo'lsa, /login sahifasiga redirect qiladi. Server Component/layout uchun. */
 export async function requireUser(): Promise<Required<SessionData>> {

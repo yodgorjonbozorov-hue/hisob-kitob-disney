@@ -1,3 +1,4 @@
+import { perRequestCache } from "@/lib/perRequestCache";
 import { NextRequest, NextResponse } from "next/server";
 import { redirect } from "next/navigation";
 import { getCurrentUser, requireUser, type SessionData } from "./session";
@@ -30,11 +31,14 @@ export interface TenantContext {
  * Sessiyadan tenantni yuklaydi. Eski (migratsiyagacha ochilgan) sessiyalarda
  * tenantId bo'lmaydi — bazadan o'qiladi (fail-closed: topilmasa null).
  */
-async function loadTenant(session: Required<SessionData>): Promise<TenantInfo | null> {
-  let tenantId = session.tenantId ?? null;
+const loadTenant = perRequestCache(async function loadTenant(
+  userId: string,
+  sessionTenantId: string | null
+): Promise<TenantInfo | null> {
+  let tenantId = sessionTenantId;
   if (!tenantId) {
     const user = await rawPrisma.user.findUnique({
-      where: { id: session.userId },
+      where: { id: userId },
       select: { tenantId: true, isActive: true },
     });
     if (!user || !user.isActive) return null;
@@ -53,10 +57,15 @@ async function loadTenant(session: Required<SessionData>): Promise<TenantInfo | 
       bepul: true,
     },
   });
-}
+});
 
+/**
+ * Tenant konteksti bir so'rov ichida layout, sahifa va har bir guard tomonidan
+ * qayta-qayta so'raladi. `loadTenant` React cache bilan memoizatsiya qilingani uchun
+ * baza faqat birinchi chaqiruvda o'qiladi — qolganlari xotiradan keladi.
+ */
 async function buildContext(session: Required<SessionData>): Promise<TenantContext | null> {
-  const tenant = await loadTenant(session);
+  const tenant = await loadTenant(session.userId, session.tenantId ?? null);
   if (!tenant) return null;
   return { session, tenantId: tenant.id, tenant, access: computeAccess(tenant) };
 }
