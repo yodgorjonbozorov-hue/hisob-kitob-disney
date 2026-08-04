@@ -315,6 +315,53 @@ Kunlik cron eng birinchi ish sifatida butun bazani JSON+gzip qilib `BACKUP_CHAT_
 Qo'lda: `npm run backup`, tiklash: `npm run restore -- <fayl.json> --confirm`.
 To'liq tartib va server ko'chirish yo'riqnomasi — [docs/MIGRATSIYA.md](docs/MIGRATSIYA.md).
 
+## Tezlik (nega sahifalar tez ochilishi kerak)
+
+Ilova Vercel'da (serverless) ishlaydi, baza esa Turso'da — **alohida serverda**. Bu shuni
+anglatadiki, har bir baza so'rovi alohida tarmoq borish-kelishi (~20–150 ms). Sahifa
+tezligini belgilaydigan asosiy raqam — sekundlar emas, **so'rovlar soni**.
+
+Shuning uchun quyidagi qoidalar amal qiladi:
+
+1. **Bir so'rovda bir marta o'qish.** `getSession`, tenant, bizneslar ro'yxati, aktiv
+   biznes va yoqilgan modullar `lib/perRequestCache.ts` orqali memoizatsiya qilingan.
+   Layout va sahifa bir xil ma'lumotni so'rasa — baza faqat bir marta o'qiladi.
+   (`perRequestCache` React'ning `cache()` funksiyasini o'raydi va u mavjud bo'lmagan
+   muhitlarda — bot, cron, testlar — xatosiz "shaffof" holatga tushadi.)
+2. **Sikl ichida so'rov yo'q.** Oylik dinamika, kategoriya kesimi va kunlik grafik
+   BITTA guruhlangan SQL so'rovi bilan olinadi (`lib/queries/dashboard.ts`).
+   Panel agregatlari: **21 → 5 so'rov**. Tekshirish:
+   `DATABASE_URL="file:./prisma/bench.db" npm run bench:panel`
+3. **Bloklamaydigan qo'shimchalar.** Bildirishnoma badge'i `<Suspense>` ichida oqim
+   bilan keladi (`components/nav/NotifBadge.tsx`) — uning so'rovlari sahifa
+   chizilishini kutib turmaydi.
+4. **`loading.tsx` majburiy.** Usiz Next.js dinamik sahifa uchun prefetch qila olmaydi
+   va tugma bosilganda ekranda hech nima o'zgarmaydi. `/app/loading.tsx` butun ilovani
+   qoplaydi.
+5. **Indekslar so'rov shakliga mos bo'lsin.** Issiq so'rovlar doim
+   `businessId + sana` (ko'pincha + `turi`) bo'yicha filtrlaydi — shuning uchun
+   kompozit indekslar qo'yilgan (migratsiya: `20260804090000_tezlik_indekslari`).
+
+### Region (eng katta qolgan omil)
+
+Vercel funksiyalari hozir **`iad1`** (Vashington, AQSh) regionida ishlaydi.
+Ikki narsa muhim va **ikkalasi ham bir xil regionda bo'lishi kerak**:
+
+- **Vercel funksiya regioni** — Vercel → Project → Settings → Functions → Region.
+- **Turso baza (primary) regioni** — `turso db show <baza>`.
+
+Agar ular turli qit'ada bo'lsa, har bir so'rov 100 ms+ turadi va hech qanday kod
+optimizatsiyasi buni qoplamaydi. Foydalanuvchilar O'zbekistonda bo'lgani uchun
+`fra1` (Frankfurt) `iad1`dan sezilarli yaqin — lekin **faqat Turso ham o'sha yerga
+ko'chirilgan (yoki replika qo'yilgan) bo'lsa**. Aks holda holat yomonlashadi.
+
+Turso'da replika qo'shish:
+
+```bash
+turso db show balansa                 # joriy primary regionni ko'rish
+turso db replicate balansa fra        # Frankfurt replikasi
+```
+
 ## Kelajakdagi ishlar (v1'da qasddan kiritilmagan)
 
 - Tranzaksiyaga rasm/kvitansiya biriktirish

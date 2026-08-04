@@ -20,7 +20,7 @@ export default async function BildirishnomalarPage() {
   const business = await getActiveBusiness(session);
 
   const notifs = businessId
-    ? await getNotifications(businessId, { rol: session.rol, omborli: business?.omborli ?? false })
+    ? await getNotifications(businessId, session.rol, business?.omborli ?? false)
     : [];
 
   return (

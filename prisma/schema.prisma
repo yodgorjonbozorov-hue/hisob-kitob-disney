@@ -206,6 +206,12 @@ model Transaction {
   @@index([businessId])
   @@index([userId])
   @@index([deletedAt])
+  // Kompozit indekslar — barcha issiq so'rovlar "businessId + sana oralig'i"
+  // shaklida bo'lgani uchun (panel, hisobot, budjet, ro'yxat).
+  @@index([businessId, sana])
+  @@index([businessId, turi, sana])
+  @@index([businessId, deletedAt, sana])
+  @@index([businessId, categoryId, sana])
 }
 
 /// Audit izi — har bir muhim o'zgarish (kim, nima, oldin→keyin) yoziladi.
@@ -303,6 +309,8 @@ model Product {
   expenses     ProductExpense[]
 
   @@index([businessId])
+  // Ombor bildirishnomalari: kam qolgan / tugagan mahsulotlar.
+  @@index([businessId, isActive, miqdor])
 }
 
 /// Mahsulot/mashinaga bog'langan xarajat (avto rejimida: ta'mirlash, bo'yoq,
@@ -366,6 +374,8 @@ model Sale {
 
   @@index([businessId])
   @@index([productId])
+  // Sotuv hisobotlari sana oralig'i bo'yicha.
+  @@index([businessId, createdAt])
 }
 
 /// Qarzdorlik. Ikki yo'nalishli:
@@ -397,6 +407,8 @@ model Debt {
   @@index([businessId])
   @@index([businessId, turi])
   @@index([productId])
+  // Bildirishnomalar: ochiq qarzlar turi va yoshi bo'yicha.
+  @@index([businessId, isYopilgan, turi, createdAt])
 }
 
 // ==== CRM moduli (BOS-2) ====

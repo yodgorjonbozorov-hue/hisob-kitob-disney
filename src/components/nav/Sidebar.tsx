@@ -23,7 +23,11 @@ interface Props {
   activeBusinessId: string | null;
   /** Modul registry'sidan generatsiya qilingan havolalar (lib/modules/registry.ts). */
   navItems: NavItem[];
-  notifCount: number;
+  /**
+   * Bildirishnoma badge'i — server komponenti sifatida `<Suspense>` ichida uzatiladi,
+   * shuning uchun uning so'rovlari sahifa chizilishini bloklamaydi.
+   */
+  notifSlot?: React.ReactNode;
 }
 
 /** Registry'dagi ikon kaliti -> lucide komponenti. */
@@ -50,7 +54,7 @@ const IKONLAR: Record<string, LucideIcon> = {
   ai: Sparkles,
 };
 
-export default function Sidebar({ ism, rol, businesses, activeBusinessId, navItems, notifCount }: Props) {
+export default function Sidebar({ ism, rol, businesses, activeBusinessId, navItems, notifSlot }: Props) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -60,7 +64,7 @@ export default function Sidebar({ ism, rol, businesses, activeBusinessId, navIte
     router.refresh();
   }
 
-  const item = (href: string, label: string, Icon: LucideIcon, badge?: number) => {
+  const item = (href: string, label: string, Icon: LucideIcon, badge?: React.ReactNode) => {
     const active = pathname === href;
     return (
       <Link
@@ -73,11 +77,7 @@ export default function Sidebar({ ism, rol, businesses, activeBusinessId, navIte
       >
         <Icon className="w-[18px] h-[18px] shrink-0" strokeWidth={active ? 2.25 : 2} />
         <span className="flex-1">{label}</span>
-        {badge ? (
-          <span className="bg-expense text-white text-2xs font-semibold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center tnum">
-            {badge}
-          </span>
-        ) : null}
+        {badge}
       </Link>
     );
   };
@@ -94,7 +94,7 @@ export default function Sidebar({ ism, rol, businesses, activeBusinessId, navIte
         <BusinessSwitcher businesses={businesses} activeId={activeBusinessId} rol={rol} />
       </div>
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {item("/app/bildirishnomalar", "Bildirishnomalar", Bell, notifCount)}
+        {item("/app/bildirishnomalar", "Bildirishnomalar", Bell, notifSlot)}
         {navItems.map((l) => item(l.href, l.label, IKONLAR[l.icon] ?? Receipt))}
       </nav>
       <div className="px-4 py-4 border-t border-line space-y-2">

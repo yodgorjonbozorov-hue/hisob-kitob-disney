@@ -1,8 +1,9 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { requireTenantPage } from "@/lib/auth/tenant";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { getAccessibleBusinesses, resolveActiveBusinessId } from "@/lib/business";
-import { getNotificationCount } from "@/lib/queries/notifications";
+import { NotifBadge } from "@/components/nav/NotifBadge";
 import { getEnabledModules } from "@/lib/modules/guard";
 import { computeNav, computeMobileTabs } from "@/lib/modules/registry";
 import { isAvto } from "@/lib/biznesTuri";
@@ -37,9 +38,21 @@ export default async function ProtectedLayout({
   const activeBusiness = businesses.find((b) => b.id === activeBusinessId);
   const activeOmborli = activeBusiness?.omborli ?? false;
   const activeAvto = isAvto(activeBusiness?.turi);
-  const notifCount = activeBusinessId
-    ? await getNotificationCount(activeBusinessId, { rol: session.rol, omborli: activeOmborli }).catch(() => 0)
-    : 0;
+
+  // Bildirishnoma soni bir nechta so'rov talab qiladi — u `await` QILINMAYDI, balki
+  // <Suspense> ichida oqim bilan keladi. Shu sabab sahifa uning natijasini kutmaydi.
+  const notifSlot = (variant: "sidebar" | "mobile") =>
+    activeBusinessId ? (
+      <Suspense fallback={null}>
+        <NotifBadge
+          tenantId={tenantId}
+          businessId={activeBusinessId}
+          rol={session.rol}
+          omborli={activeOmborli}
+          variant={variant}
+        />
+      </Suspense>
+    ) : null;
 
   // Navigatsiya modul registry'sidan generatsiya qilinadi — BITTA manba.
   const navHolati = {
@@ -61,7 +74,7 @@ export default async function ProtectedLayout({
           businesses={navBusinesses}
           activeBusinessId={activeBusinessId}
           navItems={navItems}
-          notifCount={notifCount}
+          notifSlot={notifSlot("sidebar")}
         />
         <MobileNav
           ism={session.ism}
@@ -69,7 +82,7 @@ export default async function ProtectedLayout({
           businesses={navBusinesses}
           activeBusinessId={activeBusinessId}
           omborli={activeOmborli}
-          notifCount={notifCount}
+          notifSlot={notifSlot("mobile")}
         />
         <main className="flex-1 p-4 md:p-8 pb-24 lg:pb-8">
           {session.impersonatedBy && <ImpersonationBanner ism={session.ism} />}
