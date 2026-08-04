@@ -31,6 +31,11 @@ import {
   handleAvtoText,
   clearAvtoFlow,
 } from "./avtoFlow";
+import {
+  handleTasdiqCallback,
+  handleRadCallback,
+  handleRadText,
+} from "./approvalFlow";
 import { isModuleOnForTenant } from "@/lib/modules/guard";
 import { modulByCode } from "@/lib/modules/registry";
 import { BRAND } from "@/lib/brand";
@@ -269,6 +274,16 @@ bot.callbackQuery(
   /^stol:/,
   tenantHandler((ctx, user) => handleSotishTolovCallback(ctx, user), { managerOnly: true, yozish: true })
 );
+// Tasdiqlash: qaror faqat boshqaruvchida (xizmat qatlami rolni yana tekshiradi).
+bot.callbackQuery(
+  /^tsd:ok:/,
+  tenantHandler((ctx, user) => handleTasdiqCallback(ctx, user), { managerOnly: true, yozish: true })
+);
+bot.callbackQuery(
+  /^tsd:no:/,
+  tenantHandler((ctx, user) => handleRadCallback(ctx, user), { managerOnly: true, yozish: true })
+);
+
 bot.callbackQuery(/^biz:/, tenantHandler((ctx) => handleBusinessCallback(ctx), { yozish: true }));
 bot.callbackQuery(/^cat:/, tenantHandler((ctx) => handleCategoryCallback(ctx), { yozish: true }));
 bot.callbackQuery(/^sana:/, tenantHandler((ctx) => handleDateCallback(ctx), { yozish: true }));
@@ -299,6 +314,8 @@ bot.on(
   // Matn xabarlari oqim davomi (lead yoki kirim/chiqim) — yozish hisoblanadi.
   tenantHandler(
     async (ctx, user) => {
+      // Tasdiq rad sababi — boshqa oqimlardan oldin tekshiriladi.
+      if (await handleRadText(ctx, user)) return;
       if (await handleLeadText(ctx, user)) return;
       // Avto oqimi va «xarajat: ...» tez buyrug'i — faol kirim/chiqim oqimiga aralashmaydi.
       if (await handleAvtoText(ctx, user)) return;

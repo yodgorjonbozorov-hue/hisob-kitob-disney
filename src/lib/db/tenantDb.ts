@@ -45,6 +45,9 @@ const BUSINESS_SCOPED = new Set([
   "Supplier",
   "PurchaseOrder",
   "PurchaseOrderItem",
+  // Tasdiqlash (Faza 6.2)
+  "ApprovalRule",
+  "ApprovalRequest",
 ]);
 // AuditLog: businessId nullable — biznesga bog'langan yozuvlar tenant bo'yicha filtrlanadi.
 const AUDIT_MODEL = "AuditLog";

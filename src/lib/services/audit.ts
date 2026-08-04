@@ -37,7 +37,9 @@ export type AuditEntity =
   | "account"
   | "accountTransfer"
   | "supplier"
-  | "purchaseOrder";
+  | "purchaseOrder"
+  | "approvalRule"
+  | "approvalRequest";
 
 interface AuditInput {
   businessId?: string | null;
