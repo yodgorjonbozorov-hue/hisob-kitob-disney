@@ -71,6 +71,9 @@ export function ReportView({ report }: { report: MonthlyReport }) {
         </Card>
       </div>
 
+      {/* Avto rejimi: oy davomida sotilgan har mashina bo'yicha sof foyda. */}
+      {report.avto && report.avto.qatorlar.length > 0 && <AvtoJadval yakun={report.avto} />}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <CategoryTable title="Kirim taqsimoti" data={report.kirimByCategory} tone="kirim" />
         <CategoryTable title="Chiqim taqsimoti" data={report.chiqimByCategory} tone="chiqim" />
@@ -91,5 +94,75 @@ export function ReportView({ report }: { report: MonthlyReport }) {
         </a>
       </div>
     </div>
+  );
+}
+
+/** Sotilgan mashinalar: olingan narx → xarajat → sotilgan narx → sof foyda. */
+function AvtoJadval({ yakun }: { yakun: NonNullable<MonthlyReport["avto"]> }) {
+  const jamiSotilganSumma = yakun.jamiTannarx + yakun.jamiXarajat + yakun.jamiSofFoyda;
+  return (
+    <Card className="p-0 overflow-hidden">
+      <div className="px-5 pt-5 pb-3 flex items-baseline justify-between gap-3 flex-wrap">
+        <h2 className="font-semibold text-fg">Sotilgan mashinalar bo&apos;yicha sof foyda</h2>
+        <p className="text-sm text-muted">
+          {yakun.jamiSotilgan} ta mashina ·{" "}
+          <span className={yakun.jamiSofFoyda >= 0 ? "text-income font-medium" : "text-expense font-medium"}>
+            {formatSomLabel(yakun.jamiSofFoyda)}
+          </span>
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-surface-2 text-muted text-xs uppercase">
+            <tr>
+              <th className="text-left px-5 py-2">Mashina</th>
+              <th className="text-right px-3 py-2">Olingan narx</th>
+              <th className="text-right px-3 py-2">Xarajat</th>
+              <th className="text-right px-3 py-2">Sotilgan narx</th>
+              <th className="text-right px-5 py-2">Sof foyda</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {yakun.qatorlar.map((q, i) => (
+              <tr key={`${q.nomi}-${i}`}>
+                <td className="px-5 py-2.5 font-medium">
+                  {q.nomi}
+                  {q.avtoRaqam && <span className="ml-2 text-2xs text-faint">{q.avtoRaqam}</span>}
+                </td>
+                <td className="px-3 py-2.5 text-right tnum">{formatSomLabel(q.olinganNarx)}</td>
+                <td className="px-3 py-2.5 text-right tnum text-muted">
+                  {q.xarajat > 0 ? formatSomLabel(q.xarajat) : "—"}
+                </td>
+                <td className="px-3 py-2.5 text-right tnum">{formatSomLabel(q.sotilganNarx)}</td>
+                <td
+                  className={`px-5 py-2.5 text-right tnum font-medium ${
+                    q.sofFoyda >= 0 ? "text-income" : "text-expense"
+                  }`}
+                >
+                  {formatSomLabel(q.sofFoyda)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="border-t-2 border-line">
+            <tr className="font-medium">
+              <td className="px-5 py-2.5">Jami</td>
+              <td className="px-3 py-2.5 text-right tnum">{formatSomLabel(yakun.jamiTannarx)}</td>
+              <td className="px-3 py-2.5 text-right tnum">
+                {yakun.jamiXarajat > 0 ? formatSomLabel(yakun.jamiXarajat) : "—"}
+              </td>
+              <td className="px-3 py-2.5 text-right tnum">{formatSomLabel(jamiSotilganSumma)}</td>
+              <td
+                className={`px-5 py-2.5 text-right tnum ${
+                  yakun.jamiSofFoyda >= 0 ? "text-income" : "text-expense"
+                }`}
+              >
+                {formatSomLabel(yakun.jamiSofFoyda)}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </Card>
   );
 }

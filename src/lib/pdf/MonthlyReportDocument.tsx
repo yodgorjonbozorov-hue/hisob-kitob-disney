@@ -93,6 +93,14 @@ export function MonthlyReportDocument({ report }: { report: MonthlyReport }) {
           </View>
         </View>
 
+        {/* Avto rejimi: direktor birinchi navbatda shu jadvalni o'qiydi. */}
+        {report.avto && report.avto.qatorlar.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Sotilgan mashinalar bo'yicha sof foyda</Text>
+            <AvtoTable yakun={report.avto} />
+          </>
+        )}
+
         <Text style={styles.sectionTitle}>Kirim taqsimoti</Text>
         <CategoryTable data={report.kirimByCategory} />
 
@@ -104,6 +112,46 @@ export function MonthlyReportDocument({ report }: { report: MonthlyReport }) {
         </Text>
       </Page>
     </Document>
+  );
+}
+
+/** Sotilgan mashinalar: olingan narx, xarajat va sof foyda bir qatorda. */
+function AvtoTable({ yakun }: { yakun: NonNullable<MonthlyReport["avto"]> }) {
+  return (
+    <View style={styles.table}>
+      <View style={styles.tableHeaderRow}>
+        <Text style={[styles.colName, styles.headerText]}>Mashina</Text>
+        <Text style={[styles.colValue, styles.headerText]}>Olingan</Text>
+        <Text style={[styles.colValue, styles.headerText]}>Xarajat</Text>
+        <Text style={[styles.colValue, styles.headerText]}>Sotilgan</Text>
+        <Text style={[styles.colValue, styles.headerText]}>Sof foyda</Text>
+      </View>
+      {yakun.qatorlar.map((q, i) => (
+        <View style={styles.tableRow} key={`${q.nomi}-${i}`}>
+          <Text style={styles.colName}>
+            {pdfSafe(q.nomi)}
+            {q.avtoRaqam ? ` (${pdfSafe(q.avtoRaqam)})` : ""}
+          </Text>
+          <Text style={styles.colValue}>{formatSom(q.olinganNarx)}</Text>
+          <Text style={styles.colValue}>{q.xarajat > 0 ? formatSom(q.xarajat) : "—"}</Text>
+          <Text style={styles.colValue}>{formatSom(q.sotilganNarx)}</Text>
+          <Text style={styles.colValue}>{formatSom(q.sofFoyda)}</Text>
+        </View>
+      ))}
+      <View style={[styles.tableRow, { borderBottomWidth: 0, paddingTop: 5 }]}>
+        <Text style={[styles.colName, { fontFamily: "Helvetica-Bold" }]}>
+          Jami: {yakun.jamiSotilgan} ta mashina
+        </Text>
+        <Text style={styles.colValue}>{formatSom(yakun.jamiTannarx)}</Text>
+        <Text style={styles.colValue}>{yakun.jamiXarajat > 0 ? formatSom(yakun.jamiXarajat) : "—"}</Text>
+        <Text style={styles.colValue}>
+          {formatSom(yakun.jamiTannarx + yakun.jamiXarajat + yakun.jamiSofFoyda)}
+        </Text>
+        <Text style={[styles.colValue, { fontFamily: "Helvetica-Bold" }]}>
+          {formatSom(yakun.jamiSofFoyda)}
+        </Text>
+      </View>
+    </View>
   );
 }
 

@@ -630,3 +630,52 @@ test("narxsiz mashinani narx ko'rsatib sotish mumkin", async () => {
   const foyda = await runWithTenant(tA.tenant.id, () => queries.getProductProfitability(tA.business.id));
   assert.equal(foyda.find((p: any) => p.nomi === "Tico").foyda, 5_000_000);
 });
+
+// ---------- Oylik hisobotdagi avto bo'limi ----------
+
+test("oylik hisobotda sotilgan mashinalar va sof foyda ko'rinadi", async () => {
+  const report = await import("@/lib/queries/report");
+  const { currentMonthString } = await import("@/lib/date");
+  const oy = currentMonthString();
+
+  const yakun = await runWithTenant(tA.tenant.id, () => report.getAvtoOylikYakun(tA.business.id, oy));
+  assert.ok(yakun.jamiSotilgan >= 3, "shu oyda sotilgan mashinalar bo'lishi kerak");
+
+  // Nexia 3: 118 sotildi, 100 olindi, 5 xarajat -> 13 sof foyda.
+  const nexia = yakun.qatorlar.find((q: any) => q.nomi === "Nexia 3");
+  assert.ok(nexia, "Nexia 3 hisobotda yo'q");
+  assert.equal(nexia.olinganNarx, 100_000_000);
+  assert.equal(nexia.xarajat, 5_000_000);
+  assert.equal(nexia.sotilganNarx, 118_000_000);
+  assert.equal(nexia.sofFoyda, 13_000_000);
+
+  // Yakun har qator yig'indisiga teng bo'lishi kerak.
+  assert.equal(
+    yakun.jamiSofFoyda,
+    yakun.qatorlar.reduce((a: number, q: any) => a + q.sofFoyda, 0)
+  );
+  assert.equal(
+    yakun.jamiXarajat,
+    yakun.qatorlar.reduce((a: number, q: any) => a + q.xarajat, 0)
+  );
+
+  // getMonthlyReport avto biznesda shu bo'limni qo'shadi.
+  const toliq = await runWithTenant(tA.tenant.id, () => report.getMonthlyReport(tA.business.id, oy));
+  assert.ok(toliq.avto, "avto biznesda hisobotda avto bo'limi bo'lishi kerak");
+  assert.equal(toliq.avto.jamiSofFoyda, yakun.jamiSofFoyda);
+});
+
+test("umumiy biznes hisobotida avto bo'limi bo'lmaydi", async () => {
+  const report = await import("@/lib/queries/report");
+  const { currentMonthString } = await import("@/lib/date");
+  const umumiy = await createTenantWithOwner({
+    kompaniyaNomi: "Umumiy Do'kon",
+    ism: "Egasi",
+    login: "+998955555599",
+    parol: "parol12345",
+  });
+  const toliq = await runWithTenant(umumiy.tenant.id, () =>
+    report.getMonthlyReport(umumiy.business.id, currentMonthString())
+  );
+  assert.equal(toliq.avto, null);
+});
