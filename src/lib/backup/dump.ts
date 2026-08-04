@@ -48,6 +48,7 @@ export const ZAXIRA_JADVALLARI = [
   "task",
   "activity",
   "accountTransfer",
+  "stockAdjustment",
 ] as const;
 
 export type ZaxiraJadval = (typeof ZAXIRA_JADVALLARI)[number];

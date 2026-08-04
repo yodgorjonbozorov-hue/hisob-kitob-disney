@@ -132,6 +132,7 @@ model Business {
   productExpenses ProductExpense[]
   accounts        Account[]
   transfers       AccountTransfer[]
+  adjustments     StockAdjustment[]
 
   @@index([tenantId])
 }
@@ -391,26 +392,63 @@ model Budget {
 /// Mahsulot turi (masalan salyut turlari) + narxlar + joriy qoldiq.
 /// Avto rejimida (Business.turi = "avto") bitta yozuv = bitta avtomobil (miqdor 0/1).
 model Product {
-  id           String           @id @default(cuid())
+  id           String            @id @default(cuid())
   businessId   String
-  business     Business         @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  business     Business          @relation(fields: [businessId], references: [id], onDelete: Restrict)
   nomi         String
-  kelganNarx   Int              @default(0) // tannarx (birlik)
-  sotuvNarx    Int              @default(0) // sotuv narxi (birlik)
-  miqdor       Int              @default(0) // ombordagi joriy qoldiq
-  isActive     Boolean          @default(true)
+  kelganNarx   Int               @default(0) // tannarx (birlik)
+  sotuvNarx    Int               @default(0) // sotuv narxi (birlik)
+  miqdor       Int               @default(0) // ombordagi joriy qoldiq
+  isActive     Boolean           @default(true)
   izoh         String?
+  /// Ombor kodi (artikul). Ixtiyoriy, biznes ichida takrorlanmasin.
+  sku          String?
+  /// O'lchov birligi: "dona" | "kg" | "litr" | "metr" | "quti" | "paket".
+  birlik       String            @default("dona")
+  /// Shu miqdordan kam qolsa bildirishnoma chiqadi. 0 = ogohlantirish yo'q.
+  /// Ilgari butun tizim uchun bitta sobit chegara (5 dona) ishlatilardi —
+  /// tuxum sotuvchiga ham, avtomobil sotuvchiga ham bir xil edi.
+  minQoldiq    Int               @default(0)
   // Avto rejimi maydonlari — umumiy bizneslarda null.
   avtoYil      Int?
   avtoRaqam    String?
   avtoRang     String?
-  createdAt    DateTime         @default(now())
+  createdAt    DateTime          @default(now())
   stockEntries StockEntry[]
   sales        Sale[]
   debts        Debt[]
   expenses     ProductExpense[]
+  adjustments  StockAdjustment[]
 
   @@index([businessId])
+  @@index([businessId, sku])
+}
+
+/// OMBOR TO'G'RILASH — inventarizatsiya yoki hisobdan chiqarish.
+///
+/// Ilgari qoldiqni to'g'rilashning YAGONA yo'li mahsulotni qo'lda tahrirlash
+/// edi — kim, qachon va NEGA o'zgartirgani hech qayerda qolmasdi. Endi har
+/// to'g'rilash sababi bilan yoziladi.
+///
+///   "inventarizatsiya" — sanaldi, haqiqiy qoldiq boshqa chiqdi (farq ±);
+///   "chiqarish"        — buzildi/yo'qoldi/sovg'a qilindi (farq har doim −).
+model StockAdjustment {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  turi        String
+  eskiMiqdor  Int
+  yangiMiqdor Int
+  /// yangiMiqdor − eskiMiqdor (manfiy bo'lishi mumkin).
+  farq        Int
+  sabab       String
+  userId      String
+  createdAt   DateTime @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([productId])
 }
 
 /// Mahsulot/mashinaga bog'langan xarajat (avto rejimida: ta'mirlash, bo'yoq,

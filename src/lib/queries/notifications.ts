@@ -10,7 +10,12 @@ export interface Notification {
   href: string;
 }
 
-const LOW_STOCK = 5; // shu va undan kam qoldiq — "kam qoldi"
+/**
+ * Mahsulotning o'z `minQoldiq` chegarasi bo'lmasa (0) — shu sobit qiymat
+ * ishlatiladi. Ilgari BU YAGONA chegara edi: tuxum sotuvchiga ham,
+ * avtomobil sotuvchiga ham 5 dona.
+ */
+const LOW_STOCK_DEFAULT = 5;
 
 /**
  * Aktiv biznes bo'yicha bildirishnomalar: budjet oshishi, muddati o'tgan qarzlar,
@@ -47,12 +52,16 @@ export async function getNotifications(
 
   // Ombor: kam qolgan / tugagan (omborli biznes)
   if (opts.omborli) {
-    const low = await prisma.product.findMany({
-      where: { businessId, isActive: true, miqdor: { lte: LOW_STOCK } },
-      select: { nomi: true, miqdor: true },
+    // Har mahsulotning O'Z chegarasi bor; qo'yilmagan bo'lsa (0) — default.
+    const mahsulotlar = await prisma.product.findMany({
+      where: { businessId, isActive: true },
+      select: { nomi: true, miqdor: true, minQoldiq: true, birlik: true },
       orderBy: { miqdor: "asc" },
-      take: 20,
+      take: 200,
     });
+    const low = mahsulotlar.filter(
+      (p) => p.miqdor <= (p.minQoldiq > 0 ? p.minQoldiq : LOW_STOCK_DEFAULT)
+    );
     const out0 = low.filter((p) => p.miqdor <= 0);
     const lowOnly = low.filter((p) => p.miqdor > 0);
     if (out0.length > 0) {
@@ -67,7 +76,10 @@ export async function getNotifications(
       out.push({
         severity: "warning",
         title: "Ombor kam qoldi",
-        message: `${lowOnly.length} ta mahsulot ${LOW_STOCK} donadan kam`,
+        message:
+          lowOnly.length === 1
+            ? `"${lowOnly[0].nomi}" — ${lowOnly[0].miqdor} ${lowOnly[0].birlik} qoldi`
+            : `${lowOnly.length} ta mahsulot minimal qoldiqdan kam`,
         href: isManager(opts.rol) ? "/app/ombor" : "/app/sotuv",
       });
     }

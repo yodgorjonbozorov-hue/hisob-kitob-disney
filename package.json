@@ -26,6 +26,7 @@
     "test:audit": "node -r ts-node/register tests/audit.test.ts",
     "test:kassa": "node -r ts-node/register tests/kassa.test.ts",
     "test:sotuv-bekor": "node -r ts-node/register tests/sotuv-bekor.test.ts",
+    "test:inventarizatsiya": "node -r ts-node/register tests/inventarizatsiya.test.ts",
     "test:bot-holat": "node -r ts-node/register tests/bot-holat.test.ts",
     "test:visibility": "node -r ts-node/register tests/visibility.test.ts",
     "test:signup": "node -r ts-node/register tests/signup.test.ts",

@@ -16,6 +16,11 @@ export interface ProductAdminDTO {
   avtoRang: string | null;
   /** Shu mahsulot/mashinaga yozilgan jami xarajat (ta'mirlash, bo'yoq...). */
   xarajat: number;
+  sku: string | null;
+  birlik: string;
+  minQoldiq: number;
+  /** Qoldiq o'z chegarasidan pastmi — ro'yxatda belgilanadi. */
+  kamQoldi: boolean;
 }
 
 /** Kassir uchun — miqdor RAQAMI ko'rsatilmaydi, faqat `mavjud` (bor/yo'q). */
@@ -24,6 +29,8 @@ export interface ProductKassirDTO {
   nomi: string;
   sotuvNarx: number;
   mavjud: boolean;
+  birlik: string;
+  sku: string | null;
 }
 
 /** forKassir=true bo'lsa miqdor chiqarilmaydi — faqat mavjudlik. */
@@ -39,7 +46,14 @@ export async function listProducts(
   if (opts.forKassir) {
     return products
       .filter((p) => p.isActive)
-      .map((p) => ({ id: p.id, nomi: p.nomi, sotuvNarx: p.sotuvNarx, mavjud: p.miqdor > 0 }));
+      .map((p) => ({
+        id: p.id,
+        nomi: p.nomi,
+        sotuvNarx: p.sotuvNarx,
+        mavjud: p.miqdor > 0,
+        birlik: p.birlik,
+        sku: p.sku,
+      }));
   }
 
   const xarajatlar = await getExpenseTotalsByProduct(businessId);
@@ -56,6 +70,10 @@ export async function listProducts(
     avtoRaqam: p.avtoRaqam,
     avtoRang: p.avtoRang,
     xarajat: xarajatlar[p.id] ?? 0,
+    sku: p.sku,
+    birlik: p.birlik,
+    minQoldiq: p.minQoldiq,
+    kamQoldi: p.minQoldiq > 0 && p.miqdor <= p.minQoldiq,
   }));
 }
 
@@ -304,5 +322,39 @@ export async function listRecentSales(businessId: string, limit = 20): Promise<S
     sana: s.sana.toISOString(),
     bekorQilingan: s.deletedAt !== null,
     bekorSabab: s.cancelReason,
+  }));
+}
+
+export interface StockAdjustmentDTO {
+  id: string;
+  productNomi: string;
+  turi: string;
+  eskiMiqdor: number;
+  yangiMiqdor: number;
+  farq: number;
+  sabab: string;
+  sana: string;
+}
+
+/** So'nggi inventarizatsiya va hisobdan chiqarishlar (ombor sahifasi uchun). */
+export async function listStockAdjustments(
+  businessId: string,
+  limit = 30
+): Promise<StockAdjustmentDTO[]> {
+  const rows = await prisma.stockAdjustment.findMany({
+    where: { businessId },
+    include: { product: { select: { nomi: true } } },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    productNomi: r.product.nomi,
+    turi: r.turi,
+    eskiMiqdor: r.eskiMiqdor,
+    yangiMiqdor: r.yangiMiqdor,
+    farq: r.farq,
+    sabab: r.sabab,
+    sana: r.createdAt.toISOString(),
   }));
 }

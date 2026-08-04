@@ -9,6 +9,8 @@ import { Modal } from "@/components/ui/Modal";
 import { formatSom, formatSomLabel, parseSomInput } from "@/lib/format";
 import { omborMatn, isAvto } from "@/lib/biznesTuri";
 import type { ProductAdminDTO, OmborStats } from "@/lib/queries/inventory";
+import { TogrilashModal } from "./TogrilashModal";
+import { BIRLIKLAR } from "@/lib/validation/inventory";
 
 export function OmborClient({
   initialProducts,
@@ -30,6 +32,8 @@ export function OmborClient({
   const [xarajatFor, setXarajatFor] = useState<ProductAdminDTO | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
+  // Ombor to'g'rilash (Faza 4.3): inventarizatsiya yoki hisobdan chiqarish.
+  const [togrilash, setTogrilash] = useState<"inventarizatsiya" | "chiqarish" | null>(null);
 
   function refresh() {
     router.refresh();
@@ -69,12 +73,32 @@ export function OmborClient({
 
       <div className="flex flex-wrap gap-2 justify-end">
         {!avto && (
-          <Button variant="secondary" onClick={() => setBulkOpen(true)}>
-            {M.koproq}
-          </Button>
+          <>
+            <Button variant="ghost" onClick={() => setTogrilash("chiqarish")}>
+              Hisobdan chiqarish
+            </Button>
+            <Button variant="secondary" onClick={() => setTogrilash("inventarizatsiya")}>
+              Inventarizatsiya
+            </Button>
+            <Button variant="secondary" onClick={() => setBulkOpen(true)}>
+              {M.koproq}
+            </Button>
+          </>
         )}
         <Button onClick={() => setNewOpen(true)}>{M.yangi}</Button>
       </div>
+
+      {togrilash && (
+        <TogrilashModal
+          turi={togrilash}
+          products={products}
+          onClose={() => setTogrilash(null)}
+          onDone={() => {
+            setTogrilash(null);
+            refresh();
+          }}
+        />
+      )}
 
       <Card>
         <div className="overflow-x-auto">
@@ -236,6 +260,9 @@ function NewProductModal({ onClose, onDone }: { onClose: () => void; onDone: () 
   const [nomi, setNomi] = useState("");
   const [kelgan, setKelgan] = useState("");
   const [sotuv, setSotuv] = useState("");
+  const [sku, setSku] = useState("");
+  const [birlik, setBirlik] = useState<string>("dona");
+  const [minQoldiq, setMinQoldiq] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -246,7 +273,14 @@ function NewProductModal({ onClose, onDone }: { onClose: () => void; onDone: () 
     const res = await fetch("/api/products", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nomi, kelganNarx: parseSomInput(kelgan), sotuvNarx: parseSomInput(sotuv) }),
+      body: JSON.stringify({
+        nomi,
+        kelganNarx: parseSomInput(kelgan),
+        sotuvNarx: parseSomInput(sotuv),
+        sku: sku.trim() || null,
+        birlik,
+        minQoldiq: minQoldiq ? Number(minQoldiq) : 0,
+      }),
     });
     if (!res.ok) {
       setError((await res.json()).error ?? "Xatolik");
@@ -276,6 +310,52 @@ function NewProductModal({ onClose, onDone }: { onClose: () => void; onDone: () 
         <div>
           <label className="block text-xs text-muted mb-1">Sotuv narxi</label>
           <NarxInput value={sotuv} onChange={setSotuv} placeholder="0" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-muted mb-1" htmlFor="np-sku">
+              SKU / artikul
+            </label>
+            <input
+              id="np-sku"
+              type="text"
+              value={sku}
+              onChange={(e) => setSku(e.target.value)}
+              maxLength={40}
+              placeholder="ixtiyoriy"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-muted mb-1" htmlFor="np-birlik">
+              O&apos;lchov birligi
+            </label>
+            <select
+              id="np-birlik"
+              value={birlik}
+              onChange={(e) => setBirlik(e.target.value)}
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+            >
+              {BIRLIKLAR.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs text-muted mb-1" htmlFor="np-min">
+            Minimal qoldiq (0 = ogohlantirish yo&apos;q)
+          </label>
+          <input
+            id="np-min"
+            inputMode="numeric"
+            value={minQoldiq}
+            onChange={(e) => setMinQoldiq(e.target.value.replace(/[^0-9]/g, ""))}
+            placeholder="0"
+            className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+          />
         </div>
         {error && <p className="text-expense text-sm">{error}</p>}
         <div className="flex gap-2 justify-end pt-2">

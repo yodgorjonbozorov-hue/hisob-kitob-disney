@@ -40,6 +40,7 @@ const BUSINESS_SCOPED = new Set([
   // Kassa / hisob-raqamlar (Faza 4.1)
   "Account",
   "AccountTransfer",
+  "StockAdjustment",
 ]);
 // AuditLog: businessId nullable — biznesga bog'langan yozuvlar tenant bo'yicha filtrlanadi.
 const AUDIT_MODEL = "AuditLog";

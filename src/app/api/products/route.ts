@@ -41,6 +41,9 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
       nomi: parsed.data.nomi,
       kelganNarx: parsed.data.kelganNarx ?? 0,
       sotuvNarx: parsed.data.sotuvNarx ?? 0,
+      sku: parsed.data.sku?.trim() || undefined,
+      birlik: parsed.data.birlik || undefined,
+      minQoldiq: parsed.data.minQoldiq ?? undefined,
     },
   });
   return NextResponse.json(product, { status: 201 });
