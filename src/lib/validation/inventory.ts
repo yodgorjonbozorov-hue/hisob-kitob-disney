@@ -70,6 +70,13 @@ export const createSaleSchema = z.object({
   mijozTel: z.string().max(50).optional().nullable(),
   // Kelishilgan narx (avto rejimida savdolashib belgilanadi).
   narx: z.number().int().positive().optional().nullable(),
+  /** Sotuv sanasi. Berilmasa bugun — kechagi sotuvni ham kiritish mumkin. */
+  sana: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Sana noto'g'ri formatda").optional().nullable(),
+});
+
+/** Sotuvni bekor qilish — sabab MAJBURIY (audit uchun). */
+export const cancelSaleSchema = z.object({
+  sabab: z.string().trim().min(3, "Bekor qilish sababini yozing").max(300),
 });
 
 export const debtPaymentSchema = z.object({

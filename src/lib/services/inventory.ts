@@ -2,7 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { createTransactionTx } from "@/lib/services/transactionService";
 import { runBusinessTx, type BusinessTx } from "@/lib/db/businessTx";
-import { todayDateOnlyString } from "@/lib/date";
+import { todayDateOnlyString, dateOnlyStringToUTCDate } from "@/lib/date";
+import { isAvto } from "@/lib/biznesTuri";
 import { logAudit } from "@/lib/services/audit";
 
 // Sotuv va qarz to'lovi uchun avtomatik ishlatiladigan kategoriyalar.
@@ -127,8 +128,11 @@ export async function createSale(params: {
    * ham yangilanadi. Berilmasa rejadagi sotuv narxi olinadi.
    */
   narx?: number | null;
+  /** Sotuv sanasi "YYYY-MM-DD". Berilmasa bugun (kechagi sotuvni ham kiritish mumkin). */
+  sana?: string | null;
   userId: string;
 }) {
+  const sana = params.sana ?? todayDateOnlyString();
   const sotuv = await runBusinessTx(params.businessId, async (tx) => {
     const product = await tx.product.findFirst({
       where: { id: params.productId, businessId: params.businessId, isActive: true },
@@ -156,8 +160,17 @@ export async function createSale(params: {
     const tannarx = product.kelganNarx;
     const jamiSumma = birlikNarx * params.miqdor;
 
-    // Kelishilgan narx boshqa bo'lsa — kartochkada ham haqiqiy narx tursin.
-    if (kelishilganNarx && kelishilganNarx !== product.sotuvNarx) {
+    // AVTO rejimida kelishilgan narx kartochkaga yoziladi: bitta yozuv = bitta
+    // mashina, narx esa har doim savdolashib belgilanadi.
+    //
+    // Oddiy omborda esa BU HALOKATLI edi (H-1): 500 dona tovardan bittasini
+    // chegirma bilan sotsangiz butun katalog narxi o'zgarib ketardi va keyingi
+    // barcha sotuvlar chegirma narxida ketardi. Shuning uchun endi faqat avto.
+    const biznes = await tx.business.findFirst({
+      where: { id: params.businessId },
+      select: { turi: true },
+    });
+    if (isAvto(biznes?.turi) && kelishilganNarx && kelishilganNarx !== product.sotuvNarx) {
       await tx.product.update({
         where: { id: product.id },
         data: { sotuvNarx: kelishilganNarx },
@@ -175,6 +188,7 @@ export async function createSale(params: {
         tolovTuri: params.tolovTuri,
         mijozNomi: params.mijozNomi?.trim() || undefined,
         mijozTel: params.mijozTel?.trim() || undefined,
+        sana: dateOnlyStringToUTCDate(sana),
         userId: params.userId,
       },
     });
@@ -186,7 +200,7 @@ export async function createSale(params: {
         turi: "kirim",
         categoryId,
         summa: jamiSumma,
-        sana: todayDateOnlyString(),
+        sana,
         izoh: `${product.nomi} × ${params.miqdor}`,
       });
       await tx.sale.update({ where: { id: sale.id }, data: { transactionId: txn.id } });
@@ -226,6 +240,81 @@ export async function createSale(params: {
     },
   });
   return sotuv;
+}
+
+/**
+ * SOTUVNI BEKOR QILISH (B-4).
+ *
+ * Ilgari bu umuman mumkin emas edi: kassir xato sotuv kiritsa omborda tovar
+ * kam, kassada pul ko'p bo'lib qolardi va tuzatib bo'lmasdi.
+ *
+ * Bitta atomik amalda:
+ *   1. Sale yumshoq o'chiriladi (tarix saqlanadi — kim, qachon, nega);
+ *   2. bog'langan kirim tranzaksiyasi yumshoq o'chiriladi (kassa qoldig'i tiklanadi);
+ *   3. qarzga sotuv bo'lsa — qarz o'chiriladi (TO'LOVI BO'LMASA);
+ *   4. ombor qoldig'i qaytariladi.
+ */
+export async function cancelSale(params: {
+  businessId: string;
+  saleId: string;
+  sabab: string;
+  userId: string;
+}) {
+  const sabab = params.sabab.trim();
+  if (!sabab) throw new BadRequestError("Bekor qilish sababi yozilishi shart");
+
+  const natija = await runBusinessTx(params.businessId, async (tx) => {
+    const sale = await tx.sale.findFirst({
+      where: { id: params.saleId, businessId: params.businessId },
+    });
+    if (!sale) throw new ForbiddenError("Sotuv topilmadi");
+    if (sale.deletedAt) throw new BadRequestError("Bu sotuv allaqachon bekor qilingan");
+
+    // Qarzga sotuv: to'lov qilingan bo'lsa avval to'lovlar bekor qilinishi kerak,
+    // aks holda qarz to'lovi "havoda" qolib ketadi.
+    const debt = await tx.debt.findFirst({
+      where: { saleId: sale.id, businessId: params.businessId },
+    });
+    if (debt) {
+      if (debt.tolangan > 0) {
+        throw new BadRequestError(
+          "Bu sotuv bo'yicha qarz to'lovi qilingan — avval to'lovlarni bekor qiling"
+        );
+      }
+      await tx.debt.delete({ where: { id: debt.id } });
+    }
+
+    // Naqd sotuvning kirim tranzaksiyasi — soft delete (kassadagi pul qaytadi).
+    if (sale.transactionId) {
+      await tx.transaction.updateMany({
+        where: { id: sale.transactionId, businessId: params.businessId, deletedAt: null },
+        data: { deletedAt: new Date() },
+      });
+    }
+
+    // Ombor qoldig'i qaytadi.
+    await tx.product.updateMany({
+      where: { id: sale.productId, businessId: params.businessId },
+      data: { miqdor: { increment: sale.miqdor } },
+    });
+
+    await tx.sale.update({
+      where: { id: sale.id },
+      data: { deletedAt: new Date(), cancelledBy: params.userId, cancelReason: sabab },
+    });
+
+    return { productId: sale.productId, miqdor: sale.miqdor, jamiSumma: sale.jamiSumma };
+  });
+
+  await logAudit({
+    businessId: params.businessId,
+    action: "delete",
+    entity: "sale",
+    entityId: params.saleId,
+    before: natija,
+    after: { sabab },
+  });
+  return { ok: true, ...natija };
 }
 
 /**

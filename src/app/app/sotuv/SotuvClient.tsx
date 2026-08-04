@@ -8,15 +8,20 @@ import { Badge } from "@/components/ui/Badge";
 import { formatSom, formatSomLabel, parseSomInput, formatDateUZ } from "@/lib/format";
 import { isAvto, omborMatn } from "@/lib/biznesTuri";
 import type { ProductKassirDTO, SaleDTO } from "@/lib/queries/inventory";
+import { todayDateOnlyString } from "@/lib/date";
+import { SotuvBekorModal } from "./SotuvBekorModal";
 
 export function SotuvClient({
   products,
   initialSales,
   biznesTuri = "umumiy",
+  bekorQilaOladi = false,
 }: {
   products: ProductKassirDTO[];
   initialSales: SaleDTO[];
   biznesTuri?: string;
+  /** Sotuvni bekor qilish faqat direktor/adminda (kassir o'z xatosini yashira olmasin). */
+  bekorQilaOladi?: boolean;
 }) {
   const router = useRouter();
   const avto = isAvto(biznesTuri);
@@ -33,6 +38,9 @@ export function SotuvClient({
   const [ok, setOk] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [sales, setSales] = useState(initialSales);
+  // Orqaga sana bilan sotuv kiritish (B-5): kechagi sotuv kechagi hisobotga tushsin.
+  const [sana, setSana] = useState(todayDateOnlyString());
+  const [bekorId, setBekorId] = useState<string | null>(null);
 
   const selected = useMemo(() => products.find((p) => p.id === productId), [products, productId]);
   const qty = avto ? 1 : parseSomInput(miqdor);
@@ -86,6 +94,7 @@ export function SotuvClient({
           mijozNomi: tolovTuri === "qarz" ? mijozNomi : undefined,
           mijozTel: tolovTuri === "qarz" ? mijozTel : undefined,
           narx: avto && kelishilgan > 0 ? kelishilgan : undefined,
+          sana,
         }),
       });
       const data = await res.json();
@@ -106,7 +115,9 @@ export function SotuvClient({
           jamiSumma: jami,
           tolovTuri,
           mijozNomi: tolovTuri === "qarz" ? mijozNomi : null,
-          sana: new Date().toISOString(),
+          sana: new Date(`${sana}T00:00:00.000Z`).toISOString(),
+          bekorQilingan: false,
+          bekorSabab: null,
         },
         ...prev,
       ]);
@@ -121,6 +132,7 @@ export function SotuvClient({
   }
 
   return (
+    <>
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <Card>
         <h2 className="font-semibold text-fg mb-3">{avto ? "Mashina sotish" : "Yangi sotuv"}</h2>
@@ -202,6 +214,19 @@ export function SotuvClient({
             </button>
           </div>
 
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1" htmlFor="sotuv-sana">
+              Sana
+            </label>
+            <input
+              id="sotuv-sana"
+              type="date"
+              value={sana}
+              onChange={(e) => setSana(e.target.value)}
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+            />
+          </div>
+
           {tolovTuri === "qarz" && (
             <div className="space-y-2">
               <input
@@ -239,23 +264,29 @@ export function SotuvClient({
                 <th className="pb-2">Sana</th>
                 <th className="pb-2">{M.birlikBosh}</th>
                 <th className="pb-2 text-right">Summa</th>
-                <th className="pb-2">To'lov</th>
+                <th className="pb-2">To&apos;lov</th>
+                {bekorQilaOladi && <th className="pb-2" />}
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
               {sales.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="text-center text-faint py-6">
+                  <td colSpan={bekorQilaOladi ? 5 : 4} className="text-center text-faint py-6">
                     Hali sotuv yo'q
                   </td>
                 </tr>
               )}
               {sales.map((s) => (
-                <tr key={s.id}>
+                <tr key={s.id} className={s.bekorQilingan ? "opacity-50 line-through" : ""}>
                   <td className="py-2 whitespace-nowrap">{formatDateUZ(new Date(s.sana))}</td>
                   <td className="py-2">
                     {s.productNomi}
                     {!avto && <span className="text-faint"> × {s.miqdor}</span>}
+                    {s.bekorQilingan && (
+                      <span className="block text-2xs text-expense no-underline">
+                        Bekor qilindi{s.bekorSabab ? `: ${s.bekorSabab}` : ""}
+                      </span>
+                    )}
                   </td>
                   <td className="py-2 text-right font-medium">{formatSomLabel(s.jamiSumma)}</td>
                   <td className="py-2">
@@ -263,6 +294,19 @@ export function SotuvClient({
                       {s.tolovTuri === "naqd" ? "Naqd" : "Qarz"}
                     </Badge>
                   </td>
+                  {bekorQilaOladi && (
+                    <td className="py-2 text-right">
+                      {!s.bekorQilingan && (
+                        <button
+                          type="button"
+                          onClick={() => setBekorId(s.id)}
+                          className="text-2xs text-expense hover:underline"
+                        >
+                          Bekor qilish
+                        </button>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -270,5 +314,17 @@ export function SotuvClient({
         </div>
       </Card>
     </div>
+
+    {bekorId && (
+      <SotuvBekorModal
+        saleId={bekorId}
+        onClose={() => setBekorId(null)}
+        onDone={() => {
+          setBekorId(null);
+          router.refresh();
+        }}
+      />
+    )}
+    </>
   );
 }

@@ -454,12 +454,16 @@ model StockEntry {
 }
 
 /// Sotuv — mahsulot qoldig'ini kamaytiradi. Naqd → kirim tranzaksiya; qarz → Debt.
+///
+/// `sana` ALOHIDA maydon (createdAt emas): kechagi sotuvni bugun kiritish
+/// mumkin bo'lishi kerak, aks holda u kechagi hisobotga tushmaydi.
+/// `deletedAt` — xato kiritilgan sotuvni bekor qilish (kassa dasturi uchun shart).
 model Sale {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   businessId    String
-  business      Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  business      Business  @relation(fields: [businessId], references: [id], onDelete: Restrict)
   productId     String
-  product       Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
   miqdor        Int
   birlikNarx    Int // sotuv narxi snapshot
   tannarx       Int // kelgan narx snapshot (marja hisobi uchun)
@@ -469,10 +473,17 @@ model Sale {
   mijozTel      String?
   userId        String
   transactionId String? // naqd bo'lsa bog'langan kirim tranzaksiya
-  createdAt     DateTime @default(now())
+  /// Sotuv sanasi (UTC yarim tuni). Migratsiyada createdAt dan to'ldiriladi.
+  sana          DateTime
+  createdAt     DateTime  @default(now())
+  /// Bekor qilingan sotuv — yumshoq o'chirish (tarix saqlanadi).
+  deletedAt     DateTime?
+  cancelledBy   String?
+  cancelReason  String?
   debt          Debt?
 
-  @@index([businessId, createdAt])
+  @@index([businessId, sana])
+  @@index([businessId, deletedAt, sana])
   @@index([productId])
 }
 

@@ -40,6 +40,7 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
     mijozNomi: parsed.data.mijozNomi,
     mijozTel: parsed.data.mijozTel,
     narx: parsed.data.narx,
+    sana: parsed.data.sana,
     userId: user.userId,
   });
 

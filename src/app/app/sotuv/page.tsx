@@ -6,6 +6,7 @@ import { getActiveBusiness } from "@/lib/business";
 import { listProducts, listRecentSales, type ProductKassirDTO } from "@/lib/queries/inventory";
 import { SotuvClient } from "./SotuvClient";
 import { isAvto } from "@/lib/biznesTuri";
+import { isManager } from "@/lib/auth/roles";
 
 export default async function SotuvPage() {
   const ctx = await requireTenantPage();
@@ -37,7 +38,12 @@ export default async function SotuvPage() {
           Biznes: <span className="font-medium text-fg">{business.nomi}</span>
         </p>
       </div>
-      <SotuvClient products={products} initialSales={sales} biznesTuri={business.turi} />
+      <SotuvClient
+        products={products}
+        initialSales={sales}
+        biznesTuri={business.turi}
+        bekorQilaOladi={isManager(session.rol)}
+      />
     </div>
   );
   });

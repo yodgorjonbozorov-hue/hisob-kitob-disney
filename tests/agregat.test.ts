@@ -27,6 +27,8 @@ const BIZ_A = "biz_ag_a";
 const BIZ_B = "biz_ag_b";
 const USER_A = "u_ag_a";
 const USER_B = "u_ag_b";
+/** Foydalilik fixture'idagi sotuvlar sanasi. */
+const SANA_SOTUV = new Date("2026-07-10T00:00:00.000Z");
 
 before(async () => {
   rmSync("prisma/test-agregat.db", { force: true });
@@ -84,10 +86,10 @@ before(async () => {
     data: { id: "p_ag", businessId: BIZ_A, nomi: "Salyut", kelganNarx: 10_000, sotuvNarx: 25_000, miqdor: 100 },
   });
   await rawPrisma.sale.create({
-    data: { businessId: BIZ_A, productId: "p_ag", miqdor: 3, birlikNarx: 25_000, tannarx: 10_000, jamiSumma: 75_000, tolovTuri: "naqd", userId: USER_A },
+    data: { businessId: BIZ_A, productId: "p_ag", miqdor: 3, birlikNarx: 25_000, tannarx: 10_000, jamiSumma: 75_000, tolovTuri: "naqd", userId: USER_A, sana: SANA_SOTUV },
   });
   await rawPrisma.sale.create({
-    data: { businessId: BIZ_A, productId: "p_ag", miqdor: 2, birlikNarx: 20_000, tannarx: 10_000, jamiSumma: 40_000, tolovTuri: "naqd", userId: USER_A },
+    data: { businessId: BIZ_A, productId: "p_ag", miqdor: 2, birlikNarx: 20_000, tannarx: 10_000, jamiSumma: 40_000, tolovTuri: "naqd", userId: USER_A, sana: SANA_SOTUV },
   });
   await rawPrisma.productExpense.create({
     data: { businessId: BIZ_A, productId: "p_ag", turi: "boshqa", summa: 15_000, userId: USER_A },

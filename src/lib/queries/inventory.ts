@@ -204,7 +204,7 @@ export async function getProductProfitability(businessId: string): Promise<Produ
     FROM "Sale" s
     JOIN "Business" b ON b."id" = s."businessId"
     JOIN "Product" p ON p."id" = s."productId"
-    WHERE ${businessScope("s", businessId)}
+    WHERE ${businessScope("s", businessId)} AND s."deletedAt" IS NULL
     GROUP BY s."productId", p."nomi"
   `);
 
@@ -277,13 +277,21 @@ export interface SaleDTO {
   tolovTuri: string;
   mijozNomi: string | null;
   sana: string;
+  /** Bekor qilingan sotuv — ro'yxatda chizilgan holda ko'rsatiladi. */
+  bekorQilingan: boolean;
+  bekorSabab: string | null;
 }
 
+/**
+ * So'nggi sotuvlar. `sana` bo'yicha saralanadi (createdAt emas) — orqaga sana
+ * bilan kiritilgan sotuv o'z o'rniga tushishi kerak.
+ * Bekor qilinganlar ham ko'rsatiladi (ataylab): kassir nima bo'lganini ko'rsin.
+ */
 export async function listRecentSales(businessId: string, limit = 20): Promise<SaleDTO[]> {
   const sales = await prisma.sale.findMany({
     where: { businessId },
     include: { product: { select: { nomi: true } } },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ sana: "desc" }, { createdAt: "desc" }],
     take: limit,
   });
   return sales.map((s) => ({
@@ -293,6 +301,8 @@ export async function listRecentSales(businessId: string, limit = 20): Promise<S
     jamiSumma: s.jamiSumma,
     tolovTuri: s.tolovTuri,
     mijozNomi: s.mijozNomi,
-    sana: s.createdAt.toISOString(),
+    sana: s.sana.toISOString(),
+    bekorQilingan: s.deletedAt !== null,
+    bekorSabab: s.cancelReason,
   }));
 }
