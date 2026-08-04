@@ -46,8 +46,14 @@ export default async function BillingPage() {
           {/* Joriy holat */}
           <div className="bg-surface rounded-2xl border border-line shadow-card p-6 space-y-3">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <span className={`px-3 py-1 rounded-full text-sm font-medium ${st.cls}`}>{st.text}</span>
-              {deadline && (
+              <span
+                className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  tenant.bepul ? "bg-income-soft text-income-fg" : st.cls
+                }`}
+              >
+                {tenant.bepul ? "Doimiy bepul" : st.text}
+              </span>
+              {!tenant.bepul && deadline && (
                 <span className="text-sm text-muted">
                   Muddat: <span className="font-medium text-fg">{formatDateUZ(deadline)}</span>
                   {access.kunQoldi !== null && access.kunQoldi >= 0 && (
@@ -58,13 +64,21 @@ export default async function BillingPage() {
             </div>
             {access.sabab && <p className="text-sm text-expense-fg">{access.sabab}</p>}
             {access.ogohlantirish && <p className="text-sm text-fg">{access.ogohlantirish}</p>}
-            {access.mode === "FULL" && !access.ogohlantirish && (
-              <p className="text-sm text-muted">Hammasi joyida — tizimdan to'liq foydalanishingiz mumkin.</p>
+            {tenant.bepul ? (
+              <p className="text-sm text-muted">
+                Sizda doimiy bepul foydalanish — obuna muddati va to&apos;lov talab qilinmaydi.
+              </p>
+            ) : (
+              access.mode === "FULL" &&
+              !access.ogohlantirish && (
+                <p className="text-sm text-muted">Hammasi joyida — tizimdan to&apos;liq foydalanishingiz mumkin.</p>
+              )
             )}
           </div>
 
-          {/* Tariflar + to'lov */}
-          {PLANLAR.map((plan) => (
+          {/* Tariflar + to'lov — doimiy bepul mijozga ko'rsatilmaydi. */}
+          {!tenant.bepul &&
+            PLANLAR.map((plan) => (
             <div key={plan.code} className="bg-surface rounded-2xl border border-line shadow-card p-6">
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>

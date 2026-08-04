@@ -65,10 +65,22 @@ export async function confirmPayment(paymentId: string, now: Date = new Date()) 
  */
 export async function updateExpiredStatuses(now: Date = new Date()): Promise<number> {
   const res = await rawPrisma.tenant.updateMany({
-    where: { status: "ACTIVE", currentPeriodEnd: { lt: now } },
+    // Doimiy bepul mijozlar muddat bo'yicha PAST_DUE ga o'tkazilmaydi.
+    where: { status: "ACTIVE", currentPeriodEnd: { lt: now }, bepul: false },
     data: { status: "PAST_DUE" },
   });
   return res.count;
+}
+
+/**
+ * Mijozni doimiy bepulga o'tkazadi yoki bekor qiladi (SUPERADMIN).
+ * Muddat sanalariga tegilmaydi: bepul bekor qilinsa mijoz o'zining haqiqiy
+ * obuna holatiga qaytadi.
+ */
+export async function setTenantBepul(tenantId: string, bepul: boolean) {
+  const tenant = await rawPrisma.tenant.findUnique({ where: { id: tenantId } });
+  if (!tenant) throw new BadRequestError("Tenant topilmadi");
+  return rawPrisma.tenant.update({ where: { id: tenantId }, data: { bepul } });
 }
 
 /** To'lovni rad etadi (masalan, pul kelib tushmagan bo'lsa). */

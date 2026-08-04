@@ -13,6 +13,8 @@ export interface TenantHolat {
   status: string; // TRIAL | ACTIVE | PAST_DUE | BLOCKED
   trialEndsAt: Date | null;
   currentPeriodEnd: Date | null;
+  /** Doimiy bepul mijoz — muddat va to'lov tekshirilmaydi. */
+  bepul?: boolean;
 }
 
 export interface Access {
@@ -34,6 +36,12 @@ export function computeAccess(tenant: TenantHolat, now: Date = new Date()): Acce
 
   if (tenant.status === "BLOCKED") {
     return { mode: "BILLING_ONLY", sabab: "Hisobingiz bloklangan. To'lov bo'limiga murojaat qiling.", kunQoldi, ogohlantirish: null };
+  }
+
+  // Doimiy bepul mijoz — muddat tugasa ham hammasi ochiq (bloklashdan keyin
+  // tekshiriladi: bloklangan mijoz baribir yopiq qoladi).
+  if (tenant.bepul) {
+    return { mode: "FULL", sabab: null, kunQoldi: null, ogohlantirish: null };
   }
 
   if (tenant.status === "PAST_DUE") {

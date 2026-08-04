@@ -22,6 +22,10 @@ model Tenant {
   trialEndsAt      DateTime?
   currentPeriodEnd DateTime?
   plan             String         @default("STANDARD")
+  /// Doimiy bepul foydalanish (hamkor/o'z kompaniyasi). To'lov va muddat
+  /// talab qilinmaydi: obuna tugasa ham kirish yopilmaydi, eslatma yuborilmaydi.
+  /// Bloklash bundan ustun turadi.
+  bepul            Boolean        @default(false)
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   businesses       Business[]
