@@ -83,6 +83,27 @@ npm run superadmin:reset -- <login> <yangi-parol>   # parolni tiklash (parol esd
 Turso env (`DATABASE_URL`, `DATABASE_AUTH_TOKEN`) bilan ishga tushiriladi — masalan `npx vercel env pull`
 bilan olingan fayl orqali.
 
+#### Production'ga env orqali kirish (Turso ulanmasdan)
+
+Agar production'da "Login yoki parol noto'g'ri" chiqsa — bazada SUPERADMIN yo'q yoki parol boshqa.
+Turso'ga qo'l bilan ulanmasdan tiklash uchun Vercel → Project → Settings → Environment Variables'da
+quyidagilarni qo'yib, qayta deploy qiling (build vaqtida `scripts/bootstrap-superadmin.mjs` ishlaydi):
+
+| Env | Ma'nosi |
+| --- | --- |
+| `SUPERADMIN_LOGIN` | login (masalan `superadmin`) |
+| `SUPERADMIN_PAROL` | parol, kamida 8 belgi |
+| `SUPERADMIN_ISM` | ism (ixtiyoriy, default "Platforma egasi") |
+| `SUPERADMIN_RESET` | `1` — mavjud superadmin parolini ALMASHTIRISH (parol esdan chiqqanda) |
+
+Xulq-atvor: login topilmasa — yangi SUPERADMIN yaratiladi; mavjud bo'lsa va `SUPERADMIN_RESET` qo'yilmagan
+bo'lsa — tegilmaydi; `SUPERADMIN_RESET=1` bo'lsa — parol almashtiriladi va akkaunt faollashtiriladi.
+Login SUPERADMIN bo'lmagan (mijoz) foydalanuvchiga tegishli bo'lsa hech narsa o'zgarmaydi.
+Konfiguratsiya bo'lmasa qadam jimgina o'tkazib yuboriladi va build to'xtamaydi.
+
+**Kirgandan keyin `SUPERADMIN_PAROL` va `SUPERADMIN_RESET` ni Vercel'dan o'chirib tashlang** — aks holda
+har deploy'da parol qayta o'rnatiladi va sir env'da saqlanib qoladi.
+
 ### Yangi mijoz (tenant) yaratish
 
 Eng oson yo'li — **`/superadmin` paneli → "Yangi mijoz" → "+ Mijoz qo'shish"**: kompaniya nomi, login, parol,
