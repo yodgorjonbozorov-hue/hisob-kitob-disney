@@ -116,6 +116,18 @@ Seed skripti quyidagi foydalanuvchilarni yaratadi:
 
 **Muhim**: birinchi kirishdan so'ng parollarni albatta o'zgartiring (Admin panel → Foydalanuvchilar bo'limida yangi parol o'rnatish mumkin).
 
+## Kirim/chiqim ko'rinuvchanligi (kim nimani ko'radi)
+
+- **Direktor / Administrator (OWNER, ADMIN)** — aktiv biznesdagi **barcha** kirim/chiqimni ko'radi, kim kiritganidan qat'i nazar.
+- **Kassir / Sotuvchi (CASHIER, SELLER)** — faqat **o'zi kiritgan** yozuvlarni ko'radi. Boshqa xodimning yozuvi unga ko'rinmaydi.
+
+Bu qoida barcha ko'rinishlarda bir xil ishlaydi: Yozuvlar ro'yxati va undagi jamlar,
+kassa bosh ekranidagi "Bugun" jami va oxirgi yozuvlar lentasi, global qidiruv,
+Excel eksporti hamda kun yakunidagi "kutilgan naqd" (kassir o'z smenasi bo'yicha yakunlaydi).
+
+Qoida bitta joyda — `src/lib/auth/visibility.ts` (`transactionScopeUserId`) — yozilgan va
+server tomonda qo'llanadi; testlari: `npm run test:visibility`.
+
 ## Ko'p-biznes (multi-business)
 
 Tizim bir nechta alohida biznesni bitta saytda yuritadi (masalan "Do'kon", "Filial-2", ...). Har bir biznesning **o'z alohida** hisob-kitobi bor: kategoriyalari, tranzaksiyalari, dashboard'i (0 dan boshlanadi) va oylik hisoboti.
