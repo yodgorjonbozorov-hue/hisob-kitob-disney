@@ -43,6 +43,12 @@ export default function LoginForm() {
           value={login}
           onChange={(e) => setLogin(e.target.value)}
           className="w-full rounded-lg border border-line px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand"
+          // Telefon klaviaturasi birinchi harfni kattalashtirmasin va loginni
+          // "to'g'rilab" yubormasin — aks holda kirish bekorga rad etiladi.
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          autoComplete="username"
           autoFocus
           required
         />
@@ -54,6 +60,10 @@ export default function LoginForm() {
           value={parol}
           onChange={(e) => setParol(e.target.value)}
           className="w-full rounded-lg border border-line px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          autoComplete="current-password"
           required
         />
       </div>

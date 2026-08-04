@@ -1,7 +1,9 @@
 import { z } from "zod";
 
 export const loginSchema = z.object({
-  login: z.string().min(1, "Login kiritilishi shart"),
+  // Telefon klaviaturasi login oxiriga bo'shliq qo'shib yuborishi mumkin — kesamiz.
+  // Parol tegilmaydi: bo'shliq parolning haqiqiy qismi bo'lishi mumkin.
+  login: z.string().trim().min(1, "Login kiritilishi shart"),
   parol: z.string().min(1, "Parol kiritilishi shart"),
 });
 
