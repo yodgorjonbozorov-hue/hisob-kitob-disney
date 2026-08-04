@@ -57,6 +57,8 @@ export interface TenantOverview {
    * bormaydi — bunday mijozga qo'ng'iroq qilish kerak.
    */
   telegramUlangan: boolean;
+  /** Doimiy bepul mijoz (to'lov talab qilinmaydi). */
+  bepul: boolean;
 }
 
 /** Barcha tenantlar ro'yxati (panel jadvali uchun). */
@@ -109,6 +111,7 @@ export async function listTenantsOverview(): Promise<TenantOverview[]> {
       telegramUlangan: t.users.some(
         (u) => u.isActive && !!u.telegramChatId && MANAGER_ROLLAR.includes(u.rol as never)
       ),
+      bepul: t.bepul,
     };
   });
 }

@@ -300,3 +300,105 @@ test("bloklangan tenantga eslatma yuborilmaydi", async () => {
     0
   );
 });
+
+// ---------- Doimiy bepul mijoz ----------
+
+test("computeAccess: bepul mijozda muddat tugasa ham hammasi ochiq", () => {
+  const otgan = new Date(Date.now() - 30 * KUN_MS);
+
+  // Oddiy mijoz: muddat o'tgan -> READONLY / BILLING_ONLY
+  assert.equal(
+    computeAccess({ status: "PAST_DUE", trialEndsAt: null, currentPeriodEnd: otgan }).mode,
+    "READONLY"
+  );
+  assert.equal(
+    computeAccess({ status: "TRIAL", trialEndsAt: otgan, currentPeriodEnd: null }).mode,
+    "BILLING_ONLY"
+  );
+
+  // Bepul mijoz: xuddi shu holatlarda ham FULL
+  const a = computeAccess({ status: "PAST_DUE", trialEndsAt: null, currentPeriodEnd: otgan, bepul: true });
+  assert.equal(a.mode, "FULL");
+  assert.equal(a.sabab, null);
+  assert.equal(a.kunQoldi, null, "bepulda muddat sanalmaydi");
+  assert.equal(a.ogohlantirish, null, "bepulda ogohlantirish bo'lmaydi");
+
+  assert.equal(
+    computeAccess({ status: "TRIAL", trialEndsAt: otgan, currentPeriodEnd: null, bepul: true }).mode,
+    "FULL"
+  );
+});
+
+test("bloklash bepuldan ustun turadi", () => {
+  const a = computeAccess({
+    status: "BLOCKED",
+    trialEndsAt: null,
+    currentPeriodEnd: new Date(Date.now() + KUN_MS),
+    bepul: true,
+  });
+  assert.equal(a.mode, "BILLING_ONLY", "bloklangan mijoz bepul bo'lsa ham yopiq");
+});
+
+test("setTenantBepul: yoqadi/bekor qiladi, cron PAST_DUE ga o'tkazmaydi", async () => {
+  const { setTenantBepul } = await import("@/lib/billing/subscribe");
+
+  const hamkor = await createTenantWithOwner({
+    kompaniyaNomi: "Hamkor Kompaniya",
+    ism: "Egasi",
+    login: "+998900000093",
+    parol: "parol12345",
+  });
+  const now = new Date();
+  // Muddati kecha tugagan ACTIVE mijoz.
+  await rawPrisma.tenant.update({
+    where: { id: hamkor.tenant.id },
+    data: { status: "ACTIVE", currentPeriodEnd: new Date(now.getTime() - KUN_MS) },
+  });
+
+  await setTenantBepul(hamkor.tenant.id, true);
+  const bepulTenant = await rawPrisma.tenant.findUnique({ where: { id: hamkor.tenant.id } });
+  assert.equal(bepulTenant.bepul, true);
+  assert.equal(computeAccess(bepulTenant, now).mode, "FULL");
+
+  // Cron muddati o'tganlarni PAST_DUE qiladi — bepulga tegmaydi.
+  await updateExpiredStatuses(now);
+  const cronKeyin = await rawPrisma.tenant.findUnique({ where: { id: hamkor.tenant.id } });
+  assert.equal(cronKeyin.status, "ACTIVE", "bepul mijoz PAST_DUE ga o'tmasligi kerak");
+
+  // Bekor qilinsa — haqiqiy holatiga qaytadi (sanaga tegilmagan).
+  await setTenantBepul(hamkor.tenant.id, false);
+  const qaytgan = await rawPrisma.tenant.findUnique({ where: { id: hamkor.tenant.id } });
+  assert.equal(qaytgan.bepul, false);
+  assert.equal(computeAccess(qaytgan, now).mode, "READONLY");
+});
+
+test("bepul mijozga obuna eslatmasi yuborilmaydi", async () => {
+  const { sendExpiryWarnings } = await import("@/lib/billing/notify");
+  const now = new Date();
+
+  const bepulMijoz = await createTenantWithOwner({
+    kompaniyaNomi: "Bepul Hamkor",
+    ism: "Egasi",
+    login: "+998900000094",
+    parol: "parol12345",
+  });
+  await rawPrisma.tenant.update({
+    where: { id: bepulMijoz.tenant.id },
+    // Sinov muddati ertaga tugaydi — oddiy mijozga xabar ketardi.
+    data: { trialEndsAt: new Date(now.getTime() + KUN_MS), bepul: true },
+  });
+  await rawPrisma.user.update({
+    where: { id: bepulMijoz.user.id },
+    data: { telegramChatId: "555000333" },
+  });
+
+  const yuborilgan: string[] = [];
+  const fakeBot: any = { api: { sendMessage: async (_c: string, t: string) => void yuborilgan.push(t) } };
+  const r = await sendExpiryWarnings(fakeBot, now);
+  assert.equal(
+    yuborilgan.filter((t) => t.includes("Bepul Hamkor")).length,
+    0,
+    "bepul mijozni bezovta qilmaslik kerak"
+  );
+  assert.ok(!r.telegramsiz.includes("Bepul Hamkor"));
+});

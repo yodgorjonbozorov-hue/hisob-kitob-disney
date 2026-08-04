@@ -28,6 +28,7 @@ interface TenantRow {
   takrorMi: boolean;
   bosh: boolean;
   telegramUlangan: boolean;
+  bepul: boolean;
 }
 interface PaymentRow {
   id: string;
@@ -122,6 +123,19 @@ export function SuperadminClient({
     if (blocked && !confirm(`${t.name} bloklansinmi? Mijoz faqat /billing sahifasini ochadi.`)) return;
     const r = await call(`/api/superadmin/tenants/${t.id}/block`, { blocked });
     if (r) setXabar(`${t.name}: ${blocked ? "bloklandi" : `blokdan chiqarildi (${r.status})`}.`);
+  }
+
+  /** Doimiy bepul: obuna muddati va to'lov talab qilinmaydi. */
+  async function bepulToggle(t: TenantRow) {
+    const yoqish = !t.bepul;
+    if (
+      yoqish &&
+      !confirm(`${t.name} doimiy BEPUL bo'lsinmi?\n\nObuna muddati va to'lov talab qilinmaydi.`)
+    ) {
+      return;
+    }
+    const r = await call(`/api/superadmin/tenants/${t.id}/bepul`, { bepul: yoqish });
+    if (r) setXabar(`${t.name}: ${yoqish ? "doimiy bepul qilindi" : "bepul rejimi bekor qilindi"}.`);
   }
 
   /** Faqat bo'sh (xatoga ochilgan takror) kompaniyani o'chirish. */
@@ -281,6 +295,14 @@ export function SuperadminClient({
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_CLS[t.status] ?? "bg-surface-2"}`}>
                         {t.status}
                       </span>
+                      {t.bepul && (
+                        <span
+                          className="ml-1 px-2 py-0.5 rounded-full text-xs font-medium bg-income-soft text-income-fg"
+                          title="Doimiy bepul — obuna muddati va to'lov talab qilinmaydi"
+                        >
+                          BEPUL
+                        </span>
+                      )}
                       {t.accessMode !== "FULL" && (
                         <p className="text-2xs text-expense-fg mt-0.5">{t.accessMode}</p>
                       )}
@@ -315,6 +337,14 @@ export function SuperadminClient({
                         </button>
                         <button className={`${btn} ${t.status === "BLOCKED" ? "text-income-fg" : "text-expense-fg"}`} disabled={!!busy} onClick={() => blok(t)}>
                           {t.status === "BLOCKED" ? "Blokdan chiqarish" : "Bloklash"}
+                        </button>
+                        <button
+                          className={`${btn} ${t.bepul ? "text-income-fg" : ""}`}
+                          disabled={!!busy}
+                          onClick={() => bepulToggle(t)}
+                          title="Doimiy bepul foydalanish"
+                        >
+                          {t.bepul ? "Bepulni bekor qilish" : "Bepul qilish"}
                         </button>
                         <button className={btn} disabled={!!busy} onClick={() => kirish(t)}>
                           Kirish →
