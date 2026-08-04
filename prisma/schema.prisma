@@ -115,6 +115,7 @@ model Business {
   deals        Deal[]
   crmActivities Activity[]
   tasks        Task[]
+  productExpenses ProductExpense[]
 
   @@index([tenantId])
 }
@@ -290,8 +291,32 @@ model Product {
   stockEntries StockEntry[]
   sales        Sale[]
   debts        Debt[]
+  expenses     ProductExpense[]
 
   @@index([businessId])
+}
+
+/// Mahsulot/mashinaga bog'langan xarajat (avto rejimida: ta'mirlash, bo'yoq,
+/// yuvish, rasmiylashtirish). Sof foyda = sotuv − olingan narx − shu xarajatlar.
+model ProductExpense {
+  id            String   @id @default(cuid())
+  businessId    String
+  business      Business @relation(fields: [businessId], references: [id])
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id])
+  /// "tamirlash" | "boyoq" | "yuvish" | "rasmiylashtirish" | "ehtiyot_qism" | "boshqa"
+  turi          String
+  summa         Int
+  izoh          String?
+  userId        String
+  /// Naqd to'langanda — bog'langan chiqim tranzaksiya.
+  transactionId String?
+  /// Keyin to'lanadigan bo'lsa — bog'langan "beriladigan" qarz.
+  debtId        String?
+  createdAt     DateTime @default(now())
+
+  @@index([businessId])
+  @@index([productId])
 }
 
 /// Ombor kirimi — mahsulot qoldig'ini oshiradi (chiqim tranzaksiya yaratmaydi).

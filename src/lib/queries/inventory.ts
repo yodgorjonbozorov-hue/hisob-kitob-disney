@@ -12,6 +12,8 @@ export interface ProductAdminDTO {
   avtoYil: number | null;
   avtoRaqam: string | null;
   avtoRang: string | null;
+  /** Shu mahsulot/mashinaga yozilgan jami xarajat (ta'mirlash, bo'yoq...). */
+  xarajat: number;
 }
 
 /** Kassir uchun — miqdor RAQAMI ko'rsatilmaydi, faqat `mavjud` (bor/yo'q). */
@@ -38,6 +40,8 @@ export async function listProducts(
       .map((p) => ({ id: p.id, nomi: p.nomi, sotuvNarx: p.sotuvNarx, mavjud: p.miqdor > 0 }));
   }
 
+  const xarajatlar = await getExpenseTotalsByProduct(businessId);
+
   return products.map((p) => ({
     id: p.id,
     nomi: p.nomi,
@@ -49,6 +53,7 @@ export async function listProducts(
     avtoYil: p.avtoYil,
     avtoRaqam: p.avtoRaqam,
     avtoRang: p.avtoRang,
+    xarajat: xarajatlar[p.id] ?? 0,
   }));
 }
 
@@ -138,14 +143,21 @@ export interface OmborStats {
 }
 
 export async function getOmborStats(businessId: string): Promise<OmborStats> {
-  const products = await prisma.product.findMany({
-    where: { businessId, isActive: true },
-    select: { miqdor: true, kelganNarx: true },
-  });
+  const [products, xarajatlar] = await Promise.all([
+    prisma.product.findMany({
+      where: { businessId, isActive: true },
+      select: { id: true, miqdor: true, kelganNarx: true },
+    }),
+    getExpenseTotalsByProduct(businessId),
+  ]);
   return {
     turlarSoni: products.length,
     jamiQoldiq: products.reduce((a, p) => a + p.miqdor, 0),
-    omborQiymati: products.reduce((a, p) => a + p.miqdor * p.kelganNarx, 0),
+    // Sotilmagan mashinaga qilingan xarajat ham avtoparkka tikilgan puldir.
+    omborQiymati: products.reduce(
+      (a, p) => a + p.miqdor * p.kelganNarx + (p.miqdor > 0 ? xarajatlar[p.id] ?? 0 : 0),
+      0
+    ),
   };
 }
 
@@ -155,21 +167,44 @@ export interface ProductProfitDTO {
   sotilgan: number; // dona
   daromad: number; // Σ jamiSumma
   tannarx: number; // Σ tannarx × miqdor
-  foyda: number; // daromad − tannarx
+  /** Shu mahsulot/mashinaga yozilgan xarajatlar (ta'mirlash, bo'yoq...). */
+  xarajat: number;
+  foyda: number; // daromad − tannarx − xarajat
   marja: number; // foyda / daromad (%)
 }
 
-/** Mahsulot bo'yicha foydalilik (sotuvlar asosida). Kamayish tartibida foyda bo'yicha. */
+/**
+ * Mahsulot bo'yicha foydalilik (sotuvlar asosida). Kamayish tartibida foyda bo'yicha.
+ * Avto rejimida sof foyda = sotilgan narx − olingan narx − mashinaga qilingan xarajatlar.
+ */
 export async function getProductProfitability(businessId: string): Promise<ProductProfitDTO[]> {
-  const sales = await prisma.sale.findMany({
-    where: { businessId },
-    include: { product: { select: { nomi: true } } },
-  });
+  const [sales, xarajatlar] = await Promise.all([
+    prisma.sale.findMany({
+      where: { businessId },
+      include: { product: { select: { nomi: true } } },
+    }),
+    prisma.productExpense.groupBy({
+      by: ["productId"],
+      where: { businessId },
+      _sum: { summa: true },
+    }),
+  ]);
+  const xarajatMap = new Map(xarajatlar.map((x) => [x.productId, x._sum.summa ?? 0]));
+
   const map = new Map<string, ProductProfitDTO>();
   for (const s of sales) {
     let p = map.get(s.productId);
     if (!p) {
-      p = { productId: s.productId, nomi: s.product.nomi, sotilgan: 0, daromad: 0, tannarx: 0, foyda: 0, marja: 0 };
+      p = {
+        productId: s.productId,
+        nomi: s.product.nomi,
+        sotilgan: 0,
+        daromad: 0,
+        tannarx: 0,
+        xarajat: xarajatMap.get(s.productId) ?? 0,
+        foyda: 0,
+        marja: 0,
+      };
       map.set(s.productId, p);
     }
     p.sotilgan += s.miqdor;
@@ -178,10 +213,51 @@ export async function getProductProfitability(businessId: string): Promise<Produ
   }
   const list = Array.from(map.values());
   list.forEach((p) => {
-    p.foyda = p.daromad - p.tannarx;
+    p.foyda = p.daromad - p.tannarx - p.xarajat;
     p.marja = p.daromad > 0 ? Math.round((p.foyda / p.daromad) * 100) : 0;
   });
   return list.sort((a, b) => b.foyda - a.foyda);
+}
+
+export interface ProductExpenseDTO {
+  id: string;
+  productId: string;
+  turi: string;
+  summa: number;
+  izoh: string | null;
+  /** Keyin to'lanadigan (qarzga yozilgan) xarajatmi. */
+  qarzga: boolean;
+  sana: string;
+}
+
+/** Bitta mahsulot/mashinaning xarajatlari — kartochkada ko'rsatiladi. */
+export async function listProductExpenses(
+  businessId: string,
+  productId: string
+): Promise<ProductExpenseDTO[]> {
+  const rows = await prisma.productExpense.findMany({
+    where: { businessId, productId },
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map((x) => ({
+    id: x.id,
+    productId: x.productId,
+    turi: x.turi,
+    summa: x.summa,
+    izoh: x.izoh,
+    qarzga: !!x.debtId,
+    sana: x.createdAt.toISOString(),
+  }));
+}
+
+/** Biznesdagi har mahsulot bo'yicha jami xarajat: { productId: summa }. */
+export async function getExpenseTotalsByProduct(businessId: string): Promise<Record<string, number>> {
+  const rows = await prisma.productExpense.groupBy({
+    by: ["productId"],
+    where: { businessId },
+    _sum: { summa: true },
+  });
+  return Object.fromEntries(rows.map((r) => [r.productId, r._sum.summa ?? 0]));
 }
 
 export interface SaleDTO {

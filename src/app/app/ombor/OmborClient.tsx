@@ -27,6 +27,7 @@ export function OmborClient({
   useEffect(() => setProducts(initialProducts), [initialProducts]);
   const [editing, setEditing] = useState<ProductAdminDTO | null>(null);
   const [stockFor, setStockFor] = useState<ProductAdminDTO | null>(null);
+  const [xarajatFor, setXarajatFor] = useState<ProductAdminDTO | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
 
@@ -84,6 +85,7 @@ export function OmborClient({
                 {avto && <th className="pb-2">Yil</th>}
                 {avto && <th className="pb-2">Davlat raqami</th>}
                 <th className="pb-2 text-right">{avto ? "Olingan narx" : "Tannarx"}</th>
+                {avto && <th className="pb-2 text-right">Xarajat</th>}
                 <th className="pb-2 text-right">Sotuv narxi</th>
                 {avto && <th className="pb-2 text-right">Kutilayotgan foyda</th>}
                 <th className="pb-2 text-right">{M.qoldiq}</th>
@@ -94,13 +96,14 @@ export function OmborClient({
             <tbody className="divide-y divide-line">
               {products.length === 0 && (
                 <tr>
-                  <td colSpan={avto ? 8 : 6} className="text-center text-faint py-6">
+                  <td colSpan={avto ? 9 : 6} className="text-center text-faint py-6">
                     {M.bosh}
                   </td>
                 </tr>
               )}
               {products.map((p) => {
-                const kutilayotganFoyda = p.sotuvNarx > 0 ? p.sotuvNarx - p.kelganNarx : 0;
+                // Kutilayotgan foyda mashinaga qilingan xarajatlardan keyin.
+                const kutilayotganFoyda = p.sotuvNarx > 0 ? p.sotuvNarx - p.kelganNarx - p.xarajat : 0;
                 return (
                 <tr key={p.id} className={p.isActive ? "" : "opacity-50"}>
                   <td className="py-2.5 font-medium">
@@ -110,6 +113,21 @@ export function OmborClient({
                   {avto && <td className="py-2.5 text-muted tnum">{p.avtoYil ?? "—"}</td>}
                   {avto && <td className="py-2.5 text-muted">{p.avtoRaqam ?? "—"}</td>}
                   <td className="py-2.5 text-right">{formatSomLabel(p.kelganNarx)}</td>
+                  {avto && (
+                    <td className="py-2.5 text-right">
+                      {p.xarajat > 0 ? (
+                        <button
+                          onClick={() => setXarajatFor(p)}
+                          className="tnum text-expense hover:underline"
+                          title="Xarajatlarni ko'rish"
+                        >
+                          {formatSomLabel(p.xarajat)}
+                        </button>
+                      ) : (
+                        <span className="text-faint">—</span>
+                      )}
+                    </td>
+                  )}
                   <td className="py-2.5 text-right">
                     {p.sotuvNarx > 0 ? formatSomLabel(p.sotuvNarx) : <span className="text-faint">qo'yilmagan</span>}
                   </td>
@@ -144,6 +162,14 @@ export function OmborClient({
                     </td>
                   )}
                   <td className="py-2.5 text-right whitespace-nowrap">
+                    {avto && (
+                      <button
+                        onClick={() => setXarajatFor(p)}
+                        className="text-xs font-medium text-expense hover:brightness-125 mr-3"
+                      >
+                        Xarajat
+                      </button>
+                    )}
                     {(!avto || p.miqdor === 0) && (
                       <button
                         onClick={() => setStockFor(p)}
@@ -185,6 +211,9 @@ export function OmborClient({
       )}
       {stockFor && (
         <StockEntryModal product={stockFor} avto={avto} onClose={() => setStockFor(null)} onDone={refresh} />
+      )}
+      {xarajatFor && (
+        <XarajatModal product={xarajatFor} onClose={() => setXarajatFor(null)} onDone={refresh} />
       )}
     </div>
   );
@@ -742,6 +771,237 @@ function StockEntryModal({
           </Button>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+/** Xarajat turlari — server (XARAJAT_TURLARI) bilan bir xil kodlar. */
+const XARAJAT_TURLARI: { code: string; nomi: string }[] = [
+  { code: "tamirlash", nomi: "Ta'mirlash" },
+  { code: "boyoq", nomi: "Bo'yoq" },
+  { code: "yuvish", nomi: "Yuvish" },
+  { code: "rasmiylashtirish", nomi: "Rasmiylashtirish" },
+  { code: "ehtiyot_qism", nomi: "Ehtiyot qism" },
+  { code: "boshqa", nomi: "Boshqa" },
+];
+
+function xarajatNomi(code: string): string {
+  return XARAJAT_TURLARI.find((x) => x.code === code)?.nomi ?? code;
+}
+
+interface XarajatDTO {
+  id: string;
+  turi: string;
+  summa: number;
+  izoh: string | null;
+  qarzga: boolean;
+  sana: string;
+}
+
+/**
+ * Mashina xarajatlari: ro'yxat + yangi xarajat qo'shish.
+ * Bu yerdagi summa aynan shu mashinaga yoziladi va sof foydadan ayriladi —
+ * shuning uchun uni yana qo'lda chiqimga kiritish shart emas.
+ */
+function XarajatModal({
+  product,
+  onClose,
+  onDone,
+}: {
+  product: ProductAdminDTO;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [xarajatlar, setXarajatlar] = useState<XarajatDTO[] | null>(null);
+  const [turi, setTuri] = useState("tamirlash");
+  const [summa, setSumma] = useState("");
+  const [izoh, setIzoh] = useState("");
+  const [tolovTuri, setTolovTuri] = useState<"naqd" | "qarz">("naqd");
+  const [kimga, setKimga] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function yukla() {
+    const res = await fetch(`/api/avto/xarajat?productId=${product.id}`);
+    setXarajatlar(res.ok ? await res.json() : []);
+  }
+
+  useEffect(() => {
+    yukla();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product.id]);
+
+  const jami = (xarajatlar ?? []).reduce((a, x) => a + x.summa, 0);
+  const sofFoyda = product.sotuvNarx > 0 ? product.sotuvNarx - product.kelganNarx - jami : null;
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    const summaRaqam = parseSomInput(summa);
+    if (summaRaqam <= 0) {
+      setError("Summani kiriting");
+      return;
+    }
+    setLoading(true);
+    const res = await fetch("/api/avto/xarajat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        productId: product.id,
+        turi,
+        summa: summaRaqam,
+        izoh: izoh || null,
+        tolovTuri,
+        kimga: kimga || null,
+      }),
+    });
+    if (!res.ok) {
+      setError((await res.json()).error ?? "Xatolik");
+      setLoading(false);
+      return;
+    }
+    setSumma("");
+    setIzoh("");
+    setKimga("");
+    setLoading(false);
+    await yukla();
+    onDone();
+  }
+
+  async function ochir(id: string) {
+    const res = await fetch(`/api/avto/xarajat/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      setError((await res.json()).error ?? "O'chirib bo'lmadi");
+      return;
+    }
+    await yukla();
+    onDone();
+  }
+
+  return (
+    <Modal open onClose={onClose} title={`Xarajatlar: ${product.nomi}`}>
+      <div className="space-y-4">
+        <div className="rounded-lg bg-surface-2 p-3 text-sm space-y-1">
+          <div className="flex justify-between">
+            <span className="text-muted">Olingan narx</span>
+            <span className="tnum">{formatSomLabel(product.kelganNarx)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted">Xarajatlar</span>
+            <span className="tnum text-expense">{formatSomLabel(jami)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted">Sotuv narxi</span>
+            <span className="tnum">
+              {product.sotuvNarx > 0 ? formatSomLabel(product.sotuvNarx) : "qo'yilmagan"}
+            </span>
+          </div>
+          {sofFoyda !== null && (
+            <div className="flex justify-between border-t border-line pt-1 mt-1 font-medium">
+              <span>{product.miqdor > 0 ? "Kutilayotgan sof foyda" : "Sof foyda"}</span>
+              <span className={`tnum ${sofFoyda >= 0 ? "text-income" : "text-expense"}`}>
+                {formatSomLabel(sofFoyda)}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {xarajatlar === null ? (
+          <p className="text-sm text-faint">Yuklanmoqda...</p>
+        ) : xarajatlar.length === 0 ? (
+          <p className="text-sm text-faint">Bu mashinaga hali xarajat yozilmagan.</p>
+        ) : (
+          <ul className="divide-y divide-line text-sm">
+            {xarajatlar.map((x) => (
+              <li key={x.id} className="py-2 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-medium">
+                    {xarajatNomi(x.turi)}
+                    {x.qarzga && <span className="ml-2 text-2xs text-muted">keyin to&apos;lanadi</span>}
+                  </p>
+                  {x.izoh && <p className="text-xs text-faint truncate">{x.izoh}</p>}
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="tnum text-expense">{formatSomLabel(x.summa)}</span>
+                  <button
+                    onClick={() => ochir(x.id)}
+                    className="text-xs text-muted hover:text-expense"
+                    title="O'chirish"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <form onSubmit={submit} className="space-y-3 border-t border-line pt-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs text-muted mb-1">Xarajat turi</label>
+              <select
+                value={turi}
+                onChange={(e) => setTuri(e.target.value)}
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm bg-transparent"
+              >
+                {XARAJAT_TURLARI.map((x) => (
+                  <option key={x.code} value={x.code}>
+                    {x.nomi}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-muted mb-1">Summa</label>
+              <NarxInput value={summa} onChange={setSumma} placeholder="0" />
+            </div>
+          </div>
+          <input
+            type="text"
+            value={izoh}
+            onChange={(e) => setIzoh(e.target.value)}
+            placeholder="Izoh (masalan: dvigatel ta'miri)"
+            className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+          />
+          <div className="flex gap-2">
+            {(["naqd", "qarz"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTolovTuri(t)}
+                className={`flex-1 rounded-lg border px-3 py-2 text-sm ${
+                  tolovTuri === t ? "border-brand text-fg font-medium" : "border-line text-muted"
+                }`}
+              >
+                {t === "naqd" ? "To'landi (naqd)" : "Keyin to'lanadi"}
+              </button>
+            ))}
+          </div>
+          {tolovTuri === "qarz" && (
+            <input
+              type="text"
+              value={kimga}
+              onChange={(e) => setKimga(e.target.value)}
+              placeholder="Kimga to'lanadi (usta/servis nomi)"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+              required
+            />
+          )}
+          <p className="text-2xs text-faint">
+            Bu xarajat avtomatik chiqimga tushadi — uni yana qo&apos;lda kiritish shart emas.
+          </p>
+          {error && <p className="text-expense text-sm">{error}</p>}
+          <div className="flex gap-2 justify-end">
+            <Button variant="secondary" type="button" onClick={onClose}>
+              Yopish
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "..." : "Xarajat qo'shish"}
+            </Button>
+          </div>
+        </form>
+      </div>
     </Modal>
   );
 }

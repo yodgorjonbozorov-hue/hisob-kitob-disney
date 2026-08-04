@@ -28,6 +28,7 @@ const BUSINESS_SCOPED = new Set([
   "Debt",
   "StockEntry",
   "DebtPayment",
+  "ProductExpense",
   // CRM (BOS-2)
   "Contact",
   "Stage",

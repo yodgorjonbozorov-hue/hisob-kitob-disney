@@ -10,6 +10,20 @@ const QARZ_TOLOVI_KATEGORIYA = "Qarz to'lovi";
 const QARZ_TOLASH_KATEGORIYA = "Qarz to'lash";
 // Avto rejimi: mashina naqdga olinganda — chiqim kategoriyasi.
 const MASHINA_XARIDI_KATEGORIYA = "Mashina xaridi";
+// Mashinaga qilingan xarajatlar (ta'mirlash, bo'yoq...) — chiqim kategoriyasi.
+const MASHINA_XARAJATI_KATEGORIYA = "Mashina xarajati";
+
+/** Xarajat turlarining ko'rinadigan nomlari (UI, bot va tranzaksiya izohi uchun). */
+export const XARAJAT_TURLARI = {
+  tamirlash: "Ta'mirlash",
+  boyoq: "Bo'yoq",
+  yuvish: "Yuvish",
+  rasmiylashtirish: "Rasmiylashtirish",
+  ehtiyot_qism: "Ehtiyot qism",
+  boshqa: "Boshqa",
+} as const;
+
+export type XarajatTuri = keyof typeof XARAJAT_TURLARI;
 
 /** Biznes uchun kategoriyani topadi yoki yaratadi (sotuv/qarz avtomatik yozuvlari uchun). */
 export async function ensureCategory(
@@ -330,4 +344,117 @@ export async function createAvtoMashina(params: {
   }
 
   return prisma.product.findUnique({ where: { id: product.id } });
+}
+
+/**
+ * MASHINAGA XARAJAT QO'SHISH (ta'mirlash, bo'yoq, yuvish, rasmiylashtirish...).
+ *
+ * Xarajat aynan shu mashinaga yoziladi — sof foyda hisobida sotuv narxidan
+ * ham olingan narx, ham shu xarajatlar ayriladi (getProductProfitability).
+ *
+ * Pul harakati mashina xaridi bilan bir xil qoidada:
+ *  - "naqd" → darhol chiqim tranzaksiya ("Mashina xarajati" kategoriyasi);
+ *  - "qarz" → "beriladigan" qarz (ustaga keyin to'lanadi), chiqim to'lov paytida.
+ * Ya'ni xarajatni bu yerdan kiritgandan keyin uni yana qo'lda chiqimga
+ * yozish SHART EMAS — ikki marta hisoblanib ketadi.
+ */
+export async function addProductExpense(params: {
+  businessId: string;
+  productId: string;
+  turi: XarajatTuri;
+  summa: number;
+  izoh?: string | null;
+  tolovTuri?: "naqd" | "qarz";
+  kimga?: string | null;
+  userId: string;
+}) {
+  if (params.summa <= 0) throw new BadRequestError("Summa musbat bo'lishi kerak");
+
+  const product = await prisma.product.findFirst({
+    where: { id: params.productId, businessId: params.businessId },
+  });
+  if (!product) throw new ForbiddenError("Mashina topilmadi");
+
+  const tolovTuri = params.tolovTuri ?? "naqd";
+  const kimga = params.kimga?.trim();
+  if (tolovTuri === "qarz" && !kimga) {
+    throw new BadRequestError("Keyin to'lanadigan bo'lsa — kimga to'lanishi yozilishi shart");
+  }
+
+  const turiNomi = XARAJAT_TURLARI[params.turi];
+  const belgi = [product.nomi, product.avtoRaqam].filter(Boolean).join(" ");
+  const izoh = params.izoh?.trim() || undefined;
+
+  let transactionId: string | undefined;
+  let debtId: string | undefined;
+
+  if (tolovTuri === "naqd") {
+    const categoryId = await ensureCategory(params.businessId, MASHINA_XARAJATI_KATEGORIYA, "chiqim");
+    const txn = await createTransaction(params.userId, params.businessId, {
+      turi: "chiqim",
+      categoryId,
+      summa: params.summa,
+      sana: todayDateOnlyString(),
+      izoh: `${turiNomi}: ${belgi}${izoh ? ` — ${izoh}` : ""}`,
+    });
+    transactionId = txn.id;
+  } else {
+    const debt = await createDebt({
+      businessId: params.businessId,
+      turi: "beriladigan",
+      mijozNomi: kimga!,
+      jamiSumma: params.summa,
+      productId: product.id,
+      izoh: `${turiNomi}: ${belgi}`,
+      userId: params.userId,
+    });
+    debtId = debt.id;
+  }
+
+  return prisma.productExpense.create({
+    data: {
+      businessId: params.businessId,
+      productId: product.id,
+      turi: params.turi,
+      summa: params.summa,
+      izoh,
+      userId: params.userId,
+      transactionId,
+      debtId,
+    },
+  });
+}
+
+/**
+ * Xarajatni o'chirish (xato kiritilganda). Naqd xarajat bo'lsa bog'langan
+ * chiqim tranzaksiya ham o'chiriladi (soft delete) — kassa qoldig'i to'g'ri qoladi.
+ * Qarzga yozilgan xarajat: qarz bo'yicha to'lov bo'lgan bo'lsa o'chirilmaydi.
+ */
+export async function deleteProductExpense(params: {
+  businessId: string;
+  expenseId: string;
+  userId: string;
+}) {
+  const expense = await prisma.productExpense.findFirst({
+    where: { id: params.expenseId, businessId: params.businessId },
+  });
+  if (!expense) throw new ForbiddenError("Xarajat topilmadi");
+
+  if (expense.debtId) {
+    const debt = await prisma.debt.findFirst({ where: { id: expense.debtId } });
+    if (debt && debt.tolangan > 0) {
+      throw new BadRequestError("Bu xarajat bo'yicha to'lov qilingan — avval qarzni tekshiring");
+    }
+    if (debt) await prisma.debt.delete({ where: { id: debt.id } });
+  }
+
+  if (expense.transactionId) {
+    await prisma.transaction.updateMany({
+      where: { id: expense.transactionId, businessId: params.businessId, deletedAt: null },
+      data: { deletedAt: new Date() },
+    });
+  }
+
+  await prisma.productExpense.delete({ where: { id: expense.id } });
+  return { ok: true };
 }

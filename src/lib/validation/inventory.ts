@@ -36,6 +36,21 @@ export const createAvtoSchema = z
     path: ["egasiNomi"],
   });
 
+/** Mashina/mahsulotga xarajat qo'shish (ta'mirlash, bo'yoq, rasmiylashtirish...). */
+export const createProductExpenseSchema = z.object({
+  productId: z.string().min(1),
+  turi: z.enum(["tamirlash", "boyoq", "yuvish", "rasmiylashtirish", "ehtiyot_qism", "boshqa"]),
+  summa: z.number().int().positive("Summa musbat bo'lishi kerak"),
+  izoh: z.string().max(500).optional().nullable(),
+  // "naqd" — darhol chiqim tranzaksiya; "qarz" — keyin to'lanadi (beriladigan qarz).
+  tolovTuri: z.enum(["naqd", "qarz"]).default("naqd"),
+  // Qarzga bo'lsa — kimga to'lanishi kerak (usta/servis nomi).
+  kimga: z.string().max(100).optional().nullable(),
+}).refine((d) => d.tolovTuri !== "qarz" || !!d.kimga?.trim(), {
+  message: "Keyin to'lanadigan bo'lsa — kimga to'lanishi yozilishi shart",
+  path: ["kimga"],
+});
+
 export const bulkProductsSchema = z.object({
   mahsulotlar: z.array(createProductSchema).min(1, "Kamida bitta mahsulot").max(50),
 });
@@ -83,4 +98,5 @@ export type StockEntryInput = z.infer<typeof stockEntrySchema>;
 export type CreateSaleInput = z.infer<typeof createSaleSchema>;
 export type DebtPaymentInput = z.infer<typeof debtPaymentSchema>;
 export type CreateAvtoInput = z.infer<typeof createAvtoSchema>;
+export type CreateProductExpenseInput = z.infer<typeof createProductExpenseSchema>;
 export type CreateDebtInput = z.infer<typeof createDebtSchema>;

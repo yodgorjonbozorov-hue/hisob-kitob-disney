@@ -39,9 +39,10 @@ export default async function OmborPage() {
       sotilgan: a.sotilgan + p.sotilgan,
       daromad: a.daromad + p.daromad,
       tannarx: a.tannarx + p.tannarx,
+      xarajat: a.xarajat + p.xarajat,
       foyda: a.foyda + p.foyda,
     }),
-    { sotilgan: 0, daromad: 0, tannarx: 0, foyda: 0 }
+    { sotilgan: 0, daromad: 0, tannarx: 0, xarajat: 0, foyda: 0 }
   );
 
   return (
@@ -67,6 +68,11 @@ export default async function OmborPage() {
           <Card>
             <p className="text-muted text-sm mb-1">{avto ? "Mashinalar tannarxi" : "Tannarx"}</p>
             <p className="text-xl font-semibold text-fg tnum">{formatSomLabel(jami.tannarx)}</p>
+            {jami.xarajat > 0 && (
+              <p className="text-2xs text-muted mt-1">
+                + {formatSomLabel(jami.xarajat)} xarajat
+              </p>
+            )}
           </Card>
           <Card>
             <p className="text-muted text-sm mb-1">Sof foyda</p>
@@ -87,7 +93,8 @@ export default async function OmborPage() {
                   <th className="text-left px-5 py-2">{avto ? "Mashina" : "Mahsulot"}</th>
                   <th className="text-right px-3 py-2">{M.sotilgan}</th>
                   <th className="text-right px-3 py-2">{avto ? "Sotilgan narx" : "Daromad"}</th>
-                  <th className="text-right px-3 py-2">Foyda</th>
+                  {avto && <th className="text-right px-3 py-2">Xarajat</th>}
+                  <th className="text-right px-3 py-2">{avto ? "Sof foyda" : "Foyda"}</th>
                   <th className="text-right px-5 py-2">Marja</th>
                 </tr>
               </thead>
@@ -100,6 +107,11 @@ export default async function OmborPage() {
                     </td>
                     <td className="px-3 py-2.5 text-right tnum">{p.sotilgan}</td>
                     <td className="px-3 py-2.5 text-right tnum">{formatSomLabel(p.daromad)}</td>
+                    {avto && (
+                      <td className="px-3 py-2.5 text-right tnum text-muted">
+                        {p.xarajat > 0 ? formatSomLabel(p.xarajat) : "—"}
+                      </td>
+                    )}
                     <td className={`px-3 py-2.5 text-right tnum font-medium ${p.foyda >= 0 ? "text-income" : "text-expense"}`}>
                       {formatSomLabel(p.foyda)}
                     </td>
