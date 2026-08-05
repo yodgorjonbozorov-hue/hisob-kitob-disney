@@ -109,6 +109,19 @@ export const MODULLAR: ModulTarifi[] = [
     ],
   },
   {
+    code: "HR",
+    nomi: "Xodimlar (HR-lite)",
+    tavsif:
+      "Xodim kartochkasi, davomat va oylik: stavka, avans, ushlab qolish va ustama. Oylik to'langanda chiqim tranzaksiya avtomatik yoziladi.",
+    core: false,
+    // Oylik — pul va shaxsiy ma'lumot, shuning uchun faqat boshqaruvchilar.
+    rollar: BOSHQARUVCHILAR,
+    nav: [
+      { href: "/app/hr", label: "Xodimlar", icon: "hr", tartib: 28, rollar: BOSHQARUVCHILAR },
+      { href: "/app/hr/davomat", label: "Davomat", icon: "attendance", tartib: 29, rollar: BOSHQARUVCHILAR },
+    ],
+  },
+  {
     code: "CRM",
     nomi: "CRM — mijozlar va bitimlar",
     tavsif: "Lead va bitimlar kanbani, kontaktlar, faoliyat tarixi. Yutilgan bitim 1 klikda kirimga aylanadi.",

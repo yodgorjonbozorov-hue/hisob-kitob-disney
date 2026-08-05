@@ -40,7 +40,10 @@ export type AuditEntity =
   | "purchaseOrder"
   | "approvalRule"
   | "approvalRequest"
-  | "contact";
+  | "contact"
+  | "employee"
+  | "payroll"
+  | "payrollAdvance";
 
 interface AuditInput {
   businessId?: string | null;
