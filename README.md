@@ -305,6 +305,20 @@ https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=https://<domenin
 
 `{"ok":true,"result":true,...}` javobi kelsa — bot ishga tushdi. Endi bot uzluksiz jarayonsiz, faqat Telegram xabar yuborganda ishlaydi.
 
+### 4.5. Migratsiyalarni qo'llash (telefondan ham mumkin)
+
+`build` buyrug'i migratsiyalarni va kassa migratsiyasini avtomatik
+qo'llaydi, ya'ni oddiy deploy yetarli. Lekin **zaxira olinmaydi**.
+
+Katta o'zgarishlar uchun zaxirali yo'l:
+
+```bash
+npm run apply:hammasi     # xom surat -> migratsiya -> kassa -> tekshiruv -> zaxira
+```
+
+Telefondan: GitHub → Actions → "Migratsiya qo'llash" → Run workflow.
+Batafsil: [TELEFONDAN-APPLY.md](TELEFONDAN-APPLY.md).
+
 ### 5. Vercel Cron
 
 `vercel.json` allaqachon loyihada mavjud — Vercel avtomatik ravishda quyidagi **to'rt** route'ni chaqiradi (Vercel loyiha sozlamalarida "Cron Jobs" bo'limida ko'rinadi). Alohida sozlash shart emas.

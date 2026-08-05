@@ -18,9 +18,12 @@ import { rawPrisma } from "@/lib/db/rawPrisma";
 import { DEFAULT_KASSA_NOMI } from "@/lib/services/accounts";
 
 async function main() {
+  // Build vaqtida (env'siz lokal build) jimgina o'tkazib yuboriladi —
+  // `db-migrate.mjs` bilan bir xil xatti-harakat. Aks holda `npm run build`
+  // env'siz muhitda yiqilardi.
   if (!process.env.DATABASE_URL) {
-    console.error("DATABASE_URL yo'q — skript to'xtatildi.");
-    process.exit(1);
+    console.log("DATABASE_URL yo'q — kassa migratsiyasi o'tkazib yuborildi.");
+    return;
   }
 
   const bizneslar = await rawPrisma.business.findMany({ select: { id: true, nomi: true } });
@@ -61,13 +64,23 @@ async function main() {
   console.log(`Kassasiz qolgan yozuv: ${qolgan}${qolgan === 0 ? " ✅" : " ⚠️ tekshiring"}`);
 }
 
+/**
+ * Ulanishni yopish. `rawPrisma` — kech yaratiladigan Proxy, ya'ni unga
+ * TEGISHNING O'ZI clientni quradi. `DATABASE_URL` yo'q bo'lsa (env'siz
+ * build) bu `URL_INVALID` bilan yiqiladi — shuning uchun avval tekshiramiz.
+ */
+async function ulanishniYop() {
+  if (!process.env.DATABASE_URL) return;
+  await rawPrisma.$disconnect();
+}
+
 main()
   .then(async () => {
-    await rawPrisma.$disconnect();
+    await ulanishniYop();
     process.exit(0);
   })
   .catch(async (e) => {
     console.error("XATO:", e);
-    await rawPrisma.$disconnect();
+    await ulanishniYop();
     process.exit(1);
   });
