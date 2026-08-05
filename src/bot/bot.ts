@@ -32,6 +32,11 @@ import {
   clearAvtoFlow,
 } from "./avtoFlow";
 import {
+  handleChekPhoto,
+  handleChekCategoryCallback,
+  handleChekBekorCallback,
+} from "./chekFlow";
+import {
   handleTasdiqCallback,
   handleRadCallback,
   handleRadText,
@@ -58,6 +63,7 @@ async function buyruqlarRoyxati(user: { rol: string; tenantId: string | null }):
     "/kirim — kirim kiritish",
     "/chiqim — chiqim kiritish",
     "/lead — yangi mijoz/bitim (CRM)",
+    "🧾 chek rasmini yuboring — summa avtomatik o'qiladi (AI moduli)",
   ];
 
   if (isManager(user.rol) && user.tenantId) {
@@ -274,6 +280,13 @@ bot.callbackQuery(
   /^stol:/,
   tenantHandler((ctx, user) => handleSotishTolovCallback(ctx, user), { managerOnly: true, yozish: true })
 );
+// Chek rasmi (AI OCR): kategoriya tanlash va bekor qilish.
+bot.callbackQuery(
+  /^chk:/,
+  tenantHandler((ctx, user) => handleChekCategoryCallback(ctx, user), { yozish: true })
+);
+bot.callbackQuery(/^chbekor$/, tenantHandler((ctx) => handleChekBekorCallback(ctx)));
+
 // Tasdiqlash: qaror faqat boshqaruvchida (xizmat qatlami rolni yana tekshiradi).
 bot.callbackQuery(
   /^tsd:ok:/,
@@ -307,6 +320,12 @@ bot.callbackQuery(
     },
     { managerOnly: true }
   )
+);
+
+// Chek rasmi — AI moduli yoqiq bo'lsa o'qiladi (chekFlow ichida tekshiriladi).
+bot.on(
+  "message:photo",
+  tenantHandler((ctx, user) => handleChekPhoto(ctx, user), { yozish: true })
 );
 
 bot.on(

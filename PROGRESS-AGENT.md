@@ -15,7 +15,7 @@ agent shu fayldan qayerda qolganini o'qib davom etadi.
 | 3 | Xavfsizlik + audit | `faza-3-xavfsizlik` | ✅ tugadi |
 | 4 | Kassa to'liqligi | `faza-4-kassa` | ✅ tugadi |
 | 5 | PostgreSQL + masshtab | `faza-5-postgres` | ⏸ kechiktirildi (sabab quyida) |
-| 6 | ERP modullari | `faza-6-*` | 🔄 4/6 modul: XARID ✅, TASDIQLASH ✅, MIJOZLAR ✅, HR ✅ |
+| 6 | ERP modullari | `faza-6-*` | 🔄 5/6 modul: XARID, TASDIQLASH, MIJOZLAR, HR, AI OCR ✅ |
 
 ## ⚠️ MIGRATSIYA KUTILMOQDA (qo'lda apply qilinadi)
 
@@ -920,3 +920,67 @@ taklifi) va HUJJATLAR (tashqi fayl saqlagich kerak).
 - [ ] Avans bering → Yozuvlar ro'yxatida "Avans" chiqimi paydo bo'ldimi
 - [ ] Oylikni to'lang → "Oylik" chiqimi avans chegirilgan summada yozildimi
 - [ ] Kassa qoldig'i ikkala to'lovdan keyin to'g'ri kamaydimi
+
+---
+
+### 2026-08-04 — Faza 6, Modul 5: AI OCR (chek rasmi) (tugadi)
+
+**Branch:** `faza-6-ocr` · **Migratsiya YO'Q** — yangi jadval qo'shilmadi.
+
+**Muammo:** chek qo'lda kiritilardi. Xodim summani noto'g'ri yozardi yoki
+umuman kiritmasdan qo'yardi — oy oxirida "bu pul qayerga ketdi?" degan
+savol qolardi.
+
+**Yechim:** Telegramga chek rasmini tashlash yetarli. Claude vision chekni
+o'qiydi, bot TAKLIF ko'rsatadi, foydalanuvchi kategoriyani tanlab
+tasdiqlaydi — shundagina chiqim yoziladi.
+
+**Ataylab avtomatik YOZMAYDI.** Model xato o'qishi mumkin, shuning uchun
+oxirgi so'z har doim odamda qoladi. Yana ikki himoya:
+- `chekNatijasiniAjrat` qat'iy: summa yo'q, nol yoki manfiy bo'lsa,
+  JSON buzilgan bo'lsa — natija `null` va bot "o'qiy olmadim, qo'lda
+  kiriting" deydi. Noto'g'ri raqamni jimgina yozib qo'yishdan ko'ra
+  o'qimaganini tan olish xavfsizroq.
+- `ishonch: "past"` bo'lsa foydalanuvchi ogohlantiriladi.
+
+**TASDIQLASH bilan bog'lanish:** yozuv `chiqimYubor` orqali ketadi, ya'ni
+chek orqali kiritilgan katta summa ham rahbar tasdig'ini kutadi. AI
+yo'lakchasi tekshiruvni chetlab o'tmaydi.
+
+**Cheklovlar:** AI moduli yoqilgan bo'lishi shart, kunlik AI limiti
+(`aiLimitTekshir`) qo'llanadi, rasm 5 MB dan oshmasligi kerak.
+
+**Fayllar:**
+- `src/lib/ai/chekOcr.ts` — vision chaqiruvi va javobni ajratish
+- `src/bot/chekFlow.ts` — rasm → taklif → kategoriya → yozuv oqimi
+- `src/bot/bot.ts` — `message:photo` handleri, `chk:` va `chbekor` callback'lari
+
+**Test:** `tests/chek-ocr.test.ts` (14) — toza JSON, markdown blok ichidagi
+JSON, summasiz/nol/manfiy/buzilgan javobning rad etilishi, kasr summaning
+yaxlitlanishi, noto'g'ri sana va noma'lum ishonch qiymatining tozalanishi,
+API kaliti yo'qligi, format tekshiruvi, API xatosining yashirilmasligi,
+kategoriyalar ro'yxatining so'rovga qo'shilishi. Tarmoqqa chiqmaydi —
+soxta `fetch` ishlatiladi.
+
+**Tekshirildi:** `npm run build` ✅ · `npx tsc --noEmit` ✅ ·
+30 test to'plami, jami **337 test**, 0 xato.
+
+---
+
+## FAZA 6 / MODUL 5 TEKSHIRUV RO'YXATI
+
+**Avtomatik tekshirilgan**
+- [x] `npm run build` va `tsc --noEmit` o'tadi
+- [x] Model javobi markdown blok ichida bo'lsa ham o'qiladi
+- [x] Summasiz, nol, manfiy yoki buzilgan javob RAD etiladi (chiqim yozilmaydi)
+- [x] Kasrli summa butun songa yaxlitlanadi (pul har doim Int)
+- [x] Noto'g'ri sana va noma'lum ishonch qiymati tozalanadi
+- [x] API kaliti yo'q bo'lsa aniq xato, API xatosi yashirilmaydi
+
+**Sizdan kutiladi (real muhitda)**
+- [ ] `ANTHROPIC_API_KEY` production'da borligini tekshiring
+- [ ] AI modulini yoqing (PRO tarif)
+- [ ] Botga haqiqiy chek rasmini yuboring → summa to'g'ri o'qildimi
+- [ ] Kategoriya tanlang → chiqim yozuvi paydo bo'ldimi
+- [ ] Xira/qiyshiq rasm yuboring → "o'qiy olmadim" deb to'xtadimi
+- [ ] TASDIQLASH yoqiq bo'lsa: chegaradan katta chekda tasdiq so'raldimi
