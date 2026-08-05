@@ -53,6 +53,9 @@ const BUSINESS_SCOPED = new Set([
   "Attendance",
   "Payroll",
   "PayrollAdvance",
+  // Hujjatlar (Faza 6.6)
+  "Contract",
+  "Attachment",
 ]);
 // AuditLog: businessId nullable — biznesga bog'langan yozuvlar tenant bo'yicha filtrlanadi.
 const AUDIT_MODEL = "AuditLog";

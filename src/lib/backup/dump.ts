@@ -58,6 +58,8 @@ export const ZAXIRA_JADVALLARI = [
   "attendance",
   "payroll",
   "payrollAdvance",
+  "contract",
+  "attachment",
 ] as const;
 
 export type ZaxiraJadval = (typeof ZAXIRA_JADVALLARI)[number];

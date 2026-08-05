@@ -142,6 +142,8 @@ model Business {
   attendances      Attendance[]
   payrolls         Payroll[]
   advances         PayrollAdvance[]
+  contracts        Contract[]
+  attachments      Attachment[]
 
   @@index([tenantId])
 }
@@ -605,6 +607,7 @@ model Supplier {
   createdAt  DateTime        @default(now())
   deletedAt  DateTime?
   orders     PurchaseOrder[]
+  contracts  Contract[]
 
   @@index([businessId, isActive])
   @@index([businessId, nomi])
@@ -686,6 +689,7 @@ model Contact {
   activities Activity[]
   sales      Sale[]
   debts      Debt[]
+  contracts  Contract[]
 
   @@index([businessId])
   @@index([businessId, tel])
@@ -980,4 +984,78 @@ model Payroll {
   @@unique([employeeId, oy])
   @@index([businessId, oy, holat])
   @@index([transactionId])
+}
+
+// ==== HUJJATLAR moduli (Faza 6.6) ====
+
+/// SHARTNOMA REYESTRI.
+///
+/// Shartnomalar papkada yotardi va muddati o'tib ketgani faqat kimdir
+/// eslaganda ma'lum bo'lardi. Endi muddat bazada: `eslatmaKun` kun qolganda
+/// bildirishnomalar ro'yxatida ogohlantirish chiqadi.
+///
+/// Kontragent ataylab ikki xil bog'lanadi: mijoz (`contactId`) yoki
+/// ta'minotchi (`supplierId`). Ikkalasi ham null bo'lsa — `kontragent`
+/// matni ishlatiladi (kartochkasi yo'q bir martalik tomon uchun).
+model Contract {
+  id         String    @id @default(cuid())
+  businessId String
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  raqam      String
+  nomi       String
+  /// "mijoz" | "taminotchi" | "boshqa"
+  turi       String    @default("mijoz")
+  contactId  String?
+  contact    Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  supplierId String?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  /// Kartochkasiz kontragent nomi.
+  kontragent String?
+  summa      Int       @default(0)
+  boshlanish DateTime
+  tugash     DateTime?
+  /// Tugashiga shuncha kun qolganda ogohlantiriladi.
+  eslatmaKun Int       @default(30)
+  /// "faol" | "tugagan" | "bekor"
+  holat      String    @default("faol")
+  izoh       String?
+  userId     String
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
+
+  @@unique([businessId, raqam])
+  @@index([businessId, holat, tugash])
+  @@index([contactId])
+  @@index([supplierId])
+}
+
+/// FAYL ILOVASI.
+///
+/// Ikki rejim bor va ikkalasi ham `url` maydonida yashaydi:
+///  - "havola" — tashqi manzil (Google Drive, Telegram). Hech qanday
+///    saqlagich talab qilmaydi va har doim ishlaydi;
+///  - "blob"  — Vercel Blob'ga yuklangan fayl (token sozlangan bo'lsa).
+///
+/// `entity` + `entityId` — polimorf bog'lanish. FK qo'yilmagan, chunki bitta
+/// jadval to'rt xil yozuvga ilova bo'ladi; egalik `businessId` va xizmat
+/// qatlamidagi tekshiruv bilan ta'minlanadi.
+model Attachment {
+  id         String    @id @default(cuid())
+  businessId String
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  /// "transaction" | "debt" | "deal" | "task" | "contract"
+  entity     String
+  entityId   String
+  nomi       String
+  url        String
+  /// "havola" | "blob"
+  saqlagich  String    @default("havola")
+  mimeType   String?
+  hajm       Int?
+  userId     String
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
+
+  @@index([businessId, entity, entityId])
+  @@index([businessId, createdAt])
 }

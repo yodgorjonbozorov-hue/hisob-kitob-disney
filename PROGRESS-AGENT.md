@@ -15,7 +15,7 @@ agent shu fayldan qayerda qolganini o'qib davom etadi.
 | 3 | Xavfsizlik + audit | `faza-3-xavfsizlik` | ✅ tugadi |
 | 4 | Kassa to'liqligi | `faza-4-kassa` | ✅ tugadi |
 | 5 | PostgreSQL + masshtab | `faza-5-postgres` | ⏸ kechiktirildi (sabab quyida) |
-| 6 | ERP modullari | `faza-6-*` | 🔄 5/6 modul: XARID, TASDIQLASH, MIJOZLAR, HR, AI OCR ✅ |
+| 6 | ERP modullari | `faza-6-*` | ✅ 6/6 modul tugadi |
 
 ## ⚠️ MIGRATSIYA KUTILMOQDA (qo'lda apply qilinadi)
 
@@ -37,6 +37,7 @@ production/staging'da qo'lda bajariladi. **Avval zaxira oling.**
 | 10 | `20260804170000_tasdiqlash_moduli` | `ApprovalRule`, `ApprovalRequest` | Past — faqat CREATE TABLE |
 | 11 | `20260804180000_mijozlar_moduli` | `Contact.qarzLimit`, `Sale.contactId`, `Debt.contactId` | O'rta — Sale va Debt qayta quriladi |
 | 12 | `20260804190000_hr_moduli` | `Employee`, `Attendance`, `Payroll`, `PayrollAdvance` | Past — faqat CREATE TABLE |
+| 13 | `20260804200000_hujjatlar_moduli` | `Contract`, `Attachment` | Past — faqat CREATE TABLE |
 
 **⚠️ 6-migratsiyadan KEYIN majburiy:** `npm run kassa:migratsiya` — har biznesga
 default "Naqd kassa" ochadi va `accountId`siz eski tranzaksiyalarni bog'laydi.
@@ -984,3 +985,126 @@ soxta `fetch` ishlatiladi.
 - [ ] Kategoriya tanlang → chiqim yozuvi paydo bo'ldimi
 - [ ] Xira/qiyshiq rasm yuboring → "o'qiy olmadim" deb to'xtadimi
 - [ ] TASDIQLASH yoqiq bo'lsa: chegaradan katta chekda tasdiq so'raldimi
+
+---
+
+### 2026-08-04 — Faza 6, Modul 6: HUJJATLAR (tugadi)
+
+**Branch:** `faza-6-hujjatlar`
+
+**Muammo:** shartnomalar papkada yotardi. Muddati o'tib ketgani faqat
+kimdir eslaganda ma'lum bo'lardi. Chek va hujjat skanlari esa Telegram
+suhbatlarida yo'qolib ketardi — "o'sha to'lovning hujjati qani?" degan
+savolga javob yo'q edi.
+
+**Yechim ikki qismdan iborat:**
+
+1. **Shartnomalar reyestri** — raqam, kontragent, summa, boshlanish/tugash
+   va `eslatmaKun`. Muddatga `eslatmaKun` qolganda (yoki o'tib ketganda)
+   bildirishnomalar ro'yxatida ogohlantirish chiqadi. Kontragent uch xil
+   bo'lishi mumkin: mijoz kartochkasi, ta'minotchi kartochkasi yoki oddiy
+   matn (bir martalik tomon uchun).
+
+2. **Fayl ilovalari** — `Transaction`, `Debt`, `Deal`, `Task` va
+   `Contract` ga hujjat biriktirish.
+
+**Saqlagichga bog'liqlik ataylab yumshoq.** Ilova ikki rejimda bo'ladi:
+- **havola** — tashqi manzil (Google Drive, Telegram, korporativ portal).
+  Hech qanday sozlash talab qilmaydi va HAR DOIM ishlaydi. Ko'p kichik
+  biznes uchun shu yetarli.
+- **blob** — Vercel Blob'ga yuklash, `BLOB_READ_WRITE_TOKEN` bo'lganda.
+  Token yo'q bo'lsa aniq xato beriladi; jimgina "havola" ga tushib qolish
+  foydalanuvchini chalg'itardi (fayl saqlanmagan bo'lardi).
+
+Shu qaror tufayli modul bu muhitda ham to'liq ishlaydi va sinaladi.
+
+**Xavfsizlik qarorlari:**
+- Havolada faqat `http(s)` — `javascript:` va `data:` sxemalari saqlangan
+  havola bosilganda XSS yo'liga aylanardi.
+- Yuklashda faqat oq ro'yxatdagi MIME turlar (ijro etiladigan fayllar yo'q),
+  10 MB chegara.
+- Fayl nomidan yo'l belgilari VA `..` ketma-ketligi olib tashlanadi
+  (bitta `/` almashtirish yetmasligi testda aniqlandi va tuzatildi).
+- Ilova polimorf bog'lanadi (FK yo'q, bitta jadval besh xil yozuvga ilova
+  bo'ladi), shuning uchun **egalik xizmat qatlamida tekshiriladi** — begona
+  yozuvga ilova osib bo'lmaydi.
+- Ilovani o'chirish yumshoq va saqlagichdagi fayl o'chirilmaydi: yozuv
+  tasodifan o'chirilsa havola tiklanishi kerak, va bir fayl bir necha
+  yozuvga biriktirilgan bo'lishi mumkin.
+
+**Yangi modellar:** `Contract`, `Attachment` — ikkalasi `BUSINESS_SCOPED`
+va `ZAXIRA_JADVALLARI` ro'yxatlarida.
+
+**Fayllar:**
+- `prisma/schema.prisma` + `prisma/migrations/20260804200000_hujjatlar_moduli/`
+- `src/lib/storage/driver.ts` (yangi) — saqlagich drayveri
+- `src/lib/validation/hujjat.ts`, `src/lib/services/hujjat.ts`, `src/lib/queries/hujjat.ts`
+- `src/app/api/hujjatlar/shartnomalar/route.ts`, `.../[id]/route.ts`
+- `src/app/api/hujjatlar/ilova/route.ts`, `.../[id]/route.ts`
+- `src/app/app/hujjatlar/{page,loading,error}.tsx`, `HujjatlarClient.tsx`,
+  `ShartnomaModal.tsx`, `IlovaModal.tsx`
+- `src/lib/queries/notifications.ts` — shartnoma muddati ogohlantirishi
+- `src/lib/modules/registry.ts`, `src/lib/billing/plans.ts`, `src/lib/services/audit.ts`
+
+**Test:** `tests/hujjatlar.test.ts` (20) — shartnoma CRUD, takroriy raqam,
+teskari sana, begona kontragent, muddat hisobining to'rt holati (oynada,
+oynadan uzoq, o'tib ketgan, muddatsiz), yopilgan shartnomaning
+eslatmasligi, statistika, havola biriktirish, xavfli havolalarning rad
+etilishi, begona yozuvga ilova osib bo'lmasligi, yumshoq o'chirish,
+saqlagich sozlanmagan holati, ruxsatsiz fayl turi va hajm, fayl nomining
+tozalanishi, tenant izolyatsiyasi.
+
+**Tekshirildi:** `npm run build` ✅ · `npx tsc --noEmit` ✅ ·
+31 test to'plami, jami **357 test**, 0 xato.
+
+---
+
+## FAZA 6 / MODUL 6 TEKSHIRUV RO'YXATI
+
+**Avtomatik tekshirilgan**
+- [x] `npm run build` va `tsc --noEmit` o'tadi
+- [x] Muddat hisobi to'rt holatda ham to'g'ri (oynada / uzoq / o'tgan / muddatsiz)
+- [x] Yopilgan (tugagan/bekor) shartnoma ogohlantirmaydi
+- [x] `javascript:` va `data:` havolalari rad etiladi
+- [x] Begona yozuvga va begona kontragentga bog'lab bo'lmaydi
+- [x] Saqlagich sozlanmagan bo'lsa aniq xato, havola rejimi baribir ishlaydi
+- [x] Ruxsatsiz fayl turi va 10 MB dan katta fayl rad etiladi
+- [x] Fayl nomidan `..` va yo'l belgilari olib tashlanadi
+- [x] Ilova yumshoq o'chiriladi; shartnoma o'chirilsa hujjatlari qoladi
+
+**Sizdan kutiladi (real muhitda)**
+- [ ] 13-migratsiyani apply qiling
+- [ ] Sozlamalar → Modullar bo'limida "Hujjatlar" ni yoqing (PRO)
+- [ ] Shartnoma qo'shing, tugash sanasini yaqin qilib qo'ying →
+      bildirishnomalar ro'yxatida ogohlantirish chiqdimi
+- [ ] Havola biriktiring → ro'yxatda ochilyaptimi
+- [ ] Fayl yuklashni sinamoqchi bo'lsangiz: Vercel'da Blob store yarating
+      va `BLOB_READ_WRITE_TOKEN` ni env'ga qo'ying
+
+---
+
+## 🏁 FAZA 6 YAKUNI
+
+Oltala modul tugadi va yig'ma branchga qo'shildi:
+
+| # | Modul | Branch | Migratsiya | Test |
+|---|---|---|---|---|
+| 1 | XARID | `faza-6-xarid` | 9 | 13 |
+| 2 | TASDIQLASH | `faza-6-tasdiqlash` | 10 | 20 |
+| 3 | MIJOZLAR | `faza-6-mijozlar` | 11 | 15 |
+| 4 | HR-LITE | `faza-6-hr` | 12 | 19 |
+| 5 | AI OCR | `faza-6-ocr` | — | 14 |
+| 6 | HUJJATLAR | `faza-6-hujjatlar` | 13 | 20 |
+
+**Umumiy holat:** 31 test to'plami, **357 test**, 0 xato. `npm run build`
+va `npx tsc --noEmit` toza.
+
+**Qolgan yagona faza — Faza 5 (PostgreSQL).** U ataylab oxirига qoldirildi:
+bu muhitda baza ulanmagan, va 13 ta migratsiya apply qilinmagan holda
+provayder almashtirish ularni PostgreSQL sintaksisida qayta yozishni talab
+qilardi. To'g'ri tartib:
+
+1. Staging'da 13 ta migratsiyani ketma-ket apply qiling (har biridan oldin zaxira);
+2. 6-migratsiyadan keyin **majburiy**: `npm run kassa:migratsiya`;
+3. Har modulning tekshiruv ro'yxatidan o'ting;
+4. Shundan keyin `faza-5-postgres` ochiladi va staging'da to'liq sinaladi.

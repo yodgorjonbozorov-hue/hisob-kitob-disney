@@ -122,6 +122,17 @@ export const MODULLAR: ModulTarifi[] = [
     ],
   },
   {
+    code: "HUJJATLAR",
+    nomi: "Hujjatlar",
+    tavsif:
+      "Shartnomalar reyestri muddat eslatmasi bilan va yozuvlarga fayl biriktirish. Fayl saqlagich sozlanmagan bo'lsa tashqi havola bilan ishlaydi.",
+    core: false,
+    rollar: HAMMA,
+    nav: [
+      { href: "/app/hujjatlar", label: "Shartnomalar", icon: "contract", tartib: 30, rollar: HAMMA },
+    ],
+  },
+  {
     code: "CRM",
     nomi: "CRM — mijozlar va bitimlar",
     tavsif: "Lead va bitimlar kanbani, kontaktlar, faoliyat tarixi. Yutilgan bitim 1 klikda kirimga aylanadi.",
