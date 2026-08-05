@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Receipt, FileText, PiggyBank, Bell, CalendarCheck, Repeat, Wallet,
   Package, ShoppingCart, HandCoins, Truck, Factory, Building2, Tags, Users, Trash2, ScrollText,
-  BadgeCheck, Gavel, Contact2, IdCard, CalendarDays,
+  BadgeCheck, Gavel, Contact2, IdCard, CalendarDays, FileSignature,
   LogOut, KeyRound, CreditCard, Blocks, Handshake, BookUser, ListChecks, Sparkles, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -41,6 +41,7 @@ const IKONLAR: Record<string, LucideIcon> = {
   customers: Contact2,
   hr: IdCard,
   attendance: CalendarDays,
+  contract: FileSignature,
   repeat: Repeat,
   shift: CalendarCheck,
   package: Package,

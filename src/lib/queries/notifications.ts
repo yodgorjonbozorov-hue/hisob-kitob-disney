@@ -125,6 +125,29 @@ export async function getNotifications(
         href: "/app/qarzlar",
       });
     }
+
+    // Shartnoma muddati (HUJJATLAR moduli). Modul yoqilmagan bo'lsa jadval
+    // bo'sh bo'ladi va bu blok hech narsa qo'shmaydi — qo'shimcha guard shart emas.
+    const { muddatiYaqinShartnomalar } = await import("@/lib/queries/hujjat");
+    const shartnomalar = await muddatiYaqinShartnomalar(businessId);
+    const otgan = shartnomalar.filter((c) => c.kunQoldi < 0);
+    if (otgan.length > 0) {
+      out.push({
+        severity: "danger",
+        title: "Shartnoma muddati o'tdi",
+        message: `${otgan[0].raqam} — ${otgan[0].nomi}${otgan.length > 1 ? ` va yana ${otgan.length - 1} ta` : ""}`,
+        href: "/app/hujjatlar",
+      });
+    }
+    const yaqin = shartnomalar.filter((c) => c.kunQoldi >= 0);
+    if (yaqin.length > 0) {
+      out.push({
+        severity: "warning",
+        title: "Shartnoma muddati yaqinlashdi",
+        message: `${yaqin[0].raqam} — ${yaqin[0].kunQoldi} kun qoldi${yaqin.length > 1 ? `, yana ${yaqin.length - 1} ta shartnoma` : ""}`,
+        href: "/app/hujjatlar",
+      });
+    }
   }
 
   return out;

@@ -46,7 +46,8 @@
     "test:tasdiqlash": "node -r ts-node/register tests/tasdiqlash.test.ts",
     "test:mijozlar": "node -r ts-node/register tests/mijozlar.test.ts",
     "test:hr": "node -r ts-node/register tests/hr.test.ts",
-    "test:chek-ocr": "node -r ts-node/register tests/chek-ocr.test.ts"
+    "test:chek-ocr": "node -r ts-node/register tests/chek-ocr.test.ts",
+    "test:hujjatlar": "node -r ts-node/register tests/hujjatlar.test.ts"
   },
   "prisma": {
     "seed": "node -r ts-node/register prisma/seed.ts"

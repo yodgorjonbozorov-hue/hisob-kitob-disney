@@ -43,7 +43,9 @@ export type AuditEntity =
   | "contact"
   | "employee"
   | "payroll"
-  | "payrollAdvance";
+  | "payrollAdvance"
+  | "contract"
+  | "attachment";
 
 interface AuditInput {
   businessId?: string | null;
