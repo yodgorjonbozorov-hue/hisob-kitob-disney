@@ -19,6 +19,12 @@ agent shu fayldan qayerda qolganini o'qib davom etadi.
 
 ## ⚠️ MIGRATSIYA KUTILMOQDA (qo'lda apply qilinadi)
 
+> ✅ **2026-08-04: zanjir MASHQ QILINDI.** Barcha 13 migratsiya eski
+> holatdagi bazaga **haqiqiy ma'lumot ustiga** ketma-ket qo'llandi va hech
+> narsa yo'qolmagani tasdiqlandi (`npm run test:migratsiya`). Majburiy
+> `npm run kassa:migratsiya` qadami ham mashqda bajarildi va idempotentligi
+> tekshirildi. Batafsil: quyidagi jurnal yozuvi.
+
 Migratsiyalar `--create-only` uslubida yozildi, **apply QILINMADI**.
 Bu muhitda baza ulanmagan (`DATABASE_URL` yo'q), shuning uchun qo'llash
 production/staging'da qo'lda bajariladi. **Avval zaxira oling.**
@@ -1503,3 +1509,100 @@ Yo'l xaritasidagi **barcha fazalar kod darajasida tugadi.**
 **Loyiha egasidan kutilayotgan yagona narsa** — 13 migratsiyani staging'da
 apply qilish (har biridan oldin zaxira, 6-dan keyin `npm run kassa:migratsiya`).
 Undan keyin Postgres'ga ko'chish yuqoridagi ro'yxat bo'yicha bajariladi.
+
+---
+
+### 2026-08-04 — Migratsiya zanjiri MA'LUMOT USTIGA sinaldi
+
+**Branch:** `migratsiya-mashqi` · **Migratsiya fayllariga TEGILMADI**
+
+Loyiha egasi "apply barchasi uchun senga" dedi. Bu muhitda haqiqiy bazaga
+ulanib bo'lmaydi (`.env` yo'q, `DATABASE_URL` yo'q, Turso credentials yo'q),
+shuning uchun production'da apply qilish imkonsiz. Buning o'rniga eng
+qimmatli ish bajarildi: **zanjir haqiqiy ma'lumot bilan mashq qilindi.**
+
+#### Nega bu muhim edi
+
+Barcha 33 test to'plami **bo'sh** bazadan boshlaydi. Ular migratsiyalar
+sxemani to'g'ri qurishini tekshiradi, lekin **"ustiga apply qilish"** yo'lini
+umuman sinamaydi. Aynan shu yerda xavf.
+
+Uchta migratsiya jadvalni QAYTA QURADI (SQLite'da `ALTER TABLE` cheklangani
+uchun `CREATE new_X` → `INSERT ... SELECT` → `DROP` → `RENAME`):
+- `ondelete_siyosati` — 23 jadvalning FK siyosati;
+- `sotuv_sana_bekor` — `Sale.sana` NOT NULL, `createdAt` dan to'ldiriladi;
+- `mijozlar_moduli` — `Sale` va `Debt` ga `contactId`.
+
+Bunday migratsiyada `INSERT ... SELECT` xato bo'lsa ma'lumot **jimgina**
+yo'qoladi va migratsiya "muvaffaqiyatli" tugaydi.
+
+#### Mashq qanday o'tkazildi
+
+1. Yangi bazaga faqat **eski 14 migratsiya** qo'llandi — production'dagi
+   bazaning aynan holati.
+2. Unga haqiqiy ma'lumot solindi: 2 tenant, 3 foydalanuvchi, 3 kategoriya,
+   **26 tranzaksiya** (33 mln so'm), 2 mahsulot, 2 sotuv (biri qarzga),
+   qarz va audit yozuvlari. Sotuvlarda `sana` ustuni **hali yo'q** —
+   migratsiya uni to'ldirishi kerak.
+3. Kutilayotgan **13 migratsiya** ketma-ket qo'llandi.
+4. Tekshirildi.
+
+#### Natija — barchasi ✅
+
+- 13 migratsiyaning hammasi xatosiz qo'llandi;
+- **hech bir jadvalda bitta ham yozuv yo'qolmadi** (9 jadval sanaldi);
+- summalar buzilmadi: tranzaksiyalar 33 000 000, sotuvlar 140 000,
+  to'langan qarz 20 000;
+- `PRAGMA foreign_key_check` — 0 buzilish; `integrity_check` — ok;
+- **`Sale.sana` to'g'ri to'ldirildi**: S1 → 2026-07-12, S2 → 2026-07-18
+  (aynan `createdAt` kunlari);
+- barcha yangi ustunlar (`accountId`, `contactId`, `qarzLimit`, `sku`,
+  `birlik`, `minQoldiq`, `tenantId`...) va 16 yangi jadval o'z joyida;
+- **`npm run kassa:migratsiya`** ham mashqda bajarildi: 26 ta kassasiz
+  tranzaksiyaning hammasi bog'landi, har biznesga o'z kassasi ochildi va
+  hech bir yozuv BOSHQA biznesning kassasiga tushmadi;
+- kassa skripti **ikkinchi marta** ishga tushirildi — takroriy kassa
+  ochilmadi, summalar o'zgarmadi (idempotentlik tasdiqlandi).
+
+#### Mashq DOIMIY testga aylantirildi
+
+`tests/migratsiya-zanjiri.test.ts` (10 test). Kelajakda qo'shiladigan
+migratsiyalar ham avtomatik shu tekshiruvdan o'tadi — `ESKI_OXIRGI` dan
+keyingi hamma narsa "kutilayotgan" deb hisoblanadi.
+
+**Test haqiqatan xatoni ushlashi tasdiqlandi** (ikki marta ataylab buzib
+sinaldi, keyin fayllar tiklandi):
+- `Sale.sana` backfill'i sobit qiymatga almashtirildi → 6-test qizil;
+- `mijozlar_moduli` dagi `INSERT ... SELECT` ga filtr qo'shilib jimgina
+  ma'lumot yo'qotish taqlid qilindi → **4 ta test** qizil (yozuv soni,
+  summalar, FK yaxlitligi, sana).
+
+Migratsiya fayllari asl holida (`git diff prisma/migrations/` bo'sh).
+
+**Tekshirildi:** `npm run build` ✅ · 35 test to'plami, jami **399 test**, 0 xato.
+
+---
+
+## ⚠️ SIZ UCHUN: PRODUCTION'DA APPLY QILISH
+
+Mashq muvaffaqiyatli, lekin **haqiqiy bazada apply qilish menda emas** —
+bu muhitda unga ulanish yo'q. Tartib:
+
+```bash
+# 1) ZAXIRA — hamma narsadan oldin
+npm run backup
+
+# 2) Migratsiyalar (skript idempotent, allaqachon qo'llanganini o'tkazadi)
+npm run db:apply
+
+# 3) MAJBURIY — busiz kassa qoldig'i haqiqiy pulni ko'rsatmaydi
+npm run kassa:migratsiya
+
+# 4) Tekshirish
+npm run test:migratsiya     # zanjir mashqi
+npm run build
+```
+
+Mashqda tasdiqlangan: 3-qadamni unutib qo'ysangiz, keyin ham xavfsiz
+ishga tushirsa bo'ladi (idempotent). Lekin unutmaslik yaxshiroq —
+oradagi vaqtda kassa hisoboti noto'g'ri ko'rinadi.
