@@ -1585,100 +1585,112 @@ Migratsiya fayllari asl holida (`git diff prisma/migrations/` bo'sh).
 
 ## ⚠️ SIZ UCHUN: PRODUCTION'DA APPLY QILISH
 
-Mashq muvaffaqiyatli, lekin **haqiqiy bazada apply qilish menda emas** —
-bu muhitda unga ulanish yo'q. Tartib:
+Endi bu **bitta buyruq**:
 
 ```bash
-# 1) ZAXIRA — hamma narsadan oldin
-npm run backup
-
-# 2) Migratsiyalar (skript idempotent, allaqachon qo'llanganini o'tkazadi)
-npm run db:apply
-
-# 3) MAJBURIY — busiz kassa qoldig'i haqiqiy pulni ko'rsatmaydi
-npm run kassa:migratsiya
-
-# 4) Tekshirish
-npm run test:migratsiya     # zanjir mashqi
-npm run build
+npm run apply:hammasi
 ```
 
-Mashqda tasdiqlangan: 3-qadamni unutib qo'ysangiz, keyin ham xavfsiz
-ishga tushirsa bo'ladi (idempotent). Lekin unutmaslik yaxshiroq —
-oradagi vaqtda kassa hisoboti noto'g'ri ko'rinadi.
+U o'zi bajaradi: xom surat → migratsiyalar → `kassa:migratsiya` →
+tekshiruv → mantiqiy zaxira. Har qadam oldingisiga bog'liq: birortasi
+yiqilsa keyingilari umuman ishga tushmaydi.
+
+Batafsil: quyidagi "apply oqimi" jurnal yozuvi.
 
 ---
 
-### 2026-08-04 — Tenant izolyatsiyasi ro'yxatida FAIL-OPEN bo'shlig'i yopildi
+### 2026-08-04 — Apply oqimi bitta buyruqqa siqildi (+ 2 ta jiddiy topilma)
 
-**Branch:** `izolyatsiya-royxati` · **Migratsiya YO'Q**
+**Branch:** `apply-skripti` · **Migratsiya YO'Q**
 
-Yo'l xaritasi tugagach shu sessiyada kiritilgan kod tanqidiy ko'rib
-chiqildi. Savol shunday qo'yildi: *"Yangi model tenant izolyatsiyasi
-ro'yxatiga tushmay qolsa, buni biror test ushlaydimi?"*
+Loyiha egasi "apply barchasi uchun o'zing bajar" dedi. Bazaga ulanish bu
+muhitda yo'q (tekshirildi: `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `.env` —
+hech biri yo'q), shuning uchun production'da apply qilish imkonsiz. Buning
+o'rniga **egasiga qoladigan ish bitta buyruqqa siqildi** va shu buyruq
+oxirigacha haqiqiy bazada sinaldi.
 
-**Javob: yo'q edi.**
+#### 🐛 Topilma 1: zaxira aynan kerak paytda yiqilardi
 
-#### Bo'shliqning og'irligi
+Skriptni sinash paytida chiqdi. Hujjatdagi tartib shunday edi:
 
-`lib/db/tenantDb.ts` dagi extension'da:
-
-```ts
-if (!isDirect && !isScoped) {
-  return query(args);   // FILTRSIZ o'tadi
-}
+```
+1. npm run backup      <- ZAXIRA
+2. npm run db:apply    <- migratsiyalar
 ```
 
-Ya'ni ro'yxatlarga tushmagan model so'rovi **hech qanday tenant filtrisiz**
-bajariladi va yozuvlar barcha mijozlarga ko'rinadi. Bu **fail-open**: xato
-bo'lganda himoya yoqilmaydi, aksincha — o'chadi.
+**1-qadam production'da yiqilardi.** `npm run backup` Prisma orqali
+ishlaydi, ya'ni joriy KOD sxemasini biladi. Migratsiyadan OLDIN esa baza
+koddan orqada: `Account` jadvali yo'q, `Transaction.accountId` ustuni yo'q.
+Natija: `no such table: main.Account`, keyin `no such column:
+main.Transaction.accountId`.
 
-Zaxira ro'yxatida (`ZAXIRA_JADVALLARI`) bunday qo'riqchi allaqachon bor edi
-va u ishlagan: bu sessiyada 12 yangi model qo'shildi, zaxira testi har
-birini talab qildi. Izolyatsiya ro'yxatida esa qo'riqchi **yo'q** edi —
-modellar faqat qo'lda qo'shildi, ya'ni bittasini unutish mumkin edi va
-oqibati zaxiradagidan ancha og'irroq bo'lardi.
+Ya'ni **zaxira eng kerak bo'lgan paytda ishlamasdi.**
 
-#### Yo'l-yo'lakay topilgan narsa
+Avval jadval yo'qligini kechirishga urinildi, lekin ustun yo'qligi
+qolardi — Prisma har doim sxemadagi barcha ustunlarni so'raydi. Demak
+Prisma orqali eski bazadan zaxira olish **prinsipial mumkin emas**.
+Yarim tolerantlik esa yomonroq: nosozlik holatini nomuvofiq qiladi va
+soxta ishonch beradi. Shuning uchun u qaytarildi.
 
-`AiConversation` da `tenantId` va `businessId` bor, lekin u hech qaysi
-ro'yxatda emas edi. Tekshirildi: **amalda sizib chiqish yo'q** — u faqat
-`rawPrisma` va `(businessId, userId)` kompozit kaliti bilan o'qiladi,
-`businessId` egaligi esa `withTenant` da yuqorida tekshiriladi. Lekin bu
-holat hech qayerda **yozilmagan** edi, ya'ni tasodifan to'g'ri edi.
+**Yechim — `npm run zaxira:xom`** (`scripts/xom-zaxira.mjs`): sxemani
+umuman bilmaydigan surat. `sqlite_master` dan jadvallarni topadi va har
+birini `SELECT *` bilan o'qiydi. Baza qanday holatda bo'lsa shundayligicha
+suratga oladi, ya'ni migratsiyadan OLDIN ishlaydi va orqaga qaytish yo'lini
+ochiq qoldiradi. `--tikla` bilan qaytariladi.
 
-Endi u `TIZIM_MODELLAR` da sababi bilan turadi.
+Bu mantiqiy zaxira o'rnini bosmaydi (server ko'chirish va Postgres uchun
+`npm run backup` kerak) — u faqat migratsiya oynasi uchun.
 
-#### Yechim
+#### 🐛 Topilma 2: migratsiya hisoboti mos kelmasligi
 
-`TIZIM_MODELLAR` — ataylab tenantsiz jadvallarning **sababli** ro'yxati:
-`Tenant` (extension'da alohida qoida), `AppSetting` (global sozlamalar),
-`BotConversation` (tenant aniqlanishidan oldin o'qiladi), `AiConversation`
-(yuqoridagi sabab).
+Ikkinchi sinovda `table "Business" already exists` chiqdi.
+`scripts/db-migrate.mjs` qaysi migratsiya qo'llanganini
+`_applied_migrations` da yuritadi. Agar baza boshqa yo'l bilan qurilgan
+bo'lsa (`prisma migrate deploy`, `db push`, qo'lda SQL), bu jadval bo'sh
+qoladi va runner hammasini boshidan qo'llashga urinib **o'rtada** yiqiladi
+— natijada yarim qo'llangan baza.
 
-`tests/izolyatsiya-royxati.test.ts` (9 test):
-- sxemadagi **har** model aniq bir toifaga tegishli;
-- model ikki toifada bo'lmaydi;
-- ro'yxatda sxemada yo'q model qolmagan (o'chirilgan model eskirmasin);
-- **`tenantId`/`businessId` maydoni bor model tenantsiz qolmaydi** — eng
-  kuchli shart, sxemadan avtomatik chiqadi;
-- har istisno sababi bilan yozilgan (bo'sh izoh o'tmaydi);
-- yangi modullarning haqiqiy izolyatsiyasi: HR (xodim, oylik), shartnoma va
-  **ilova** (u polimorf, FK yo'q — faqat `businessId` filtriga tayanadi),
-  xarid va tasdiqlash;
-- boshqa tenant yozuvini `update` (IDOR) va `updateMany` bilan
-  o'zgartirib bo'lmasligi.
+Endi `apply:hammasi` buni **boshida** aniqlaydi: birinchi kutayotgan
+migratsiya allaqachon mavjud jadvalni yaratmoqchi bo'lsa, hech narsaga
+tegmasdan to'xtaydi va yechimni ko'rsatadi.
 
-**Qo'riqchi ishlashi tasdiqlandi:** `Attachment` ro'yxatdan vaqtincha olib
-tashlandi → **3 test** qizil bo'ldi (statik tasnif, `businessId` sharti va
-xatti-harakat testi). Ya'ni model haqiqatan sizib chiqadi va test buni
-ko'radi. Keyin fayl tiklandi.
+**Yechim vositasi — `npm run migratsiya:belgila`**: SQL bajarmaydi, faqat
+allaqachon qo'llangan migratsiyalarni hisobotda belgilaydi. `--tasdiq`siz
+faqat ro'yxatni ko'rsatadi (noto'g'ri nom bilan migratsiyani "bajarilgan"
+deb belgilab qo'yish — footgun, shuning uchun ikki qadamli).
 
-`CLAUDE.md` dagi "yangi model qo'shilsa" qoidasi aniqlashtirildi: bu
-fail-open nuqta ekani va istisnolar sabab bilan yozilishi yozib qo'yildi.
+#### `npm run apply:hammasi` — oqim
 
-**Fayllar:** `src/lib/db/tenantDb.ts` (ro'yxatlar eksport qilindi +
-`TIZIM_MODELLAR`), `tests/izolyatsiya-royxati.test.ts`, `CLAUDE.md`.
+| # | Qadam | Izoh |
+|---|---|---|
+| 1 | Oldindan tekshiruv | Ulanish, kutayotgan migratsiyalar, hisobot mosligi |
+| 2 | **Xom surat** | Sxemaga bog'liq emas; olinmasa DAVOM ETILMAYDI |
+| 3 | Migratsiyalar | `db-migrate.mjs`, idempotent |
+| 4 | **Kassa migratsiyasi** | Majburiy; busiz kassa qoldig'i noto'g'ri |
+| 5 | Tekshiruv | Yozuv sonlari, summa, FK, yaxlitlik, kassasiz/sanasiz yozuvlar |
+| 6 | Mantiqiy zaxira | Endi sxema mos — odatdagi zaxira ishlaydi |
 
-**Tekshirildi:** `npm run build` ✅ · `npx tsc --noEmit` ✅ ·
-36 test to'plami, jami **408 test**, 0 xato.
+**To'xtash qoidasi:** har qadam oldingisiga bog'liq. Jimgina davom etish
+yarim qo'llangan bazadan ko'ra yomonroq.
+
+#### Oxirigacha sinaldi
+
+Eski holatdagi baza + ma'lumot (12 tranzaksiya, 7.8 mln so'm, sotuv)
+qurilib, butun oqim **haqiqatan ishga tushirildi**:
+- hisobot mos kelmasligi boshida ushlandi va hech narsaga tegilmadi;
+- `migratsiya:belgila` dan keyin oqim to'liq o'tdi;
+- ma'lumot yo'qolmadi, summa o'zgarmadi, FK va yaxlitlik toza;
+- kassasiz tranzaksiya 0, sanasiz sotuv 0;
+- **ikkinchi marta** ishga tushirildi — takroriy kassa ochilmadi, hech
+  narsa o'zgarmadi;
+- **xom suratdan tiklash sinaldi**: 3 yozuv o'chirilib, sotuv summasi
+  buzildi → tiklashdan keyin hammasi joyiga qaytdi.
+
+**Test:** `tests/apply-oqimi.test.ts` (9) — yuqoridagi har bir holat,
+shu jumladan "Prisma zaxirasi eski bazada yiqilishi KUTILADI, xom surat
+esa ishlaydi" solishtiruvi.
+
+**Fayllar:** `scripts/apply-hammasi.mjs`, `scripts/xom-zaxira.mjs`,
+`scripts/migratsiya-belgila.mjs`, `tests/apply-oqimi.test.ts`, `package.json`.
+
+**Tekshirildi:** `npm run build` ✅ · 37 test to'plami, jami **417 test**, 0 xato.

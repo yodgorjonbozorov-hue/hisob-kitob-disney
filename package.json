@@ -11,6 +11,7 @@
     "db:seed": "node -r ts-node/register prisma/seed.ts",
     "db:migrate:create": "prisma migrate dev --create-only",
     "db:apply": "node scripts/db-migrate.mjs",
+    "apply:hammasi": "node scripts/apply-hammasi.mjs",
     "bot": "node -r ts-node/register src/bot/index.ts",
     "superadmin:create": "node -r ts-node/register scripts/create-superadmin.ts",
     "superadmin:reset": "node -r ts-node/register scripts/reset-superadmin.ts",
@@ -18,6 +19,8 @@
     "client:create": "node -r ts-node/register scripts/create-client.ts",
     "kassa:migratsiya": "node -r ts-node/register scripts/kassa-migratsiya.ts",
     "backup": "node -r ts-node/register scripts/backup.ts",
+    "zaxira:xom": "node scripts/xom-zaxira.mjs",
+    "migratsiya:belgila": "node scripts/migratsiya-belgila.mjs",
     "restore": "node -r ts-node/register scripts/restore.ts",
     "pg:migratsiya": "node scripts/pg-migratsiya.mjs",
     "test:isolation": "node -r ts-node/register tests/isolation.test.ts",
@@ -53,7 +56,8 @@
     "test:audit-qoldiq": "node -r ts-node/register tests/audit-qoldiq.test.ts",
     "test:dialect": "node -r ts-node/register tests/dialect.test.ts",
     "test:migratsiya": "node -r ts-node/register tests/migratsiya-zanjiri.test.ts",
-    "test:izolyatsiya-royxati": "node -r ts-node/register tests/izolyatsiya-royxati.test.ts"
+    "test:izolyatsiya-royxati": "node -r ts-node/register tests/izolyatsiya-royxati.test.ts",
+    "test:apply-oqimi": "node -r ts-node/register tests/apply-oqimi.test.ts"
   },
   "prisma": {
     "seed": "node -r ts-node/register prisma/seed.ts"
