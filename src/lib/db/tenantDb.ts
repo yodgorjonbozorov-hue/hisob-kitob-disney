@@ -275,14 +275,46 @@ function buildTenantClient(tenantId: string) {
 
 export type TenantDb = ReturnType<typeof buildTenantClient>;
 
-// Har tenant uchun extension bir marta quriladi (kesh).
+/**
+ * Har tenant uchun extension bir marta quriladi (kesh).
+ *
+ * Kesh CHEGARALANGAN. Ilgari oddiy `Map` edi va hech qachon tozalanmasdi:
+ * uzoq yashaydigan jarayonda (bot, cron, issiq lambda) har yangi tenant
+ * yangi client qoldirardi va xotira monoton o'sardi. 500+ mijoz maqsadida
+ * bu sezilarli.
+ *
+ * LRU: chegaraga yetganda eng UZOQ VAQT ishlatilmagani chiqariladi.
+ * `Map` kalitlar tartibini kiritilish bo'yicha saqlaydi, shuning uchun
+ * har murojaatda kalitni o'chirib qayta qo'yish "eng oxirgi ishlatilgan"
+ * ni oxiriga suradi — birinchi kalit har doim eng eskisi bo'ladi.
+ *
+ * Chiqarilgan client shunchaki qayta quriladi (u faqat extension o'ramchisi,
+ * ulanish emas — ulanish `rawPrisma` da bitta va umumiy).
+ */
+export const TENANT_KESH_CHEGARASI = 200;
+
 const cache = new Map<string, TenantDb>();
 
 export function tenantClient(tenantId: string): TenantDb {
-  let client = cache.get(tenantId);
-  if (!client) {
-    client = buildTenantClient(tenantId);
-    cache.set(tenantId, client);
+  const mavjud = cache.get(tenantId);
+  if (mavjud) {
+    // Oxiriga suramiz — bu kalit endi "eng yangi ishlatilgan".
+    cache.delete(tenantId);
+    cache.set(tenantId, mavjud);
+    return mavjud;
+  }
+
+  const client = buildTenantClient(tenantId);
+  cache.set(tenantId, client);
+
+  if (cache.size > TENANT_KESH_CHEGARASI) {
+    const engEski = cache.keys().next().value;
+    if (engEski !== undefined) cache.delete(engEski);
   }
   return client;
+}
+
+/** Kesh hajmi — test va diagnostika uchun. */
+export function tenantKeshHajmi(): number {
+  return cache.size;
 }

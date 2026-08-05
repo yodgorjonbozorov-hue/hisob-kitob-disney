@@ -1,10 +1,21 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+
+/** Klaviatura bilan yuriladigan elementlar (yashirinlari hisobga olinmaydi). */
+const FOKUSLANADIGAN =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), ' +
+  'textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
  * Desktop'da markazdagi dialog, mobil'da pastki sheet (bottom sheet).
  * ESC va backdrop bosilganda yopiladi; ochilganda body scroll bloklanadi.
+ *
+ * FOKUS QAMOVI (focus trap): ochilganda fokus modal ichiga o'tadi va Tab
+ * bilan undan chiqib bo'lmaydi. Busiz klaviatura yoki skrin-rider bilan
+ * ishlaydigan foydalanuvchi Tab bosaverib modal ORTIDAGI ko'rinmas
+ * tugmalarga tushib ketardi — forma to'ldirilmay, nima bo'layotgani
+ * bilinmay qolardi. Yopilganda fokus modalni ochgan elementga qaytadi.
  */
 export function Modal({
   open,
@@ -17,16 +28,62 @@ export function Modal({
   title: string;
   children: React.ReactNode;
 }) {
+  const panel = useRef<HTMLDivElement>(null);
+  const oldingiFokus = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
     if (!open) return;
+
+    // Modal ochilishidan oldin fokusda turgan element — yopilgach shunga qaytamiz.
+    oldingiFokus.current = document.activeElement as HTMLElement | null;
+
+    const elementlar = () =>
+      Array.from(panel.current?.querySelectorAll<HTMLElement>(FOKUSLANADIGAN) ?? []).filter(
+        (el) => el.offsetParent !== null || el === document.activeElement
+      );
+
+    // Birinchi maydonga fokus. Yopish tugmasi birinchi bo'lib qolmasligi uchun
+    // avval forma elementini qidiramiz — foydalanuvchi darhol yoza boshlasin.
+    const birinchi =
+      panel.current?.querySelector<HTMLElement>("input, select, textarea") ?? elementlar()[0];
+    birinchi?.focus();
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab") return;
+
+      const royxat = elementlar();
+      if (royxat.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      const bosh = royxat[0];
+      const oxir = royxat[royxat.length - 1];
+      const faol = document.activeElement;
+
+      // Chetlarda aylantiramiz: oxirgidan keyin birinchisiga, aksincha ham.
+      if (!e.shiftKey && faol === oxir) {
+        e.preventDefault();
+        bosh.focus();
+      } else if (e.shiftKey && faol === bosh) {
+        e.preventDefault();
+        oxir.focus();
+      } else if (faol instanceof Node && !panel.current?.contains(faol)) {
+        // Fokus qandaydir yo'l bilan tashqariga chiqib ketgan — qaytaramiz.
+        e.preventDefault();
+        bosh.focus();
+      }
     };
+
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
+      oldingiFokus.current?.focus?.();
     };
   }, [open, onClose]);
 
@@ -41,12 +98,14 @@ export function Modal({
       aria-label={title}
     >
       <div
+        ref={panel}
         onClick={(e) => e.stopPropagation()}
         className="bg-surface text-fg w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl p-6 pb-safe max-h-[92vh] overflow-y-auto animate-slide-up sm:animate-fade-in"
       >
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-fg">{title}</h3>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Yopish"
             className="text-faint hover:text-fg text-2xl leading-none w-9 h-9 flex items-center justify-center -mr-2 rounded-lg hover:bg-surface-2"

@@ -1273,3 +1273,97 @@ kerak, lekin buni Postgres ulangandan keyin, o'lchov bilan qilish to'g'ri.
 
 **Faza 5.1 ning o'zi (provayder almashtirish) hali bajarilmagan** — u
 staging va ulangan baza talab qiladi.
+
+---
+
+### 2026-08-04 — Audit qoldiqlari: uchta o'rta darajali topilma (tugadi)
+
+**Branch:** `audit-qoldiqlari` · **Migratsiya YO'Q**
+
+Yo'l xaritasidagi barcha fazalar (Faza 5.1 dan tashqari — u baza talab
+qiladi) tugagach, `docs/AUDIT-2026-08.md` dagi 🟡 O'RTA ro'yxati qayta
+ko'rib chiqildi. Ko'pchiligi allaqachon yopilgan edi (`Sale.sana`,
+`Button` type, AI limit atomikligi, Payme/Click timing-safe taqqoslash,
+Telegram kodi `crypto.randomInt`, `shift-close` audit entity). **Uchtasi
+hali ochiq ekan.**
+
+#### 1. 🔴 Parol `Math.random()` bilan yaratilardi
+
+`resetUserPassword` (superadmin foydalanuvchi parolini tiklaganda) 10
+belgili parolni `Math.random()` bilan yasardi. U kriptografik emas: ichki
+holati bir necha natijadan tiklanadi, ya'ni parolni bashorat qilish
+mumkin. Bu parol esa hisobga **to'liq kirish** huquqini beradi.
+
+Diqqatga sazovori: aynan shu xato Telegram bog'lash kodida allaqachon
+topilgan va tuzatilgan edi (izohi ham yozilgan) — lekin bu yer e'tibordan
+chetda qolgan. Endi `crypto.randomInt` ishlatiladi.
+
+**Qaytalanmasligi uchun statik qo'riqchi** qo'shildi: maxfiy qiymat
+yaratadigan fayllarda `Math.random(` chaqiruvi bo'lsa test yiqiladi.
+Izohlarda nomni eslatish mumkin (ataylab: "bu kriptografik emas" degan
+izoh foydali), faqat chaqiruv taqiqlanadi.
+
+#### 2. Tenant client keshi chegarasiz o'sardi
+
+`tenantClient` keshi oddiy `Map` edi va hech qachon tozalanmasdi. Uzoq
+yashaydigan jarayonda (bot, cron, issiq lambda) har yangi tenant yangi
+client qoldirardi — xotira monoton o'sardi. 500+ mijoz maqsadi uchun bu
+sezilarli.
+
+Endi **LRU, chegara 200**. `Map` kalitlar tartibini kiritilish bo'yicha
+saqlagani uchun har murojaatda kalitni o'chirib qayta qo'yish "eng oxirgi
+ishlatilgan"ni oxiriga suradi, birinchi kalit esa har doim eng eskisi
+bo'ladi. Chiqarilgan client shunchaki qayta quriladi — u faqat extension
+o'ramchisi, ulanish emas (ulanish `rawPrisma` da bitta va umumiy).
+
+#### 3. Modal'da fokus qamovi (focus trap) yo'q edi
+
+Klaviatura yoki skrin-rider bilan ishlaydigan foydalanuvchi Tab bosaverib
+modal **ortidagi** ko'rinmas tugmalarga tushib ketardi — forma
+to'ldirilmay, nima bo'layotgani bilinmay qolardi.
+
+Endi: ochilganda fokus birinchi maydonga o'tadi (yopish tugmasiga emas —
+foydalanuvchi darhol yoza boshlasin), Tab/Shift+Tab modal ichida
+aylanadi, fokus tashqariga chiqib ketsa qaytariladi, yopilganda esa
+modalni **ochgan elementga** qaytadi. Bu 20 dan ortiq modalga bir joydan
+tarqaladi.
+
+**Fayllar:**
+- `src/lib/superadmin/service.ts` — `crypto.randomInt`
+- `src/lib/db/tenantDb.ts` — LRU kesh + `tenantKeshHajmi()`
+- `src/components/ui/Modal.tsx` — fokus qamovi
+
+**Test:** `tests/audit-qoldiq.test.ts` (8) — tiklangan parolning haqiqatan
+ishlashi va majburiy almashtirish belgisi, alifbo tarkibi, 30 chaqiruvda
+takrorlanmaslik va alifbo qamrovi, keshning bir xil clientni qaytarishi,
+chegaradan oshmasligi, yaqinda ishlatilganning saqlanishi, `Math.random(`
+statik qo'riqchisi, Modal fokus qamovi.
+
+**Tekshirildi:** `npm run build` ✅ · `npx tsc --noEmit` ✅ ·
+33 test to'plami, jami **376 test**, 0 xato.
+
+---
+
+## AUDIT QOLDIQLARI TEKSHIRUV RO'YXATI
+
+**Avtomatik tekshirilgan**
+- [x] Tiklangan parol ishlaydi, `mustChangePassword` yoqiladi
+- [x] 30 ta chaqiruvda 30 xil parol, alifbo keng qamrab olinadi
+- [x] Maxfiy fayllarda `Math.random(` chaqiruvi yo'q (statik qo'riqchi)
+- [x] Tenant keshi chegaradan oshmaydi va yaqinda ishlatilganni saqlaydi
+- [x] Modal'da Tab/Shift+Tab qamovi va fokusni qaytarish bor
+
+**Sizdan kutiladi (real muhitda)**
+- [ ] Superadmin paneldan foydalanuvchi parolini tiklang → yangi parol
+      bilan kirilib, darhol almashtirish so'ralsinmi
+- [ ] Istalgan modalni oching va faqat Tab bilan yuring — fokus modaldan
+      chiqib ketmasligi kerak
+- [ ] Modalni yoping → fokus uni ochgan tugmaga qaytdimi
+
+---
+
+## 📋 QOLGAN YAGONA ISH
+
+**Faza 5.1 — PostgreSQL'ga ko'chish.** Yo'riqnoma tayyor:
+`docs/POSTGRES-KOCHISH.md`. Oldindan shart — 13 ta migratsiyani staging'da
+apply qilish va `npm run kassa:migratsiya` ni ishga tushirish.

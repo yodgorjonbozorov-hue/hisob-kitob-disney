@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { computeAccess } from "@/lib/billing/access";
 import { planByCode } from "@/lib/billing/plans";
@@ -256,11 +257,17 @@ export async function unblockTenant(tenantId: string, now: Date = new Date()) {
 export async function resetUserPassword(userId: string): Promise<{ login: string; yangiParol: string }> {
   const user = await rawPrisma.user.findUnique({ where: { id: userId }, select: { id: true, login: true } });
   if (!user) throw new BadRequestError("Foydalanuvchi topilmadi");
-  // 10 belgili tasodifiy parol (o'qilishi oson belgilar).
+  // 10 belgili tasodifiy parol (o'qilishi oson belgilar: 0/O, 1/l/I yo'q).
+  //
+  // `crypto.randomInt` — `Math.random` EMAS. `Math.random` kriptografik emas:
+  // uning ichki holati bir necha natijadan tiklanadi, ya'ni parolni bashorat
+  // qilish mumkin. Bu parol esa hisobga to'liq kirish huquqini beradi.
+  // (Telegram bog'lash kodida shu xato allaqachon tuzatilgan edi — bu yer
+  // o'shanda e'tibordan chetda qolgan.)
   const alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
   let yangiParol = "";
   for (let i = 0; i < 10; i++) {
-    yangiParol += alphabet[Math.floor(Math.random() * alphabet.length)];
+    yangiParol += alphabet[randomInt(0, alphabet.length)];
   }
   await rawPrisma.user.update({
     where: { id: userId },
