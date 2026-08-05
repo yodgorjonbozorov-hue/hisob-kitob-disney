@@ -33,7 +33,9 @@ invariantlari — ular buzilsa mahsulot ishonchliligi yo'qoladi.
   o'chirilganlarni ko'rsatadigan joylardan tashqari (`listDeletedTransactions`).
 - Yangi model qo'shilsa:
   1. `src/lib/db/tenantDb.ts` dagi `BUSINESS_SCOPED` yoki `TENANT_DIRECT` to'plamiga,
-  2. `src/lib/backup/dump.ts` dagi `ZAXIRA_JADVALLARI` ro'yxatiga qo'shiladi.
+  2. `src/lib/backup/dump.ts` dagi `ZAXIRA_JADVALLARI` ro'yxatiga qo'shiladi —
+     **bog'liqlik tartibida**: model o'zi FK bilan murojaat qiladigan barcha
+     jadvallardan KEYIN turishi shart, aks holda zaxira tiklanmaydi.
   (Istisno: vaqtinchalik holat jadvallari — masalan `BotConversation` — zaxiraga kirmaydi.)
 
 ## Tekshirish

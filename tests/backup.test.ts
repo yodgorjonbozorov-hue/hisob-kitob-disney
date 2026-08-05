@@ -76,6 +76,54 @@ before(async () => {
       izoh: "Zaxira sinovi",
     });
     tranzaksiyaId = tr.id;
+
+    // FK'ga boy fikstura: mijozga BOG'LANGAN sotuv va qarz, shartnoma va ilova.
+    // Bularsiz round-trip testi tiklash TARTIBIDAGI xatoni sezmasdi — aynan
+    // shunday xato bir marta o'tib ketgan edi (`contact` `sale` dan keyin turardi).
+    const mijoz = await rawPrisma.contact.create({
+      data: { businessId: tA.business.id, ism: "Zaxira mijozi", createdBy: tA.user.id, qarzLimit: 5_000_000 },
+    });
+    const mahsulot = await rawPrisma.product.create({
+      data: { businessId: tA.business.id, nomi: "Zaxira tovari", kelganNarx: 1_000, sotuvNarx: 2_000, miqdor: 10 },
+    });
+    const sotuv = await rawPrisma.sale.create({
+      data: {
+        businessId: tA.business.id, productId: mahsulot.id, contactId: mijoz.id,
+        miqdor: 2, birlikNarx: 2_000, tannarx: 1_000, jamiSumma: 4_000,
+        tolovTuri: "qarz", sana: new Date("2026-08-01T00:00:00.000Z"), userId: tA.user.id,
+      },
+    });
+    await rawPrisma.debt.create({
+      data: {
+        businessId: tA.business.id, turi: "olinadigan", saleId: sotuv.id, productId: mahsulot.id,
+        contactId: mijoz.id, mijozNomi: "Zaxira mijozi", jamiSumma: 4_000, userId: tA.user.id,
+      },
+    });
+    const taminotchi = await rawPrisma.supplier.create({
+      data: { businessId: tA.business.id, nomi: "Zaxira ta'minotchisi" },
+    });
+    const shartnoma = await rawPrisma.contract.create({
+      data: {
+        businessId: tA.business.id, raqam: "ZX-1", nomi: "Zaxira shartnomasi",
+        turi: "taminotchi", supplierId: taminotchi.id,
+        boshlanish: new Date("2026-01-01T00:00:00.000Z"), userId: tA.user.id,
+      },
+    });
+    await rawPrisma.attachment.create({
+      data: {
+        businessId: tA.business.id, entity: "contract", entityId: shartnoma.id,
+        nomi: "Skan", url: "https://example.com/skan.pdf", userId: tA.user.id,
+      },
+    });
+    const xodim = await rawPrisma.employee.create({
+      data: { businessId: tA.business.id, ism: "Zaxira xodimi", stavka: 1_000_000 },
+    });
+    await rawPrisma.payroll.create({
+      data: {
+        businessId: tA.business.id, employeeId: xodim.id, oy: "2026-07",
+        hisoblangan: 1_000_000, tolanadigan: 1_000_000, userId: tA.user.id,
+      },
+    });
   });
 });
 
@@ -99,6 +147,43 @@ test("ZAXIRA_JADVALLARI schema'dagi BARCHA modellarni qamrab oladi", () => {
     `Bu modellar zaxiraga tushmaydi — src/lib/backup/dump.ts dagi ZAXIRA_JADVALLARI ga qo'shing: ${yoq.join(", ")}`
   );
   assert.equal(backup.ZAXIRA_JADVALLARI.length + backup.ZAXIRASIZ_JADVALLAR.length, modellar.length);
+});
+
+test("ZAXIRA_JADVALLARI bog'liqlik tartibida — har jadval FK'laridan KEYIN", () => {
+  const schema = readFileSync("prisma/schema.prisma", "utf8");
+
+  // Har model blokidagi FK-EGASI bo'lgan relatsiyalar: `@relation(fields: [...])`
+  // yozilgan tomon. Ikkinchi (teskari) tomonda FK yo'q, shuning uchun u
+  // tartibga ta'sir qilmaydi.
+  const bloklar = [...schema.matchAll(/^model\s+(\w+)\s*\{([\s\S]*?)^\}/gm)];
+  const kichik = (m: string) => m[0].toLowerCase() + m.slice(1);
+
+  const xatolar: string[] = [];
+  for (const [, model, tana] of bloklar) {
+    const jadval = kichik(model);
+    const oz = backup.ZAXIRA_JADVALLARI.indexOf(jadval);
+    if (oz === -1) continue; // zaxirasiz jadval
+
+    for (const satr of tana.split("\n")) {
+      const rel = satr.match(/^\s*\w+\s+(\w+)\??\s+@relation\(.*fields:/);
+      if (!rel) continue;
+      const bogliq = kichik(rel[1]);
+      if (bogliq === jadval) continue; // o'ziga havola
+
+      const uning = backup.ZAXIRA_JADVALLARI.indexOf(bogliq);
+      if (uning === -1) continue;
+      if (uning > oz) {
+        xatolar.push(`${jadval} -> ${bogliq} (${jadval} ${oz}-o'rinda, ${bogliq} ${uning}-o'rinda)`);
+      }
+    }
+  }
+
+  assert.deepEqual(
+    xatolar,
+    [],
+    "Tiklash tartibi buzilgan — quyidagi jadvallar o'z FK'laridan OLDIN yoziladi va " +
+      `tiklash "Foreign key constraint violated" bilan to'xtaydi:\n  ${xatolar.join("\n  ")}`
+  );
 });
 
 test("createDump: barcha tenantlar ma'lumotini oladi", async () => {

@@ -1198,3 +1198,78 @@ route faylining guard va `maxDuration` bilan borligi.
 - [ ] Ertasi kuni 03:00–06:00 oralig'ida to'rtala log'ni ko'rib chiqing
 - [ ] Tashqi rejalashtiruvchi ishlatayotgan bo'lsangiz, eski
       `/api/cron/monthly-report` manzilini yangi to'rttaga almashtiring
+
+---
+
+### 2026-08-04 — Faza 5, Prompt 5.1 tayyorgarligi (+ topilgan xato tuzatildi)
+
+**Branch:** `faza-5-cron` (davomi) · **Migratsiya YO'Q**
+
+Provayderni almashtirish baza ulanmagan muhitda sinab bo'lmaydi, shuning
+uchun kod o'zgartirilmadi. Buning o'rniga bazasiz bajarilishi mumkin bo'lgan
+uch ish qilindi.
+
+#### 1. 🐛 ZAXIRA TIKLASH TARTIBIDAGI XATO — topildi va tuzatildi
+
+Ko'chirish yo'lini o'rganayotib jiddiy xato chiqdi. `restoreDump`
+`ZAXIRA_JADVALLARI` **tartibida** yozadi, ya'ni ro'yxat bog'liqlik
+tartibida bo'lishi shart. MIJOZLAR moduli `Sale.contactId` va
+`Debt.contactId` qo'shgach, `contact` ro'yxatda `sale` dan **keyin** qolib
+ketgan edi.
+
+FK haqiqatan majburlanishi tekshirildi (yo'q `contactId` bilan sotuv
+yozishga urinish `Foreign key constraint violated` beradi). Demak
+**mijozga bog'langan sotuvi bor har qanday zaxira tiklanmasdi** — va buni
+faqat haqiqiy avariya paytida bilib qolardik.
+
+Tuzatildi: `contact` `sale`/`debt` dan oldinga ko'chirildi.
+
+**Ikkita doimiy qo'riqchi qo'shildi** (`tests/backup.test.ts`):
+- **Sxemadan chiqariladigan tartib testi** — `prisma/schema.prisma` dagi har
+  `@relation(fields: ...)` uchun ro'yxatdagi o'rinni tekshiradi. Bu
+  kelajakdagi HAR QANDAY modelga avtomatik tarqaladi, ya'ni bir marta
+  yozilib qo'yilgan qoida emas, ishlaydigan tekshiruv.
+- **FK'ga boy round-trip fiksturasi** — mijozga bog'langan sotuv va qarz,
+  ta'minotchili shartnoma, ilova, xodim va oylik vedomosti. Ilgari
+  round-trip testi faqat oddiy tranzaksiya bilan ishlagani uchun xatoni
+  sezmagan edi.
+
+Ikkala test tartib buzilganda haqiqatan yiqilishi tekshirildi (tartib
+vaqtincha orqaga qaytarilib sinaldi: 2 ta test qizil, keyin tiklanib
+yashil).
+
+`CLAUDE.md` dagi "yangi model qo'shilsa" qoidasiga bog'liqlik tartibi
+sharti yozib qo'yildi.
+
+#### 2. SQLite'ga xos joylar inventari
+
+Butun kod bo'ylab qidirildi. Provayderga bog'liq **atigi to'rt** joy bor:
+
+| Joy | Muammo | Postgres yechimi |
+|---|---|---|
+| `api/auth/login/route.ts` | `COLLATE NOCASE` | `LOWER()` + funksional indeks |
+| `lib/db/businessRaw.ts` `sanaKalit()` | `typeof`/`strftime`/`unixepoch` | `to_char()` — `CASE` butunlay yo'qoladi |
+| `lib/rateLimit.ts`, `lib/ai/limit.ts` | — | **O'zgarish kerak emas** (`CAST`+`RETURNING` standart) |
+| 3 ta `contains` qidiruvi | registrga sezgir | `mode: "insensitive"` qo'shiladi |
+
+#### 3. `docs/POSTGRES-KOCHISH.md` — ko'chirish yo'riqnomasi
+
+To'liq tartib, yuqoridagi inventar, sxema o'zgarishlari va staging
+tekshiruv ro'yxati.
+
+**Prompt spetsifikatsiyasidan ataylab chetlashish:** `scripts/migrate-to-postgres.ts`
+YOZILMADI. `scripts/restore.ts` allaqachon aynan shu ishni qiladi (zaxira
+JSON → bog'liqlik tartibida yozish → sonlarni solishtirish) va provayderga
+bog'liq hech narsasi yo'q. Ikkinchi, deyarli bir xil skript faqat ikkita
+saqlanadigan joy hosil qilardi va biri eskirardi. Sabab hujjatda yozilgan.
+
+Hujjatda **unumdorlik ogohlantirishi** ham bor: `restoreDump` yozuvlarni
+bittalab yozadi (SQLite'da `createMany` cheklangani uchun). Uzoqdagi
+Postgres bilan bu juda sekin — ko'chishdan oldin `createMany` ga o'tkazish
+kerak, lekin buni Postgres ulangandan keyin, o'lchov bilan qilish to'g'ri.
+
+**Tekshirildi:** `npx tsc --noEmit` ✅ · 32 test to'plami, jami **367 test**,
+0 xato.
+
+**Faza 5.1 ning o'zi (provayder almashtirish) hali bajarilmagan** — u
+staging va ulangan baza talab qiladi.
