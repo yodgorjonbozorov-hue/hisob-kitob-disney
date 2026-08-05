@@ -1,8 +1,8 @@
 {
   "crons": [
-    {
-      "path": "/api/cron/monthly-report",
-      "schedule": "0 3 * * *"
-    }
+    { "path": "/api/cron/backup", "schedule": "0 3 * * *" },
+    { "path": "/api/cron/billing", "schedule": "0 4 * * *" },
+    { "path": "/api/cron/reports", "schedule": "0 5 * * *" },
+    { "path": "/api/cron/tasks", "schedule": "0 6 * * *" }
   ]
 }

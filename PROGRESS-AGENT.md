@@ -14,7 +14,7 @@ agent shu fayldan qayerda qolganini o'qib davom etadi.
 | 2 | Unumdorlik + UX | `faza-2-perf` | ✅ tugadi |
 | 3 | Xavfsizlik + audit | `faza-3-xavfsizlik` | ✅ tugadi |
 | 4 | Kassa to'liqligi | `faza-4-kassa` | ✅ tugadi |
-| 5 | PostgreSQL + masshtab | `faza-5-postgres` | ⏸ kechiktirildi (sabab quyida) |
+| 5 | PostgreSQL + masshtab | `faza-5-cron` | 🔄 5.2 (cron) ✅ · 5.1 (Postgres) bazani kutmoqda |
 | 6 | ERP modullari | `faza-6-*` | ✅ 6/6 modul tugadi |
 
 ## ⚠️ MIGRATSIYA KUTILMOQDA (qo'lda apply qilinadi)
@@ -1108,3 +1108,93 @@ qilardi. To'g'ri tartib:
 2. 6-migratsiyadan keyin **majburiy**: `npm run kassa:migratsiya`;
 3. Har modulning tekshiruv ro'yxatidan o'ting;
 4. Shundan keyin `faza-5-postgres` ochiladi va staging'da to'liq sinaladi.
+
+---
+
+### 2026-08-04 — Faza 5, Prompt 5.2: cron'ni bo'lish (tugadi)
+
+**Branch:** `faza-5-cron` · **Migratsiya YO'Q** — bazaga tegilmadi.
+
+Faza 5 ning bu qismi PostgreSQL'ga umuman bog'liq emas, shuning uchun
+migratsiyalarni kutmasdan bajarildi. Audit'dagi **H-12** shu bilan yopiladi.
+
+**Muammo:** bitta cron route'da ketma-ket sakkizta ish bajarilardi — zaxira,
+obuna statuslari, oylik hisobot, takroriylar, eslatmalar, kunlik xulosa va
+ikkita tozalash. 50+ tenantda bu 60 soniyalik limitga urilardi va oxirgi
+qadamlar **jimgina** bajarilmay qolardi. Hech kim buni sezmasdi: javob
+baribir "OK" edi yoki funksiya timeout bo'lib log'da yo'qolardi.
+
+**Yechim — to'rt alohida cron:**
+
+| Vaqt | Route | Ish |
+|---|---|---|
+| 03:00 | `/api/cron/backup` | Zaxira + bot suhbatlari va rate limit tozalash |
+| 04:00 | `/api/cron/billing` | Obuna statuslari + muddat eslatmalari |
+| 05:00 | `/api/cron/reports` | Oylik hisobot + kunlik xulosa |
+| 06:00 | `/api/cron/tasks` | Takroriy tranzaksiyalar + vazifa eslatmalari |
+
+**Tartib tasodifiy emas:**
+- zaxira eng birinchi — keyingi qadamlardan biri yiqilsa ham kunlik nusxa
+  olingan bo'ladi;
+- obuna statuslari zaxiradan keyin — status o'zgarishi ma'lumotga ta'sir
+  qiladi, undan oldingi holat nusxada qolishi kerak;
+- takroriylar (har tenant ustidan aylanadigan eng uzun ish) oxirida — u
+  timeout bo'lsa ham qolgan uchtasi allaqachon bajarilgan.
+
+**Ishlar route'dan ajratildi** (`src/lib/cron/ishlar.ts`): `zaxiraIshi`,
+`billingIshi`, `hisobotIshi`, `vazifaIshi`. Shu bois ular testda HTTP'siz
+chaqiriladi. Har qadam `xavfsiz()` bilan o'raladi — bitta qadamdagi xato
+guruhning qolganini yiqitmaydi.
+
+**`tenantlarBoylab()`** — har tenantni alohida qo'riqlaydi. Ilgari bitta
+tenantdagi buzuq ma'lumot butun aylanishni to'xtatardi va undan keyingi
+barcha mijozlar xizmatsiz qolardi.
+
+**`cronGuard()`** — barcha cron route'lari uchun yagona fail-closed
+tekshiruv (C-5 dagi tuzatish endi bitta joyda va yangi route'larga ham
+avtomatik tarqaladi).
+
+**Eski route saqlandi.** `/api/cron/monthly-report` o'chirilmadi: kimdir
+tashqi rejalashtiruvchidan chaqirayotgan bo'lishi mumkin. U avvalgidek
+to'rtala ishni ketma-ket bajaradi (timeout xavfi ham avvalgidek) va log'ga
+eskirgani haqida ogohlantirish yozadi.
+
+**Fayllar:**
+- `src/lib/cron/guard.ts`, `src/lib/cron/ishlar.ts` (yangi)
+- `src/app/api/cron/{backup,billing,reports,tasks}/route.ts` (yangi)
+- `src/app/api/cron/monthly-report/route.ts` (moslik uchun qayta yozildi)
+- `vercel.json` — 4 ta cron
+- `README.md` — deploy bo'limida jadval va tartib izohi
+
+**Test:** `tests/cron.test.ts` (10) — guard'ning sirsiz holatda 503
+qaytarishi (`"Bearer undefined"` ham o'tmasligi), noto'g'ri/yo'q sarlavhada
+401, prefiks mos kelgani yetmasligi, har tenantning o'z kontekstida
+ishlashi, bitta tenantdagi xatoning qolganlarini to'xtatmasligi, hamma
+yiqilganda ham funksiyaning xato otmasligi, `vercel.json` dagi to'rt
+cron'ning mavjudligi va vaqtlari ustma-ust tushmasligi, har yo'l uchun
+route faylining guard va `maxDuration` bilan borligi.
+
+**Tekshirildi:** `npm run build` ✅ · `npx tsc --noEmit` ✅ ·
+32 test to'plami, jami **367 test**, 0 xato.
+
+---
+
+## FAZA 5 / PROMPT 5.2 TEKSHIRUV RO'YXATI
+
+**Avtomatik tekshirilgan**
+- [x] `npm run build` va `tsc --noEmit` o'tadi
+- [x] `CRON_SECRET` yo'q bo'lsa 503 (fail-closed), `"Bearer undefined"` o'tmaydi
+- [x] Noto'g'ri sir va prefiksi mos keluvchi uzun satr 401
+- [x] Har tenant o'z kontekstida ishlaydi
+- [x] Bitta tenantdagi xato aylanishni to'xtatmaydi
+- [x] `vercel.json` da 4 ta cron, vaqtlari ustma-ust tushmaydi
+- [x] Har route'da guard va `maxDuration = 60` bor
+
+**Sizdan kutiladi (real muhitda)**
+- [ ] Vercel'da deploy qilgach "Cron Jobs" bo'limida 4 ta yozuv ko'rinsin
+- [ ] Har birini qo'lda bir marta chaqirib javobini tekshiring
+      (`curl -H "Authorization: Bearer $CRON_SECRET" .../api/cron/backup`)
+- [ ] `/api/cron/backup` dan keyin Telegram kanalida zaxira fayli paydo bo'ldimi
+- [ ] Ertasi kuni 03:00–06:00 oralig'ida to'rtala log'ni ko'rib chiqing
+- [ ] Tashqi rejalashtiruvchi ishlatayotgan bo'lsangiz, eski
+      `/api/cron/monthly-report` manzilini yangi to'rttaga almashtiring
