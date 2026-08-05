@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { sanaKalitSql } from "./dialect";
 import { rawPrisma } from "./rawPrisma";
 import { currentTenantId } from "./tenantContext";
 
@@ -43,15 +44,10 @@ export function songa(value: unknown): number {
 /**
  * DateTime ustunidan "YYYY-MM" yoki "YYYY-MM-DD" kalitini oladi.
  *
- * libsql adapteri DateTime'ni ISO matn sifatida saqlaydi
- * ("2026-07-10T00:00:00+00:00"), lekin eski yozuvlar (yoki Prisma'ning
- * o'z SQLite konnektori) millisekund INTEGER bo'lishi mumkin — ikkala
- * holat ham qo'llab-quvvatlanadi.
+ * Amalga oshirilishi provayderga bog'liq (SQLite'da `strftime`, Postgres'da
+ * `to_char`), shuning uchun `lib/db/dialect.ts` ga ko'chirilgan — dialekt
+ * farqlari bitta joyda tursin.
  */
 export function sanaKalit(column: string, uzunlik: 7 | 10): Prisma.Sql {
-  const col = Prisma.raw(column);
-  const fmt = uzunlik === 7 ? "%Y-%m" : "%Y-%m-%d";
-  return Prisma.sql`CASE WHEN typeof(${col}) = 'text'
-      THEN substr(${col}, 1, ${uzunlik})
-      ELSE strftime(${fmt}, ${col} / 1000, 'unixepoch') END`;
+  return sanaKalitSql(column, uzunlik);
 }

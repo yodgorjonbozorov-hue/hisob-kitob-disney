@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { qidiruvRejimi } from "@/lib/db/dialect";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import type { Prisma } from "@prisma/client";
 
@@ -31,7 +32,7 @@ function buildTransactionWhere(params: TransactionListParams): Prisma.Transactio
   }
   if (params.turi === "kirim" || params.turi === "chiqim") where.turi = params.turi;
   if (params.categoryId) where.categoryId = params.categoryId;
-  if (params.q) where.izoh = { contains: params.q };
+  if (params.q) where.izoh = { contains: params.q, ...qidiruvRejimi() };
   if (params.minSumma != null || params.maxSumma != null) {
     where.summa = {};
     if (params.minSumma != null) where.summa.gte = params.minSumma;

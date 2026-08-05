@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 // Login global (tenantlar aro) unique — autentifikatsiya rawPrisma bilan ishlaydi.
 import { rawPrisma as prisma } from "@/lib/db/rawPrisma";
+import { Prisma } from "@prisma/client";
+import { registrsizTeng } from "@/lib/db/dialect";
 import { verifyPassword } from "@/lib/auth/password";
 import { getSession } from "@/lib/auth/session";
 import { normalizeRol } from "@/lib/auth/roles";
@@ -21,9 +23,11 @@ async function findUserByLogin(login: string) {
   const exact = await prisma.user.findUnique({ where: { login } });
   if (exact) return exact;
 
-  const matches = await prisma.$queryRaw<Array<{ id: string }>>`
-    SELECT "id" FROM "User" WHERE "login" = ${login} COLLATE NOCASE LIMIT 2
-  `;
+  // Registrsiz taqqoslash provayderga bog'liq (SQLite: COLLATE NOCASE,
+  // Postgres: LOWER() + funksional indeks) — `lib/db/dialect.ts` da.
+  const matches = await prisma.$queryRaw<Array<{ id: string }>>(
+    Prisma.sql`SELECT "id" FROM "User" WHERE ${registrsizTeng('"login"', login)} LIMIT 2`
+  );
   if (matches.length !== 1) return null;
   return prisma.user.findUnique({ where: { id: matches[0].id } });
 }

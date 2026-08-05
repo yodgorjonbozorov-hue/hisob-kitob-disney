@@ -23,7 +23,8 @@ process.env.DATABASE_URL = "file:./prisma/test-audit-qoldiq.db";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { rmSync, readFileSync } from "node:fs";
+import { rmSync, readFileSync, readdirSync, statSync, existsSync } from "node:fs";
+import { join, sep } from "node:path";
 
 let rawPrisma: any;
 let resetUserPassword: any;
@@ -145,6 +146,65 @@ test("maxfiy qiymatlar Math.random() bilan yaratilmaydi", () => {
     [],
     `Maxfiy qiymat yaratadigan fayllarda Math.random topildi — crypto.randomInt ishlating: ${shubhali.join(", ")}`
   );
+});
+
+/**
+ * CLAUDE.md: "Barcha izohlar va UI matnlari o'zbek tilida (lotin). Kirill
+ * harflar kodda taqiqlangan."
+ *
+ * Lekin qoida mutlaq emas — uch joyda kirill ATAYLAB kerak:
+ *  - Payme protokoli javobda ruscha xato matnini TALAB qiladi (`ru:` maydoni
+ *    to'lov tizimining spetsifikatsiyasi, bizning UI matnimiz emas);
+ *  - chek OCR prompti "ИТОГО" so'zini bilishi kerak — O'zbekistondagi
+ *    cheklarning yarmi ruscha;
+ *  - slug/nom normalizatsiyasi kirillcha KIRITMANI qabul qiladi.
+ *
+ * Shuning uchun ruxsat ro'yxati aniq va sababi bilan yozilgan. Yangi fayl
+ * qo'shilsa test yiqiladi va sabab yozilishi talab qilinadi.
+ */
+const KIRILL_RUXSAT: Record<string, string> = {
+  "src/lib/billing/payme.ts": "Payme protokoli ruscha xato matnini talab qiladi",
+  "src/app/api/billing/payme/route.ts": "Payme protokoli javobi",
+  "src/lib/ai/chekOcr.ts": "ruscha cheklarda \"ИТОГО\" so'zi uchraydi",
+  "src/lib/services/signup.ts": "kirillcha kompaniya nomini qabul qiluvchi regex",
+};
+
+test("kodda kutilmagan kirill harflar yo'q", () => {
+  const kirill = /[\u0400-\u04FF]/;
+  const kengaytmalar = [".ts", ".tsx", ".mjs", ".prisma", ".css"];
+
+  function yur(dir: string, natija: string[] = []): string[] {
+    for (const nom of readdirSync(dir)) {
+      const yol = join(dir, nom);
+      if (statSync(yol).isDirectory()) {
+        yur(yol, natija);
+      } else if (kengaytmalar.some((k) => nom.endsWith(k))) {
+        natija.push(yol);
+      }
+    }
+    return natija;
+  }
+
+  const kutilmagan: string[] = [];
+  for (const fayl of yur("src")) {
+    const yol = fayl.split(sep).join("/");
+    if (yol in KIRILL_RUXSAT) continue;
+    if (kirill.test(readFileSync(fayl, "utf8"))) kutilmagan.push(yol);
+  }
+
+  assert.deepEqual(
+    kutilmagan,
+    [],
+    "Bu fayllarda kirill harflar bor. Izoh yoki UI matni bo'lsa lotinga o'tkazing; " +
+      `protokol talabi bo'lsa KIRILL_RUXSAT ga sabab bilan qo'shing: ${kutilmagan.join(", ")}`
+  );
+});
+
+test("kirill ruxsat ro'yxatidagi fayllar haqiqatan mavjud", () => {
+  // Ro'yxat eskirmasin: fayl o'chirilsa yoki ko'chirilsa shu test aytadi.
+  for (const yol of Object.keys(KIRILL_RUXSAT)) {
+    assert.ok(existsSync(yol), `KIRILL_RUXSAT dagi ${yol} endi mavjud emas — ro'yxatdan olib tashlang`);
+  }
 });
 
 test("Modal fokus qamovi va fokusni qaytarish o'z joyida", () => {

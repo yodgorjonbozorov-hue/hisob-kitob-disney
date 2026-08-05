@@ -69,10 +69,38 @@ Tuzatildi va endi ikkita test qo'riqlaydi (`tests/backup.test.ts`):
 
 ---
 
+## 1.5 ✅ KODDA BAJARILGAN QISM
+
+Quyidagilar **allaqachon yozilgan va SQLite'da sinalgan**. Ko'chishda ularga
+tegish shart emas:
+
+| Nima | Qayerda |
+|---|---|
+| Dialekt qatlami (barcha farqlar bitta joyda) | `src/lib/db/dialect.ts` |
+| Adapter `DATABASE_URL` sxemasiga qarab tanlanadi | `src/lib/db/rawPrisma.ts` |
+| `@prisma/adapter-pg` va `pg` o'rnatilgan | `package.json` |
+| Postgres boshlang'ich migratsiyasi (40 jadval, 104 indeks, 76 FK) | `prisma/migrations-postgres/` |
+| Migratsiyani qayta generatsiya qilish | `npm run pg:migratsiya` |
+| Dialekt testlari (ikkala yo'l ham) | `tests/dialect.test.ts` (11 ta) |
+
+Dialekt qatlami provayderni `DATABASE_URL` sxemasidan aniqlaydi
+(`postgresql://` yoki `postgres://`), chunki Prisma'ning o'z provayderi build
+paytida qotib qoladi va runtime'da o'qib bo'lmaydi. Postgres adapteri KECH
+yuklanadi — SQLite deploy'ida `pg` paketi bundle'ga umuman tushmaydi.
+
+**Ya'ni ko'chishda qoladigan ish:** sxemada bitta satrni almashtirish,
+migratsiya papkalarini almashtirish, ma'lumotni ko'chirish va staging'da
+sinash. Kod tayyor.
+
+---
+
 ## 2. SQLite'ga xos joylar — to'liq ro'yxat
 
 Kod bo'ylab qidirildi (`$queryRaw`, `COLLATE`, `strftime`, `julianday`,
-`datetime(`, `NOCASE`). Faqat **to'rt** joy provayderga bog'liq:
+`datetime(`, `NOCASE`). Faqat **to'rt** joy provayderga bog'liq edi —
+**to'rttasi ham `lib/db/dialect.ts` ga ko'chirildi va ikkala yo'l yozildi.**
+Quyidagi tavsiflar endi tarixiy ma'lumot: nima uchun shunday qilinganini
+tushuntiradi.
 
 ### 2.1 `src/app/api/auth/login/route.ts` — `COLLATE NOCASE`
 
@@ -176,10 +204,20 @@ imkonsiz qiladi. Har enum uchun zod sxemasi allaqachon bor
 bo'lib xizmat qiladi.
 
 **Migratsiyalar papkasi:** mavjud 13 migratsiya SQLite SQL'ida yozilgan va
-PostgreSQL'da ishlamaydi. To'g'ri yo'l — Postgres uchun **yangi boshlang'ich
-migratsiya** (`prisma migrate dev --create-only` bo'sh Postgres bazasiga),
-eski papkani esa `prisma/migrations-sqlite/` ga arxiv sifatida ko'chirish.
+PostgreSQL'da ishlamaydi. Postgres uchun boshlang'ich migratsiya
+**allaqachon generatsiya qilingan**: `prisma/migrations-postgres/`.
+Ko'chishda papkalar almashtiriladi:
+
+```bash
+mv prisma/migrations prisma/migrations-sqlite      # arxiv
+mv prisma/migrations-postgres prisma/migrations
+```
+
 Ma'lumot baribir zaxira JSON orqali ko'chadi, migratsiya tarixi emas.
+
+⚠️ Sxemaga yangi model qo'shilsa bu fayl avtomatik yangilanmaydi — shuning
+uchun `tests/dialect.test.ts` uni sxemadagi model soni bilan solishtiradi va
+eskirsa test yiqiladi. Yangilash: `npm run pg:migratsiya`.
 
 ---
 
@@ -190,8 +228,8 @@ Ma'lumot baribir zaxira JSON orqali ko'chadi, migratsiya tarixi emas.
 - [ ] Postgres bazasi yaratildi, `prisma migrate deploy` o'tdi
 - [ ] `restoreDump` `createMany` ga o'tkazildi (unumdorlik uchun)
 - [ ] `npm run restore` — barcha jadval sonlari mos
-- [ ] 2.1 va 2.2 dagi raw SQL Postgres variantiga o'tkazildi
-- [ ] `contains` qidiruvlariga `mode: "insensitive"` qo'shildi
+- [x] ~~2.1 va 2.2 dagi raw SQL Postgres variantiga o'tkazildi~~ (bajarildi)
+- [x] ~~`contains` qidiruvlariga `mode: "insensitive"` qo'shildi~~ (bajarildi)
 - [ ] **Barcha 32 test to'plami Postgres'da yashil**
 - [ ] Rate limit parallel testi Postgres'da qayta o'tkazildi
 - [ ] Qidiruv registrga sezgirmasligi qo'lda tekshirildi
