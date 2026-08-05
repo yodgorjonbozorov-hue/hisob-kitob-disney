@@ -15,7 +15,7 @@ agent shu fayldan qayerda qolganini o'qib davom etadi.
 | 3 | Xavfsizlik + audit | `faza-3-xavfsizlik` | ✅ tugadi |
 | 4 | Kassa to'liqligi | `faza-4-kassa` | ✅ tugadi |
 | 5 | PostgreSQL + masshtab | `faza-5-postgres` | ⏸ kechiktirildi (sabab quyida) |
-| 6 | ERP modullari | `faza-6-*` | 🔄 3/6 modul: XARID ✅, TASDIQLASH ✅, MIJOZLAR ✅ |
+| 6 | ERP modullari | `faza-6-*` | 🔄 4/6 modul: XARID ✅, TASDIQLASH ✅, MIJOZLAR ✅, HR ✅ |
 
 ## ⚠️ MIGRATSIYA KUTILMOQDA (qo'lda apply qilinadi)
 
@@ -36,6 +36,7 @@ production/staging'da qo'lda bajariladi. **Avval zaxira oling.**
 | 9 | `20260804160000_xarid_moduli` | `Supplier`, `PurchaseOrder`, `PurchaseOrderItem` | Past — faqat CREATE TABLE |
 | 10 | `20260804170000_tasdiqlash_moduli` | `ApprovalRule`, `ApprovalRequest` | Past — faqat CREATE TABLE |
 | 11 | `20260804180000_mijozlar_moduli` | `Contact.qarzLimit`, `Sale.contactId`, `Debt.contactId` | O'rta — Sale va Debt qayta quriladi |
+| 12 | `20260804190000_hr_moduli` | `Employee`, `Attendance`, `Payroll`, `PayrollAdvance` | Past — faqat CREATE TABLE |
 
 **⚠️ 6-migratsiyadan KEYIN majburiy:** `npm run kassa:migratsiya` — har biznesga
 default "Naqd kassa" ochadi va `accountId`siz eski tranzaksiyalarni bog'laydi.
@@ -818,3 +819,104 @@ saqlagich kerak: Vercel Blob yoki S3), HR-LITE, AI OCR.
 - [ ] Limitdan oshiring — xato xabari aniq va tushunarli chiqadimi
 - [ ] Mijoz kartochkasida sotuv/qarz/bitim bo'limlari to'g'ri to'ladimi
 - [ ] Qarz to'lovi kiritilgach kartochkadagi "ochiq qarz" kamaydimi
+
+---
+
+### 2026-08-04 — Faza 6, Modul 4: HR-LITE (tugadi)
+
+**Branch:** `faza-6-hr`
+
+**Muammo:** oylik daftar yoki Excelda yuritilardi. Kimga qancha avans
+berilgani esa umuman yozilmasdi — oy oxirida "men senga 500 ming bergan
+edim" degan bahs boshlanardi. Chiqim tranzaksiyalari ichida oylik alohida
+ko'rinmasdi.
+
+**Nega `Employee` va `User` alohida:** `User` — tizimga KIRADIGAN hisob.
+Xodimlarning ko'pchiligi tizimga umuman kirmaydi (yuk tashuvchi, oshpaz,
+farrosh), lekin ularga oylik to'lanadi. Ikkalasini bitta jadvalga tiqish
+"loginsiz foydalanuvchi" degan g'alati yozuvlarni tug'dirardi.
+`Employee.userId` — ixtiyoriy ko'prik.
+
+**Uch bosqichli pul oqimi:**
+1. **Hisoblash** (`qoralama`) — PUL EMAS. Hisobotga, kassa qoldig'iga va
+   budjetga umuman ta'sir qilmaydi.
+2. **Avans** — pul DARHOL chiqadi (chiqim tranzaksiya + `PayrollAdvance`
+   bitta atomik amalda). Qoralama vedomost ham darhol qayta hisoblanadi.
+3. **To'lash** — `tolanadigan` summa bitta chiqim tranzaksiyasiga aylanadi.
+   Avans allaqachon chiqim bo'lgani uchun undan **chegirilgan** — bir xil
+   pul ikki marta chiqim bo'lib ko'rinmaydi. (Test buni aniq tekshiradi:
+   avans 1 mln + oylik 4.3 mln = jami 5.3 mln, 6.3 mln emas.)
+
+**Stavka mantiqi:**
+- `oylik` — asos to'liq stavka. Avtomatik proporsiya ataylab yo'q: o'zbek
+  amaliyotida oylik ishchi kunlar soniga qarab o'zgarmaydi, kam ishlagani
+  `ushlab` bilan qo'lda hisobga olinadi.
+- `kunlik` — asos davomatdan: `stavka × kunlar`. Yarim kunni kasr bilan
+  saqlamaslik uchun `Payroll.yarimKunlar` ikkilangan sonda yuritiladi
+  (1 kun = 2, yarim kun = 1) — pul har doim `Int` qoidasi buzilmaydi.
+- `tolanadigan = max(0, hisoblangan + qoshimcha − ushlab − avans)` —
+  manfiy oylik yozilmaydi.
+
+**Davomat:** bir xodim, bir kun, bitta yozuv (qayta belgilansa ustiga
+yoziladi). Jadval xodim × kun ko'rinishida, katakni bosish bilan
+belgilanadi (optimistik ko'rinish, xato bo'lsa orqaga qaytadi).
+
+**Qulflar:** to'langan oylikni qayta to'lab ham, qayta hisoblab ham
+bo'lmaydi; to'langan oyga avans yozilmaydi; to'lanmagan vedomosti bor
+xodim o'chirilmaydi.
+
+**Yangi modellar:** `Employee`, `Attendance`, `Payroll`, `PayrollAdvance`
+— to'rttasi `BUSINESS_SCOPED` va `ZAXIRA_JADVALLARI` ro'yxatlarida.
+
+**Fayllar:**
+- `prisma/schema.prisma` + `prisma/migrations/20260804190000_hr_moduli/`
+- `src/lib/validation/hr.ts`, `src/lib/services/hr.ts`, `src/lib/queries/hr.ts`
+- `src/app/api/hr/xodimlar/route.ts`, `.../[id]/route.ts`
+- `src/app/api/hr/davomat/route.ts`, `src/app/api/hr/avans/route.ts`
+- `src/app/api/hr/oylik/route.ts`, `.../[id]/route.ts`
+- `src/app/app/hr/{page,loading,error}.tsx`, `HrClient.tsx`, `XodimModal.tsx`, `OylikModal.tsx`
+- `src/app/app/hr/davomat/{page,loading}.tsx`, `DavomatClient.tsx`
+- `src/lib/modules/registry.ts`, `src/lib/billing/plans.ts`, `src/lib/services/audit.ts`
+- `src/lib/db/tenantDb.ts`, `src/lib/backup/dump.ts`, `src/components/nav/Sidebar.tsx`
+
+**Ruxsat:** modul PRO tarifda, faqat BOSHQARUVCHILAR (oylik — pul va
+shaxsiy ma'lumot).
+
+**Test:** `tests/hr.test.ts` (19) — xodim CRUD, davomatning ustiga
+yozilishi, kunlik/oylik stavka hisobi, ustama va ushlab qolish, avansning
+darhol chiqim yozishi va oylikdan chegirilishi, qayta hisoblashda avansning
+yo'qolmasligi, manfiy oylikning bo'lmasligi, to'lovdagi qulflar, vedomost
+ro'yxati va statistika, yumshoq o'chirish, tenant izolyatsiyasi.
+
+**Tekshirildi:** `npm run build` ✅ · `npx tsc --noEmit` ✅ ·
+29 test to'plami, jami **323 test**, 0 xato.
+
+**Keyingi qadam:** Faza 6 ning qolgani — AI OCR (chek rasmi → chiqim
+taklifi) va HUJJATLAR (tashqi fayl saqlagich kerak).
+
+---
+
+## FAZA 6 / MODUL 4 TEKSHIRUV RO'YXATI
+
+**Avtomatik tekshirilgan**
+- [x] `npm run build` va `tsc --noEmit` o'tadi
+- [x] Oylik hisoblash pul yozuvi YARATMAYDI
+- [x] Kunlik stavkada oylik davomatdan to'g'ri hisoblanadi (yarim kun ham)
+- [x] Oylik stavkada asos to'liq stavka bo'ladi
+- [x] Ustama qo'shadi, ushlab qolish kamaytiradi
+- [x] Avans darhol chiqim yozadi va qoralama vedomostni yangilaydi
+- [x] Qayta hisoblash avansni va berilmagan qiymatlarni yo'qotmaydi
+- [x] To'lanadigan hech qachon manfiy bo'lmaydi
+- [x] To'lashda avans chegirilgan summa yoziladi (ikki marta hisoblanmaydi)
+- [x] To'langan oylik qayta to'lanmaydi, qayta hisoblanmaydi, avans qabul qilmaydi
+- [x] To'lanmagan vedomosti bor xodim o'chirilmaydi
+- [x] Begona tenant xodim va vedomostlarni ko'rmaydi
+
+**Sizdan kutiladi (real muhitda)**
+- [ ] 12-migratsiyani apply qiling
+- [ ] Sozlamalar → Modullar bo'limida "Xodimlar (HR-lite)" ni yoqing (PRO)
+- [ ] Oylik va kunlik stavkali ikki xodim qo'shing
+- [ ] Davomat jadvalida bir necha kun belgilang → oylik to'g'ri hisoblandimi
+- [ ] Avans bering → Yozuvlar ro'yxatida "Avans" chiqimi paydo bo'ldimi
+- [ ] Oylikni to'lang → "Oylik" chiqimi avans chegirilgan summada yozildimi
+- [ ] Kassa qoldig'i ikkala to'lovdan keyin to'g'ri kamaydimi

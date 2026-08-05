@@ -138,6 +138,10 @@ model Business {
   purchaseItems    PurchaseOrderItem[]
   approvalRules    ApprovalRule[]
   approvalRequests ApprovalRequest[]
+  employees        Employee[]
+  attendances      Attendance[]
+  payrolls         Payroll[]
+  advances         PayrollAdvance[]
 
   @@index([tenantId])
 }
@@ -155,6 +159,7 @@ model User {
   // Seed parollarini birinchi kirishda majburiy almashtirish uchun.
   mustChangePassword Boolean           @default(false)
   transactions       Transaction[]
+  employees          Employee[]
   approvalRequests   ApprovalRequest[] @relation("TasdiqSorovchi")
   approvalDecisions  ApprovalRequest[] @relation("TasdiqQaror")
 
@@ -309,6 +314,9 @@ model Transaction {
   deletedAt       DateTime?
   /// Tasdiqdan o'tib yozilgan bo'lsa — o'sha so'rov (aks holda null).
   approvalRequest ApprovalRequest?
+  /// HR: shu tranzaksiya oylik yoki avans to'lovi bo'lsa — o'sha yozuv.
+  payroll         Payroll?         @relation("OylikChiqimi")
+  advance         PayrollAdvance?  @relation("AvansChiqimi")
 
   // KOMPOZIT INDEKSLAR: SQLite bitta so'rovda bitta indeks ishlatadi, shuning uchun
   // 6 ta bitta-ustunli indeks deyarli foydasiz edi (va har yozuvni sekinlashtirardi).
@@ -850,4 +858,126 @@ model ApprovalRequest {
   @@index([userId])
   @@index([tasdiqlovchiId])
   @@index([ruleId])
+}
+
+// ==== HR-LITE moduli (Faza 6.4) ====
+
+/// XODIM KARTOCHKASI — `User` dan ataylab ajratilgan.
+///
+/// `User` — tizimga KIRADIGAN hisob. Xodimlarning ko'pchiligi esa tizimga
+/// umuman kirmaydi (yuk tashuvchi, oshpaz, farrosh), lekin ularga oylik
+/// to'lanadi. Ikkalasini bitta jadvalga tiqish "loginsiz foydalanuvchi"
+/// degan g'alati yozuvlarni tug'dirardi. `userId` — ixtiyoriy ko'prik.
+model Employee {
+  id           String    @id @default(cuid())
+  businessId   String
+  business     Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  /// Tizim hisobi bilan bog'lanish (ixtiyoriy).
+  userId       String?
+  user         User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  ism          String
+  lavozim      String?
+  tel          String?
+  /// Stavka (so'm). `stavkaTuri` ga qarab oylik yoki bir kunlik.
+  stavka       Int       @default(0)
+  /// "oylik" | "kunlik"
+  stavkaTuri   String    @default("oylik")
+  ishBoshlagan DateTime?
+  isActive     Boolean   @default(true)
+  izoh         String?
+  createdAt    DateTime  @default(now())
+  deletedAt    DateTime?
+
+  attendances Attendance[]
+  payrolls    Payroll[]
+  advances    PayrollAdvance[]
+
+  @@index([businessId, isActive, deletedAt])
+  @@index([userId])
+}
+
+/// DAVOMAT — bir xodim, bir kun, bir yozuv.
+///
+/// `holat`: "keldi" | "yarim" | "kelmadi" | "tatil". Kunlik stavkada oylik
+/// shu yozuvlardan hisoblanadi. Yarim kunni kasr bilan saqlamaslik uchun
+/// `Payroll.yarimKunlar` ikkilangan sonda yuritiladi (1 kun = 2).
+model Attendance {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  sana       DateTime
+  holat      String   @default("keldi")
+  izoh       String?
+  createdAt  DateTime @default(now())
+
+  @@unique([employeeId, sana])
+  @@index([businessId, sana])
+  @@index([employeeId, sana])
+}
+
+/// AVANS — oy o'rtasida berilgan pul.
+///
+/// Avans DARHOL chiqim tranzaksiyasi yozadi: pul haqiqatan kassadan chiqdi.
+/// Oy yopilganda esa u `Payroll.avans` sifatida hisobdan chegiriladi —
+/// aks holda bir xil pul ikki marta chiqim bo'lib ko'rinardi.
+model PayrollAdvance {
+  id            String       @id @default(cuid())
+  businessId    String
+  business      Business     @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  employeeId    String
+  employee      Employee     @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  /// Qaysi oyning oyligidan chegiriladi — "YYYY-MM".
+  oy            String
+  summa         Int
+  sana          DateTime
+  izoh          String?
+  transactionId String?      @unique
+  transaction   Transaction? @relation("AvansChiqimi", fields: [transactionId], references: [id], onDelete: SetNull)
+  userId        String
+  createdAt     DateTime     @default(now())
+
+  @@index([businessId, oy])
+  @@index([employeeId, oy])
+  @@index([transactionId])
+}
+
+/// OYLIK VEDOMOSTI — bir xodim, bir oy.
+///
+/// `qoralama` holatida hech qanday pul yozuvi yo'q: bu hali hisob-kitob.
+/// `tolangan` holatida `tolanadigan` summa bitta chiqim tranzaksiyasiga
+/// aylanadi (avans allaqachon chiqim bo'lgani uchun undan chegirilgan).
+model Payroll {
+  id            String       @id @default(cuid())
+  businessId    String
+  business      Business     @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  employeeId    String
+  employee      Employee     @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  /// "YYYY-MM"
+  oy            String
+  /// Kunlik stavkada — davomatdan hisoblangan ikkilangan kunlar (1 kun = 2).
+  yarimKunlar   Int          @default(0)
+  /// Stavka bo'yicha asosiy hisob.
+  hisoblangan   Int          @default(0)
+  /// Ustama/mukofot.
+  qoshimcha     Int          @default(0)
+  /// Ushlab qolish (jarima, yetishmovchilik).
+  ushlab        Int          @default(0)
+  /// Shu oyda berilgan avanslar yig'indisi (snapshot).
+  avans         Int          @default(0)
+  /// hisoblangan + qoshimcha - ushlab - avans (manfiy bo'lmaydi).
+  tolanadigan   Int          @default(0)
+  /// "qoralama" | "tolangan"
+  holat         String       @default("qoralama")
+  tolanganSana  DateTime?
+  transactionId String?      @unique
+  transaction   Transaction? @relation("OylikChiqimi", fields: [transactionId], references: [id], onDelete: SetNull)
+  izoh          String?
+  userId        String
+  createdAt     DateTime     @default(now())
+
+  @@unique([employeeId, oy])
+  @@index([businessId, oy, holat])
+  @@index([transactionId])
 }

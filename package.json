@@ -44,7 +44,8 @@
     "test:tolov": "node -r ts-node/register tests/tolov.test.ts",
     "test:xarid": "node -r ts-node/register tests/xarid.test.ts",
     "test:tasdiqlash": "node -r ts-node/register tests/tasdiqlash.test.ts",
-    "test:mijozlar": "node -r ts-node/register tests/mijozlar.test.ts"
+    "test:mijozlar": "node -r ts-node/register tests/mijozlar.test.ts",
+    "test:hr": "node -r ts-node/register tests/hr.test.ts"
   },
   "prisma": {
     "seed": "node -r ts-node/register prisma/seed.ts"

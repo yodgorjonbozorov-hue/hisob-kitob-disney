@@ -48,6 +48,11 @@ const BUSINESS_SCOPED = new Set([
   // Tasdiqlash (Faza 6.2)
   "ApprovalRule",
   "ApprovalRequest",
+  // HR-lite (Faza 6.4)
+  "Employee",
+  "Attendance",
+  "Payroll",
+  "PayrollAdvance",
 ]);
 // AuditLog: businessId nullable — biznesga bog'langan yozuvlar tenant bo'yicha filtrlanadi.
 const AUDIT_MODEL = "AuditLog";
