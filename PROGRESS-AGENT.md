@@ -1583,114 +1583,80 @@ Migratsiya fayllari asl holida (`git diff prisma/migrations/` bo'sh).
 
 ---
 
-## ⚠️ SIZ UCHUN: PRODUCTION'DA APPLY QILISH
+## 📱 SIZ UCHUN: TELEFONDAN APPLY QILISH
 
-Endi bu **bitta buyruq**:
+Kompyuter kerak emas.
 
-```bash
-npm run apply:hammasi
-```
+**GitHub → Actions → "Migratsiya qo'llash" → Run workflow → `HA` → Run**
 
-U o'zi bajaradi: xom surat → migratsiyalar → `kassa:migratsiya` →
-tekshiruv → mantiqiy zaxira. Har qadam oldingisiga bog'liq: birortasi
-yiqilsa keyingilari umuman ishga tushmaydi.
+Bir marta sozlash kerak: repo Settings → Secrets → `DATABASE_URL` va
+`DATABASE_AUTH_TOKEN` (Vercel env'dan ko'chiring).
 
-Batafsil: quyidagi "apply oqimi" jurnal yozuvi.
+To'liq yo'riqnoma: [`TELEFONDAN-APPLY.md`](TELEFONDAN-APPLY.md).
+
+Terminaldan bo'lsa: `npm run apply:hammasi`.
 
 ---
 
-### 2026-08-04 — Apply oqimi bitta buyruqqa siqildi (+ 2 ta jiddiy topilma)
+### 2026-08-04 — Telefondan apply (+ deploy'dagi yashirin xavf tuzatildi)
 
-**Branch:** `apply-skripti` · **Migratsiya YO'Q**
+**Branch:** `telefondan-apply` · **Migratsiya YO'Q**
 
-Loyiha egasi "apply barchasi uchun o'zing bajar" dedi. Bazaga ulanish bu
-muhitda yo'q (tekshirildi: `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `.env` —
-hech biri yo'q), shuning uchun production'da apply qilish imkonsiz. Buning
-o'rniga **egasiga qoladigan ish bitta buyruqqa siqildi** va shu buyruq
-oxirigacha haqiqiy bazada sinaldi.
+Loyiha egasi telefondan qilish mumkinmi deb so'radi. Tekshirish paytida
+**jiddiy xavf** topildi.
 
-#### 🐛 Topilma 1: zaxira aynan kerak paytda yiqilardi
+#### 🐛 Deploy migratsiyani YARIM qo'llardi
 
-Skriptni sinash paytida chiqdi. Hujjatdagi tartib shunday edi:
+`package.json` da:
 
 ```
-1. npm run backup      <- ZAXIRA
-2. npm run db:apply    <- migratsiyalar
+"build": "node scripts/db-migrate.mjs && node scripts/bootstrap-superadmin.mjs && next build"
 ```
 
-**1-qadam production'da yiqilardi.** `npm run backup` Prisma orqali
-ishlaydi, ya'ni joriy KOD sxemasini biladi. Migratsiyadan OLDIN esa baza
-koddan orqada: `Account` jadvali yo'q, `Transaction.accountId` ustuni yo'q.
-Natija: `no such table: main.Account`, keyin `no such column:
-main.Transaction.accountId`.
+Ya'ni Vercel'ga har deploy **migratsiyalarni avtomatik qo'llaydi**. Bu
+o'z-o'zidan qulay, lekin `kassa:migratsiya` bu zanjirda YO'Q edi.
 
-Ya'ni **zaxira eng kerak bo'lgan paytda ishlamasdi.**
+Natija: branch merge qilinsa 13 migratsiya jimgina qo'llanardi va barcha
+tranzaksiyalar `accountId` siz qolardi — **kassa qoldig'i haqiqiy pulni
+ko'rsatmasdi**, hech qanday xato ham chiqmasdi. Ya'ni "migratsiyadan keyin
+kassa skriptini unutmang" degan hujjat qatori yetarli emas edi: deploy
+uni umuman so'ramasdan bajarib qo'yardi.
 
-Avval jadval yo'qligini kechirishga urinildi, lekin ustun yo'qligi
-qolardi — Prisma har doim sxemadagi barcha ustunlarni so'raydi. Demak
-Prisma orqali eski bazadan zaxira olish **prinsipial mumkin emas**.
-Yarim tolerantlik esa yomonroq: nosozlik holatini nomuvofiq qiladi va
-soxta ishonch beradi. Shuning uchun u qaytarildi.
+**Tuzatildi:** `kassa-migratsiya.ts` build zanjiriga qo'shildi. Buning
+uchun u env'siz muhitda ham xavfsiz bo'lishi kerak edi — `DATABASE_URL`
+yo'q bo'lsa endi jimgina o'tkazib yuboriladi (`db-migrate.mjs` bilan bir
+xil xatti-harakat).
 
-**Yechim — `npm run zaxira:xom`** (`scripts/xom-zaxira.mjs`): sxemani
-umuman bilmaydigan surat. `sqlite_master` dan jadvallarni topadi va har
-birini `SELECT *` bilan o'qiydi. Baza qanday holatda bo'lsa shundayligicha
-suratga oladi, ya'ni migratsiyadan OLDIN ishlaydi va orqaga qaytish yo'lini
-ochiq qoldiradi. `--tikla` bilan qaytariladi.
+**Yo'l-yo'lakay ikkinchi xato:** birinchi urinishda `main()` erta
+qaytardi, lekin `.finally(() => rawPrisma.$disconnect())` proxy'ga
+tegib clientni QURARDI va `URL_INVALID` bilan build'ni yiqitardi.
+Buni faqat `exit` kodini tekshirganda ko'rdim — `grep` bilan qaraganda
+"o'tkazib yuborildi" xabari chiqib, hammasi joyidadek ko'rinardi.
+Endi disconnect ham himoyalangan.
 
-Bu mantiqiy zaxira o'rnini bosmaydi (server ko'chirish va Postgres uchun
-`npm run backup` kerak) — u faqat migratsiya oynasi uchun.
+Ikkala holat ham `exit=0` bilan tasdiqlandi: env'siz build va eski
+holatdagi bazaga deploy taqlidi (5 tranzaksiya → 13 migratsiya →
+kassa bog'landi → `Kassasiz qolgan yozuv: 0`).
 
-#### 🐛 Topilma 2: migratsiya hisoboti mos kelmasligi
+#### Telefondan uchta yo'l
 
-Ikkinchi sinovda `table "Business" already exists` chiqdi.
-`scripts/db-migrate.mjs` qaysi migratsiya qo'llanganini
-`_applied_migrations` da yuritadi. Agar baza boshqa yo'l bilan qurilgan
-bo'lsa (`prisma migrate deploy`, `db push`, qo'lda SQL), bu jadval bo'sh
-qoladi va runner hammasini boshidan qo'llashga urinib **o'rtada** yiqiladi
-— natijada yarim qo'llangan baza.
-
-Endi `apply:hammasi` buni **boshida** aniqlaydi: birinchi kutayotgan
-migratsiya allaqachon mavjud jadvalni yaratmoqchi bo'lsa, hech narsaga
-tegmasdan to'xtaydi va yechimni ko'rsatadi.
-
-**Yechim vositasi — `npm run migratsiya:belgila`**: SQL bajarmaydi, faqat
-allaqachon qo'llangan migratsiyalarni hisobotda belgilaydi. `--tasdiq`siz
-faqat ro'yxatni ko'rsatadi (noto'g'ri nom bilan migratsiyani "bajarilgan"
-deb belgilab qo'yish — footgun, shuning uchun ikki qadamli).
-
-#### `npm run apply:hammasi` — oqim
-
-| # | Qadam | Izoh |
+| Yo'l | Zaxira | Qulaylik |
 |---|---|---|
-| 1 | Oldindan tekshiruv | Ulanish, kutayotgan migratsiyalar, hisobot mosligi |
-| 2 | **Xom surat** | Sxemaga bog'liq emas; olinmasa DAVOM ETILMAYDI |
-| 3 | Migratsiyalar | `db-migrate.mjs`, idempotent |
-| 4 | **Kassa migratsiyasi** | Majburiy; busiz kassa qoldig'i noto'g'ri |
-| 5 | Tekshiruv | Yozuv sonlari, summa, FK, yaxlitlik, kassasiz/sanasiz yozuvlar |
-| 6 | Mantiqiy zaxira | Endi sxema mos — odatdagi zaxira ishlaydi |
+| **GitHub Actions** (tavsiya) | ✅ artefakt, 30 kun | Actions → Run workflow → `HA` |
+| Vercel deploy | ❌ yo'q | Merge yoki "Redeploy" |
+| Turso konsoli | ❌ | Faqat tekshirish uchun |
 
-**To'xtash qoidasi:** har qadam oldingisiga bog'liq. Jimgina davom etish
-yarim qo'llangan bazadan ko'ra yomonroq.
+**`.github/workflows/migratsiya.yml`** — `workflow_dispatch`, telefondagi
+GitHub ilovasidan ishlaydi. Himoyalar: `tasdiq: HA` yozilmasa ishga
+tushmaydi; sekret yo'q bo'lsa aniq xato; `concurrency` bilan bir vaqtda
+ikkita migratsiya bloklanadi; zaxiralar **har doim** (yiqilganda ham)
+artefakt sifatida yuklanadi; `faqat_zaxira` rejimi ham bor.
 
-#### Oxirigacha sinaldi
+**`TELEFONDAN-APPLY.md`** — uchala yo'l, sozlash qadamlari, tekshiruv
+SQL'lari va xato holatida nima qilish.
 
-Eski holatdagi baza + ma'lumot (12 tranzaksiya, 7.8 mln so'm, sotuv)
-qurilib, butun oqim **haqiqatan ishga tushirildi**:
-- hisobot mos kelmasligi boshida ushlandi va hech narsaga tegilmadi;
-- `migratsiya:belgila` dan keyin oqim to'liq o'tdi;
-- ma'lumot yo'qolmadi, summa o'zgarmadi, FK va yaxlitlik toza;
-- kassasiz tranzaksiya 0, sanasiz sotuv 0;
-- **ikkinchi marta** ishga tushirildi — takroriy kassa ochilmadi, hech
-  narsa o'zgarmadi;
-- **xom suratdan tiklash sinaldi**: 3 yozuv o'chirilib, sotuv summasi
-  buzildi → tiklashdan keyin hammasi joyiga qaytdi.
+**Fayllar:** `.github/workflows/migratsiya.yml`, `TELEFONDAN-APPLY.md`,
+`scripts/kassa-migratsiya.ts`, `package.json`, `README.md`.
 
-**Test:** `tests/apply-oqimi.test.ts` (9) — yuqoridagi har bir holat,
-shu jumladan "Prisma zaxirasi eski bazada yiqilishi KUTILADI, xom surat
-esa ishlaydi" solishtiruvi.
-
-**Fayllar:** `scripts/apply-hammasi.mjs`, `scripts/xom-zaxira.mjs`,
-`scripts/migratsiya-belgila.mjs`, `tests/apply-oqimi.test.ts`, `package.json`.
-
-**Tekshirildi:** `npm run build` ✅ · 37 test to'plami, jami **417 test**, 0 xato.
+**Tekshirildi:** `npm run build` ✅ (env bilan va env'siz, ikkalasi ham
+`exit=0`) · 37 test to'plami, jami **417 test**, 0 xato.

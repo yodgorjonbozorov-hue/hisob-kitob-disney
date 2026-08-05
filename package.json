@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/db-migrate.mjs && node scripts/bootstrap-superadmin.mjs && next build",
+    "build": "node scripts/db-migrate.mjs && node -r ts-node/register scripts/kassa-migratsiya.ts && node scripts/bootstrap-superadmin.mjs && next build",
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate",
