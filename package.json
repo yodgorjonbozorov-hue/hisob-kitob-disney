@@ -52,7 +52,8 @@
     "test:cron": "node -r ts-node/register tests/cron.test.ts",
     "test:audit-qoldiq": "node -r ts-node/register tests/audit-qoldiq.test.ts",
     "test:dialect": "node -r ts-node/register tests/dialect.test.ts",
-    "test:migratsiya": "node -r ts-node/register tests/migratsiya-zanjiri.test.ts"
+    "test:migratsiya": "node -r ts-node/register tests/migratsiya-zanjiri.test.ts",
+    "test:izolyatsiya-royxati": "node -r ts-node/register tests/izolyatsiya-royxati.test.ts"
   },
   "prisma": {
     "seed": "node -r ts-node/register prisma/seed.ts"

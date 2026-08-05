@@ -17,7 +17,39 @@ import { auditYoz, entityNomi, type AuditAmal } from "./auditWriter";
  *    (signup/superadmin rawPrisma bilan ishlaydi).
  */
 
-const TENANT_DIRECT = new Set(["Business", "User", "Subscription", "Payment", "TenantModule"]);
+/**
+ * MODEL TASNIFI — har model ANIQ bittasiga tegishli bo'lishi shart.
+ *
+ * Nega bu jiddiy: quyidagi `buildTenantClient` da ro'yxatlarga tushmagan model
+ * so'rovi FILTRSIZ o'tkaziladi (`return query(args)`). Ya'ni yangi model
+ * ro'yxatga qo'shilmasa, u barcha tenantlarga ko'rinadi va buni hech kim
+ * sezmaydi — bu FAIL-OPEN.
+ *
+ * `tests/izolyatsiya-royxati.test.ts` sxemadan chiqib har modelni tekshiradi:
+ * `tenantId` yoki `businessId` maydoni bor model albatta ro'yxatda bo'lishi,
+ * yoki `TIZIM_MODELLAR` da SABABI bilan yozilishi kerak.
+ */
+export const TENANT_DIRECT = new Set(["Business", "User", "Subscription", "Payment", "TenantModule"]);
+
+/**
+ * ATAYLAB tenantga bog'lanmagan tizim jadvallari — sababi bilan.
+ *
+ * Bularga tenant filtri qo'llanmaydi va bu TO'G'RI. Lekin har biri ochiq
+ * qaror bo'lishi kerak, unutilgan model emas.
+ */
+export const TIZIM_MODELLAR: Record<string, string> = {
+  // Tenant modelining o'zi extension'da alohida ishlanadi (faqat o'qish).
+  Tenant: "extension'da alohida qoida: faqat o'z tenantini o'qish mumkin",
+  // Global kalit-qiymat: rate limit hisoblagichlari, cron bayroqlari.
+  AppSetting: "global tizim sozlamalari, tenantga tegishli emas",
+  // Kalit — chatId; bot foydalanuvchi tenanti aniqlanishidan OLDIN o'qiydi.
+  BotConversation: "bot holati tenant aniqlanishidan oldin o'qiladi (chatId kaliti)",
+  // tenantId/businessId bor, LEKIN faqat rawPrisma va kompozit kalit
+  // (businessId + userId) bilan o'qiladi; businessId egaligi withTenant'da
+  // yuqorida tekshiriladi. Scoped client orqali umuman ishlatilmaydi.
+  AiConversation: "faqat rawPrisma va (businessId, userId) kompozit kaliti bilan o'qiladi",
+};
+
 const BUSINESS_SCOPED = new Set([
   "Category",
   "Transaction",
@@ -58,7 +90,10 @@ const BUSINESS_SCOPED = new Set([
   "Attachment",
 ]);
 // AuditLog: businessId nullable — biznesga bog'langan yozuvlar tenant bo'yicha filtrlanadi.
-const AUDIT_MODEL = "AuditLog";
+export const AUDIT_MODEL = "AuditLog";
+
+/** Biznes orqali tenantga bog'lanadigan modellar (test uchun ochiq). */
+export const BUSINESS_SCOPED_MODELLAR: ReadonlySet<string> = BUSINESS_SCOPED;
 
 const FILTER_OPS = new Set([
   "findMany",
