@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { qidiruvRejimi } from "@/lib/db/dialect";
 import { isManager } from "@/lib/auth/roles";
 import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { withTenant } from "@/lib/auth/tenant";
@@ -38,7 +39,10 @@ export const GET = withTenant(async (request, _ctx, { session: user }) => {
         deletedAt: null,
         // Xodimga qidiruvda ham faqat o'zi kiritgan yozuvlar chiqadi.
         ...(scopeUserId ? { userId: scopeUserId } : {}),
-        OR: [{ izoh: { contains: q } }, { category: { nomi: { contains: q } } }],
+        OR: [
+          { izoh: { contains: q, ...qidiruvRejimi() } },
+          { category: { nomi: { contains: q, ...qidiruvRejimi() } } },
+        ],
       },
       include: { category: { select: { nomi: true } } },
       orderBy: { sana: "desc" },
@@ -46,21 +50,21 @@ export const GET = withTenant(async (request, _ctx, { session: user }) => {
     }),
     omborli
       ? prisma.debt.findMany({
-          where: { businessId, mijozNomi: { contains: q } },
+          where: { businessId, mijozNomi: { contains: q, ...qidiruvRejimi() } },
           orderBy: { createdAt: "desc" },
           take: 5,
         })
       : Promise.resolve([]),
     omborli
       ? prisma.product.findMany({
-          where: { businessId, nomi: { contains: q } },
+          where: { businessId, nomi: { contains: q, ...qidiruvRejimi() } },
           select: { id: true, nomi: true },
           take: 5,
         })
       : Promise.resolve([]),
     isManager(user.rol)
       ? prisma.category.findMany({
-          where: { businessId, nomi: { contains: q } },
+          where: { businessId, nomi: { contains: q, ...qidiruvRejimi() } },
           select: { id: true, nomi: true, turi: true },
           take: 5,
         })

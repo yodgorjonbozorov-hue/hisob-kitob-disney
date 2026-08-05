@@ -14,7 +14,7 @@ agent shu fayldan qayerda qolganini o'qib davom etadi.
 | 2 | Unumdorlik + UX | `faza-2-perf` | ✅ tugadi |
 | 3 | Xavfsizlik + audit | `faza-3-xavfsizlik` | ✅ tugadi |
 | 4 | Kassa to'liqligi | `faza-4-kassa` | ✅ tugadi |
-| 5 | PostgreSQL + masshtab | `faza-5-cron` | 🔄 5.2 (cron) ✅ · 5.1 (Postgres) bazani kutmoqda |
+| 5 | PostgreSQL + masshtab | `faza-5-postgres` | 🔄 5.2 ✅ · 5.1 kod tayyor, staging kutilmoqda |
 | 6 | ERP modullari | `faza-6-*` | ✅ 6/6 modul tugadi |
 
 ## ⚠️ MIGRATSIYA KUTILMOQDA (qo'lda apply qilinadi)
@@ -1362,8 +1362,144 @@ statik qo'riqchisi, Modal fokus qamovi.
 
 ---
 
-## 📋 QOLGAN YAGONA ISH
+---
 
-**Faza 5.1 — PostgreSQL'ga ko'chish.** Yo'riqnoma tayyor:
-`docs/POSTGRES-KOCHISH.md`. Oldindan shart — 13 ta migratsiyani staging'da
-apply qilish va `npm run kassa:migratsiya` ni ishga tushirish.
+### 2026-08-04 — Faza 5.1: Postgres yo'li KODDA tayyorlandi
+
+**Branch:** `faza-5-postgres` · **Migratsiya YO'Q** (SQLite sxemasiga tegilmadi)
+
+Loyiha egasi ruxsat berdi. Bazani bu muhitda ulab bo'lmaydi, lekin
+ko'chishning **kod qismini** to'liq bajarish mumkin ekan — va bajarildi.
+SQLite yo'li o'zgarishsiz ishlab turadi (389 test buni tasdiqlaydi),
+Postgres yo'li esa yozilgan va sinalgan.
+
+#### Dialekt qatlami — `src/lib/db/dialect.ts`
+
+Provayder farqlari to'rt joyga sochilgan edi. Ularning birortasini unutish
+turlicha oqibat berardi va **eng xavflisi jimgina o'tib ketardi**:
+`strftime` Postgres'da yo'q — so'rov yiqiladi va bu darhol ko'rinadi;
+`COLLATE NOCASE` ni unutish esa sintaksis xatosi BERMAYDI — qidiruv
+shunchaki registrga sezgir bo'lib qoladi va hech kim sezmaydi.
+
+Endi hammasi bitta faylda, to'rt funksiya:
+- `isPostgres()` — provayderni `DATABASE_URL` sxemasidan aniqlaydi
+  (Prisma'ning o'z provayderi build paytida qotib qoladi, runtime'da
+  o'qib bo'lmaydi);
+- `qidiruvRejimi()` — SQLite'da bo'sh, Postgres'da `mode: "insensitive"`
+  (SQLite'da bu rejim berilsa so'rov XATO beradi, shuning uchun spread
+  bilan yo'qoladi);
+- `sanaKalitSql()` — SQLite'da `typeof`/`strftime`/`substr` bilan CASE,
+  Postgres'da bitta `to_char`;
+- `registrsizTeng()` — `COLLATE NOCASE` ↔ `LOWER()`.
+
+Chaqiruv joylari yangilandi: `businessRaw.ts` (sanaKalit), login route,
+3 ta `contains` qidiruvi (`transactions.ts`, `search`, `crm/contacts`).
+
+#### Adapter ikki provayderli — `src/lib/db/rawPrisma.ts`
+
+`DATABASE_URL` sxemasiga qarab `@prisma/adapter-pg` yoki
+`@prisma/adapter-libsql` tanlanadi. Postgres adapteri **kech** yuklanadi:
+SQLite deploy'ida `pg` paketi bundle'ga umuman tushmaydi.
+
+`@prisma/adapter-pg`, `pg` va `@types/pg` o'rnatildi.
+
+#### Postgres boshlang'ich migratsiyasi
+
+`prisma/migrations-postgres/00000000000000_init/migration.sql` —
+**40 jadval, 104 indeks, 76 tashqi kalit**. Qo'lda yozilmagan:
+`prisma migrate diff --from-empty` bilan sxemadan generatsiya qilingan
+(bu buyruq bazaga ULANMAYDI, shuning uchun bu yerda ham ishladi).
+
+Unga bitta narsa qo'lda qo'shiladi — `User_login_lower_idx` funksional
+indeksi. Prisma uni sxemadan generatsiya qilmaydi, lekin dialekt
+qatlamining Postgres yo'li `WHERE LOWER("login") = ...` yozadi va
+indekssiz bu login sahifasida butun jadvalni skanerlaydi.
+
+`npm run pg:migratsiya` — faylni qayta generatsiya qiladi (sxema
+o'zgargach). `tests/dialect.test.ts` uni sxemadagi model soni bilan
+solishtiradi, ya'ni eskirsa test aytadi.
+
+#### 🐛 Yo'l-yo'lakay: kirill harflar qo'riqchisi
+
+Dialekt testini yozayotib izohga bitta ruscha so'z yozib yuborilgan edi —
+CLAUDE.md buni taqiqlaydi. Bu auditning ochiq bandi ham edi ("Aralash
+kirill/lotin harflar").
+
+Qoida mutlaq bo'lolmaydi: uch joyda kirill ATAYLAB kerak — Payme protokoli
+javobda ruscha xato matnini talab qiladi, chek OCR prompti "ИТОГО" so'zini
+bilishi kerak (O'zbekistondagi cheklarning yarmi ruscha), slug esa
+kirillcha kiritmani qabul qiladi.
+
+Shuning uchun qo'riqchi test **sababli ruxsat ro'yxati** bilan yozildi:
+yangi faylda kirill paydo bo'lsa test yiqiladi va sabab yozilishi talab
+qilinadi. Ro'yxatdagi fayl o'chirilsa/ko'chirilsa ham test aytadi.
+
+**Fayllar:**
+- `src/lib/db/dialect.ts` (yangi), `src/lib/db/rawPrisma.ts`, `src/lib/db/businessRaw.ts`
+- `src/app/api/auth/login/route.ts`, `src/lib/queries/transactions.ts`,
+  `src/app/api/search/route.ts`, `src/app/api/crm/contacts/route.ts`
+- `prisma/migrations-postgres/` (yangi papka + README)
+- `scripts/pg-migratsiya.mjs` (yangi), `package.json`
+- `docs/POSTGRES-KOCHISH.md` — bajarilgan qism qo'shildi
+
+**Test:** `tests/dialect.test.ts` (11) — provayder aniqlash (URL ichida
+"postgres" so'zi bo'lgani yetarli emasligi ham), qidiruv rejimining
+ikkala holati, sana kalitining ikkala varianti va format qiymatlari,
+registrsiz taqqoslashning ikkala sintaksisi, qiymatning SQL'ga
+yopishtirilmasligi (inyeksiya himoyasi), migratsiya faylining sxemaga
+mosligi. `tests/audit-qoldiq.test.ts` ga kirill qo'riqchisi qo'shildi
+(8 → 10).
+
+**Tekshirildi:** `npm run build` ✅ · `npx tsc --noEmit` ✅ ·
+34 test to'plami, jami **389 test**, 0 xato.
+
+---
+
+## FAZA 5.1 TEKSHIRUV RO'YXATI
+
+**Avtomatik tekshirilgan (SQLite'da)**
+- [x] `npm run build` va `tsc --noEmit` o'tadi
+- [x] Barcha 389 test yashil — SQLite xatti-harakati o'zgarmadi
+- [x] Provayder `DATABASE_URL` sxemasidan to'g'ri aniqlanadi
+- [x] Ikkala dialekt yo'li ham to'g'ri SQL generatsiya qiladi
+- [x] Qidirilayotgan qiymat SQL matniga tushmaydi (parametr bo'lib qoladi)
+- [x] Postgres migratsiyasi sxemadagi 40 modelga mos
+- [x] Kodda kutilmagan kirill harflar yo'q
+
+**Ko'chishda qoladigan ish (staging'da)**
+- [ ] 13 ta SQLite migratsiyasini apply qiling + `npm run kassa:migratsiya`
+- [ ] `npm run backup` — zaxira oling, yozuvlar sonini yozib qo'ying
+- [ ] `schema.prisma`: `provider = "postgresql"`
+- [ ] `mv prisma/migrations prisma/migrations-sqlite`
+      va `mv prisma/migrations-postgres prisma/migrations`
+- [ ] `npm run pg:migratsiya` — migratsiya eskirmaganini tasdiqlang
+- [ ] `DATABASE_URL=postgresql://... npx prisma migrate deploy`
+- [ ] `restoreDump` ni `createMany` ga o'tkazing (uzoqdagi Postgres bilan
+      bittalab yozish juda sekin — sabab hujjatda)
+- [ ] `DATABASE_URL=postgresql://... npm run restore -- <fayl> --confirm`
+- [ ] **Barcha 34 test to'plamini Postgres bilan qayta o'tkazing**
+- [ ] Rate limit parallel testi Postgres'da (RETURNING semantikasi)
+- [ ] Qidiruv endi registrga sezgirmasligini qo'lda tekshiring
+- [ ] Faqat shundan keyin: string maydonlarni enum'ga o'tkazish (alohida PR)
+
+Batafsil: `docs/POSTGRES-KOCHISH.md`.
+
+---
+
+## 📋 UMUMIY HOLAT
+
+Yo'l xaritasidagi **barcha fazalar kod darajasida tugadi.**
+
+| Faza | Holat |
+|---|---|
+| 0–4 | ✅ tugadi |
+| 5.1 | ✅ kod tayyor · ⏳ staging'da bajariladi |
+| 5.2 | ✅ tugadi |
+| 6 (6 modul) | ✅ tugadi |
+
+34 test to'plami, **389 test**, 0 xato. `npm run build` va
+`npx tsc --noEmit` toza.
+
+**Loyiha egasidan kutilayotgan yagona narsa** — 13 migratsiyani staging'da
+apply qilish (har biridan oldin zaxira, 6-dan keyin `npm run kassa:migratsiya`).
+Undan keyin Postgres'ga ko'chish yuqoridagi ro'yxat bo'yicha bajariladi.

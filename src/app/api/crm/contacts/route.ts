@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { qidiruvRejimi } from "@/lib/db/dialect";
 import { withTenant } from "@/lib/auth/tenant";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { z } from "zod";
@@ -15,7 +16,14 @@ export const GET = withTenant(
       where: {
         businessId,
         deletedAt: null,
-        ...(q ? { OR: [{ ism: { contains: q } }, { tel: { contains: q } }] } : {}),
+        ...(q
+          ? {
+              OR: [
+                { ism: { contains: q, ...qidiruvRejimi() } },
+                { tel: { contains: q, ...qidiruvRejimi() } },
+              ],
+            }
+          : {}),
       },
       include: { _count: { select: { deals: true } } },
       orderBy: { createdAt: "desc" },
