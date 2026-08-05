@@ -48,7 +48,8 @@
     "test:hr": "node -r ts-node/register tests/hr.test.ts",
     "test:chek-ocr": "node -r ts-node/register tests/chek-ocr.test.ts",
     "test:hujjatlar": "node -r ts-node/register tests/hujjatlar.test.ts",
-    "test:cron": "node -r ts-node/register tests/cron.test.ts"
+    "test:cron": "node -r ts-node/register tests/cron.test.ts",
+    "test:audit-qoldiq": "node -r ts-node/register tests/audit-qoldiq.test.ts"
   },
   "prisma": {
     "seed": "node -r ts-node/register prisma/seed.ts"
