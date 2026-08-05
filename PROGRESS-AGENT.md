@@ -1606,3 +1606,79 @@ npm run build
 Mashqda tasdiqlangan: 3-qadamni unutib qo'ysangiz, keyin ham xavfsiz
 ishga tushirsa bo'ladi (idempotent). Lekin unutmaslik yaxshiroq —
 oradagi vaqtda kassa hisoboti noto'g'ri ko'rinadi.
+
+---
+
+### 2026-08-04 — Tenant izolyatsiyasi ro'yxatida FAIL-OPEN bo'shlig'i yopildi
+
+**Branch:** `izolyatsiya-royxati` · **Migratsiya YO'Q**
+
+Yo'l xaritasi tugagach shu sessiyada kiritilgan kod tanqidiy ko'rib
+chiqildi. Savol shunday qo'yildi: *"Yangi model tenant izolyatsiyasi
+ro'yxatiga tushmay qolsa, buni biror test ushlaydimi?"*
+
+**Javob: yo'q edi.**
+
+#### Bo'shliqning og'irligi
+
+`lib/db/tenantDb.ts` dagi extension'da:
+
+```ts
+if (!isDirect && !isScoped) {
+  return query(args);   // FILTRSIZ o'tadi
+}
+```
+
+Ya'ni ro'yxatlarga tushmagan model so'rovi **hech qanday tenant filtrisiz**
+bajariladi va yozuvlar barcha mijozlarga ko'rinadi. Bu **fail-open**: xato
+bo'lganda himoya yoqilmaydi, aksincha — o'chadi.
+
+Zaxira ro'yxatida (`ZAXIRA_JADVALLARI`) bunday qo'riqchi allaqachon bor edi
+va u ishlagan: bu sessiyada 12 yangi model qo'shildi, zaxira testi har
+birini talab qildi. Izolyatsiya ro'yxatida esa qo'riqchi **yo'q** edi —
+modellar faqat qo'lda qo'shildi, ya'ni bittasini unutish mumkin edi va
+oqibati zaxiradagidan ancha og'irroq bo'lardi.
+
+#### Yo'l-yo'lakay topilgan narsa
+
+`AiConversation` da `tenantId` va `businessId` bor, lekin u hech qaysi
+ro'yxatda emas edi. Tekshirildi: **amalda sizib chiqish yo'q** — u faqat
+`rawPrisma` va `(businessId, userId)` kompozit kaliti bilan o'qiladi,
+`businessId` egaligi esa `withTenant` da yuqorida tekshiriladi. Lekin bu
+holat hech qayerda **yozilmagan** edi, ya'ni tasodifan to'g'ri edi.
+
+Endi u `TIZIM_MODELLAR` da sababi bilan turadi.
+
+#### Yechim
+
+`TIZIM_MODELLAR` — ataylab tenantsiz jadvallarning **sababli** ro'yxati:
+`Tenant` (extension'da alohida qoida), `AppSetting` (global sozlamalar),
+`BotConversation` (tenant aniqlanishidan oldin o'qiladi), `AiConversation`
+(yuqoridagi sabab).
+
+`tests/izolyatsiya-royxati.test.ts` (9 test):
+- sxemadagi **har** model aniq bir toifaga tegishli;
+- model ikki toifada bo'lmaydi;
+- ro'yxatda sxemada yo'q model qolmagan (o'chirilgan model eskirmasin);
+- **`tenantId`/`businessId` maydoni bor model tenantsiz qolmaydi** — eng
+  kuchli shart, sxemadan avtomatik chiqadi;
+- har istisno sababi bilan yozilgan (bo'sh izoh o'tmaydi);
+- yangi modullarning haqiqiy izolyatsiyasi: HR (xodim, oylik), shartnoma va
+  **ilova** (u polimorf, FK yo'q — faqat `businessId` filtriga tayanadi),
+  xarid va tasdiqlash;
+- boshqa tenant yozuvini `update` (IDOR) va `updateMany` bilan
+  o'zgartirib bo'lmasligi.
+
+**Qo'riqchi ishlashi tasdiqlandi:** `Attachment` ro'yxatdan vaqtincha olib
+tashlandi → **3 test** qizil bo'ldi (statik tasnif, `businessId` sharti va
+xatti-harakat testi). Ya'ni model haqiqatan sizib chiqadi va test buni
+ko'radi. Keyin fayl tiklandi.
+
+`CLAUDE.md` dagi "yangi model qo'shilsa" qoidasi aniqlashtirildi: bu
+fail-open nuqta ekani va istisnolar sabab bilan yozilishi yozib qo'yildi.
+
+**Fayllar:** `src/lib/db/tenantDb.ts` (ro'yxatlar eksport qilindi +
+`TIZIM_MODELLAR`), `tests/izolyatsiya-royxati.test.ts`, `CLAUDE.md`.
+
+**Tekshirildi:** `npm run build` ✅ · `npx tsc --noEmit` ✅ ·
+36 test to'plami, jami **408 test**, 0 xato.

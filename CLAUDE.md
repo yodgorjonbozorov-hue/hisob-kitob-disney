@@ -32,7 +32,11 @@ invariantlari — ular buzilsa mahsulot ishonchliligi yo'qoladi.
 - Har tranzaksiya so'rovida `deletedAt: null` (soft-delete filtri) — ataylab
   o'chirilganlarni ko'rsatadigan joylardan tashqari (`listDeletedTransactions`).
 - Yangi model qo'shilsa:
-  1. `src/lib/db/tenantDb.ts` dagi `BUSINESS_SCOPED` yoki `TENANT_DIRECT` to'plamiga,
+  1. `src/lib/db/tenantDb.ts` dagi `BUSINESS_SCOPED` yoki `TENANT_DIRECT` to'plamiga
+     qo'shiladi. **Bu FAIL-OPEN nuqta:** ro'yxatga tushmagan model so'rovi
+     filtrsiz o'tadi va barcha tenantlarga ko'rinadi. Model ataylab
+     tenantsiz bo'lsa — `TIZIM_MODELLAR` ga SABABI bilan yoziladi.
+     (`tests/izolyatsiya-royxati.test.ts` buni majburlaydi.)
   2. `src/lib/backup/dump.ts` dagi `ZAXIRA_JADVALLARI` ro'yxatiga qo'shiladi —
      **bog'liqlik tartibida**: model o'zi FK bilan murojaat qiladigan barcha
      jadvallardan KEYIN turishi shart, aks holda zaxira tiklanmaydi.
