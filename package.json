@@ -59,7 +59,9 @@
     "test:izolyatsiya-royxati": "node -r ts-node/register tests/izolyatsiya-royxati.test.ts",
     "test:apply-oqimi": "node -r ts-node/register tests/apply-oqimi.test.ts",
     "test:deploy-zaxira": "node -r ts-node/register tests/deploy-zaxira.test.ts",
-    "test:postgres": "node -r ts-node/register tests/postgres.test.ts"
+    "test:postgres": "node -r ts-node/register tests/postgres.test.ts",
+    "e2e:tayyorla": "node scripts/e2e-tayyorla.mjs",
+    "test:smoke": "node -r ts-node/register tests/smoke-brauzer.test.ts"
   },
   "prisma": {
     "seed": "node -r ts-node/register prisma/seed.ts"

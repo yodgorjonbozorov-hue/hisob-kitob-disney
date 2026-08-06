@@ -1796,3 +1796,58 @@ buzib sinaldi — migratsiya fayliga bitta satr qo'shilganda qizil bo'ldi.
 almashtirish, string maydonlarni Prisma enum'ga o'tkazish, build
 zanjiridagi libsql skriptlarini almashtirish, staging'da to'liq ma'lumot
 bilan ko'chirish.
+
+---
+
+## 2026-08-06 · Brauzer smoke testlari (birinchi marta)
+
+**Sabab.** Loyihada 37 ta test to'plami bor edi va ularning HAMMASI kod
+darajasida ishlardi. "Foydalanuvchi kirib, chiqim qo'shib, hisobotni ochsa
+ishlaydimi" degan savol hech qachon avtomatik tekshirilmagan. Bu ayni
+paytda muhim: 5 ta yangi modul endigina ishga tushdi va ularning
+sahifalari brauzerda umuman ochilmagan edi.
+
+**`tests/smoke-brauzer.test.ts` (7 test).** `next start` ko'tariladi, toza
+e2e bazasi quriladi, Chromium ochiladi:
+
+- noto'g'ri parol rad etiladi va sessiya cookie'si BERILMAYDI;
+- to'g'ri parol bilan kiriladi;
+- sessiyasiz ichki sahifa login'ga yo'naltiradi;
+- **registry'dagi har bir nav havolasi ochiladi** (29 ta);
+- yangi modul sahifalari to'g'ri sarlavha bilan chiqadi;
+- kirim qo'shiladi va ro'yxatda ko'rinadi;
+- modullar sozlamalarda ko'rinadi.
+
+Havolalar ro'yxati **qo'lda yozilmaydi** — `MODULLAR` registry'sidan
+olinadi. Sidebar, BottomNav va CommandPalette ham o'sha manbadan
+generatsiya qilinadi, ya'ni test foydalanuvchi haqiqatan bosadigan
+havolalarni yuradi. Yangi modul qo'shilsa test o'zi qamrab oladi.
+
+**Nega `node:test`, Playwright runner emas.** Loyihada `@playwright/test`
+yo'q, faqat `playwright` kutubxonasi bor. Yangi runner va konfiguratsiya
+olib kirish o'rniga mavjud uslub saqlandi. Brauzer muhitda oldindan
+o'rnatilgan (`/opt/pw-browsers/chromium`) — yuklab olinmaydi.
+
+**Yo'l-yo'lakay tuzatilgan nuqson.** `LoginForm.tsx` da yorliqlar
+inputlarga bog'lanmagan edi (`htmlFor`/`id` yo'q) — skrinrider maydon
+nomini o'qimasdi. Bu test yozishga urinilganda bilindi: `getByLabel`
+ishlamadi. Tuzatildi.
+
+**Sinov muhitidagi ikkita tuzoq (ilova nuqsoni emas):**
+
+1. Seed demo adminni parol almashtirishga majbur qiladi — to'g'ri qaror,
+   lekin bayroq qolsa HAR sahifa "Parolni o'zgartirish" ga yo'naltiriladi
+   va testlar aslida hech narsani sinamaydi. `e2e-tayyorla.mjs` uni
+   tozalaydi.
+2. Yangi modullar standart holatda o'chiq — tenant PRO tarifga o'tkazilib
+   modullar yoqiladi, aks holda sahifalar ochilmaydi.
+
+**Beqarorlik tuzatildi.** Ikki yurishda ikki xil test yiqildi:
+`net::ERR_ABORTED` — Next.js klient routeri fon prefetch'i bilan
+navigatsiyani uzadi. Bu ilova nosozligi emas. Barcha navigatsiyalar uch
+marta qayta uriniladigan `och()` orqali o'tkazildi; kirishdan keyin
+sahifa chizilishi kutiladi.
+
+**Tekshirildi:** `test:smoke` 7/7, ketma-ket ikki yurishda ham. Qo'riqchi
+ataylab buzib sinaldi — registry'ga mavjud bo'lmagan havola qo'shilganda
+test `HTTP 404` bilan qizil bo'ldi va aynan o'sha havolani ko'rsatdi.
