@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/db-migrate.mjs && node -r ts-node/register scripts/kassa-migratsiya.ts && node scripts/bootstrap-superadmin.mjs && next build",
+    "build": "node scripts/deploy-zaxira.mjs && node scripts/db-migrate.mjs && node -r ts-node/register scripts/kassa-migratsiya.ts && node scripts/bootstrap-superadmin.mjs && next build",
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate",
@@ -57,7 +57,8 @@
     "test:dialect": "node -r ts-node/register tests/dialect.test.ts",
     "test:migratsiya": "node -r ts-node/register tests/migratsiya-zanjiri.test.ts",
     "test:izolyatsiya-royxati": "node -r ts-node/register tests/izolyatsiya-royxati.test.ts",
-    "test:apply-oqimi": "node -r ts-node/register tests/apply-oqimi.test.ts"
+    "test:apply-oqimi": "node -r ts-node/register tests/apply-oqimi.test.ts",
+    "test:deploy-zaxira": "node -r ts-node/register tests/deploy-zaxira.test.ts"
   },
   "prisma": {
     "seed": "node -r ts-node/register prisma/seed.ts"

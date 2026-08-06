@@ -4,10 +4,10 @@
 #   Actions -> "Migratsiya qo'llash" -> "Run workflow" -> tasdiq: HA -> Run
 #
 # Nega alohida workflow kerak (Vercel deploy'ning o'zi ham migratsiya
-# qo'llaydi): deploy ZAXIRA OLMAYDI. Bu yerda esa avval xom surat olinadi
-# va u artefakt sifatida saqlanadi — ya'ni orqaga qaytish yo'li ochiq
-# qoladi. Aynan shu sabab uchun katta o'zgarishlarda shu yo'l tavsiya
-# etiladi, oddiy deploy emas.
+# qo'llaydi va `scripts/deploy-zaxira.mjs` orqali avval zaxira oladi):
+# u yerdagi zaxira Telegram kanaliga ketadi. Bu yerda esa xom surat
+# GitHub artefakti sifatida saqlanadi (30 kun) va migratsiya deploy'dan
+# ajratilgan holda, xohlagan paytda ishga tushiriladi.
 name: Migratsiya qo'llash
 
 on:
