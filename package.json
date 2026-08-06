@@ -61,7 +61,8 @@
     "test:deploy-zaxira": "node -r ts-node/register tests/deploy-zaxira.test.ts",
     "test:postgres": "node -r ts-node/register tests/postgres.test.ts",
     "e2e:tayyorla": "node scripts/e2e-tayyorla.mjs",
-    "test:smoke": "node -r ts-node/register tests/smoke-brauzer.test.ts"
+    "test:smoke": "node -r ts-node/register tests/smoke-brauzer.test.ts",
+    "test:kelishilgan-narx": "node -r ts-node/register tests/kelishilgan-narx.test.ts"
   },
   "prisma": {
     "seed": "node -r ts-node/register prisma/seed.ts"

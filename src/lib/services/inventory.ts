@@ -131,6 +131,8 @@ export async function createSale(params: {
    * ham yangilanadi. Berilmasa rejadagi sotuv narxi olinadi.
    */
   narx?: number | null;
+  /** Naqd sotuvda pul tushadigan kassa (naqd/Click/terminal). Berilmasa — standart kassa. */
+  accountId?: string | null;
   /** Sotuv sanasi "YYYY-MM-DD". Berilmasa bugun (kechagi sotuvni ham kiritish mumkin). */
   sana?: string | null;
   userId: string;
@@ -212,6 +214,7 @@ export async function createSale(params: {
       const txn = await createTransactionTx(tx, params.userId, params.businessId, {
         turi: "kirim",
         categoryId,
+        accountId: params.accountId ?? undefined,
         summa: jamiSumma,
         sana,
         izoh: `${product.nomi} × ${params.miqdor}`,

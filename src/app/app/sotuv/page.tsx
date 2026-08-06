@@ -29,12 +29,14 @@ export default async function SotuvPage() {
   // mumkin (shunda qarz limiti ishlaydi). Yoqilmagan bo'lsa ro'yxat bo'sh.
   const { getEnabledModules } = await import("@/lib/modules/guard");
   const yoqilgan = await getEnabledModules(ctx);
-  const [products, sales, mijozlar] = await Promise.all([
+  const [products, sales, mijozlar, kassalar] = await Promise.all([
     listProducts(business.id, { forKassir: true }) as Promise<ProductKassirDTO[]>,
     listRecentSales(business.id, 15),
     yoqilgan.has("MIJOZLAR")
       ? (await import("@/lib/queries/mijoz")).listMijozlar(business.id)
       : Promise.resolve([]),
+    // Naqd sotuvda pul qaysi kassaga tushishini tanlash uchun (Naqd / Click / terminal).
+    (await import("@/lib/queries/accounts")).listAccounts(business.id, true),
   ]);
 
   return (
@@ -51,6 +53,7 @@ export default async function SotuvPage() {
         biznesTuri={business.turi}
         bekorQilaOladi={isManager(session.rol)}
         mijozlar={mijozlar}
+        kassalar={kassalar}
       />
     </div>
   );

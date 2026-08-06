@@ -76,8 +76,10 @@ export const createSaleSchema = z.object({
   contactId: z.string().min(1).optional().nullable(),
   mijozNomi: z.string().max(100).optional().nullable(),
   mijozTel: z.string().max(50).optional().nullable(),
-  // Kelishilgan narx (avto rejimida savdolashib belgilanadi).
+  // Kelishilgan narx (birlik) — savdolashib belgilangan haqiqiy sotuv narxi.
   narx: z.number().int().positive().optional().nullable(),
+  /** Naqd sotuvda pul tushadigan kassa (naqd/Click/terminal). Berilmasa — standart kassa. */
+  accountId: z.string().min(1).optional().nullable(),
   /** Sotuv sanasi. Berilmasa bugun — kechagi sotuvni ham kiritish mumkin. */
   sana: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Sana noto'g'ri formatda").optional().nullable(),
 });
