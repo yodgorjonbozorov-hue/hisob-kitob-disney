@@ -1,3 +1,4 @@
+import { requestCache } from "@/lib/requestCache";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import type { SessionData } from "@/lib/auth/session";
@@ -22,18 +23,31 @@ export interface BusinessDTO {
  */
 export async function getAccessibleBusinesses(session: SessionData): Promise<BusinessDTO[]> {
   if (session.businessId) {
-    const b = await prisma.business.findUnique({
-      where: { id: session.businessId },
-      select: { id: true, nomi: true, isActive: true, omborli: true, turi: true },
-    });
+    const b = await businessByIdCached(session.businessId);
     return b ? [b] : [];
   }
-  return prisma.business.findMany({
+  return activeBusinessesCached(session.tenantId ?? "");
+}
+
+/**
+ * Bir request ichida layout ham, sahifa ham shu so'rovlarni takrorlaydi —
+ * `cache()` ularni bitta DB so'roviga birlashtiradi (so'rovlararo kesh EMAS).
+ * Tenant filtri baribir prisma extension'da — bu faqat dedupe.
+ */
+const businessByIdCached = requestCache(async (id: string) =>
+  prisma.business.findUnique({
+    where: { id },
+    select: { id: true, nomi: true, isActive: true, omborli: true, turi: true },
+  })
+);
+
+const activeBusinessesCached = requestCache(async (_tenantId: string) =>
+  prisma.business.findMany({
     where: { isActive: true },
     select: { id: true, nomi: true, isActive: true, omborli: true, turi: true },
     orderBy: { nomi: "asc" },
-  });
-}
+  })
+);
 
 /**
  * Joriy so'rov uchun aktiv biznes id'sini hal qiladi.
@@ -48,7 +62,11 @@ export async function resolveActiveBusinessId(session: SessionData): Promise<str
   if (session.businessId) {
     return session.businessId;
   }
+  return cookieBusinessIdCached(session.tenantId ?? "");
+}
 
+/** Cookie'dagi aktiv biznesni hal qilish — bir request ichida bir marta bajariladi. */
+const cookieBusinessIdCached = requestCache(async (_tenantId: string): Promise<string | null> => {
   const cookieId = (await cookies()).get(ACTIVE_BUSINESS_COOKIE)?.value;
   if (cookieId) {
     const exists = await prisma.business.findFirst({
@@ -64,15 +82,12 @@ export async function resolveActiveBusinessId(session: SessionData): Promise<str
     select: { id: true },
   });
   return first?.id ?? null;
-}
+});
 
 export async function getActiveBusiness(session: SessionData): Promise<BusinessDTO | null> {
   const id = await resolveActiveBusinessId(session);
   if (!id) return null;
-  return prisma.business.findUnique({
-    where: { id },
-    select: { id: true, nomi: true, isActive: true, omborli: true, turi: true },
-  });
+  return businessByIdCached(id);
 }
 
 /** Biznes omborli ekanini tekshiradi; bo'lmasa BadRequestError. Ombor route'lari boshida ishlatiladi. */

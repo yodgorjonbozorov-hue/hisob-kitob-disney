@@ -1,3 +1,4 @@
+import { requestCache } from "@/lib/requestCache";
 import { NextRequest, NextResponse } from "next/server";
 import { redirect } from "next/navigation";
 import { getCurrentUser, requireUser, type SessionData } from "./session";
@@ -34,21 +35,11 @@ export interface TenantContext {
 }
 
 /**
- * Sessiyadan tenantni yuklaydi. Eski (migratsiyagacha ochilgan) sessiyalarda
- * tenantId bo'lmaydi — bazadan o'qiladi (fail-closed: topilmasa null).
+ * Bir so'rov (request) ichida layout HAM sahifa HAM shu lookup'ni chaqiradi —
+ * `cache()` ularni bitta DB so'roviga birlashtiradi (so'rovlararo kesh EMAS).
  */
-async function loadTenant(session: Required<SessionData>): Promise<TenantInfo | null> {
-  let tenantId = session.tenantId ?? null;
-  if (!tenantId) {
-    const user = await rawPrisma.user.findUnique({
-      where: { id: session.userId },
-      select: { tenantId: true, isActive: true },
-    });
-    if (!user || !user.isActive) return null;
-    tenantId = user.tenantId;
-  }
-  if (!tenantId) return null;
-  return rawPrisma.tenant.findUnique({
+const tenantByIdCached = requestCache(async (tenantId: string): Promise<TenantInfo | null> =>
+  rawPrisma.tenant.findUnique({
     where: { id: tenantId },
     select: {
       id: true,
@@ -59,7 +50,29 @@ async function loadTenant(session: Required<SessionData>): Promise<TenantInfo | 
       plan: true,
       bepul: true,
     },
-  });
+  })
+);
+
+const userTenantIdCached = requestCache(async (userId: string) =>
+  rawPrisma.user.findUnique({
+    where: { id: userId },
+    select: { tenantId: true, isActive: true },
+  })
+);
+
+/**
+ * Sessiyadan tenantni yuklaydi. Eski (migratsiyagacha ochilgan) sessiyalarda
+ * tenantId bo'lmaydi — bazadan o'qiladi (fail-closed: topilmasa null).
+ */
+async function loadTenant(session: Required<SessionData>): Promise<TenantInfo | null> {
+  let tenantId = session.tenantId ?? null;
+  if (!tenantId) {
+    const user = await userTenantIdCached(session.userId);
+    if (!user || !user.isActive) return null;
+    tenantId = user.tenantId;
+  }
+  if (!tenantId) return null;
+  return tenantByIdCached(tenantId);
 }
 
 async function buildContext(session: Required<SessionData>): Promise<TenantContext | null> {

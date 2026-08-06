@@ -13,13 +13,19 @@ export default async function SotuvPage() {
   const { session, tenantId } = ctx;
   // Tenant konteksti: quyidagi barcha prisma so'rovlari shu tenantga avtomatik cheklanadi.
   return runWithTenant(tenantId, async () => {
-  // OMBOR moduli yoqilmagan bo'lsa — asosiy sahifaga.
-  await requireModulePage(ctx, "OMBOR");
   // Sotuvchi faqat kirim/chiqim kiritadi — bu sahifa unga yopiq.
   if (session.rol === "SELLER") {
     redirect("/app");
   }
-  const business = await getActiveBusiness(session);
+  const { getEnabledModules } = await import("@/lib/modules/guard");
+  // Guard, biznes va modullar parallel — har biri alohida kutilsa Turso'da
+  // ketma-ket round-trip yig'ilib sahifani sekinlashtiradi.
+  const [, business, yoqilgan] = await Promise.all([
+    // OMBOR moduli yoqilmagan bo'lsa — asosiy sahifaga.
+    requireModulePage(ctx, "OMBOR"),
+    getActiveBusiness(session),
+    getEnabledModules(ctx),
+  ]);
   if (!business || !business.omborli) {
     redirect("/app");
   }
@@ -27,8 +33,6 @@ export default async function SotuvPage() {
   // Kassir uchun ham, admin uchun ham sotuv formasi bir xil (miqdorsiz — faqat mavjudlik).
   // MIJOZLAR moduli yoqiq bo'lsa — qarzga sotuvda mijoz kartochkasini tanlash
   // mumkin (shunda qarz limiti ishlaydi). Yoqilmagan bo'lsa ro'yxat bo'sh.
-  const { getEnabledModules } = await import("@/lib/modules/guard");
-  const yoqilgan = await getEnabledModules(ctx);
   const [products, sales, mijozlar, kassalar] = await Promise.all([
     listProducts(business.id, { forKassir: true }) as Promise<ProductKassirDTO[]>,
     listRecentSales(business.id, 15),

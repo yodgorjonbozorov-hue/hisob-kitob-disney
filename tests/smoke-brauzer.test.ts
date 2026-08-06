@@ -35,7 +35,9 @@ const PAROL = "admin123";
  * revizyasini kutadi (bu mashinada boshqasi turibdi), shuning uchun yo'l
  * ochiq beriladi — brauzer yuklab olinmaydi.
  */
-const BRAUZER_YOLI = "/opt/pw-browsers/chromium";
+// Yo'l topilmasa (masalan Windows) — Playwright o'zi o'rnatgan Chromium ishlatiladi.
+const TAYYOR_CHROMIUM = "/opt/pw-browsers/chromium";
+const BRAUZER_YOLI = existsSync(TAYYOR_CHROMIUM) ? TAYYOR_CHROMIUM : undefined;
 
 const qurilgan = existsSync(".next/BUILD_ID");
 const sabab = qurilgan ? undefined : "`.next` yo'q — avval `npm run build` qiling";
@@ -67,7 +69,9 @@ before(async () => {
   });
   assert.equal(tayyorla.status, 0, `baza tayyorlanmadi:\n${tayyorla.stdout}\n${tayyorla.stderr}`);
 
+  // Windows'da `npx` bajariladigan fayl emas (`npx.cmd`) — shell orqali topiladi.
   server = spawn("npx", ["next", "start", "-p", String(PORT)], {
+    shell: process.platform === "win32",
     env: {
       ...process.env,
       DATABASE_URL: "file:./prisma/e2e.db",
@@ -90,7 +94,15 @@ before(async () => {
 
 after(async () => {
   if (browser) await browser.close();
-  if (server) server.kill("SIGTERM");
+  if (server?.pid) {
+    if (process.platform === "win32") {
+      // shell:true bilan spawn qilinganda kill() faqat qobiq (shell)ni o'ldiradi,
+      // next server bolasi tirik qoladi — butun daraxtni taskkill o'chiradi.
+      spawnSync("taskkill", ["/pid", String(server.pid), "/T", "/F"]);
+    } else {
+      server.kill("SIGTERM");
+    }
+  }
 });
 
 /** Yangi, sessiyasiz sahifa. */
@@ -132,10 +144,11 @@ async function kir(page: Page) {
   await page.getByLabel("Login").fill(LOGIN);
   await page.getByLabel("Parol").fill(PAROL);
   await page.getByRole("button", { name: "Kirish" }).click();
-  await page.waitForURL("**/app**", { timeout: 20_000 });
+  // 60s: sekin mashinalarda (Windows, antivirus ostida) login ba'zan 20s dan oshadi.
+  await page.waitForURL("**/app**", { timeout: 60_000 });
   // Sahifa chizilib bo'lguncha kutamiz — aks holda keyingi navigatsiya
   // yarim yuklangan sahifani uzib qo'yadi.
-  await page.waitForSelector("h1", { timeout: 20_000 });
+  await page.waitForSelector("h1", { timeout: 60_000 });
 }
 
 // ---------- Kirish ----------

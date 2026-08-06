@@ -1851,3 +1851,40 @@ sahifa chizilishi kutiladi.
 **Tekshirildi:** `test:smoke` 7/7, ketma-ket ikki yurishda ham. Qo'riqchi
 ataylab buzib sinaldi — registry'ga mavjud bo'lmagan havola qo'shilganda
 test `HTTP 404` bilan qizil bo'ldi va aynan o'sha havolani ko'rsatdi.
+
+---
+
+## 2026-08-06 — Sekinlik: request ichida takroriy DB so'rovlarini yo'q qilish
+
+**Muammo.** Production'da (Vercel iad1 + Turso Tokio) tugmalar 8-9 soniyada
+bosilardi. Ildiz sabab ikkita: (1) geografiya — har SQL so'rovi AQSh↔Tokio
+~160 ms yo'l bosadi (docs/MIGRATSIYA.md, hal qilinishi operatsion ish);
+(2) kod — har sahifa renderida 13-16 ta, asosan KETMA-KET, DB so'rovi.
+
+**Kod tuzatishlari:**
+
+- `src/lib/requestCache.ts` (yangi) — `React.cache` mavjud bo'lsa request
+  ichida dedupe, testlarda (oddiy Node) funksiya o'zgarishsiz qaytadi.
+- Tenant lookup (`auth/tenant.ts`), yoqilgan modullar (`modules/guard.ts`),
+  biznes so'rovlari (`business.ts`) request ichida keshlanadi — layout ham,
+  sahifa ham chaqirsa DB'ga BITTA so'rov ketadi (ilgari 2-3 marta takror).
+- Bildirishnoma soni layout'ni bloklamaydi: yangi `/api/me/notif-count`
+  (withTenant) + `useNotifCount()` hook — badge sahifa ochilgach yuklanadi.
+  Ilgari bu hisob HAR navigatsiyada ~6 ketma-ket so'rov bilan renderni
+  ushlab turardi.
+- Sotuv sahifasida guard/biznes/modullar so'rovlari parallel.
+
+**Smoke testlar Windows'da ham ishlaydigan bo'ldi:** `npx` shell orqali
+(`npx.cmd`), Chromium yo'li topilmasa Playwright'ning o'z brauzeri,
+server daraxti `taskkill /T` bilan o'chiriladi (aks holda zombi jarayon
+portni va e2e.db ni ushlab qoladi). Login kutish muddati 60 s.
+
+**Tekshirildi:** `npm run build` (exit 0), `test:isolation` 22/22,
+`test:modules` 13/13. Smoke bu sekin Windows noutbukda beqaror (har
+yurishda boshqa test login bosqichida vaqtdan oshadi); qo'lda tekshiruv:
+login POST 200 (3.8 s), /app, /app/sotuv, /app/tranzaksiyalar — 200,
+notif-count — 200. Linux CI'da to'liq yurishi kutiladi.
+
+**Qolgan operatsion ish (kod emas, egasi bajaradi):** Turso'ni fra
+(Frankfurt) ga ko'chirish → Vercel funksiya regionini fra1 → balansa.uz
+domenini ulash. Tartib muhim: avval baza, keyin region (docs/MIGRATSIYA.md).

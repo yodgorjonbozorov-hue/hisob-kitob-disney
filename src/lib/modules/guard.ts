@@ -1,3 +1,4 @@
+import { requestCache } from "@/lib/requestCache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ForbiddenError } from "@/lib/auth/guard";
@@ -13,6 +14,15 @@ import { MODULLAR, modulByCode } from "./registry";
  * Rol matritsasi (registry.rollar) API darajasida ham tekshiriladi.
  */
 
+/**
+ * Bir request ichida layout, sahifa va guard'lar bu ro'yxatni bir necha marta
+ * so'raydi — `cache()` ularni bitta DB so'roviga birlashtiradi (kalit: tenantId).
+ */
+const aktivModulRowsCached = requestCache(async (_tenantId: string) =>
+  // Tenant-scoped so'rov (extension avtomatik filtrlaydi).
+  prisma.tenantModule.findMany({ where: { isActive: true }, select: { code: true } })
+);
+
 /** Tenant uchun yoqilgan modul kodlari. Tenant kontekstida chaqirilishi shart. */
 export async function getEnabledModules(ctx: TenantContext): Promise<Set<string>> {
   const plan = planByCode(ctx.tenant.plan);
@@ -23,8 +33,7 @@ export async function getEnabledModules(ctx: TenantContext): Promise<Set<string>
     if (m.core) yoqilgan.add(m.code); // core — tarifdan qat'i nazar
   }
 
-  // Tenant-scoped so'rov (extension avtomatik filtrlaydi).
-  const rows = await prisma.tenantModule.findMany({ where: { isActive: true }, select: { code: true } });
+  const rows = await aktivModulRowsCached(ctx.tenantId);
   for (const r of rows) {
     if (modulByCode(r.code) && planModullari.has(r.code)) {
       yoqilgan.add(r.code);

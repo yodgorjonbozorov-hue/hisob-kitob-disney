@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { Rol } from "@/lib/auth/session";
 import { BusinessSwitcher } from "@/components/BusinessSwitcher";
 import { Logo } from "@/components/Logo";
+import { useNotifCount } from "./useNotifCount";
 
 interface BusinessOption {
   id: string;
@@ -16,14 +17,15 @@ interface Props {
   businesses: BusinessOption[];
   activeBusinessId: string | null;
   omborli: boolean;
-  notifCount: number;
 }
 
 /**
  * Mobil yuqori panel (top app bar): brend + biznes almashtirgich + qo'ng'iroq.
  * Navigatsiya pastki tab-bar (BottomNav) orqali. Faqat < lg.
  */
-export default function MobileNav({ rol, businesses, activeBusinessId, notifCount }: Props) {
+export default function MobileNav({ rol, businesses, activeBusinessId }: Props) {
+  // Badge soni sahifani bloklamasdan keyin yuklanadi.
+  const notifCount = useNotifCount();
   return (
     <div className="lg:hidden sticky top-0 z-40 bg-surface/90 backdrop-blur border-b border-line">
       <div className="flex items-center justify-between px-4 py-2.5 gap-2">

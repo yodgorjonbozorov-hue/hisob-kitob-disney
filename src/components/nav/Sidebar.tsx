@@ -15,6 +15,7 @@ import { TelegramLinkButton } from "@/components/TelegramLinkButton";
 import { BusinessSwitcher } from "@/components/BusinessSwitcher";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Logo } from "@/components/Logo";
+import { useNotifCount } from "./useNotifCount";
 
 interface BusinessOption { id: string; nomi: string }
 interface Props {
@@ -24,7 +25,6 @@ interface Props {
   activeBusinessId: string | null;
   /** Modul registry'sidan generatsiya qilingan havolalar (lib/modules/registry.ts). */
   navItems: NavItem[];
-  notifCount: number;
 }
 
 /** Registry'dagi ikon kaliti -> lucide komponenti. */
@@ -60,9 +60,11 @@ const IKONLAR: Record<string, LucideIcon> = {
   ai: Sparkles,
 };
 
-export default function Sidebar({ ism, rol, businesses, activeBusinessId, navItems, notifCount }: Props) {
+export default function Sidebar({ ism, rol, businesses, activeBusinessId, navItems }: Props) {
   const pathname = usePathname();
   const router = useRouter();
+  // Badge soni sahifani bloklamasdan keyin yuklanadi.
+  const notifCount = useNotifCount();
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
