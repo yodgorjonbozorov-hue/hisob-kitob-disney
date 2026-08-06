@@ -45,15 +45,29 @@ invariantlari — ular buzilsa mahsulot ishonchliligi yo'qoladi.
 ## Tekshirish
 
 - Har o'zgarishdan keyin: `npm run build` o'tishi shart.
-- Migratsiya: `prisma migrate dev --create-only` bilan, qo'lda ko'rib chiqiladi.
-  Migratsiya HECH QACHON avtomatik apply qilinmaydi.
+- Migratsiya: `prisma migrate dev --create-only` bilan yoziladi va qo'lda
+  ko'rib chiqiladi. Qo'llash esa deploy paytida avtomatik bo'ladi
+  (`scripts/db-migrate.mjs`).
+- Zaxirasiz migratsiya bo'lmaydi. Build zanjirining birinchi halqasi —
+  `scripts/deploy-zaxira.mjs`: kutayotgan migratsiya bo'lsa xom surat olib
+  Telegram zaxira kanaliga yuboradi, yuborilmasa build TO'XTAYDI.
+  Bu himoyani o'chirish faqat `ZAXIRASIZ_DAVOM=ha` bilan, bilib turib.
 - Test: `npm run test:isolation` va tegishli test fayli ishga tushiriladi.
 
 ## Tegilmaydigan fayllar
 
 - `prisma/dev.db` — lokal baza, tegilmaydi.
 - `.env`, `.env.*` — o'qilmaydi va tahrir qilinmaydi.
-- `main` branch — merge faqat loyiha egasi tomonidan.
+
+## Merge huquqi
+
+`main` ga merge oldin faqat loyiha egasiga ruxsat etilgan edi. Loyiha egasi
+2026-08-06 da bu cheklovni BEKOR QILDI: agent tayyor ishni o'zi `main` ga
+qo'sha oladi.
+
+O'rniga qoladigan shart — merge qilishdan oldin `npm run build` va tegishli
+testlar o'tgan bo'lishi. Cheklov olib tashlangani ishni tekshirmasdan
+qo'shishga ruxsat bermaydi; u faqat kutish navbatini olib tashlaydi.
 
 ## Fazalar bo'yicha ish
 

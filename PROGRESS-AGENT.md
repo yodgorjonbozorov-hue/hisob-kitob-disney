@@ -1660,3 +1660,79 @@ SQL'lari va xato holatida nima qilish.
 
 **Tekshirildi:** `npm run build` ✅ (env bilan va env'siz, ikkalasi ham
 `exit=0`) · 37 test to'plami, jami **417 test**, 0 xato.
+
+---
+
+## 2026-08-06 · Deploy'ning o'zi zaxira oladigan bo'ldi
+
+**Sabab.** Oldingi holatda zaxira olishning yagona ishonchli yo'li —
+GitHub Actions workflow'i — alohida sozlangan sekretlar talab qilardi.
+Sekretlar qo'yilmagan edi, shuning uchun 13 ta migratsiya `main` ga merge
+qilinganda **zaxirasiz** qo'llandi. Muammoning ildizi sozlash emas:
+himoya ilova ishlaydigan yo'ldan TASHQARIDA turgani.
+
+**Yechim.** Himoya deploy zanjirining ichiga ko'chirildi. Build muhitida
+baza ulanishi allaqachon bor (ilova usiz ishlamaydi), demak qo'shimcha
+sozlash kerak emas.
+
+```
+build: deploy-zaxira.mjs && db-migrate.mjs && kassa-migratsiya.ts && ...
+```
+
+`scripts/deploy-zaxira.mjs`:
+
+1. `DATABASE_URL` yo'q — jimgina o'tadi (env'siz lokal build).
+2. Baza butunlay bo'sh — o'tadi. Yangi muhitni birinchi marta ko'tarishda
+   himoya qiladigan ma'lumot yo'q; aks holda yangi muhit Telegram
+   sozlanmaguncha umuman ko'tarilmasdi.
+3. Kutayotgan migratsiya yo'q — hech narsa qilmaydi. Oddiy deploy
+   sekinlashmaydi, keraksiz zaxira yuborilmaydi.
+4. Jadvallar bor, lekin `_applied_migrations` bo'sh — **to'xtaydi**. Bu
+   baza boshqa yo'l bilan qurilgani belgisi; `db-migrate.mjs` bunday
+   holatda hammasini boshidan qo'llashga urinib "table already exists"
+   bilan O'RTADA yiqiladi va yarim qo'llangan baza qoladi. Yechim
+   (`migratsiya:belgila`) xato matnida ko'rsatiladi.
+5. Kutayotgan migratsiya bor — xom surat olib, gzip qilib Telegram zaxira
+   kanaliga yuboradi. **Yuborilmasa build to'xtaydi**, ya'ni migratsiya
+   umuman ishga tushmaydi.
+
+Surat build konteynerida qolsa foydasi yo'q — konteyner deploy tugashi
+bilan yo'qoladi. Shuning uchun "olindi" yetarli emas: u serverdan
+TASHQARIGA chiqqani tasdiqlanishi shart.
+
+**Ehtiyotkorlik nuqtasi.** `_applied_migrations` jadvali yo'q bo'lsa
+hammasi kutayotgan deb qaraladi. Noaniqlikda "zaxira kerak emas" degan
+qaror — aynan ma'lumot yo'qoladigan qaror.
+
+**Chetlab o'tish.** `ZAXIRASIZ_DAVOM=ha` — bitta joyda, `toxta()` ichida
+tekshiriladi, ya'ni sabab qanday bo'lishidan qat'i nazar qaror bitta.
+Hisobot nomuvofiqligi bundan MUSTASNO (`yiqit()`): u zaxira haqida emas,
+migratsiyaning o'zi buzuq holatda ishga tushishi haqida.
+
+**Refaktor.** Surat mantig'i `scripts/lib/xom-surat.mjs` ga chiqarildi;
+`xom-zaxira.mjs` endi shu ustidagi yupqa CLI. Surat formati ikki joyda
+ajralib ketmasligi uchun. `scripts/lib/telegram.mjs` — sxemaga bog'liq
+bo'lmagan hujjat yuborish (`src/lib/backup/send.ts` Prisma'ga tayanadi,
+migratsiyadan oldin ishlamaydi).
+
+**Testda topilgan xato.** Soxta Telegram serveri test jarayonining o'zida
+turgani uchun `spawnSync` bilan **deadlock** bo'ldi: sinxron kutish ota
+jarayonni bloklaydi, server ulanishni qabul qila olmaydi, bola cheksiz
+kutadi. `spawn` + promise'ga o'tkazildi; sabab test ichida izohlab
+qo'yildi.
+
+**CLAUDE.md o'zgardi.** Loyiha egasi `main` ga merge cheklovini bekor
+qildi. O'rniga qoladigan shart — merge oldidan `npm run build` va testlar
+o'tishi. "Migratsiya HECH QACHON avtomatik apply qilinmaydi" qoidasi ham
+haqiqatga moslashtirildi: u deploy paytida avtomatik qo'llanadi, lekin
+endi majburiy zaxira bilan.
+
+**Fayllar:** `scripts/deploy-zaxira.mjs`, `scripts/lib/xom-surat.mjs`,
+`scripts/lib/telegram.mjs`, `scripts/xom-zaxira.mjs`,
+`tests/deploy-zaxira.test.ts`, `package.json`, `CLAUDE.md`,
+`TELEFONDAN-APPLY.md`, `.github/workflows/migratsiya.yml`.
+
+**Tekshirildi:** `tests/deploy-zaxira.test.ts` — 10 test. Zanjir tartibi
+qo'riqchisi ataylab buzib sinaldi (build'da `deploy-zaxira` `db-migrate`
+dan keyinga surildi → test qizil bo'ldi). `test:apply-oqimi` 9/9 —
+refaktor eski oqimni buzmadi.

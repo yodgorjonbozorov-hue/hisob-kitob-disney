@@ -4,10 +4,37 @@ Kompyuter kerak emas. Uch yo'l bor — birinchisi tavsiya etiladi.
 
 ---
 
-## 1. GitHub Actions (tavsiya etiladi) ✅
+## 1. Oddiy deploy (tavsiya etiladi) ✅
 
-**Nega bu yo'l:** avval zaxira olinadi va u 30 kun saqlanadi. Boshqa
-yo'llarda zaxira yo'q.
+**Hech qanday sozlash kerak emas.** Branch'ni `main` ga qo'shsangiz yoki
+Vercel'da "Redeploy" bossangiz, build zanjiri o'zi hamma ishni qiladi:
+
+```
+deploy-zaxira.mjs && db-migrate.mjs && kassa-migratsiya.ts && bootstrap-superadmin.mjs && next build
+```
+
+Birinchi halqa — `deploy-zaxira.mjs` — kutayotgan migratsiya bor-yo'qligini
+tekshiradi:
+
+- **yo'q bo'lsa** hech narsa qilmaydi (oddiy deploy sekinlashmaydi);
+- **bor bo'lsa** bazadan xom surat olib, uni Telegram zaxira kanalingizga
+  hujjat qilib yuboradi. Yuborilmasa — **build to'xtaydi va migratsiya
+  umuman ishga tushmaydi**.
+
+Ya'ni zaxirasiz migratsiya qo'llanmaydi. Zaxira o'sha kanalda turadi,
+tiklash: `npm run zaxira:xom -- --tikla <fayl>.json` (fayl gzip — avval
+`gunzip` qiling).
+
+Kerak bo'lgan env: `BACKUP_CHAT_ID` va `BACKUP_BOT_TOKEN` (yoki
+`TELEGRAM_BOT_TOKEN`) — kunlik zaxira uchun allaqachon sozlangan.
+
+---
+
+## 2. GitHub Actions (zaxirani alohida artefakt sifatida saqlash)
+
+**Nega kerak bo'lishi mumkin:** zaxira Telegramga emas, GitHub artefaktiga
+tushadi va 30 kun saqlanadi; migratsiyani deploy'dan ajratib, xohlagan
+paytda ishga tushirish mumkin.
 
 ### Bir marta sozlash (5 daqiqa)
 
@@ -45,24 +72,6 @@ migratsiyaga tegilmaydi.
 
 ---
 
-## 2. Vercel'ga deploy qilish
-
-`package.json` dagi `build` buyrug'i migratsiyalarni **avtomatik**
-qo'llaydi:
-
-```
-build: db-migrate.mjs && kassa-migratsiya.ts && bootstrap-superadmin.mjs && next build
-```
-
-Ya'ni branch'ni merge qilsangiz yoki Vercel'da "Redeploy" bossangiz,
-migratsiyalar va kassa migratsiyasi o'zi bajariladi.
-
-**⚠️ Kamchiligi: zaxira olinmaydi.** Shuning uchun bu yo'l kichik
-o'zgarishlar uchun. Katta migratsiyada (masalan hozirgi 13 ta) avval
-1-yo'l bilan zaxira oling.
-
----
-
 ## 3. Turso konsoli (faqat tekshirish uchun)
 
 `turso.tech` saytiga telefondan kirib SQL yozish mumkin. Migratsiya
@@ -85,7 +94,7 @@ SELECT name FROM sqlite_master WHERE type='table' AND name IN
 
 ## Migratsiyadan keyin
 
-1. Ilovani qayta deploy qiling (agar 1-yo'lni ishlatgan bo'lsangiz)
+1. Ilovani qayta deploy qiling (agar 2-yo'lni ishlatgan bo'lsangiz)
 2. **Sozlamalar → Modullar** bo'limida yangi modullarni yoqing (PRO tarif):
    XARID, TASDIQLASH, MIJOZLAR, Xodimlar (HR), HUJJATLAR
 3. `PROGRESS-AGENT.md` dagi har modul tekshiruv ro'yxatidan o'ting
