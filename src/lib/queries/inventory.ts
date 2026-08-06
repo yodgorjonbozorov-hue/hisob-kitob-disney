@@ -1,4 +1,6 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { businessQueryRaw, businessScope, songa } from "@/lib/db/businessRaw";
 
 export interface ProductAdminDTO {
   id: string;
@@ -14,6 +16,11 @@ export interface ProductAdminDTO {
   avtoRang: string | null;
   /** Shu mahsulot/mashinaga yozilgan jami xarajat (ta'mirlash, bo'yoq...). */
   xarajat: number;
+  sku: string | null;
+  birlik: string;
+  minQoldiq: number;
+  /** Qoldiq o'z chegarasidan pastmi — ro'yxatda belgilanadi. */
+  kamQoldi: boolean;
 }
 
 /** Kassir uchun — miqdor RAQAMI ko'rsatilmaydi, faqat `mavjud` (bor/yo'q). */
@@ -22,6 +29,8 @@ export interface ProductKassirDTO {
   nomi: string;
   sotuvNarx: number;
   mavjud: boolean;
+  birlik: string;
+  sku: string | null;
 }
 
 /** forKassir=true bo'lsa miqdor chiqarilmaydi — faqat mavjudlik. */
@@ -37,7 +46,14 @@ export async function listProducts(
   if (opts.forKassir) {
     return products
       .filter((p) => p.isActive)
-      .map((p) => ({ id: p.id, nomi: p.nomi, sotuvNarx: p.sotuvNarx, mavjud: p.miqdor > 0 }));
+      .map((p) => ({
+        id: p.id,
+        nomi: p.nomi,
+        sotuvNarx: p.sotuvNarx,
+        mavjud: p.miqdor > 0,
+        birlik: p.birlik,
+        sku: p.sku,
+      }));
   }
 
   const xarajatlar = await getExpenseTotalsByProduct(businessId);
@@ -54,6 +70,10 @@ export async function listProducts(
     avtoRaqam: p.avtoRaqam,
     avtoRang: p.avtoRang,
     xarajat: xarajatlar[p.id] ?? 0,
+    sku: p.sku,
+    birlik: p.birlik,
+    minQoldiq: p.minQoldiq,
+    kamQoldi: p.minQoldiq > 0 && p.miqdor <= p.minQoldiq,
   }));
 }
 
@@ -178,45 +198,52 @@ export interface ProductProfitDTO {
  * Avto rejimida sof foyda = sotilgan narx − olingan narx − mashinaga qilingan xarajatlar.
  */
 export async function getProductProfitability(businessId: string): Promise<ProductProfitDTO[]> {
-  const [sales, xarajatlar] = await Promise.all([
-    prisma.sale.findMany({
-      where: { businessId },
-      include: { product: { select: { nomi: true } } },
-    }),
-    prisma.productExpense.groupBy({
-      by: ["productId"],
-      where: { businessId },
-      _sum: { summa: true },
-    }),
-  ]);
-  const xarajatMap = new Map(xarajatlar.map((x) => [x.productId, x._sum.summa ?? 0]));
+  // Ilgari BARCHA sotuvlar RAM'ga yuklanib JS'da guruhlanardi — 100 000 sotuvli
+  // biznesda bu serverni yiqitardi. Endi guruhlash SQL'da (`SUM(tannarx*miqdor)`
+  // ni Prisma qila olmaydi, shuning uchun xom so'rov — tenant sharti SQL ichida).
+  const rows = await businessQueryRaw<{
+    productId: string;
+    nomi: string;
+    sotilgan: unknown;
+    daromad: unknown;
+    tannarx: unknown;
+    xarajat: unknown;
+  }>(Prisma.sql`
+    SELECT
+      s."productId"                     AS productId,
+      p."nomi"                          AS nomi,
+      SUM(s."miqdor")                   AS sotilgan,
+      SUM(s."jamiSumma")                AS daromad,
+      SUM(s."tannarx" * s."miqdor")     AS tannarx,
+      COALESCE((
+        SELECT SUM(e."summa") FROM "ProductExpense" e
+        WHERE e."productId" = s."productId" AND e."businessId" = s."businessId"
+      ), 0)                             AS xarajat
+    FROM "Sale" s
+    JOIN "Business" b ON b."id" = s."businessId"
+    JOIN "Product" p ON p."id" = s."productId"
+    WHERE ${businessScope("s", businessId)} AND s."deletedAt" IS NULL
+    GROUP BY s."productId", p."nomi"
+  `);
 
-  const map = new Map<string, ProductProfitDTO>();
-  for (const s of sales) {
-    let p = map.get(s.productId);
-    if (!p) {
-      p = {
-        productId: s.productId,
-        nomi: s.product.nomi,
-        sotilgan: 0,
-        daromad: 0,
-        tannarx: 0,
-        xarajat: xarajatMap.get(s.productId) ?? 0,
-        foyda: 0,
-        marja: 0,
+  return rows
+    .map((r) => {
+      const daromad = songa(r.daromad);
+      const tannarx = songa(r.tannarx);
+      const xarajat = songa(r.xarajat);
+      const foyda = daromad - tannarx - xarajat;
+      return {
+        productId: r.productId,
+        nomi: r.nomi,
+        sotilgan: songa(r.sotilgan),
+        daromad,
+        tannarx,
+        xarajat,
+        foyda,
+        marja: daromad > 0 ? Math.round((foyda / daromad) * 100) : 0,
       };
-      map.set(s.productId, p);
-    }
-    p.sotilgan += s.miqdor;
-    p.daromad += s.jamiSumma;
-    p.tannarx += s.tannarx * s.miqdor;
-  }
-  const list = Array.from(map.values());
-  list.forEach((p) => {
-    p.foyda = p.daromad - p.tannarx - p.xarajat;
-    p.marja = p.daromad > 0 ? Math.round((p.foyda / p.daromad) * 100) : 0;
-  });
-  return list.sort((a, b) => b.foyda - a.foyda);
+    })
+    .sort((a, b) => b.foyda - a.foyda);
 }
 
 export interface ProductExpenseDTO {
@@ -268,13 +295,21 @@ export interface SaleDTO {
   tolovTuri: string;
   mijozNomi: string | null;
   sana: string;
+  /** Bekor qilingan sotuv — ro'yxatda chizilgan holda ko'rsatiladi. */
+  bekorQilingan: boolean;
+  bekorSabab: string | null;
 }
 
+/**
+ * So'nggi sotuvlar. `sana` bo'yicha saralanadi (createdAt emas) — orqaga sana
+ * bilan kiritilgan sotuv o'z o'rniga tushishi kerak.
+ * Bekor qilinganlar ham ko'rsatiladi (ataylab): kassir nima bo'lganini ko'rsin.
+ */
 export async function listRecentSales(businessId: string, limit = 20): Promise<SaleDTO[]> {
   const sales = await prisma.sale.findMany({
     where: { businessId },
     include: { product: { select: { nomi: true } } },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ sana: "desc" }, { createdAt: "desc" }],
     take: limit,
   });
   return sales.map((s) => ({
@@ -284,6 +319,42 @@ export async function listRecentSales(businessId: string, limit = 20): Promise<S
     jamiSumma: s.jamiSumma,
     tolovTuri: s.tolovTuri,
     mijozNomi: s.mijozNomi,
-    sana: s.createdAt.toISOString(),
+    sana: s.sana.toISOString(),
+    bekorQilingan: s.deletedAt !== null,
+    bekorSabab: s.cancelReason,
+  }));
+}
+
+export interface StockAdjustmentDTO {
+  id: string;
+  productNomi: string;
+  turi: string;
+  eskiMiqdor: number;
+  yangiMiqdor: number;
+  farq: number;
+  sabab: string;
+  sana: string;
+}
+
+/** So'nggi inventarizatsiya va hisobdan chiqarishlar (ombor sahifasi uchun). */
+export async function listStockAdjustments(
+  businessId: string,
+  limit = 30
+): Promise<StockAdjustmentDTO[]> {
+  const rows = await prisma.stockAdjustment.findMany({
+    where: { businessId },
+    include: { product: { select: { nomi: true } } },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    productNomi: r.product.nomi,
+    turi: r.turi,
+    eskiMiqdor: r.eskiMiqdor,
+    yangiMiqdor: r.yangiMiqdor,
+    farq: r.farq,
+    sabab: r.sabab,
+    sana: r.createdAt.toISOString(),
   }));
 }

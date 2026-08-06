@@ -13,13 +13,16 @@ import { runWithTenant } from "@/lib/db/tenantContext";
 import { isManager } from "@/lib/auth/roles";
 import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
+// Dashboard raqamlari 60 soniya keshlanadi; yozuv o'zgarganda kesh darhol
+// bekor qilinadi (lib/cache.ts -> dashboardYangilandi).
 import {
-  getMonthSummary,
-  getCategoryBreakdown,
-  getTrend,
-  getDailyDynamics,
-} from "@/lib/queries/dashboard";
+  getMonthSummaryKesh,
+  getCategoryBreakdownKesh,
+  getTrendKesh,
+  getDailyDynamicsKesh,
+} from "@/lib/queries/dashboardCached";
 import { getDebtTotals } from "@/lib/queries/inventory";
+import { getJamiKassaQoldiq } from "@/lib/queries/accounts";
 import { getTodayTotals } from "@/lib/queries/shift";
 import { listTransactions } from "@/lib/queries/transactions";
 import { KassaHome } from "./KassaHome";
@@ -84,14 +87,15 @@ export default async function DashboardPage({
   }
 
   const business = await getActiveBusiness(session);
-  const [summary, kirimBreakdown, chiqimBreakdown, trend, daily, qarzTotal, categoryCount] = await Promise.all([
-    getMonthSummary(businessId, month),
-    getCategoryBreakdown(businessId, month, "kirim"),
-    getCategoryBreakdown(businessId, month, "chiqim"),
-    getTrend(businessId, 6, month),
-    getDailyDynamics(businessId, month),
+  const [summary, kirimBreakdown, chiqimBreakdown, trend, daily, qarzTotal, categoryCount, kassaQoldiq] = await Promise.all([
+    getMonthSummaryKesh(businessId, month),
+    getCategoryBreakdownKesh(businessId, month, "kirim"),
+    getCategoryBreakdownKesh(businessId, month, "chiqim"),
+    getTrendKesh(businessId, 6, month),
+    getDailyDynamicsKesh(businessId, month),
     business?.omborli ? getDebtTotals(businessId) : Promise.resolve({ olinadigan: 0, beriladigan: 0, sof: 0 }),
     prisma.category.count({ where: { businessId } }),
+    getJamiKassaQoldiq(businessId),
   ]);
 
   return (
@@ -126,6 +130,15 @@ export default async function DashboardPage({
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <StatCard
+          label="Kassa qoldig'i"
+          value={formatMoneyCompact(kassaQoldiq)}
+          accent={kassaQoldiq >= 0 ? "brand" : "expense"}
+        >
+          <Link href="/app/kassa" className="text-2xs text-brand hover:underline mt-1 inline-block">
+            Kassalar bo&apos;yicha &rarr;
+          </Link>
+        </StatCard>
         <StatCard
           label="Jami kirim"
           value={formatMoneyCompact(summary.jamiKirim)}

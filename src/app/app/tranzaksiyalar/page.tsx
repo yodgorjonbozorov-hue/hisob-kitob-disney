@@ -7,6 +7,7 @@ import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { listTransactions } from "@/lib/queries/transactions";
 import { formatSom } from "@/lib/format";
 import { TransactionsClient } from "./TransactionsClient";
+import { listAccounts } from "@/lib/queries/accounts";
 
 interface SearchParams {
   from?: string;
@@ -40,7 +41,7 @@ export default async function TranzaksiyalarPage({
     );
   }
 
-  const [result, categories] = await Promise.all([
+  const [result, categories, accounts] = await Promise.all([
     listTransactions({
       businessId,
       // Xodim faqat o'zi kiritgan yozuvlarni ko'radi, direktor — barchasini.
@@ -58,6 +59,8 @@ export default async function TranzaksiyalarPage({
       where: { businessId, isActive: true },
       orderBy: [{ tartib: "asc" }, { nomi: "asc" }],
     }),
+    // Faol kassalar — formada tanlash uchun (bitta bo'lsa qadam yashiriladi).
+    listAccounts(businessId, true),
   ]);
 
   // Ko'chirish maqsadlari — direktor uchun joriy bizneskan boshqa bizneslar.
@@ -77,6 +80,7 @@ export default async function TranzaksiyalarPage({
         page={result.page}
         pageSize={result.pageSize}
         categories={categories}
+        accounts={accounts}
         currentUserId={session.userId}
         currentUserRol={session.rol}
         hideProfit={hideProfit}

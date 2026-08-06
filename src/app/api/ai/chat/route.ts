@@ -4,14 +4,18 @@ import { resolveActiveBusinessId } from "@/lib/business";
 import { getEnabledModules } from "@/lib/modules/guard";
 import { aiSuhbat, AiSozlanmaganError } from "@/lib/ai/claude";
 import { aiLimitTekshir } from "@/lib/ai/limit";
+import { tarixniOl, tarixgaYoz, tarixniTozala } from "@/lib/ai/suhbat";
 import { z } from "zod";
 
+/**
+ * Mijoz FAQAT savol yuboradi. Suhbat tarixi serverda saqlanadi (lib/ai/suhbat.ts) —
+ * ilgari tarix mijozdan kelardi va soxta `assistant` xabari bilan modelni
+ * chalg'itish mumkin edi (prompt injection, S-7).
+ */
 const schema = z.object({
   savol: z.string().trim().min(1, "Savol kiriting").max(1000),
-  tarix: z
-    .array(z.object({ rol: z.enum(["user", "assistant"]), matn: z.string().max(4000) }))
-    .max(20)
-    .optional(),
+  /** true bo'lsa oldingi suhbat unutiladi ("Yangi suhbat"). */
+  yangiSuhbat: z.boolean().optional(),
 });
 
 /** AI yordamchi bilan suhbat. AI faqat tenant-scoped tool'lar orqali ma'lumot ko'radi. */
@@ -33,13 +37,22 @@ export const POST = withTenant(
       );
     }
 
+    const kalit = { businessId, userId: ctx.session.userId };
+    if (parsed.data.yangiSuhbat) {
+      await tarixniTozala(kalit);
+    }
+
     try {
-      const yoqilganModullar = await getEnabledModules(ctx);
+      const [yoqilganModullar, tarix] = await Promise.all([
+        getEnabledModules(ctx),
+        tarixniOl(kalit),
+      ]);
       const javob = await aiSuhbat({
         savol: parsed.data.savol,
-        tarix: parsed.data.tarix ?? [],
+        tarix,
         ctx: { businessId, yoqilganModullar },
       });
+      await tarixgaYoz({ ...kalit, tenantId: ctx.tenantId }, parsed.data.savol, javob);
       return NextResponse.json({ javob, qoldi: limit.qoldi });
     } catch (error) {
       if (error instanceof AiSozlanmaganError) {

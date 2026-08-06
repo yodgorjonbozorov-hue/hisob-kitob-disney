@@ -1,0 +1,116 @@
+# Migratsiyalarni TELEFONDAN qo'llash.
+#
+# GitHub mobil ilovasi yoki brauzeridan:
+#   Actions -> "Migratsiya qo'llash" -> "Run workflow" -> tasdiq: HA -> Run
+#
+# Nega alohida workflow kerak (Vercel deploy'ning o'zi ham migratsiya
+# qo'llaydi): deploy ZAXIRA OLMAYDI. Bu yerda esa avval xom surat olinadi
+# va u artefakt sifatida saqlanadi — ya'ni orqaga qaytish yo'li ochiq
+# qoladi. Aynan shu sabab uchun katta o'zgarishlarda shu yo'l tavsiya
+# etiladi, oddiy deploy emas.
+name: Migratsiya qo'llash
+
+on:
+  workflow_dispatch:
+    inputs:
+      tasdiq:
+        description: 'Bazaga yoziladi. Davom etish uchun "HA" deb yozing'
+        required: true
+        default: ""
+      faqat_zaxira:
+        description: "Faqat zaxira olish (migratsiya qo'llanmaydi)"
+        type: boolean
+        default: false
+
+# Bir vaqtda ikkita migratsiya ishga tushmasin.
+concurrency:
+  group: migratsiya
+  cancel-in-progress: false
+
+jobs:
+  qollash:
+    name: Zaxira + migratsiya + tekshiruv
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Tasdiqni tekshirish
+        if: inputs.tasdiq != 'HA'
+        run: |
+          echo "::error::Tasdiq berilmadi. Bazaga yozadigan amal — tasodifan"
+          echo "::error::ishga tushmasligi uchun 'HA' deb yozish shart."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Bog'liqliklar
+        run: npm ci
+        env:
+          # Prisma generate postinstall'da ishlaydi; ulanish shart emas.
+          PRISMA_SKIP_POSTINSTALL_GENERATE: "false"
+
+      - name: Sirlar borligini tekshirish
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL sekret sozlanmagan."
+            echo "::error::Settings -> Secrets and variables -> Actions -> New repository secret"
+            exit 1
+          fi
+          echo "DATABASE_URL sozlangan."
+
+      # Faqat zaxira: migratsiyaga tegmasdan surat olish (xohlagan paytda).
+      - name: Faqat zaxira
+        if: inputs.faqat_zaxira
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: |
+          npm run zaxira:xom
+          npm run backup
+
+      # To'liq oqim: xom surat -> migratsiyalar -> kassa -> tekshiruv -> zaxira.
+      # Skript o'zi fail-fast: birortasi yiqilsa keyingilari ishga tushmaydi.
+      - name: Migratsiyalarni qo'llash
+        if: ${{ !inputs.faqat_zaxira }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: npm run apply:hammasi
+
+      # Zaxiralar HAR DOIM yuklanadi — jarayon yiqilgan bo'lsa ular ayniqsa kerak.
+      - name: Zaxiralarni saqlash
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zaxira-${{ github.run_number }}
+          path: prisma/backups/
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Yakun
+        if: success()
+        run: |
+          echo "### ✅ Migratsiya tugadi" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Zaxiralar \`zaxira-${{ github.run_number }}\` artefaktida (30 kun)." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Keyingi qadamlar:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Ilovani qayta deploy qiling" >> $GITHUB_STEP_SUMMARY
+          echo "2. Sozlamalar → Modullar: XARID, TASDIQLASH, MIJOZLAR, HR, HUJJATLAR" >> $GITHUB_STEP_SUMMARY
+
+      - name: Xatolik yuz berdi
+        if: failure()
+        run: |
+          echo "### ❌ Migratsiya yiqildi" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Skript fail-fast: keyingi qadamlar bajarilmadi." >> $GITHUB_STEP_SUMMARY
+          echo "Log'ni o'qing — xato sababi va yechimi yozilgan." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Zaxira olingan bo'lsa \`zaxira-${{ github.run_number }}\` artefaktida." >> $GITHUB_STEP_SUMMARY

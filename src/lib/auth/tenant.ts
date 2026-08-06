@@ -6,6 +6,13 @@ import { rawPrisma } from "@/lib/db/rawPrisma";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { computeAccess, type Access } from "@/lib/billing/access";
 
+/** So'rovdan mijoz IP manzilini oladi (Vercel `x-forwarded-for` beradi). */
+function clientIp(request: NextRequest): string | null {
+  const xff = request.headers.get("x-forwarded-for");
+  if (xff) return xff.split(",")[0].trim();
+  return request.headers.get("x-real-ip");
+}
+
 /** Guard uchun kerakli tenant maydonlari. */
 export interface TenantInfo {
   id: string;
@@ -147,14 +154,20 @@ export function withTenant<Ctx = unknown>(handler: RouteHandler<Ctx>, opts: With
         }
       }
 
-      return await runWithTenant(ctx.tenantId, async () => {
-        if (opts.module) {
-          // Dinamik import — aylanma bog'liqlikni oldini oladi (guard -> tenant -> guard).
-          const { requireModule } = await import("@/lib/modules/guard");
-          await requireModule(ctx, opts.module);
-        }
-        return handler(request, routeCtx, ctx);
-      });
+      // Aktor kontekstga qo'shiladi — barcha yozish amallari audit jurnaliga
+      // shu foydalanuvchi nomidan tushadi (lib/db/tenantDb.ts).
+      return await runWithTenant(
+        ctx.tenantId,
+        async () => {
+          if (opts.module) {
+            // Dinamik import — aylanma bog'liqlikni oldini oladi (guard -> tenant -> guard).
+            const { requireModule } = await import("@/lib/modules/guard");
+            await requireModule(ctx, opts.module);
+          }
+          return handler(request, routeCtx, ctx);
+        },
+        { userId: ctx.session.userId, ism: ctx.session.ism, ip: clientIp(request) }
+      );
     } catch (error) {
       return handleApiError(error);
     }

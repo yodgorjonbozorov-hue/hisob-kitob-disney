@@ -305,13 +305,42 @@ https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=https://<domenin
 
 `{"ok":true,"result":true,...}` javobi kelsa — bot ishga tushdi. Endi bot uzluksiz jarayonsiz, faqat Telegram xabar yuborganda ishlaydi.
 
+### 4.5. Migratsiyalarni qo'llash (telefondan ham mumkin)
+
+`build` buyrug'i migratsiyalarni va kassa migratsiyasini avtomatik
+qo'llaydi, ya'ni oddiy deploy yetarli. Lekin **zaxira olinmaydi**.
+
+Katta o'zgarishlar uchun zaxirali yo'l:
+
+```bash
+npm run apply:hammasi     # xom surat -> migratsiya -> kassa -> tekshiruv -> zaxira
+```
+
+Telefondan: GitHub → Actions → "Migratsiya qo'llash" → Run workflow.
+Batafsil: [TELEFONDAN-APPLY.md](TELEFONDAN-APPLY.md).
+
 ### 5. Vercel Cron
 
-`vercel.json` allaqachon loyihada mavjud — Vercel avtomatik ravishda `/api/cron/monthly-report` route'ini kuniga bir marta chaqiradi (Vercel loyiha sozlamalarida "Cron Jobs" bo'limida ko'rinadi). Alohida sozlash shart emas.
+`vercel.json` allaqachon loyihada mavjud — Vercel avtomatik ravishda quyidagi **to'rt** route'ni chaqiradi (Vercel loyiha sozlamalarida "Cron Jobs" bo'limida ko'rinadi). Alohida sozlash shart emas.
+
+| Vaqt (UTC) | Route | Nima qiladi |
+|---|---|---|
+| 03:00 | `/api/cron/backup` | Zaxira + eskirgan bot suhbatlari va rate limit hisoblagichlarini tozalash |
+| 04:00 | `/api/cron/billing` | Davri tugagan obuna statuslari + muddat eslatmalari |
+| 05:00 | `/api/cron/reports` | Oylik hisobot (oyning 1-sanasi) + kunlik xulosa |
+| 06:00 | `/api/cron/tasks` | Takroriy tranzaksiyalar + vazifa eslatmalari |
+
+Ilgari bularning hammasi bitta route'da ketma-ket bajarilardi va 50+ tenantda 60 soniyalik limitga urilib, oxirgi qadamlar **jimgina** bajarilmay qolardi. Endi har guruh alohida vaqtda ishlaydi; bittasi yiqilsa qolgan uchtasi baribir bajariladi.
+
+Tartib tasodifiy emas: zaxira eng birinchi (keyingi qadamlardan biri yiqilsa ham kunlik nusxa olingan bo'ladi), eng uzun ish — takroriylar — esa oxirida.
+
+Har route `CRON_SECRET` bilan himoyalangan va **fail-closed**: sir sozlanmagan bo'lsa route umuman ishlamaydi (503).
+
+Eski `/api/cron/monthly-report` moslik uchun saqlangan va avvalgidek to'rtala ishni ketma-ket bajaradi — ya'ni timeout xavfi ham avvalgidek. Tashqi rejalashtiruvchidan chaqirayotgan bo'lsangiz, yangi to'rt manzilga o'ting.
 
 ### 6. Zaxira (backup)
 
-Kunlik cron eng birinchi ish sifatida butun bazani JSON+gzip qilib `BACKUP_CHAT_ID` kanaliga yuboradi.
+Kunlik zaxira cron'i (`/api/cron/backup`, 03:00) butun bazani JSON+gzip qilib `BACKUP_CHAT_ID` kanaliga yuboradi.
 Qo'lda: `npm run backup`, tiklash: `npm run restore -- <fayl.json> --confirm`.
 To'liq tartib va server ko'chirish yo'riqnomasi — [docs/MIGRATSIYA.md](docs/MIGRATSIYA.md).
 

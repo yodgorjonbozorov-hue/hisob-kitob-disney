@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaLibSQL } from "@prisma/adapter-libsql";
 import { createClient } from "@libsql/client";
+import { isPostgres } from "./dialect";
 
 /**
  * XOM (scope'siz) Prisma client — tenant filtri YO'Q.
@@ -18,17 +19,39 @@ const globalForPrisma = globalThis as unknown as {
   rawPrisma: PrismaClient | undefined;
 };
 
-// @libsql/client "file:./dev.db" (lokal) va "libsql://...turso.io" (production)
-// ikkalasini ham bir xil kodda qo'llab-quvvatlaydi.
+/**
+ * Adapter `DATABASE_URL` sxemasiga qarab tanlanadi:
+ *
+ *  - `postgresql://` / `postgres://` — PostgreSQL (`@prisma/adapter-pg`);
+ *  - qolgani (`file:`, `libsql://`) — SQLite/Turso (`@prisma/adapter-libsql`).
+ *
+ * Postgres adapteri KECH yuklanadi (`require` shu tarmoqda). Sababi: paket
+ * SQLite muhitida o'rnatilmagan bo'lishi mumkin va statik import butun
+ * ilovani yiqitardi. Postgres yo'li tanlanmagunicha unga umuman tegilmaydi.
+ */
 function createRawPrisma(): PrismaClient {
+  const url = process.env.DATABASE_URL as string;
+  const log: ("error" | "warn")[] =
+    process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"];
+
+  if (isPostgres(url)) {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { PrismaPg } = require("@prisma/adapter-pg") as typeof import("@prisma/adapter-pg");
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { Pool } = require("pg") as typeof import("pg");
+    return new PrismaClient({
+      adapter: new PrismaPg(new Pool({ connectionString: url })),
+      log,
+    });
+  }
+
+  // @libsql/client "file:./dev.db" (lokal) va "libsql://...turso.io" (production)
+  // ikkalasini ham bir xil kodda qo'llab-quvvatlaydi.
   const libsqlClient = createClient({
-    url: process.env.DATABASE_URL as string,
+    url,
     authToken: process.env.DATABASE_AUTH_TOKEN,
   });
-  return new PrismaClient({
-    adapter: new PrismaLibSQL(libsqlClient),
-    log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
-  });
+  return new PrismaClient({ adapter: new PrismaLibSQL(libsqlClient), log });
 }
 
 /**

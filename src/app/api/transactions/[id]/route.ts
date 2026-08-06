@@ -6,7 +6,7 @@ import { isManager } from "@/lib/auth/roles";
 import { updateTransactionSchema } from "@/lib/validation/transaction";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { resolveActiveBusinessId } from "@/lib/business";
-import { logAudit, getClientIp } from "@/lib/services/audit";
+import { dashboardYangilandi } from "@/lib/cache";
 
 export const PATCH = withTenant<{ params: { id: string } }>(async (request, { params }, { session: user }) => {
   const businessId = await resolveActiveBusinessId(user);
@@ -56,18 +56,7 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
     include: { category: true, user: { select: { id: true, ism: true } } },
   });
 
-  await logAudit({
-    businessId: existing.businessId,
-    userId: user.userId,
-    userIsm: user.ism,
-    action: "update",
-    entity: "transaction",
-    entityId: existing.id,
-    before: { turi: existing.turi, summa: existing.summa, categoryId: existing.categoryId, sana: existing.sana, izoh: existing.izoh },
-    after: { turi: updated.turi, summa: updated.summa, categoryId: updated.categoryId, sana: updated.sana, izoh: updated.izoh },
-    ip: getClientIp(request),
-  });
-
+  dashboardYangilandi(existing.businessId);
   return NextResponse.json(updated);
 });
 
@@ -89,22 +78,12 @@ export const DELETE = withTenant<{ params: { id: string } }>(async (request, { p
     // Butunlay o'chirish — faqat admin.
     if (!isManager(user.rol)) throw new ForbiddenError("Butunlay o'chirish faqat direktor uchun");
     await prisma.transaction.delete({ where: { id: params.id } });
-    await logAudit({
-      businessId: existing.businessId, userId: user.userId, userIsm: user.ism,
-      action: "delete", entity: "transaction", entityId: existing.id,
-      before: { turi: existing.turi, summa: existing.summa, permanent: true },
-      ip: getClientIp(request),
-    });
+    dashboardYangilandi(existing.businessId);
     return NextResponse.json({ ok: true, permanent: true });
   }
 
   // Soft delete — belgilanadi (undo/savat uchun).
   await prisma.transaction.update({ where: { id: params.id }, data: { deletedAt: new Date() } });
-  await logAudit({
-    businessId: existing.businessId, userId: user.userId, userIsm: user.ism,
-    action: "delete", entity: "transaction", entityId: existing.id,
-    before: { turi: existing.turi, summa: existing.summa, categoryId: existing.categoryId },
-    ip: getClientIp(request),
-  });
+  dashboardYangilandi(existing.businessId);
   return NextResponse.json({ ok: true });
 });

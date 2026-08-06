@@ -53,6 +53,7 @@ export const MODULLAR: ModulTarifi[] = [
       { href: "/app/tranzaksiyalar", label: "Yozuvlar", icon: "receipt", tartib: 11, rollar: HAMMA },
       { href: "/app/hisobot", label: "Oylik hisobot", icon: "report", tartib: 12, rollar: BOSHQARUVCHILAR },
       { href: "/app/byudjet", label: "Budjet", icon: "budget", tartib: 13, rollar: BOSHQARUVCHILAR },
+      { href: "/app/kassa", label: "Kassalar", icon: "wallet", tartib: 14, rollar: BOSHQARUVCHILAR },
       { href: "/app/takroriy", label: "Takroriy", icon: "repeat", tartib: 40, rollar: BOSHQARUVCHILAR },
       { href: "/app/smena", label: "Kun yakuni", icon: "shift", tartib: 41, rollar: ["OWNER", "ADMIN", "CASHIER"] },
     ],
@@ -68,6 +69,67 @@ export const MODULLAR: ModulTarifi[] = [
       { href: "/app/ombor", label: "Ombor", icon: "package", tartib: 20, rollar: BOSHQARUVCHILAR },
       { href: "/app/sotuv", label: "Sotuv", icon: "cart", tartib: 21, rollar: ["OWNER", "ADMIN", "CASHIER"] },
       { href: "/app/qarzlar", label: "Qarzlar", icon: "debt", tartib: 22, rollar: ["OWNER", "ADMIN", "CASHIER"] },
+    ],
+  },
+  {
+    code: "XARID",
+    nomi: "Xarid",
+    tavsif:
+      "Ta'minotchilar reyestri, xarid buyurtmasi va qabul qilish. Qabul qilinganda tovar omborga tushadi, chiqim yoki ta'minotchiga qarz avtomatik yoziladi.",
+    core: false,
+    // Xarid — pul va ombor qarori, shuning uchun faqat boshqaruvchilar.
+    rollar: BOSHQARUVCHILAR,
+    nav: [
+      { href: "/app/xarid", label: "Xarid", icon: "purchase", tartib: 23, rollar: BOSHQARUVCHILAR },
+      { href: "/app/xarid/taminotchilar", label: "Ta'minotchilar", icon: "supplier", tartib: 24, rollar: BOSHQARUVCHILAR },
+    ],
+  },
+  {
+    code: "TASDIQLASH",
+    nomi: "Tasdiqlash",
+    tavsif:
+      "Chegaradan oshgan chiqim darhol yozilmaydi — rahbar tasdig'ini kutadi. Tasdiqlash Telegramdagi tugma orqali ham mumkin.",
+    core: false,
+    // Xodim o'z so'rovini ko'radi; qaror faqat boshqaruvchida.
+    rollar: HAMMA,
+    nav: [
+      { href: "/app/tasdiqlash", label: "Tasdiqlash", icon: "approval", tartib: 25, rollar: HAMMA },
+      { href: "/app/tasdiqlash/qoidalar", label: "Tasdiq qoidalari", icon: "rule", tartib: 26, rollar: BOSHQARUVCHILAR },
+    ],
+  },
+  {
+    code: "MIJOZLAR",
+    nomi: "Mijozlar",
+    tavsif:
+      "Mijoz kartochkasi: barcha sotuvlar, qarzlar va CRM bitimlari bitta sahifada. Qarz limiti — chegaradan oshgan qarzga sotuv rad etiladi.",
+    core: false,
+    rollar: HAMMA,
+    nav: [
+      { href: "/app/mijozlar", label: "Mijozlar", icon: "customers", tartib: 27, rollar: HAMMA },
+    ],
+  },
+  {
+    code: "HR",
+    nomi: "Xodimlar (HR-lite)",
+    tavsif:
+      "Xodim kartochkasi, davomat va oylik: stavka, avans, ushlab qolish va ustama. Oylik to'langanda chiqim tranzaksiya avtomatik yoziladi.",
+    core: false,
+    // Oylik — pul va shaxsiy ma'lumot, shuning uchun faqat boshqaruvchilar.
+    rollar: BOSHQARUVCHILAR,
+    nav: [
+      { href: "/app/hr", label: "Xodimlar", icon: "hr", tartib: 28, rollar: BOSHQARUVCHILAR },
+      { href: "/app/hr/davomat", label: "Davomat", icon: "attendance", tartib: 29, rollar: BOSHQARUVCHILAR },
+    ],
+  },
+  {
+    code: "HUJJATLAR",
+    nomi: "Hujjatlar",
+    tavsif:
+      "Shartnomalar reyestri muddat eslatmasi bilan va yozuvlarga fayl biriktirish. Fayl saqlagich sozlanmagan bo'lsa tashqi havola bilan ishlaydi.",
+    core: false,
+    rollar: HAMMA,
+    nav: [
+      { href: "/app/hujjatlar", label: "Shartnomalar", icon: "contract", tartib: 30, rollar: HAMMA },
     ],
   },
   {

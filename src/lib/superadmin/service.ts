@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { computeAccess } from "@/lib/billing/access";
 import { planByCode } from "@/lib/billing/plans";
@@ -139,6 +140,7 @@ async function tenantsWithData(): Promise<Set<string>> {
           budgets: true,
           shiftCloses: true,
           recurrings: true,
+          transfers: true,
         },
       },
     },
@@ -179,7 +181,12 @@ export async function deleteEmptyTenant(tenantId: string): Promise<{ name: strin
       await tx.category.deleteMany({ where: { businessId: { in: businessIds } } });
       await tx.auditLog.deleteMany({ where: { businessId: { in: businessIds } } });
       await tx.stage.deleteMany({ where: { businessId: { in: businessIds } } });
+      // Kassalar (Faza 4.1) — har biznesda kamida bittasi bo'ladi, shuning uchun
+      // ular ham biznesdan OLDIN o'chirilishi shart (Account.businessId Restrict).
+      await tx.accountTransfer.deleteMany({ where: { businessId: { in: businessIds } } });
+      await tx.account.deleteMany({ where: { businessId: { in: businessIds } } });
     }
+    await tx.auditLog.deleteMany({ where: { tenantId } });
     await tx.user.deleteMany({ where: { tenantId } });
     await tx.business.deleteMany({ where: { tenantId } });
     await tx.tenantModule.deleteMany({ where: { tenantId } });
@@ -250,11 +257,17 @@ export async function unblockTenant(tenantId: string, now: Date = new Date()) {
 export async function resetUserPassword(userId: string): Promise<{ login: string; yangiParol: string }> {
   const user = await rawPrisma.user.findUnique({ where: { id: userId }, select: { id: true, login: true } });
   if (!user) throw new BadRequestError("Foydalanuvchi topilmadi");
-  // 10 belgili tasodifiy parol (o'qilishi oson belgilar).
+  // 10 belgili tasodifiy parol (o'qilishi oson belgilar: 0/O, 1/l/I yo'q).
+  //
+  // `crypto.randomInt` — `Math.random` EMAS. `Math.random` kriptografik emas:
+  // uning ichki holati bir necha natijadan tiklanadi, ya'ni parolni bashorat
+  // qilish mumkin. Bu parol esa hisobga to'liq kirish huquqini beradi.
+  // (Telegram bog'lash kodida shu xato allaqachon tuzatilgan edi — bu yer
+  // o'shanda e'tibordan chetda qolgan.)
   const alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
   let yangiParol = "";
   for (let i = 0; i < 10; i++) {
-    yangiParol += alphabet[Math.floor(Math.random() * alphabet.length)];
+    yangiParol += alphabet[randomInt(0, alphabet.length)];
   }
   await rawPrisma.user.update({
     where: { id: userId },

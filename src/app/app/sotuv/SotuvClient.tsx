@@ -8,15 +8,24 @@ import { Badge } from "@/components/ui/Badge";
 import { formatSom, formatSomLabel, parseSomInput, formatDateUZ } from "@/lib/format";
 import { isAvto, omborMatn } from "@/lib/biznesTuri";
 import type { ProductKassirDTO, SaleDTO } from "@/lib/queries/inventory";
+import type { MijozDTO } from "@/lib/queries/mijoz";
+import { todayDateOnlyString } from "@/lib/date";
+import { SotuvBekorModal } from "./SotuvBekorModal";
 
 export function SotuvClient({
   products,
   initialSales,
   biznesTuri = "umumiy",
+  bekorQilaOladi = false,
+  mijozlar = [],
 }: {
   products: ProductKassirDTO[];
   initialSales: SaleDTO[];
   biznesTuri?: string;
+  /** Sotuvni bekor qilish faqat direktor/adminda (kassir o'z xatosini yashira olmasin). */
+  bekorQilaOladi?: boolean;
+  /** MIJOZLAR moduli yoqiq bo'lsa — qarz limiti ishlaydigan mijoz kartochkalari. */
+  mijozlar?: MijozDTO[];
 }) {
   const router = useRouter();
   const avto = isAvto(biznesTuri);
@@ -27,12 +36,16 @@ export function SotuvClient({
   const [tolovTuri, setTolovTuri] = useState<"naqd" | "qarz">("naqd");
   // Avto: kelishilgan narx. Mashina tanlanganda rejadagi narx bilan to'ldiriladi.
   const [narx, setNarx] = useState("");
+  const [contactId, setContactId] = useState("");
   const [mijozNomi, setMijozNomi] = useState("");
   const [mijozTel, setMijozTel] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [sales, setSales] = useState(initialSales);
+  // Orqaga sana bilan sotuv kiritish (B-5): kechagi sotuv kechagi hisobotga tushsin.
+  const [sana, setSana] = useState(todayDateOnlyString());
+  const [bekorId, setBekorId] = useState<string | null>(null);
 
   const selected = useMemo(() => products.find((p) => p.id === productId), [products, productId]);
   const qty = avto ? 1 : parseSomInput(miqdor);
@@ -83,9 +96,11 @@ export function SotuvClient({
           productId: selected.id,
           miqdor: qty,
           tolovTuri,
+          contactId: tolovTuri === "qarz" && contactId ? contactId : undefined,
           mijozNomi: tolovTuri === "qarz" ? mijozNomi : undefined,
           mijozTel: tolovTuri === "qarz" ? mijozTel : undefined,
           narx: avto && kelishilgan > 0 ? kelishilgan : undefined,
+          sana,
         }),
       });
       const data = await res.json();
@@ -106,11 +121,14 @@ export function SotuvClient({
           jamiSumma: jami,
           tolovTuri,
           mijozNomi: tolovTuri === "qarz" ? mijozNomi : null,
-          sana: new Date().toISOString(),
+          sana: new Date(`${sana}T00:00:00.000Z`).toISOString(),
+          bekorQilingan: false,
+          bekorSabab: null,
         },
         ...prev,
       ]);
       setMiqdor("1");
+      setContactId("");
       setMijozNomi("");
       setMijozTel("");
       setProductId("");
@@ -121,6 +139,7 @@ export function SotuvClient({
   }
 
   return (
+    <>
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <Card>
         <h2 className="font-semibold text-fg mb-3">{avto ? "Mashina sotish" : "Yangi sotuv"}</h2>
@@ -202,8 +221,55 @@ export function SotuvClient({
             </button>
           </div>
 
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1" htmlFor="sotuv-sana">
+              Sana
+            </label>
+            <input
+              id="sotuv-sana"
+              type="date"
+              value={sana}
+              onChange={(e) => setSana(e.target.value)}
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+            />
+          </div>
+
           {tolovTuri === "qarz" && (
             <div className="space-y-2">
+              {mijozlar.length > 0 && (
+                <div>
+                  <select
+                    value={contactId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setContactId(id);
+                      // Kartochka tanlansa ism/telefon undan olinadi — qo'lda
+                      // yozilgan nom bilan kartochka bir-biriga qarama-qarshi
+                      // bo'lib qolmasligi kerak.
+                      const m = mijozlar.find((x) => x.id === id);
+                      if (m) {
+                        setMijozNomi(m.ism);
+                        setMijozTel(m.tel ?? "");
+                      }
+                    }}
+                    className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+                    aria-label="Mijoz kartochkasi"
+                  >
+                    <option value="">Kartochkasiz (faqat ism yozish)</option>
+                    {mijozlar.map((m) => (
+                      <option key={m.id} value={m.id} disabled={m.limitToldi}>
+                        {m.ism}
+                        {m.qarzLimit !== null &&
+                          ` — qarz ${m.ochiqQarz.toLocaleString("uz-UZ")} / ${m.qarzLimit.toLocaleString("uz-UZ")}`}
+                        {m.limitToldi ? " (limit to'ldi)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-2xs text-faint mt-1">
+                    Kartochka tanlansa sotuv mijoz tarixiga tushadi va qarz limiti tekshiriladi.
+                  </p>
+                </div>
+              )}
               <input
                 type="text"
                 value={mijozNomi}
@@ -239,29 +305,56 @@ export function SotuvClient({
                 <th className="pb-2">Sana</th>
                 <th className="pb-2">{M.birlikBosh}</th>
                 <th className="pb-2 text-right">Summa</th>
-                <th className="pb-2">To'lov</th>
+                <th className="pb-2">To&apos;lov</th>
+                <th className="pb-2" />
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
               {sales.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="text-center text-faint py-6">
+                  <td colSpan={5} className="text-center text-faint py-6">
                     Hali sotuv yo'q
                   </td>
                 </tr>
               )}
               {sales.map((s) => (
-                <tr key={s.id}>
+                <tr key={s.id} className={s.bekorQilingan ? "opacity-50 line-through" : ""}>
                   <td className="py-2 whitespace-nowrap">{formatDateUZ(new Date(s.sana))}</td>
                   <td className="py-2">
                     {s.productNomi}
                     {!avto && <span className="text-faint"> × {s.miqdor}</span>}
+                    {s.bekorQilingan && (
+                      <span className="block text-2xs text-expense no-underline">
+                        Bekor qilindi{s.bekorSabab ? `: ${s.bekorSabab}` : ""}
+                      </span>
+                    )}
                   </td>
                   <td className="py-2 text-right font-medium">{formatSomLabel(s.jamiSumma)}</td>
                   <td className="py-2">
                     <Badge tone={s.tolovTuri === "naqd" ? "kirim" : "neutral"}>
                       {s.tolovTuri === "naqd" ? "Naqd" : "Qarz"}
                     </Badge>
+                  </td>
+                  <td className="py-2 text-right whitespace-nowrap">
+                    {!s.bekorQilingan && (
+                      <a
+                        href={`/api/sales/${s.id}/receipt`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-2xs text-brand hover:underline"
+                      >
+                        Chek
+                      </a>
+                    )}
+                    {bekorQilaOladi && !s.bekorQilingan && (
+                      <button
+                        type="button"
+                        onClick={() => setBekorId(s.id)}
+                        className="text-2xs text-expense hover:underline ml-3"
+                      >
+                        Bekor qilish
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -270,5 +363,17 @@ export function SotuvClient({
         </div>
       </Card>
     </div>
+
+    {bekorId && (
+      <SotuvBekorModal
+        saleId={bekorId}
+        onClose={() => setBekorId(null)}
+        onDone={() => {
+          setBekorId(null);
+          router.refresh();
+        }}
+      />
+    )}
+    </>
   );
 }

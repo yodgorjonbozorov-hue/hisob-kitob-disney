@@ -6,7 +6,6 @@ import { resolveActiveBusinessId } from "@/lib/business";
 import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { getExpectedCash } from "@/lib/queries/shift";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
-import { logAudit, getClientIp } from "@/lib/services/audit";
 import { z } from "zod";
 
 const schema = z.object({
@@ -42,13 +41,6 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
       farq,
       izoh: parsed.data.izoh ?? null,
     },
-  });
-
-  await logAudit({
-    businessId, userId: user.userId, userIsm: user.ism,
-    action: "create", entity: "sale", entityId: shift.id,
-    after: { smena: true, kutilganNaqd, sanalganNaqd: parsed.data.sanalganNaqd, farq },
-    ip: getClientIp(request),
   });
 
   return NextResponse.json({ ok: true, kutilganNaqd, farq });

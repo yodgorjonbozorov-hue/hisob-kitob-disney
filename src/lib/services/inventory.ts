@@ -1,7 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
-import { createTransaction } from "@/lib/services/transactionService";
-import { todayDateOnlyString } from "@/lib/date";
+import { createTransactionTx } from "@/lib/services/transactionService";
+import { runBusinessTx, type BusinessTx } from "@/lib/db/businessTx";
+import { todayDateOnlyString, dateOnlyStringToUTCDate } from "@/lib/date";
+import { isAvto } from "@/lib/biznesTuri";
+import { logAudit } from "@/lib/services/audit";
+import { qarzLimitTekshirTx } from "@/lib/services/mijoz";
 
 // Sotuv va qarz to'lovi uchun avtomatik ishlatiladigan kategoriyalar.
 const SOTUV_KATEGORIYA = "Sotuv";
@@ -25,7 +29,28 @@ export const XARAJAT_TURLARI = {
 
 export type XarajatTuri = keyof typeof XARAJAT_TURLARI;
 
-/** Biznes uchun kategoriyani topadi yoki yaratadi (sotuv/qarz avtomatik yozuvlari uchun). */
+/**
+ * Biznes uchun kategoriyani topadi yoki yaratadi (sotuv/qarz avtomatik yozuvlari uchun).
+ *
+ * `upsert` ishlatiladi: eski `findFirst → create` ketma-ketligi ikkita parallel
+ * sotuvda `@@unique([nomi, turi, businessId])` ni buzib 500 xato berardi.
+ */
+export async function ensureCategoryTx(
+  tx: BusinessTx,
+  businessId: string,
+  nomi: string,
+  turi: "kirim" | "chiqim" = "kirim"
+): Promise<string> {
+  const cat = await tx.category.upsert({
+    where: { nomi_turi_businessId: { nomi, turi, businessId } },
+    update: {},
+    create: { businessId, nomi, turi },
+    select: { id: true },
+  });
+  return cat.id;
+}
+
+/** Tranzaksiyadan tashqarida chaqirish uchun (bot, eski chaqiruvchilar). */
 export async function ensureCategory(
   businessId: string,
   nomi: string,
@@ -37,28 +62,30 @@ export async function ensureCategory(
   return created.id;
 }
 
-/** Ombor kirimi — mahsulot qoldig'ini oshiradi. Chiqim tranzaksiya YARATMAYDI. */
-export async function createStockEntry(params: {
+interface StockEntryParams {
   businessId: string;
   productId: string;
   miqdor: number;
   birlikNarx?: number | null;
   userId: string;
   izoh?: string | null;
-}) {
-  const product = await prisma.product.findFirst({
+}
+
+/** Ombor kirimi (tranzaksiya ichida): qoldiq oshirish + StockEntry bitta amalda. */
+async function createStockEntryTx(tx: BusinessTx, params: StockEntryParams) {
+  const product = await tx.product.findFirst({
     where: { id: params.productId, businessId: params.businessId },
   });
   if (!product) throw new ForbiddenError("Mahsulot topilmadi");
 
   const birlikNarx = params.birlikNarx ?? product.kelganNarx;
 
-  await prisma.product.update({
+  await tx.product.update({
     where: { id: product.id },
     data: { miqdor: { increment: params.miqdor } },
   });
 
-  const entry = await prisma.stockEntry.create({
+  return tx.stockEntry.create({
     data: {
       businessId: params.businessId,
       productId: product.id,
@@ -68,7 +95,20 @@ export async function createStockEntry(params: {
       izoh: params.izoh ?? undefined,
     },
   });
+}
 
+/** Ombor kirimi — mahsulot qoldig'ini oshiradi. Chiqim tranzaksiya YARATMAYDI. */
+export async function createStockEntry(params: StockEntryParams) {
+  const entry = await runBusinessTx(params.businessId, (tx) => createStockEntryTx(tx, params));
+  // runBusinessTx xom `tx` delegatlarini ishlatadi — tenant extension'idagi
+  // avtomatik audit u yerda ishlamaydi, shuning uchun biznes hodisasi qo'lda yoziladi.
+  await logAudit({
+    businessId: params.businessId,
+    action: "create",
+    entity: "product",
+    entityId: params.productId,
+    after: { omborKirimi: true, miqdor: params.miqdor, stockEntryId: entry.id },
+  });
   return entry;
 }
 
@@ -81,6 +121,8 @@ export async function createSale(params: {
   productId: string;
   miqdor: number;
   tolovTuri: "naqd" | "qarz";
+  /** Mijoz kartochkasi (ixtiyoriy). Berilsa qarz limiti tekshiriladi. */
+  contactId?: string | null;
   mijozNomi?: string | null;
   mijozTel?: string | null;
   /**
@@ -89,88 +131,204 @@ export async function createSale(params: {
    * ham yangilanadi. Berilmasa rejadagi sotuv narxi olinadi.
    */
   narx?: number | null;
+  /** Sotuv sanasi "YYYY-MM-DD". Berilmasa bugun (kechagi sotuvni ham kiritish mumkin). */
+  sana?: string | null;
   userId: string;
 }) {
-  const product = await prisma.product.findFirst({
-    where: { id: params.productId, businessId: params.businessId, isActive: true },
-  });
-  if (!product) throw new ForbiddenError("Mahsulot topilmadi");
-
-  const kelishilganNarx = params.narx && params.narx > 0 ? Math.round(params.narx) : null;
-  if (!kelishilganNarx && product.sotuvNarx <= 0) {
-    throw new BadRequestError("Sotuv narxi kiritilmagan");
-  }
-  if (params.tolovTuri === "qarz" && !params.mijozNomi?.trim()) {
-    throw new BadRequestError("Qarzga sotishda mijoz nomi kiritilishi shart");
-  }
-
-  // Atomik shartli kamaytirish — yetarli qoldiq bo'lsagina bajariladi.
-  const upd = await prisma.product.updateMany({
-    where: { id: product.id, businessId: params.businessId, miqdor: { gte: params.miqdor } },
-    data: { miqdor: { decrement: params.miqdor } },
-  });
-  if (upd.count === 0) {
-    throw new BadRequestError("Omborda yetarli emas");
-  }
-
-  const birlikNarx = kelishilganNarx ?? product.sotuvNarx;
-  const tannarx = product.kelganNarx;
-  const jamiSumma = birlikNarx * params.miqdor;
-
-  // Kelishilgan narx boshqa bo'lsa — kartochkada ham haqiqiy narx tursin.
-  if (kelishilganNarx && kelishilganNarx !== product.sotuvNarx) {
-    await prisma.product.update({
-      where: { id: product.id },
-      data: { sotuvNarx: kelishilganNarx },
+  const sana = params.sana ?? todayDateOnlyString();
+  const sotuv = await runBusinessTx(params.businessId, async (tx) => {
+    const product = await tx.product.findFirst({
+      where: { id: params.productId, businessId: params.businessId, isActive: true },
     });
-  }
+    if (!product) throw new ForbiddenError("Mahsulot topilmadi");
 
-  const sale = await prisma.sale.create({
-    data: {
-      businessId: params.businessId,
-      productId: product.id,
-      miqdor: params.miqdor,
-      birlikNarx,
-      tannarx,
-      jamiSumma,
-      tolovTuri: params.tolovTuri,
-      mijozNomi: params.mijozNomi?.trim() || undefined,
-      mijozTel: params.mijozTel?.trim() || undefined,
-      userId: params.userId,
-    },
-  });
+    const kelishilganNarx = params.narx && params.narx > 0 ? Math.round(params.narx) : null;
+    if (!kelishilganNarx && product.sotuvNarx <= 0) {
+      throw new BadRequestError("Sotuv narxi kiritilmagan");
+    }
+    if (params.tolovTuri === "qarz" && !params.mijozNomi?.trim()) {
+      throw new BadRequestError("Qarzga sotishda mijoz nomi kiritilishi shart");
+    }
 
-  if (params.tolovTuri === "naqd") {
-    // Naqd sotuv — darhol kirim tranzaksiya (kassa usuli).
-    const categoryId = await ensureCategory(params.businessId, SOTUV_KATEGORIYA);
-    const txn = await createTransaction(params.userId, params.businessId, {
-      turi: "kirim",
-      categoryId,
-      summa: jamiSumma,
-      sana: todayDateOnlyString(),
-      izoh: `${product.nomi} × ${params.miqdor}`,
+    // Qarz limiti — qoldiq kamaytirilishidan OLDIN tekshiriladi, shu bilan
+    // limitdan oshgan sotuv omborga umuman tegmaydi (tranzaksiya orqaga
+    // qaytadi, lekin tartib baribir aniq bo'lgani ma'qul).
+    if (params.tolovTuri === "qarz" && params.contactId) {
+      const narx =
+        kelishilganNarx && kelishilganNarx > 0 ? kelishilganNarx : product.sotuvNarx;
+      await qarzLimitTekshirTx(tx, params.businessId, params.contactId, narx * params.miqdor);
+    }
+
+    // Atomik shartli kamaytirish — yetarli qoldiq bo'lsagina bajariladi.
+    const upd = await tx.product.updateMany({
+      where: { id: product.id, businessId: params.businessId, miqdor: { gte: params.miqdor } },
+      data: { miqdor: { decrement: params.miqdor } },
     });
-    await prisma.sale.update({ where: { id: sale.id }, data: { transactionId: txn.id } });
-  } else {
-    // Qarz — daromad yozilmaydi, qarzdorlik yaratiladi (bizga qarzdor).
-    await prisma.debt.create({
+    if (upd.count === 0) {
+      throw new BadRequestError("Omborda yetarli emas");
+    }
+
+    const birlikNarx = kelishilganNarx ?? product.sotuvNarx;
+    const tannarx = product.kelganNarx;
+    const jamiSumma = birlikNarx * params.miqdor;
+
+    // AVTO rejimida kelishilgan narx kartochkaga yoziladi: bitta yozuv = bitta
+    // mashina, narx esa har doim savdolashib belgilanadi.
+    //
+    // Oddiy omborda esa BU HALOKATLI edi (H-1): 500 dona tovardan bittasini
+    // chegirma bilan sotsangiz butun katalog narxi o'zgarib ketardi va keyingi
+    // barcha sotuvlar chegirma narxida ketardi. Shuning uchun endi faqat avto.
+    const biznes = await tx.business.findFirst({
+      where: { id: params.businessId },
+      select: { turi: true },
+    });
+    if (isAvto(biznes?.turi) && kelishilganNarx && kelishilganNarx !== product.sotuvNarx) {
+      await tx.product.update({
+        where: { id: product.id },
+        data: { sotuvNarx: kelishilganNarx },
+      });
+    }
+
+    const sale = await tx.sale.create({
       data: {
         businessId: params.businessId,
-        turi: "olinadigan",
-        saleId: sale.id,
         productId: product.id,
-        mijozNomi: params.mijozNomi!.trim(),
-        mijozTel: params.mijozTel?.trim() || undefined,
+        miqdor: params.miqdor,
+        birlikNarx,
+        tannarx,
         jamiSumma,
+        tolovTuri: params.tolovTuri,
+        contactId: params.contactId ?? undefined,
+        mijozNomi: params.mijozNomi?.trim() || undefined,
+        mijozTel: params.mijozTel?.trim() || undefined,
+        sana: dateOnlyStringToUTCDate(sana),
         userId: params.userId,
       },
     });
-  }
 
-  return prisma.sale.findUnique({
-    where: { id: sale.id },
-    include: { product: { select: { nomi: true } } },
+    if (params.tolovTuri === "naqd") {
+      // Naqd sotuv — darhol kirim tranzaksiya (kassa usuli).
+      const categoryId = await ensureCategoryTx(tx, params.businessId, SOTUV_KATEGORIYA);
+      const txn = await createTransactionTx(tx, params.userId, params.businessId, {
+        turi: "kirim",
+        categoryId,
+        summa: jamiSumma,
+        sana,
+        izoh: `${product.nomi} × ${params.miqdor}`,
+      });
+      await tx.sale.update({ where: { id: sale.id }, data: { transactionId: txn.id } });
+    } else {
+      // Qarz — daromad yozilmaydi, qarzdorlik yaratiladi (bizga qarzdor).
+      await tx.debt.create({
+        data: {
+          businessId: params.businessId,
+          turi: "olinadigan",
+          saleId: sale.id,
+          productId: product.id,
+          contactId: params.contactId ?? undefined,
+          mijozNomi: params.mijozNomi!.trim(),
+          mijozTel: params.mijozTel?.trim() || undefined,
+          jamiSumma,
+          userId: params.userId,
+        },
+      });
+    }
+
+    return tx.sale.findUnique({
+      where: { id: sale.id },
+      include: { product: { select: { nomi: true } } },
+    });
   });
+
+  await logAudit({
+    businessId: params.businessId,
+    action: "create",
+    entity: "sale",
+    entityId: sotuv?.id ?? "?",
+    after: {
+      productId: params.productId,
+      miqdor: params.miqdor,
+      jamiSumma: sotuv?.jamiSumma,
+      tolovTuri: params.tolovTuri,
+      mijozNomi: sotuv?.mijozNomi,
+    },
+  });
+  return sotuv;
+}
+
+/**
+ * SOTUVNI BEKOR QILISH (B-4).
+ *
+ * Ilgari bu umuman mumkin emas edi: kassir xato sotuv kiritsa omborda tovar
+ * kam, kassada pul ko'p bo'lib qolardi va tuzatib bo'lmasdi.
+ *
+ * Bitta atomik amalda:
+ *   1. Sale yumshoq o'chiriladi (tarix saqlanadi — kim, qachon, nega);
+ *   2. bog'langan kirim tranzaksiyasi yumshoq o'chiriladi (kassa qoldig'i tiklanadi);
+ *   3. qarzga sotuv bo'lsa — qarz o'chiriladi (TO'LOVI BO'LMASA);
+ *   4. ombor qoldig'i qaytariladi.
+ */
+export async function cancelSale(params: {
+  businessId: string;
+  saleId: string;
+  sabab: string;
+  userId: string;
+}) {
+  const sabab = params.sabab.trim();
+  if (!sabab) throw new BadRequestError("Bekor qilish sababi yozilishi shart");
+
+  const natija = await runBusinessTx(params.businessId, async (tx) => {
+    const sale = await tx.sale.findFirst({
+      where: { id: params.saleId, businessId: params.businessId },
+    });
+    if (!sale) throw new ForbiddenError("Sotuv topilmadi");
+    if (sale.deletedAt) throw new BadRequestError("Bu sotuv allaqachon bekor qilingan");
+
+    // Qarzga sotuv: to'lov qilingan bo'lsa avval to'lovlar bekor qilinishi kerak,
+    // aks holda qarz to'lovi "havoda" qolib ketadi.
+    const debt = await tx.debt.findFirst({
+      where: { saleId: sale.id, businessId: params.businessId },
+    });
+    if (debt) {
+      if (debt.tolangan > 0) {
+        throw new BadRequestError(
+          "Bu sotuv bo'yicha qarz to'lovi qilingan — avval to'lovlarni bekor qiling"
+        );
+      }
+      await tx.debt.delete({ where: { id: debt.id } });
+    }
+
+    // Naqd sotuvning kirim tranzaksiyasi — soft delete (kassadagi pul qaytadi).
+    if (sale.transactionId) {
+      await tx.transaction.updateMany({
+        where: { id: sale.transactionId, businessId: params.businessId, deletedAt: null },
+        data: { deletedAt: new Date() },
+      });
+    }
+
+    // Ombor qoldig'i qaytadi.
+    await tx.product.updateMany({
+      where: { id: sale.productId, businessId: params.businessId },
+      data: { miqdor: { increment: sale.miqdor } },
+    });
+
+    await tx.sale.update({
+      where: { id: sale.id },
+      data: { deletedAt: new Date(), cancelledBy: params.userId, cancelReason: sabab },
+    });
+
+    return { productId: sale.productId, miqdor: sale.miqdor, jamiSumma: sale.jamiSumma };
+  });
+
+  await logAudit({
+    businessId: params.businessId,
+    action: "delete",
+    entity: "sale",
+    entityId: params.saleId,
+    before: natija,
+    after: { sabab },
+  });
+  return { ok: true, ...natija };
 }
 
 /**
@@ -184,51 +342,73 @@ export async function recordDebtPayment(params: {
   summa: number;
   userId: string;
 }) {
-  const debt = await prisma.debt.findFirst({
-    where: { id: params.debtId, businessId: params.businessId },
-  });
-  if (!debt) throw new ForbiddenError("Qarz topilmadi");
-  if (debt.isYopilgan) throw new BadRequestError("Bu qarz allaqachon yopilgan");
+  const qarz = await runBusinessTx(params.businessId, async (tx) => {
+    const debt = await tx.debt.findFirst({
+      where: { id: params.debtId, businessId: params.businessId },
+    });
+    if (!debt) throw new ForbiddenError("Qarz topilmadi");
+    if (debt.isYopilgan) throw new BadRequestError("Bu qarz allaqachon yopilgan");
 
-  const qolgan = debt.jamiSumma - debt.tolangan;
-  if (params.summa > qolgan) {
-    throw new BadRequestError("To'lov summasi qolgan qarzdan ko'p");
-  }
+    const qolgan = debt.jamiSumma - debt.tolangan;
+    if (params.summa > qolgan) {
+      throw new BadRequestError("To'lov summasi qolgan qarzdan ko'p");
+    }
 
-  const beriladigan = debt.turi === "beriladigan";
-  const categoryId = await ensureCategory(
-    params.businessId,
-    beriladigan ? QARZ_TOLASH_KATEGORIYA : QARZ_TOLOVI_KATEGORIYA,
-    beriladigan ? "chiqim" : "kirim"
-  );
-  const txn = await createTransaction(params.userId, params.businessId, {
-    turi: beriladigan ? "chiqim" : "kirim",
-    categoryId,
-    summa: params.summa,
-    sana: todayDateOnlyString(),
-    izoh: `${beriladigan ? "Qarz to'lash" : "Qarz to'lovi"}: ${debt.mijozNomi}`,
-  });
-
-  await prisma.debtPayment.create({
-    data: {
-      debtId: debt.id,
-      businessId: params.businessId,
+    const beriladigan = debt.turi === "beriladigan";
+    const categoryId = await ensureCategoryTx(
+      tx,
+      params.businessId,
+      beriladigan ? QARZ_TOLASH_KATEGORIYA : QARZ_TOLOVI_KATEGORIYA,
+      beriladigan ? "chiqim" : "kirim"
+    );
+    const txn = await createTransactionTx(tx, params.userId, params.businessId, {
+      turi: beriladigan ? "chiqim" : "kirim",
+      categoryId,
       summa: params.summa,
-      userId: params.userId,
-      transactionId: txn.id,
-    },
+      sana: todayDateOnlyString(),
+      izoh: `${beriladigan ? "Qarz to'lash" : "Qarz to'lovi"}: ${debt.mijozNomi}`,
+    });
+
+    await tx.debtPayment.create({
+      data: {
+        debtId: debt.id,
+        businessId: params.businessId,
+        summa: params.summa,
+        userId: params.userId,
+        transactionId: txn.id,
+      },
+    });
+
+    // Optimistik qulf: `tolangan` biz o'qigan qiymatda qolgan bo'lsagina yoziladi.
+    // Ikki xodim bir vaqtda to'lov kiritsa — ikkinchisi jimgina yo'qolmaydi.
+    const yangiTolangan = debt.tolangan + params.summa;
+    const upd = await tx.debt.updateMany({
+      where: {
+        id: debt.id,
+        businessId: params.businessId,
+        tolangan: debt.tolangan,
+        isYopilgan: false,
+      },
+      data: {
+        tolangan: yangiTolangan,
+        isYopilgan: yangiTolangan >= debt.jamiSumma,
+      },
+    });
+    if (upd.count === 0) {
+      throw new BadRequestError("Qarz holati o'zgardi — sahifani yangilab qayta urinib ko'ring");
+    }
+
+    return tx.debt.findUniqueOrThrow({ where: { id: debt.id } });
   });
 
-  const yangiTolangan = debt.tolangan + params.summa;
-  const updated = await prisma.debt.update({
-    where: { id: debt.id },
-    data: {
-      tolangan: yangiTolangan,
-      isYopilgan: yangiTolangan >= debt.jamiSumma,
-    },
+  await logAudit({
+    businessId: params.businessId,
+    action: "create",
+    entity: "debtPayment",
+    entityId: params.debtId,
+    after: { summa: params.summa, tolangan: qarz.tolangan, isYopilgan: qarz.isYopilgan },
   });
-
-  return updated;
+  return qarz;
 }
 
 /**
@@ -236,7 +416,7 @@ export async function recordDebtPayment(params: {
  * Pul harakati YOZILMAYDI: kirim/chiqim tranzaksiya to'lov paytida yoziladi
  * (kassa usuli — recordDebtPayment).
  */
-export async function createDebt(params: {
+export interface CreateDebtParams {
   businessId: string;
   turi: "olinadigan" | "beriladigan";
   mijozNomi: string;
@@ -247,7 +427,10 @@ export async function createDebt(params: {
   muddat?: string | null;
   izoh?: string | null;
   userId: string;
-}) {
+}
+
+/** `createDebt`ning tranzaksiya ichida ishlaydigan varianti. */
+async function createDebtTx(tx: BusinessTx, params: CreateDebtParams) {
   const nomi = params.mijozNomi.trim();
   if (!nomi) throw new BadRequestError("Ism kiritilishi shart");
   if (params.jamiSumma <= 0) throw new BadRequestError("Summa musbat bo'lishi kerak");
@@ -258,14 +441,14 @@ export async function createDebt(params: {
   }
 
   if (params.productId) {
-    const product = await prisma.product.findFirst({
+    const product = await tx.product.findFirst({
       where: { id: params.productId, businessId: params.businessId },
       select: { id: true },
     });
     if (!product) throw new ForbiddenError("Mahsulot topilmadi");
   }
 
-  return prisma.debt.create({
+  return tx.debt.create({
     data: {
       businessId: params.businessId,
       turi: params.turi,
@@ -280,6 +463,18 @@ export async function createDebt(params: {
       userId: params.userId,
     },
   });
+}
+
+export async function createDebt(params: CreateDebtParams) {
+  const qarz = await runBusinessTx(params.businessId, (tx) => createDebtTx(tx, params));
+  await logAudit({
+    businessId: params.businessId,
+    action: "create",
+    entity: "debt",
+    entityId: qarz.id,
+    after: { turi: qarz.turi, mijozNomi: qarz.mijozNomi, jamiSumma: qarz.jamiSumma },
+  });
+  return qarz;
 }
 
 /**
@@ -312,54 +507,76 @@ export async function createAvtoMashina(params: {
     throw new BadRequestError("Qarzga olishda mashina egasining ismi kiritilishi shart");
   }
 
-  const product = await prisma.product.create({
-    data: {
+  const mashina = await runBusinessTx(params.businessId, async (tx) => {
+    const product = await tx.product.create({
+      data: {
+        businessId: params.businessId,
+        nomi,
+        kelganNarx: params.olinganNarx,
+        sotuvNarx: params.sotuvNarx ?? 0,
+        miqdor: 0, // qoldiqni StockEntry oshiradi
+        avtoYil: params.avtoYil ?? undefined,
+        avtoRaqam: params.avtoRaqam?.trim() || undefined,
+        avtoRang: params.avtoRang?.trim() || undefined,
+        izoh: params.izoh?.trim() || undefined,
+      },
+    });
+
+    await createStockEntryTx(tx, {
       businessId: params.businessId,
-      nomi,
-      kelganNarx: params.olinganNarx,
-      sotuvNarx: params.sotuvNarx ?? 0,
-      miqdor: 0, // qoldiqni StockEntry oshiradi
-      avtoYil: params.avtoYil ?? undefined,
-      avtoRaqam: params.avtoRaqam?.trim() || undefined,
-      avtoRang: params.avtoRang?.trim() || undefined,
-      izoh: params.izoh?.trim() || undefined,
+      productId: product.id,
+      miqdor: 1,
+      birlikNarx: params.olinganNarx,
+      userId: params.userId,
+      izoh:
+        params.tolovTuri === "qarz" ? `Qarzga olindi: ${params.egasiNomi!.trim()}` : "Naqdga olindi",
+    });
+
+    const belgi = [nomi, params.avtoRaqam?.trim()].filter(Boolean).join(" ");
+
+    if (params.tolovTuri === "naqd") {
+      const categoryId = await ensureCategoryTx(
+        tx,
+        params.businessId,
+        MASHINA_XARIDI_KATEGORIYA,
+        "chiqim"
+      );
+      await createTransactionTx(tx, params.userId, params.businessId, {
+        turi: "chiqim",
+        categoryId,
+        summa: params.olinganNarx,
+        sana: todayDateOnlyString(),
+        izoh: `Mashina xaridi: ${belgi}`,
+      });
+    } else {
+      await createDebtTx(tx, {
+        businessId: params.businessId,
+        turi: "beriladigan",
+        mijozNomi: params.egasiNomi!.trim(),
+        mijozTel: params.egasiTel,
+        jamiSumma: params.olinganNarx,
+        productId: product.id,
+        izoh: `Mashina uchun: ${belgi}`,
+        userId: params.userId,
+      });
+    }
+
+    return tx.product.findUniqueOrThrow({ where: { id: product.id } });
+  });
+
+  await logAudit({
+    businessId: params.businessId,
+    action: "create",
+    entity: "product",
+    entityId: mashina.id,
+    after: {
+      nomi: mashina.nomi,
+      avtoRaqam: mashina.avtoRaqam,
+      olinganNarx: params.olinganNarx,
+      tolovTuri: params.tolovTuri,
     },
   });
-
-  await createStockEntry({
-    businessId: params.businessId,
-    productId: product.id,
-    miqdor: 1,
-    birlikNarx: params.olinganNarx,
-    userId: params.userId,
-    izoh: params.tolovTuri === "qarz" ? `Qarzga olindi: ${params.egasiNomi!.trim()}` : "Naqdga olindi",
-  });
-
-  const belgi = [nomi, params.avtoRaqam?.trim()].filter(Boolean).join(" ");
-
-  if (params.tolovTuri === "naqd") {
-    const categoryId = await ensureCategory(params.businessId, MASHINA_XARIDI_KATEGORIYA, "chiqim");
-    await createTransaction(params.userId, params.businessId, {
-      turi: "chiqim",
-      categoryId,
-      summa: params.olinganNarx,
-      sana: todayDateOnlyString(),
-      izoh: `Mashina xaridi: ${belgi}`,
-    });
-  } else {
-    await createDebt({
-      businessId: params.businessId,
-      turi: "beriladigan",
-      mijozNomi: params.egasiNomi!.trim(),
-      mijozTel: params.egasiTel,
-      jamiSumma: params.olinganNarx,
-      productId: product.id,
-      izoh: `Mashina uchun: ${belgi}`,
-      userId: params.userId,
-    });
-  }
-
-  return prisma.product.findUnique({ where: { id: product.id } });
+  return mashina;
 }
 
 /**
@@ -386,59 +603,75 @@ export async function addProductExpense(params: {
 }) {
   if (params.summa <= 0) throw new BadRequestError("Summa musbat bo'lishi kerak");
 
-  const product = await prisma.product.findFirst({
-    where: { id: params.productId, businessId: params.businessId },
-  });
-  if (!product) throw new ForbiddenError("Mashina topilmadi");
-
-  const tolovTuri = params.tolovTuri ?? "naqd";
-  const kimga = params.kimga?.trim();
-  if (tolovTuri === "qarz" && !kimga) {
-    throw new BadRequestError("Keyin to'lanadigan bo'lsa — kimga to'lanishi yozilishi shart");
-  }
-
-  const turiNomi = XARAJAT_TURLARI[params.turi];
-  const belgi = [product.nomi, product.avtoRaqam].filter(Boolean).join(" ");
-  const izoh = params.izoh?.trim() || undefined;
-
-  let transactionId: string | undefined;
-  let debtId: string | undefined;
-
-  if (tolovTuri === "naqd") {
-    const categoryId = await ensureCategory(params.businessId, MASHINA_XARAJATI_KATEGORIYA, "chiqim");
-    const txn = await createTransaction(params.userId, params.businessId, {
-      turi: "chiqim",
-      categoryId,
-      summa: params.summa,
-      sana: todayDateOnlyString(),
-      izoh: `${turiNomi}: ${belgi}${izoh ? ` — ${izoh}` : ""}`,
+  const xarajat = await runBusinessTx(params.businessId, async (tx) => {
+    const product = await tx.product.findFirst({
+      where: { id: params.productId, businessId: params.businessId },
     });
-    transactionId = txn.id;
-  } else {
-    const debt = await createDebt({
-      businessId: params.businessId,
-      turi: "beriladigan",
-      mijozNomi: kimga!,
-      jamiSumma: params.summa,
-      productId: product.id,
-      izoh: `${turiNomi}: ${belgi}`,
-      userId: params.userId,
-    });
-    debtId = debt.id;
-  }
+    if (!product) throw new ForbiddenError("Mashina topilmadi");
 
-  return prisma.productExpense.create({
-    data: {
-      businessId: params.businessId,
-      productId: product.id,
-      turi: params.turi,
-      summa: params.summa,
-      izoh,
-      userId: params.userId,
-      transactionId,
-      debtId,
-    },
+    const tolovTuri = params.tolovTuri ?? "naqd";
+    const kimga = params.kimga?.trim();
+    if (tolovTuri === "qarz" && !kimga) {
+      throw new BadRequestError("Keyin to'lanadigan bo'lsa — kimga to'lanishi yozilishi shart");
+    }
+
+    const turiNomi = XARAJAT_TURLARI[params.turi];
+    const belgi = [product.nomi, product.avtoRaqam].filter(Boolean).join(" ");
+    const izoh = params.izoh?.trim() || undefined;
+
+    let transactionId: string | undefined;
+    let debtId: string | undefined;
+
+    if (tolovTuri === "naqd") {
+      const categoryId = await ensureCategoryTx(
+        tx,
+        params.businessId,
+        MASHINA_XARAJATI_KATEGORIYA,
+        "chiqim"
+      );
+      const txn = await createTransactionTx(tx, params.userId, params.businessId, {
+        turi: "chiqim",
+        categoryId,
+        summa: params.summa,
+        sana: todayDateOnlyString(),
+        izoh: `${turiNomi}: ${belgi}${izoh ? ` — ${izoh}` : ""}`,
+      });
+      transactionId = txn.id;
+    } else {
+      const debt = await createDebtTx(tx, {
+        businessId: params.businessId,
+        turi: "beriladigan",
+        mijozNomi: kimga!,
+        jamiSumma: params.summa,
+        productId: product.id,
+        izoh: `${turiNomi}: ${belgi}`,
+        userId: params.userId,
+      });
+      debtId = debt.id;
+    }
+
+    return tx.productExpense.create({
+      data: {
+        businessId: params.businessId,
+        productId: product.id,
+        turi: params.turi,
+        summa: params.summa,
+        izoh,
+        userId: params.userId,
+        transactionId,
+        debtId,
+      },
+    });
   });
+
+  await logAudit({
+    businessId: params.businessId,
+    action: "create",
+    entity: "productExpense",
+    entityId: xarajat.id,
+    after: { productId: params.productId, turi: params.turi, summa: params.summa, qarzga: !!xarajat.debtId },
+  });
+  return xarajat;
 }
 
 /**
@@ -451,26 +684,39 @@ export async function deleteProductExpense(params: {
   expenseId: string;
   userId: string;
 }) {
-  const expense = await prisma.productExpense.findFirst({
-    where: { id: params.expenseId, businessId: params.businessId },
-  });
-  if (!expense) throw new ForbiddenError("Xarajat topilmadi");
-
-  if (expense.debtId) {
-    const debt = await prisma.debt.findFirst({ where: { id: expense.debtId } });
-    if (debt && debt.tolangan > 0) {
-      throw new BadRequestError("Bu xarajat bo'yicha to'lov qilingan — avval qarzni tekshiring");
-    }
-    if (debt) await prisma.debt.delete({ where: { id: debt.id } });
-  }
-
-  if (expense.transactionId) {
-    await prisma.transaction.updateMany({
-      where: { id: expense.transactionId, businessId: params.businessId, deletedAt: null },
-      data: { deletedAt: new Date() },
+  const natija = await runBusinessTx(params.businessId, async (tx) => {
+    const expense = await tx.productExpense.findFirst({
+      where: { id: params.expenseId, businessId: params.businessId },
     });
-  }
+    if (!expense) throw new ForbiddenError("Xarajat topilmadi");
 
-  await prisma.productExpense.delete({ where: { id: expense.id } });
+    if (expense.debtId) {
+      const debt = await tx.debt.findFirst({
+        where: { id: expense.debtId, businessId: params.businessId },
+      });
+      if (debt && debt.tolangan > 0) {
+        throw new BadRequestError("Bu xarajat bo'yicha to'lov qilingan — avval qarzni tekshiring");
+      }
+      if (debt) await tx.debt.delete({ where: { id: debt.id } });
+    }
+
+    if (expense.transactionId) {
+      await tx.transaction.updateMany({
+        where: { id: expense.transactionId, businessId: params.businessId, deletedAt: null },
+        data: { deletedAt: new Date() },
+      });
+    }
+
+    await tx.productExpense.delete({ where: { id: expense.id } });
+    return { ok: true, summa: expense.summa, productId: expense.productId };
+  });
+
+  await logAudit({
+    businessId: params.businessId,
+    action: "delete",
+    entity: "productExpense",
+    entityId: params.expenseId,
+    before: { productId: natija.productId, summa: natija.summa },
+  });
   return { ok: true };
 }

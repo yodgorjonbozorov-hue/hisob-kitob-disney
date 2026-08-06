@@ -12,11 +12,19 @@ interface CategoryOption {
   turi: string;
 }
 
+interface AccountOption {
+  id: string;
+  nomi: string;
+}
+
 export function TransactionForm({
   categories,
+  accounts,
   onCreated,
 }: {
   categories: CategoryOption[];
+  /** Faol kassalar. Bitta bo'lsa tanlash maydoni KO'RSATILMAYDI — ortiqcha qadam. */
+  accounts: AccountOption[];
   onCreated: (t: TransactionDTO) => void;
 }) {
   const [turi, setTuri] = useState<"kirim" | "chiqim">("kirim");
@@ -24,6 +32,7 @@ export function TransactionForm({
   const [summaText, setSummaText] = useState("");
   const [sana, setSana] = useState(todayDateOnlyString());
   const [izoh, setIzoh] = useState("");
+  const [accountId, setAccountId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,7 +66,16 @@ export function TransactionForm({
       const res = await fetch("/api/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ turi, categoryId: catId, summa, sana, izoh: izoh || undefined }),
+        body: JSON.stringify({
+          turi,
+          categoryId: catId,
+          summa,
+          sana,
+          izoh: izoh || undefined,
+          // Bitta kassali biznesda accountId yuborilmaydi — server birinchi
+          // faol kassani o'zi tanlaydi.
+          ...(accountId ? { accountId } : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -141,6 +159,25 @@ export function TransactionForm({
             className="w-full rounded-lg border border-line px-3 py-2 text-sm"
           />
         </div>
+        {accounts.length > 1 && (
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1" htmlFor="tx-kassa">
+              Kassa
+            </label>
+            <select
+              id="tx-kassa"
+              value={accountId}
+              onChange={(e) => setAccountId(e.target.value)}
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+            >
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.nomi}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div>
           <label className="block text-xs font-medium text-muted mb-1">Izoh (ixtiyoriy)</label>
           <input

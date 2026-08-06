@@ -1,5 +1,7 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { monthRangeUTC, shiftMonthString, currentMonthString, utcDateToDateOnlyString } from "@/lib/date";
+import { businessQueryRaw, businessScope, sanaKalit, songa } from "@/lib/db/businessRaw";
+import { monthRangeUTC, shiftMonthString, currentMonthString } from "@/lib/date";
 
 export interface MonthTotals {
   jamiKirim: number;
@@ -17,21 +19,45 @@ export interface MonthSummary extends MonthTotals {
   };
 }
 
-async function sumByType(businessId: string, from: Date, to: Date, turi: "kirim" | "chiqim"): Promise<number> {
-  const result = await prisma.transaction.aggregate({
-    _sum: { summa: true },
-    where: { businessId, turi, sana: { gte: from, lt: to } },
-  });
-  return result._sum.summa ?? 0;
+const BOSH_TOTALS: MonthTotals = { jamiKirim: 0, jamiChiqim: 0, sofFoyda: 0 };
+
+interface GuruhQator {
+  kalit: string;
+  turi: string;
+  summa: unknown;
 }
 
-async function monthTotals(businessId: string, monthStr: string): Promise<MonthTotals> {
-  const { from, to } = monthRangeUTC(monthStr);
-  const [jamiKirim, jamiChiqim] = await Promise.all([
-    sumByType(businessId, from, to, "kirim"),
-    sumByType(businessId, from, to, "chiqim"),
-  ]);
-  return { jamiKirim, jamiChiqim, sofFoyda: jamiKirim - jamiChiqim };
+/**
+ * Berilgan oraliqdagi kirim/chiqimni OY bo'yicha guruhlab qaytaradi — BITTA so'rov.
+ *
+ * Ilgari har oy uchun ikkita `aggregate` ketardi: 6 oylik trend = 12 so'rov,
+ * oylik xulosa = 4 so'rov. Turso'da har so'rov ~160 ms — bu sezilarli kechikish.
+ */
+async function monthlyTotals(
+  businessId: string,
+  from: Date,
+  to: Date
+): Promise<Map<string, MonthTotals>> {
+  const rows = await businessQueryRaw<GuruhQator>(Prisma.sql`
+    SELECT ${sanaKalit('t."sana"', 7)} AS kalit, t."turi" AS turi, SUM(t."summa") AS summa
+    FROM "Transaction" t
+    JOIN "Business" b ON b."id" = t."businessId"
+    WHERE ${businessScope("t", businessId)}
+      AND t."deletedAt" IS NULL
+      AND t."sana" >= ${from}
+      AND t."sana" < ${to}
+    GROUP BY kalit, t."turi"
+  `);
+
+  const map = new Map<string, MonthTotals>();
+  for (const r of rows) {
+    const oy = map.get(r.kalit) ?? { ...BOSH_TOTALS };
+    if (r.turi === "kirim") oy.jamiKirim += songa(r.summa);
+    else oy.jamiChiqim += songa(r.summa);
+    oy.sofFoyda = oy.jamiKirim - oy.jamiChiqim;
+    map.set(r.kalit, oy);
+  }
+  return map;
 }
 
 function pctChange(curr: number, prev: number): number | null {
@@ -44,10 +70,13 @@ export async function getMonthSummary(
   monthStr: string = currentMonthString()
 ): Promise<MonthSummary> {
   const prevMonthStr = shiftMonthString(monthStr, -1);
-  const [curr, prev] = await Promise.all([
-    monthTotals(businessId, monthStr),
-    monthTotals(businessId, prevMonthStr),
-  ]);
+  // Joriy va oldingi oy bitta oraliqda — 4 ta aggregate o'rniga 1 ta so'rov.
+  const { from } = monthRangeUTC(prevMonthStr);
+  const { to } = monthRangeUTC(monthStr);
+  const byMonth = await monthlyTotals(businessId, from, to);
+
+  const curr = byMonth.get(monthStr) ?? BOSH_TOTALS;
+  const prev = byMonth.get(prevMonthStr) ?? BOSH_TOTALS;
 
   return {
     month: monthStr,
@@ -76,7 +105,7 @@ export async function getCategoryBreakdown(
   const { from, to } = monthRangeUTC(monthStr);
   const grouped = await prisma.transaction.groupBy({
     by: ["categoryId"],
-    where: { businessId, turi, sana: { gte: from, lt: to } },
+    where: { businessId, turi, deletedAt: null, sana: { gte: from, lt: to } },
     _sum: { summa: true },
   });
 
@@ -118,14 +147,13 @@ export async function getTrend(
     monthStrs.push(shiftMonthString(endMonth, -i));
   }
 
-  const points = await Promise.all(
-    monthStrs.map(async (m) => {
-      const totals = await monthTotals(businessId, m);
-      return { month: m, ...totals };
-    })
-  );
+  // Butun oraliq bitta so'rovda (ilgari 6 oy = 12 ta aggregate).
+  const { from } = monthRangeUTC(monthStrs[0]);
+  const { to } = monthRangeUTC(endMonth);
+  const byMonth = await monthlyTotals(businessId, from, to);
 
-  return points;
+  // Yozuvsiz oylar ham nuqta sifatida qoladi — grafikda uzilish bo'lmasin.
+  return monthStrs.map((month) => ({ month, ...(byMonth.get(month) ?? BOSH_TOTALS) }));
 }
 
 export interface DailyPoint {
@@ -139,20 +167,25 @@ export async function getDailyDynamics(
   monthStr: string = currentMonthString()
 ): Promise<DailyPoint[]> {
   const { from, to } = monthRangeUTC(monthStr);
-  const transactions = await prisma.transaction.findMany({
-    where: { businessId, sana: { gte: from, lt: to } },
-    select: { sana: true, turi: true, summa: true },
-  });
+  // Ilgari butun oy RAM'ga yuklanib JS'da guruhlanardi — endi SQL GROUP BY.
+  const rows = await businessQueryRaw<GuruhQator>(Prisma.sql`
+    SELECT ${sanaKalit('t."sana"', 10)} AS kalit, t."turi" AS turi, SUM(t."summa") AS summa
+    FROM "Transaction" t
+    JOIN "Business" b ON b."id" = t."businessId"
+    WHERE ${businessScope("t", businessId)}
+      AND t."deletedAt" IS NULL
+      AND t."sana" >= ${from}
+      AND t."sana" < ${to}
+    GROUP BY kalit, t."turi"
+    ORDER BY kalit ASC
+  `);
 
   const byDate = new Map<string, DailyPoint>();
-  for (const t of transactions) {
-    const key = utcDateToDateOnlyString(t.sana);
-    if (!byDate.has(key)) {
-      byDate.set(key, { date: key, kirim: 0, chiqim: 0 });
-    }
-    const point = byDate.get(key)!;
-    if (t.turi === "kirim") point.kirim += t.summa;
-    else point.chiqim += t.summa;
+  for (const r of rows) {
+    const point = byDate.get(r.kalit) ?? { date: r.kalit, kirim: 0, chiqim: 0 };
+    if (r.turi === "kirim") point.kirim += songa(r.summa);
+    else point.chiqim += songa(r.summa);
+    byDate.set(r.kalit, point);
   }
 
   return Array.from(byDate.values()).sort((a, b) => a.date.localeCompare(b.date));

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 // Login global (tenantlar aro) unique — autentifikatsiya rawPrisma bilan ishlaydi.
 import { rawPrisma as prisma } from "@/lib/db/rawPrisma";
+import { Prisma } from "@prisma/client";
+import { registrsizTeng } from "@/lib/db/dialect";
 import { verifyPassword } from "@/lib/auth/password";
 import { getSession } from "@/lib/auth/session";
 import { normalizeRol } from "@/lib/auth/roles";
@@ -21,18 +23,25 @@ async function findUserByLogin(login: string) {
   const exact = await prisma.user.findUnique({ where: { login } });
   if (exact) return exact;
 
-  const matches = await prisma.$queryRaw<Array<{ id: string }>>`
-    SELECT "id" FROM "User" WHERE "login" = ${login} COLLATE NOCASE LIMIT 2
-  `;
+  // Registrsiz taqqoslash provayderga bog'liq (SQLite: COLLATE NOCASE,
+  // Postgres: LOWER() + funksional indeks) — `lib/db/dialect.ts` da.
+  const matches = await prisma.$queryRaw<Array<{ id: string }>>(
+    Prisma.sql`SELECT "id" FROM "User" WHERE ${registrsizTeng('"login"', login)} LIMIT 2`
+  );
   if (matches.length !== 1) return null;
   return prisma.user.findUnique({ where: { id: matches[0].id } });
 }
 
+/** Rate limit oynalari — reset ham xuddi shu oyna kaliti bilan ishlashi kerak. */
+const IP_OYNA = 5 * 60 * 1000;
+const LOGIN_OYNA = 15 * 60 * 1000;
+
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request) ?? "unknown";
   const rlKey = `login:${ip}`;
-  // Har IP uchun 5 daqiqada 8 urinish.
-  const rl = rateLimit(rlKey, 8, 5 * 60 * 1000);
+  // Har IP uchun 5 daqiqada 8 urinish (hisoblagich bazada — barcha lambda
+  // instansiyalari uchun umumiy).
+  const rl = await rateLimit(rlKey, 8, IP_OYNA);
   if (!rl.ok) {
     return NextResponse.json(
       { error: `Juda ko'p urinish. ${rl.retryAfter} soniyadan keyin qayta urining.` },
@@ -51,7 +60,7 @@ export async function POST(request: NextRequest) {
   // Bir login bo'yicha ham alohida limit (IP almashtirib brute-force qilishga qarshi):
   // 15 daqiqada 5 urinish.
   const rlLoginKey = `login:l:${login.toLowerCase()}`;
-  const rlLogin = rateLimit(rlLoginKey, 5, 15 * 60 * 1000);
+  const rlLogin = await rateLimit(rlLoginKey, 5, LOGIN_OYNA);
   if (!rlLogin.ok) {
     return NextResponse.json(
       { error: `Bu login uchun juda ko'p urinish. ${rlLogin.retryAfter} soniyadan keyin qayta urining.` },
@@ -72,8 +81,8 @@ export async function POST(request: NextRequest) {
   }
 
   // Muvaffaqiyat — rate limitlarni tozalaymiz va oxirgi kirish vaqtini yozamiz.
-  rateLimitReset(rlKey);
-  rateLimitReset(rlLoginKey);
+  await rateLimitReset(rlKey, IP_OYNA);
+  await rateLimitReset(rlLoginKey, LOGIN_OYNA);
   await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }).catch(() => {});
 
   const session = await getSession();

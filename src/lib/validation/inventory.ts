@@ -4,6 +4,9 @@ export const createProductSchema = z.object({
   nomi: z.string().min(1, "Nomi kiritilishi shart").max(100),
   kelganNarx: z.number().int().min(0).optional(),
   sotuvNarx: z.number().int().min(0).optional(),
+  sku: z.string().trim().max(40).optional().nullable(),
+  birlik: z.string().max(20).optional(),
+  minQoldiq: z.number().int().min(0).max(1_000_000).optional(),
 });
 
 export const updateProductSchema = z.object({
@@ -15,6 +18,9 @@ export const updateProductSchema = z.object({
   avtoYil: z.number().int().min(1900).max(2100).optional().nullable(),
   avtoRaqam: z.string().max(20).optional().nullable(),
   avtoRang: z.string().max(30).optional().nullable(),
+  sku: z.string().trim().max(40).optional().nullable(),
+  birlik: z.string().max(20).optional(),
+  minQoldiq: z.number().int().min(0).max(1_000_000).optional(),
 });
 
 /** Avto rejimi — avtoparkka mashina qabul qilish. */
@@ -66,10 +72,19 @@ export const createSaleSchema = z.object({
   productId: z.string().min(1),
   miqdor: z.number().int().positive("Miqdor musbat bo'lishi kerak"),
   tolovTuri: z.enum(["naqd", "qarz"]),
+  /** Mijoz kartochkasi (MIJOZLAR moduli). Berilsa qarz limiti tekshiriladi. */
+  contactId: z.string().min(1).optional().nullable(),
   mijozNomi: z.string().max(100).optional().nullable(),
   mijozTel: z.string().max(50).optional().nullable(),
   // Kelishilgan narx (avto rejimida savdolashib belgilanadi).
   narx: z.number().int().positive().optional().nullable(),
+  /** Sotuv sanasi. Berilmasa bugun — kechagi sotuvni ham kiritish mumkin. */
+  sana: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Sana noto'g'ri formatda").optional().nullable(),
+});
+
+/** Sotuvni bekor qilish — sabab MAJBURIY (audit uchun). */
+export const cancelSaleSchema = z.object({
+  sabab: z.string().trim().min(3, "Bekor qilish sababini yozing").max(300),
 });
 
 export const debtPaymentSchema = z.object({
@@ -102,3 +117,16 @@ export type DebtPaymentInput = z.infer<typeof debtPaymentSchema>;
 export type CreateAvtoInput = z.infer<typeof createAvtoSchema>;
 export type CreateProductExpenseInput = z.infer<typeof createProductExpenseSchema>;
 export type CreateDebtInput = z.infer<typeof createDebtSchema>;
+
+/** O'lchov birliklari — UI va API bir xil ro'yxatdan foydalanadi. */
+export const BIRLIKLAR = ["dona", "kg", "litr", "metr", "quti", "paket"] as const;
+export type Birlik = (typeof BIRLIKLAR)[number];
+
+/** Inventarizatsiya / hisobdan chiqarish. */
+export const adjustStockSchema = z.object({
+  productId: z.string().min(1),
+  turi: z.enum(["inventarizatsiya", "chiqarish"]),
+  /** Inventarizatsiyada — sanalgan qoldiq; chiqarishda — chiqariladigan miqdor. */
+  miqdor: z.number().int().min(0, "Miqdor manfiy bo'lmasligi kerak"),
+  sabab: z.string().trim().min(3, "Sababni yozing").max(300),
+});

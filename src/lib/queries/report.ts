@@ -43,10 +43,12 @@ export interface MonthlyReport {
  */
 export async function getAvtoOylikYakun(businessId: string, month: string): Promise<AvtoOylikYakun> {
   const { from, to } = monthRangeUTC(month);
+  // `sana` bo'yicha (createdAt emas): orqaga sana bilan kiritilgan sotuv o'sha
+  // oyning hisobotiga tushishi kerak. Bekor qilinganlar hisoblanmaydi.
   const sales = await prisma.sale.findMany({
-    where: { businessId, createdAt: { gte: from, lt: to } },
+    where: { businessId, deletedAt: null, sana: { gte: from, lt: to } },
     include: { product: { select: { nomi: true, avtoRaqam: true } } },
-    orderBy: { createdAt: "asc" },
+    orderBy: { sana: "asc" },
   });
 
   const xarajatlar = await prisma.productExpense.groupBy({
@@ -66,7 +68,7 @@ export async function getAvtoOylikYakun(businessId: string, month: string): Prom
       sotilganNarx: s.jamiSumma,
       xarajat,
       sofFoyda: s.jamiSumma - olinganNarx - xarajat,
-      sana: s.createdAt.toISOString(),
+      sana: s.sana.toISOString(),
     };
   });
 

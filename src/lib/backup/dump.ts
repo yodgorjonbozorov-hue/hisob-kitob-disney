@@ -21,6 +21,14 @@ export const BACKUP_VERSION = 1;
  * aks holda yangi jadval zaxiraga umuman tushmaydi. `tests/backup.test.ts` dagi
  * "barcha modellar qamrab olingan" testi buni tekshiradi.
  */
+/**
+ * Zaxira va TIKLASH tartibi. `restoreDump` aynan shu ketma-ketlikda yozadi,
+ * shuning uchun ro'yxat BOG'LIQLIK TARTIBIDA bo'lishi shart: har jadval o'zi
+ * murojaat qiladigan jadvallardan KEYIN turadi.
+ *
+ * Yangi model qo'shsangiz, uning FK'lari ro'yxatda undan oldinroqda ekaniga
+ * ishonch hosil qiling — aks holda tiklash yarim yo'lda to'xtaydi.
+ */
 export const ZAXIRA_JADVALLARI = [
   "tenant",
   "business",
@@ -29,6 +37,7 @@ export const ZAXIRA_JADVALLARI = [
   "subscription",
   "payment",
   "appSetting",
+  "account",
   "category",
   "transaction",
   "auditLog",
@@ -38,17 +47,46 @@ export const ZAXIRA_JADVALLARI = [
   "product",
   "productExpense",
   "stockEntry",
+  // DIQQAT: `contact` `sale` va `debt` dan OLDIN turishi SHART — ikkalasida
+  // ham `contactId` FK bor (MIJOZLAR moduli). Tartib buzilsa zaxira tiklanmaydi:
+  // "Foreign key constraint violated". `tests/backup.test.ts` buni qo'riqlaydi.
+  "contact",
   "sale",
   "debt",
   "debtPayment",
-  "contact",
   "stage",
   "deal",
   "task",
   "activity",
+  "accountTransfer",
+  "stockAdjustment",
+  "supplier",
+  "purchaseOrder",
+  "purchaseOrderItem",
+  "approvalRule",
+  "approvalRequest",
+  "employee",
+  "attendance",
+  "payroll",
+  "payrollAdvance",
+  "contract",
+  "attachment",
 ] as const;
 
 export type ZaxiraJadval = (typeof ZAXIRA_JADVALLARI)[number];
+
+/**
+ * ATAYLAB zaxiraga kirmaydigan jadvallar — vaqtinchalik holat.
+ * Ularni tiklashning ma'nosi yo'q (va ba'zilari shaxsiy ma'lumot saqlaydi).
+ * Yangi model qo'shsangiz: yo ZAXIRA_JADVALLARI ga, yo shu ro'yxatga — uchinchi
+ * variant yo'q (`tests/backup.test.ts` buni majburlaydi).
+ */
+export const ZAXIRASIZ_JADVALLAR = [
+  // Telegram botdagi yarim tugallangan suhbat holati, 24 soatdan keyin tozalanadi.
+  "botConversation",
+  // AI yordamchi suhbati — vaqtinchalik kontekst, tiklashning ma'nosi yo'q.
+  "aiConversation",
+] as const;
 
 export type Zaxira = {
   version: number;

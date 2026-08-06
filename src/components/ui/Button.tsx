@@ -25,6 +25,10 @@ export function Button({
   className = "",
   children,
   disabled,
+  // HTML'da tugmaning default turi "submit" — forma ichidagi har qanday tugma
+  // (masalan "Bekor qilish") formani yuborib yuborardi. Endi default "button",
+  // yuboruvchi tugmalarda `type="submit"` ANIQ yoziladi.
+  type = "button",
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: Variant;
@@ -33,8 +37,9 @@ export function Button({
 }) {
   return (
     <button
+      type={type}
       disabled={disabled || loading}
-      className={`inline-flex items-center justify-center gap-2 rounded-lg font-medium transition disabled:opacity-50 disabled:cursor-not-allowed ${sizeClasses[size]} ${variantClasses[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-lg font-medium transition disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-surface ${sizeClasses[size]} ${variantClasses[variant]} ${className}`}
       {...props}
     >
       {loading && (

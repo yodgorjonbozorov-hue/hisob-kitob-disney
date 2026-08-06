@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { debtPaymentSchema } from "@/lib/validation/inventory";
 import { resolveActiveBusinessId, requireOmborli } from "@/lib/business";
 import { recordDebtPayment } from "@/lib/services/inventory";
+import { dashboardYangilandi } from "@/lib/cache";
 
 /** Qarz to'lovi qabul qilish — admin va kassir. */
 export const POST = withTenant<{ params: { id: string } }>(async (request, { params }, { session: user }) => {
@@ -26,6 +27,7 @@ export const POST = withTenant<{ params: { id: string } }>(async (request, { par
     userId: user.userId,
   });
 
+  dashboardYangilandi(businessId);
   return NextResponse.json({
     id: debt.id,
     tolangan: debt.tolangan,

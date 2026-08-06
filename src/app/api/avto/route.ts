@@ -4,6 +4,7 @@ import { withTenant } from "@/lib/auth/tenant";
 import { createAvtoSchema } from "@/lib/validation/inventory";
 import { resolveActiveBusinessId, requireAvto } from "@/lib/business";
 import { createAvtoMashina } from "@/lib/services/inventory";
+import { dashboardYangilandi } from "@/lib/cache";
 
 /**
  * Avtoparkka mashina qabul qilish (avto rejimidagi biznes).
@@ -39,5 +40,6 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
     userId: user.userId,
   });
 
+  dashboardYangilandi(businessId);
   return NextResponse.json(mashina, { status: 201 });
 }, { module: "OMBOR" });

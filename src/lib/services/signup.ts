@@ -1,5 +1,6 @@
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { hashPassword } from "@/lib/auth/password";
+import { DEFAULT_KASSA_NOMI } from "@/lib/services/accounts";
 
 /** Bepul sinov muddati (kun). */
 export const TRIAL_KUNLARI = 14;
@@ -152,6 +153,12 @@ export async function createTenantWithOwner(params: SignupParams) {
         rol: "OWNER",
         tenantId: tenant.id,
       },
+    });
+
+    // Har biznesda kamida bitta kassa bo'lishi shart — aks holda yozuv qayerga
+    // tushishini ko'rsatib bo'lmaydi (Faza 4.1).
+    await tx.account.create({
+      data: { businessId: business.id, nomi: DEFAULT_KASSA_NOMI, turi: "naqd", tartib: 0 },
     });
 
     await tx.category.createMany({

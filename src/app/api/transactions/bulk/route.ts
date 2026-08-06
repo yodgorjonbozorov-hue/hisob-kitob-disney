@@ -3,8 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { isManager } from "@/lib/auth/roles";
 import { withTenant } from "@/lib/auth/tenant";
 import { resolveActiveBusinessId } from "@/lib/business";
-import { logAudit, getClientIp } from "@/lib/services/audit";
 import { z } from "zod";
+import { dashboardYangilandi } from "@/lib/cache";
 
 const schema = z.object({ ids: z.array(z.string()).min(1).max(500) });
 
@@ -29,12 +29,6 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
     data: { deletedAt: new Date() },
   });
 
-  await logAudit({
-    businessId, userId: user.userId, userIsm: user.ism,
-    action: "delete", entity: "transaction", entityId: "bulk",
-    after: { count: res.count, bulk: true },
-    ip: getClientIp(request),
-  });
-
+  dashboardYangilandi(businessId);
   return NextResponse.json({ ok: true, deleted: res.count });
 });

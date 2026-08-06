@@ -10,6 +10,7 @@ import {
 } from "@/lib/services/inventory";
 import { formatMoney, parseSummaText } from "@/lib/format";
 import { getFlow } from "./state";
+import { flowStore } from "./conversationStore";
 
 /**
  * TELEGRAM AVTO KANALI: olib-sotar ko'p vaqt bozorda/yo'lda bo'ladi — mashina
@@ -56,10 +57,11 @@ interface AvtoFlowState {
   sotuvSummasi?: number;
 }
 
-const avtoConversations = new Map<string, AvtoFlowState>();
+// Holat bazada saqlanadi (serverless webhook) — batafsil: ./conversationStore.ts
+const avtoConversations = flowStore<AvtoFlowState>("avto");
 
-export function clearAvtoFlow(chatId: string): void {
-  avtoConversations.delete(chatId);
+export function clearAvtoFlow(chatId: string): Promise<void> {
+  return avtoConversations.delete(chatId);
 }
 
 /** Apostrof va registr farqini yo'q qiladi ("Ta'mirlash" ≈ "tamirlash"). */
@@ -135,7 +137,7 @@ async function bizneslarniSora(
   }
   if (bizneslar.length === 1) return bizneslar[0].id;
 
-  avtoConversations.set(chatId, { step: keyingiStep === "m_nomi" ? "m_business" : "x_business" });
+  await avtoConversations.set(chatId, { step: keyingiStep === "m_nomi" ? "m_business" : "x_business" });
   const keyboard = new InlineKeyboard();
   bizneslar.forEach((b, i) => {
     keyboard.text(b.nomi, `${prefiks}:${b.id}`);
@@ -154,7 +156,7 @@ export async function startMashinaFlow(ctx: Context, user: User) {
   const businessId = await bizneslarniSora(ctx, user, chatId, "m_nomi", "amb");
   if (!businessId) return;
 
-  avtoConversations.set(chatId, { step: "m_nomi", businessId });
+  await avtoConversations.set(chatId, { step: "m_nomi", businessId });
   await ctx.reply("Yangi mashina 🚗\nModelni yozing (masalan: Cobalt 2019):");
 }
 
@@ -170,7 +172,7 @@ export async function handleMashinaBusinessCallback(ctx: Context) {
     await ctx.answerCallbackQuery({ text: "Biznes topilmadi" });
     return;
   }
-  avtoConversations.set(chatId, { step: "m_nomi", businessId: business.id });
+  await avtoConversations.set(chatId, { step: "m_nomi", businessId: business.id });
   await ctx.answerCallbackQuery();
   await ctx.editMessageText("Yangi mashina 🚗\nModelni yozing (masalan: Cobalt 2019):");
 }
@@ -178,7 +180,7 @@ export async function handleMashinaBusinessCallback(ctx: Context) {
 /** mtol:<naqd|qarz> */
 export async function handleMashinaTolovCallback(ctx: Context, user: User) {
   const chatId = String(ctx.chat!.id);
-  const flow = avtoConversations.get(chatId);
+  const flow = await avtoConversations.get(chatId);
   const tolovTuri = (ctx.callbackQuery?.data ?? "").slice(5) as "naqd" | "qarz";
 
   if (!flow || flow.step !== "m_tolov") {
@@ -187,7 +189,7 @@ export async function handleMashinaTolovCallback(ctx: Context, user: User) {
   }
 
   if (tolovTuri === "qarz") {
-    avtoConversations.set(chatId, { ...flow, step: "m_egasi", tolovTuri });
+    await avtoConversations.set(chatId, { ...flow, step: "m_egasi", tolovTuri });
     await ctx.answerCallbackQuery();
     await ctx.editMessageText("Kimdan qarzga olindi? Ism yozing:");
     return;
@@ -208,7 +210,7 @@ async function mashinaniSaqla(ctx: Context, user: User, flow: AvtoFlowState, ega
     egasiNomi: egasiNomi ?? null,
     userId: user.id,
   });
-  clearAvtoFlow(chatId);
+  await clearAvtoFlow(chatId);
 
   const kutilayotgan = (flow.sotuvNarx ?? 0) > 0 ? flow.sotuvNarx! - flow.olinganNarx! : null;
   await ctx.reply(
@@ -244,7 +246,7 @@ async function mashinalarniKorsat(ctx: Context, chatId: string, businessId: stri
     return;
   }
 
-  avtoConversations.set(chatId, { step: "x_mashina", businessId });
+  await avtoConversations.set(chatId, { step: "x_mashina", businessId });
   const keyboard = new InlineKeyboard();
   mashinalar.forEach((m) => {
     keyboard.text(mashinaBelgi(m), `axm:${m.id}`).row();
@@ -272,7 +274,7 @@ export async function handleXarajatBusinessCallback(ctx: Context) {
 export async function handleXarajatMashinaCallback(ctx: Context) {
   const chatId = String(ctx.chat!.id);
   const productId = (ctx.callbackQuery?.data ?? "").slice(4);
-  const flow = avtoConversations.get(chatId);
+  const flow = await avtoConversations.get(chatId);
 
   const mashina = await prisma.product.findFirst({ where: { id: productId } });
   if (!mashina) {
@@ -280,7 +282,7 @@ export async function handleXarajatMashinaCallback(ctx: Context) {
     return;
   }
 
-  avtoConversations.set(chatId, {
+  await avtoConversations.set(chatId, {
     ...(flow ?? {}),
     step: "x_turi",
     businessId: mashina.businessId,
@@ -305,7 +307,7 @@ function turiKeyboard(): InlineKeyboard {
 /** axt:<turi> */
 export async function handleXarajatTuriCallback(ctx: Context) {
   const chatId = String(ctx.chat!.id);
-  const flow = avtoConversations.get(chatId);
+  const flow = await avtoConversations.get(chatId);
   const turi = (ctx.callbackQuery?.data ?? "").slice(4) as XarajatTuri;
 
   if (!flow || flow.step !== "x_turi" || !XARAJAT_TURLARI[turi]) {
@@ -313,7 +315,7 @@ export async function handleXarajatTuriCallback(ctx: Context) {
     return;
   }
 
-  avtoConversations.set(chatId, { ...flow, step: "x_summa", turi });
+  await avtoConversations.set(chatId, { ...flow, step: "x_summa", turi });
   await ctx.answerCallbackQuery();
   await ctx.editMessageText(
     `${flow.productNomi} — ${XARAJAT_TURLARI[turi]}\nSummani yozing (masalan: 2 mln yoki 2000000):`
@@ -332,7 +334,7 @@ async function xarajatniSaqla(
     summa: params.summa,
     userId: user.id,
   });
-  clearAvtoFlow(String(ctx.chat!.id));
+  await clearAvtoFlow(String(ctx.chat!.id));
 
   // Yangilangan sof foyda darhol ko'rinadi — olib-sotar aynan shu raqamni kutadi.
   const [mashina, jami] = await Promise.all([
@@ -377,7 +379,7 @@ async function sotuvMashinalariniKorsat(ctx: Context, chatId: string, businessId
     return;
   }
 
-  avtoConversations.set(chatId, { step: "s_mashina", businessId });
+  await avtoConversations.set(chatId, { step: "s_mashina", businessId });
   const keyboard = new InlineKeyboard();
   mashinalar.forEach((m) => {
     keyboard.text(mashinaBelgi(m), `sxm:${m.id}`).row();
@@ -418,7 +420,7 @@ export async function handleSotishMashinaCallback(ctx: Context) {
   });
   const xarajatJami = xarajat._sum.summa ?? 0;
 
-  avtoConversations.set(chatId, {
+  await avtoConversations.set(chatId, {
     step: "s_narx",
     businessId: mashina.businessId,
     productId: mashina.id,
@@ -442,7 +444,7 @@ export async function handleSotishMashinaCallback(ctx: Context) {
 /** stol:<naqd|qarz> */
 export async function handleSotishTolovCallback(ctx: Context, user: User) {
   const chatId = String(ctx.chat!.id);
-  const flow = avtoConversations.get(chatId);
+  const flow = await avtoConversations.get(chatId);
   const tolovTuri = (ctx.callbackQuery?.data ?? "").slice(5) as "naqd" | "qarz";
 
   if (!flow || flow.step !== "s_tolov") {
@@ -451,7 +453,7 @@ export async function handleSotishTolovCallback(ctx: Context, user: User) {
   }
 
   if (tolovTuri === "qarz") {
-    avtoConversations.set(chatId, { ...flow, step: "s_xaridor" });
+    await avtoConversations.set(chatId, { ...flow, step: "s_xaridor" });
     await ctx.answerCallbackQuery();
     await ctx.editMessageText("Xaridor ismi? (qarzdorlik shu nom bilan yuritiladi)");
     return;
@@ -472,7 +474,7 @@ async function sotuvniSaqla(
   const mashina = await prisma.product.findFirst({ where: { id: flow.productId! } });
   if (!mashina) {
     await ctx.reply("Mashina topilmadi.");
-    clearAvtoFlow(chatId);
+    await clearAvtoFlow(chatId);
     return;
   }
 
@@ -493,7 +495,7 @@ async function sotuvniSaqla(
   const xarajatJami = xarajat._sum.summa ?? 0;
   const sof = flow.sotuvSummasi! - mashina.kelganNarx - xarajatJami;
 
-  clearAvtoFlow(chatId);
+  await clearAvtoFlow(chatId);
   await ctx.reply(
     [
       `✅ Sotildi: ${flow.productNomi}`,
@@ -582,10 +584,10 @@ async function tezXarajat(ctx: Context, user: User, matn: string): Promise<boole
 export async function handleAvtoText(ctx: Context, user: User): Promise<boolean> {
   const chatId = String(ctx.chat!.id);
   const matn = ctx.message?.text?.trim() ?? "";
-  const flow = avtoConversations.get(chatId);
+  const flow = await avtoConversations.get(chatId);
 
   // Faol kirim/chiqim oqimi bo'lsa aralashmaymiz.
-  if (!flow && /^xarajat\b/i.test(matn) && !getFlow(chatId)) {
+  if (!flow && /^xarajat\b/i.test(matn) && !(await getFlow(chatId))) {
     return tezXarajat(ctx, user, matn);
   }
   if (!flow) return false;
@@ -595,7 +597,7 @@ export async function handleAvtoText(ctx: Context, user: User): Promise<boolean>
       await ctx.reply("Model nomini yozing:");
       return true;
     }
-    avtoConversations.set(chatId, { ...flow, step: "m_olingan", nomi: matn });
+    await avtoConversations.set(chatId, { ...flow, step: "m_olingan", nomi: matn });
     await ctx.reply("Qanchaga olindi? (masalan: 120 mln)");
     return true;
   }
@@ -606,7 +608,7 @@ export async function handleAvtoText(ctx: Context, user: User): Promise<boolean>
       await ctx.reply("Narxni to'g'ri kiriting (masalan: 120 mln yoki 120000000):");
       return true;
     }
-    avtoConversations.set(chatId, { ...flow, step: "m_sotuv", olinganNarx: summa });
+    await avtoConversations.set(chatId, { ...flow, step: "m_sotuv", olinganNarx: summa });
     await ctx.reply("Rejadagi sotuv narxi? (bilmasangiz «-» yozing)");
     return true;
   }
@@ -617,7 +619,7 @@ export async function handleAvtoText(ctx: Context, user: User): Promise<boolean>
       await ctx.reply("Sotuv narxini kiriting yoki «-» yozing:");
       return true;
     }
-    avtoConversations.set(chatId, { ...flow, step: "m_tolov", sotuvNarx: sotuv });
+    await avtoConversations.set(chatId, { ...flow, step: "m_tolov", sotuvNarx: sotuv });
     await ctx.reply("Mashina qanday olindi?", {
       reply_markup: new InlineKeyboard().text("Naqdga", "mtol:naqd").text("Qarzga", "mtol:qarz"),
     });
@@ -639,7 +641,7 @@ export async function handleAvtoText(ctx: Context, user: User): Promise<boolean>
       await ctx.reply("Sotilgan narxni to'g'ri kiriting (masalan: 148 mln):");
       return true;
     }
-    avtoConversations.set(chatId, { ...flow, step: "s_tolov", sotuvSummasi: summa });
+    await avtoConversations.set(chatId, { ...flow, step: "s_tolov", sotuvSummasi: summa });
     await ctx.reply("To'lov qanday?", {
       reply_markup: new InlineKeyboard().text("Naqd olindi", "stol:naqd").text("Qarzga", "stol:qarz"),
     });

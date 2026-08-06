@@ -42,10 +42,10 @@ model Tenant {
 model TenantModule {
   id         String   @id @default(cuid())
   tenantId   String
-  tenant     Tenant   @relation(fields: [tenantId], references: [id])
-  code       String   // registry'dagi modul kodi (masalan "OMBOR")
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  code       String // registry'dagi modul kodi (masalan "OMBOR")
   isActive   Boolean  @default(true)
-  sozlamalar String?  // modul-spetsifik sozlamalar (JSON)
+  sozlamalar String? // modul-spetsifik sozlamalar (JSON)
   createdAt  DateTime @default(now())
 
   @@unique([tenantId, code])
@@ -57,7 +57,7 @@ model TenantModule {
 model Subscription {
   id          String   @id @default(cuid())
   tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   plan        String
   status      String   @default("ACTIVE")
   periodStart DateTime
@@ -72,90 +72,108 @@ model Subscription {
 /// To'lov yozuvi. provider: "MANUAL" | "PAYME" | "CLICK";
 /// status: "PENDING" | "CONFIRMED" | "REJECTED". MANUAL'da SUPERADMIN tasdiqlaydi.
 model Payment {
-  id         String    @id @default(cuid())
-  tenantId   String
-  tenant     Tenant    @relation(fields: [tenantId], references: [id])
-  amount     Int
-  provider   String    @default("MANUAL")
-  externalId String?
-  status     String    @default("PENDING")
+  id                String    @id @default(cuid())
+  tenantId          String
+  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  amount            Int
+  provider          String    @default("MANUAL")
+  /// Provider tranzaksiya IDsi. @unique — bitta provider tranzaksiyasi ikki marta
+  /// yozilmasligi uchun (webhook takroriy so'rov yuborishi mumkin).
+  externalId        String?   @unique
+  status            String    @default("PENDING")
   /// Qaysi tarif uchun to'lov — tasdiqda tenant.plan shu qiymatga o'tadi (upgrade oqimi).
-  plan       String?
-  izoh       String?
-  paidAt     DateTime?
-  createdAt  DateTime  @default(now())
+  plan              String?
+  izoh              String?
+  paidAt            DateTime?
+  createdAt         DateTime  @default(now())
   /// Onlayn provider tranzaksiyasi holati. Payme: 1 (yaratildi), 2 (bajarildi),
   /// -1 (yaratilgach bekor), -2 (bajarilgach bekor). Click: 1/2/-1.
-  providerState Int?
+  providerState     Int?
   /// Provider tranzaksiyasi yaratilgan payt (Payme create_time).
   providerCreatedAt DateTime?
-  cancelTime DateTime?
+  cancelTime        DateTime?
   /// Payme bekor qilish sababi kodi.
-  cancelReason Int?
+  cancelReason      Int?
 
   @@index([tenantId])
   @@index([status])
-  @@index([externalId])
 }
 
 /// Biznes (kompaniya bo'limi). Har bir biznesning o'z kategoriyalari, tranzaksiyalari va dashboard'i.
 model Business {
-  id           String        @id @default(cuid())
-  nomi         String
-  isActive     Boolean       @default(true)
+  id               String                 @id @default(cuid())
+  nomi             String
+  isActive         Boolean                @default(true)
   // Ombor (inventar) tizimi yoqilganmi — tovar sotadigan bizneslar uchun (masalan Salyut).
-  omborli      Boolean       @default(false)
+  omborli          Boolean                @default(false)
   // Biznes turi: "umumiy" | "avto". Avto — olib-sotarlar uchun (ombor → avtopark).
   // Faqat UI matnlari va sotuv qoidalariga ta'sir qiladi (lib/biznesTuri.ts).
-  turi         String        @default("umumiy")
-  createdAt    DateTime      @default(now())
-  tenantId     String
-  tenant       Tenant        @relation(fields: [tenantId], references: [id])
-  categories   Category[]
-  transactions Transaction[]
-  users        User[]
-  products     Product[]
-  budgets      Budget[]
-  shiftCloses  ShiftClose[]
-  recurrings   RecurringTransaction[]
-  sales        Sale[]
-  debts        Debt[]
-  stockEntries StockEntry[]
-  debtPayments DebtPayment[]
-  auditLogs    AuditLog[]
-  contacts     Contact[]
-  stages       Stage[]
-  deals        Deal[]
-  crmActivities Activity[]
-  tasks        Task[]
-  productExpenses ProductExpense[]
+  turi             String                 @default("umumiy")
+  createdAt        DateTime               @default(now())
+  tenantId         String
+  tenant           Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  categories       Category[]
+  transactions     Transaction[]
+  users            User[]
+  products         Product[]
+  budgets          Budget[]
+  shiftCloses      ShiftClose[]
+  recurrings       RecurringTransaction[]
+  sales            Sale[]
+  debts            Debt[]
+  stockEntries     StockEntry[]
+  debtPayments     DebtPayment[]
+  auditLogs        AuditLog[]
+  contacts         Contact[]
+  stages           Stage[]
+  deals            Deal[]
+  crmActivities    Activity[]
+  tasks            Task[]
+  productExpenses  ProductExpense[]
+  accounts         Account[]
+  transfers        AccountTransfer[]
+  adjustments      StockAdjustment[]
+  suppliers        Supplier[]
+  purchaseOrders   PurchaseOrder[]
+  purchaseItems    PurchaseOrderItem[]
+  approvalRules    ApprovalRule[]
+  approvalRequests ApprovalRequest[]
+  employees        Employee[]
+  attendances      Attendance[]
+  payrolls         Payroll[]
+  advances         PayrollAdvance[]
+  contracts        Contract[]
+  attachments      Attachment[]
 
   @@index([tenantId])
 }
 
 model User {
-  id                String        @id @default(cuid())
-  ism               String
-  login             String        @unique
-  parolHash         String
+  id                 String            @id @default(cuid())
+  ism                String
+  login              String            @unique
+  parolHash          String
   // rol: "SUPERADMIN" | "OWNER" | "ADMIN" | "CASHIER" | "SELLER" (zod bilan cheklanadi).
-  rol               String
-  isActive          Boolean       @default(true)
-  createdAt         DateTime      @default(now())
-  lastLoginAt       DateTime?
+  rol                String
+  isActive           Boolean           @default(true)
+  createdAt          DateTime          @default(now())
+  lastLoginAt        DateTime?
   // Seed parollarini birinchi kirishda majburiy almashtirish uchun.
-  mustChangePassword Boolean      @default(false)
-  transactions      Transaction[]
+  mustChangePassword Boolean           @default(false)
+  transactions       Transaction[]
+  employees          Employee[]
+  approvalRequests   ApprovalRequest[] @relation("TasdiqSorovchi")
+  approvalDecisions  ApprovalRequest[] @relation("TasdiqQaror")
 
   // Tenant a'zoligi. Faqat SUPERADMIN (platforma egasi) uchun null.
-  tenantId          String?
-  tenant            Tenant?       @relation(fields: [tenantId], references: [id])
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   // Kassir bitta biznesga biriktiriladi; owner/admin/seller uchun null (tenant ichidagi barcha bizneslar).
-  businessId        String?
-  business          Business?     @relation(fields: [businessId], references: [id])
+  businessId String?
+  business   Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
 
-  telegramChatId    String?       @unique
+  telegramChatId    String?   @unique
   linkCode          String?
   linkCodeExpiresAt DateTime?
 
@@ -169,18 +187,107 @@ model AppSetting {
   value String
 }
 
+/// AI YORDAMCHI SUHBATI — server tomonda saqlanadi.
+///
+/// Nega: ilgari suhbat tarixi mijozdan (brauzerdan) kelardi. Foydalanuvchi
+/// soxta `assistant` xabarini yuborib modelni chalg'itishi mumkin edi
+/// (prompt injection). Endi mijoz faqat SAVOL yuboradi, tarix esa shu
+/// jadvaldan olinadi.
+///
+/// Bitta foydalanuvchi + biznes uchun bitta faol suhbat.
+model AiConversation {
+  id         String   @id @default(cuid())
+  tenantId   String
+  businessId String
+  userId     String
+  /// Xabarlar JSON massivi: [{ rol: "user" | "assistant", matn: string }]
+  xabarlar   String
+  updatedAt  DateTime @updatedAt
+  createdAt  DateTime @default(now())
+
+  @@unique([businessId, userId])
+  @@index([tenantId, updatedAt])
+}
+
+/// Telegram botdagi ko'p qadamli suhbat holati (/kirim, /lead, /mashina, /sotish).
+///
+/// Nega bazada: production'da bot serverless webhook orqali ishlaydi — har so'rov
+/// boshqa instansiyaga tushishi mumkin, xotiradagi Map bilan oqim o'rtada uziladi.
+/// Bitta chat bir vaqtda bitta oqimda bo'ladi, shuning uchun kalit — chatId.
+///
+/// Bu VAQTINCHALIK holat: zaxira ro'yxatiga (lib/backup/dump.ts) ATAYLAB
+/// qo'shilmagan va 24 soatdan keyin cron tomonidan tozalanadi.
+model BotConversation {
+  chatId    String   @id
+  /// Qaysi oqim: "transaction" | "lead" | "avto"
+  flow      String
+  /// Oqim holati (JSON)
+  state     String
+  updatedAt DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+
+/// PUL MANBAI — kassa yoki hisob-raqam (naqd, plastik, bank).
+///
+/// Ilgari hamma pul bitta "qop"da edi: naqd sotuv ham, plastik ham, bankdagi
+/// pul ham bir joyda ko'rinardi. Endi har tranzaksiya qaysi kassaga
+/// tushganini bildiradi va har kassaning o'z qoldig'i bo'ladi.
+model Account {
+  id               String            @id @default(cuid())
+  businessId       String
+  business         Business          @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  nomi             String
+  /// "naqd" | "plastik" | "bank"
+  turi             String            @default("naqd")
+  isActive         Boolean           @default(true)
+  tartib           Int               @default(0)
+  createdAt        DateTime          @default(now())
+  transactions     Transaction[]
+  chiqishlar       AccountTransfer[] @relation("transferFrom")
+  kirishlar        AccountTransfer[] @relation("transferTo")
+  approvalRequests ApprovalRequest[]
+
+  @@unique([businessId, nomi])
+  @@index([businessId, isActive, tartib])
+}
+
+/// KASSALAR ARO PUL KO'CHIRISH (masalan kassadan bankka).
+///
+/// Ataylab Transaction YOZMAYDI: bu kirim ham, chiqim ham emas — pul biznes
+/// ichida joyini o'zgartirdi. Aks holda kunlik kirim/chiqim sun'iy oshib
+/// ketardi. Kassa qoldig'i hisobida esa alohida hisobga olinadi.
+model AccountTransfer {
+  id            String   @id @default(cuid())
+  businessId    String
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  fromAccountId String
+  fromAccount   Account  @relation("transferFrom", fields: [fromAccountId], references: [id], onDelete: Restrict)
+  toAccountId   String
+  toAccount     Account  @relation("transferTo", fields: [toAccountId], references: [id], onDelete: Restrict)
+  summa         Int
+  sana          DateTime
+  izoh          String?
+  userId        String
+  createdAt     DateTime @default(now())
+
+  @@index([businessId, sana])
+}
+
 model Category {
-  id           String        @id @default(cuid())
-  nomi         String
-  turi         String
-  tartib       Int           @default(0)
-  isActive     Boolean       @default(true)
-  createdAt    DateTime      @default(now())
-  businessId   String
-  business     Business      @relation(fields: [businessId], references: [id])
-  transactions Transaction[]
-  budgets      Budget[]
-  recurrings   RecurringTransaction[]
+  id               String                 @id @default(cuid())
+  nomi             String
+  turi             String
+  tartib           Int                    @default(0)
+  isActive         Boolean                @default(true)
+  createdAt        DateTime               @default(now())
+  businessId       String
+  business         Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  transactions     Transaction[]
+  budgets          Budget[]
+  recurrings       RecurringTransaction[]
+  approvalRules    ApprovalRule[]
+  approvalRequests ApprovalRequest[]
 
   @@unique([nomi, turi, businessId])
   @@index([turi, isActive])
@@ -188,35 +295,54 @@ model Category {
 }
 
 model Transaction {
-  id         String   @id @default(cuid())
-  turi       String
-  categoryId String
-  category   Category @relation(fields: [categoryId], references: [id])
-  businessId String
-  business   Business @relation(fields: [businessId], references: [id])
-  summa      Int
-  sana       DateTime
-  izoh       String?
-  userId     String
-  user       User     @relation(fields: [userId], references: [id])
-  filial     String?
-  createdAt  DateTime @default(now())
+  id              String           @id @default(cuid())
+  turi            String
+  categoryId      String
+  category        Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  businessId      String
+  business        Business         @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  /// Qaysi kassa/hisob-raqamga tushdi. Eski yozuvlar uchun null — migratsiya
+  /// skripti (scripts/kassa-migratsiya.ts) ularni default kassaga bog'laydi.
+  accountId       String?
+  account         Account?         @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  summa           Int
+  sana            DateTime
+  izoh            String?
+  userId          String
+  user            User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  filial          String?
+  createdAt       DateTime         @default(now())
   // Soft delete — o'chirilgan yozuv shu vaqt bilan belgilanadi (undo/savat uchun).
-  deletedAt  DateTime?
+  deletedAt       DateTime?
+  /// Tasdiqdan o'tib yozilgan bo'lsa — o'sha so'rov (aks holda null).
+  approvalRequest ApprovalRequest?
+  /// HR: shu tranzaksiya oylik yoki avans to'lovi bo'lsa — o'sha yozuv.
+  payroll         Payroll?         @relation("OylikChiqimi")
+  advance         PayrollAdvance?  @relation("AvansChiqimi")
 
-  @@index([sana])
-  @@index([turi])
+  // KOMPOZIT INDEKSLAR: SQLite bitta so'rovda bitta indeks ishlatadi, shuning uchun
+  // 6 ta bitta-ustunli indeks deyarli foydasiz edi (va har yozuvni sekinlashtirardi).
+  // Barcha real so'rovlar businessId + (filtr) + sana ko'rinishida bo'ladi.
+  @@index([businessId, deletedAt, sana])
+  @@index([businessId, turi, deletedAt, sana])
+  @@index([businessId, categoryId, sana])
+  @@index([businessId, userId, sana])
+  // Quyidagi ikkitasi FILTR uchun emas — `onDelete: Restrict` tekshiruvi uchun:
+  // kategoriya/foydalanuvchi o'chirilayotganda SQLite bola jadvalni skanerlaydi.
   @@index([categoryId])
-  @@index([businessId])
   @@index([userId])
-  @@index([deletedAt])
+  @@index([businessId, accountId, sana])
 }
 
 /// Audit izi — har bir muhim o'zgarish (kim, nima, oldin→keyin) yoziladi.
 model AuditLog {
   id         String    @id @default(cuid())
+  /// Qaysi kompaniya (tenant) jurnaliga tegishli. SUPERADMIN amallarida null.
+  /// businessId'siz yozuvlar (foydalanuvchi, biznes, modul) ham shu ustun
+  /// orqali tenant bo'yicha filtrlanadi.
+  tenantId   String?
   businessId String?
-  business   Business? @relation(fields: [businessId], references: [id])
+  business   Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
   userId     String?
   userIsm    String?
   action     String // "create" | "update" | "delete" | "restore"
@@ -225,9 +351,10 @@ model AuditLog {
   before     String? // JSON
   after      String? // JSON
   ip         String?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
 
-  @@index([businessId])
+  @@index([tenantId, createdAt])
+  @@index([businessId, createdAt])
   @@index([entity])
   @@index([createdAt])
 }
@@ -236,7 +363,7 @@ model AuditLog {
 model ShiftClose {
   id           String   @id @default(cuid())
   businessId   String
-  business     Business @relation(fields: [businessId], references: [id])
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
   userId       String
   userIsm      String?
   sana         DateTime
@@ -253,9 +380,9 @@ model ShiftClose {
 model RecurringTransaction {
   id            String   @id @default(cuid())
   businessId    String
-  business      Business @relation(fields: [businessId], references: [id])
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   categoryId    String
-  category      Category @relation(fields: [categoryId], references: [id])
+  category      Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   turi          String
   summa         Int
   izoh          String?
@@ -271,9 +398,9 @@ model RecurringTransaction {
 model Budget {
   id         String   @id @default(cuid())
   businessId String
-  business   Business @relation(fields: [businessId], references: [id])
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   categoryId String
-  category   Category @relation(fields: [categoryId], references: [id])
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   oy         String
   limitSumma Int
   createdAt  DateTime @default(now())
@@ -287,26 +414,64 @@ model Budget {
 /// Mahsulot turi (masalan salyut turlari) + narxlar + joriy qoldiq.
 /// Avto rejimida (Business.turi = "avto") bitta yozuv = bitta avtomobil (miqdor 0/1).
 model Product {
-  id           String       @id @default(cuid())
-  businessId   String
-  business     Business     @relation(fields: [businessId], references: [id])
-  nomi         String
-  kelganNarx   Int          @default(0) // tannarx (birlik)
-  sotuvNarx    Int          @default(0) // sotuv narxi (birlik)
-  miqdor       Int          @default(0) // ombordagi joriy qoldiq
-  isActive     Boolean      @default(true)
-  izoh         String?
+  id            String              @id @default(cuid())
+  businessId    String
+  business      Business            @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  nomi          String
+  kelganNarx    Int                 @default(0) // tannarx (birlik)
+  sotuvNarx     Int                 @default(0) // sotuv narxi (birlik)
+  miqdor        Int                 @default(0) // ombordagi joriy qoldiq
+  isActive      Boolean             @default(true)
+  izoh          String?
+  /// Ombor kodi (artikul). Ixtiyoriy, biznes ichida takrorlanmasin.
+  sku           String?
+  /// O'lchov birligi: "dona" | "kg" | "litr" | "metr" | "quti" | "paket".
+  birlik        String              @default("dona")
+  /// Shu miqdordan kam qolsa bildirishnoma chiqadi. 0 = ogohlantirish yo'q.
+  /// Ilgari butun tizim uchun bitta sobit chegara (5 dona) ishlatilardi —
+  /// tuxum sotuvchiga ham, avtomobil sotuvchiga ham bir xil edi.
+  minQoldiq     Int                 @default(0)
   // Avto rejimi maydonlari — umumiy bizneslarda null.
-  avtoYil      Int?
-  avtoRaqam    String?
-  avtoRang     String?
-  createdAt    DateTime     @default(now())
-  stockEntries StockEntry[]
-  sales        Sale[]
-  debts        Debt[]
-  expenses     ProductExpense[]
+  avtoYil       Int?
+  avtoRaqam     String?
+  avtoRang      String?
+  createdAt     DateTime            @default(now())
+  stockEntries  StockEntry[]
+  sales         Sale[]
+  debts         Debt[]
+  expenses      ProductExpense[]
+  adjustments   StockAdjustment[]
+  xaridSatrlari PurchaseOrderItem[]
 
   @@index([businessId])
+  @@index([businessId, sku])
+}
+
+/// OMBOR TO'G'RILASH — inventarizatsiya yoki hisobdan chiqarish.
+///
+/// Ilgari qoldiqni to'g'rilashning YAGONA yo'li mahsulotni qo'lda tahrirlash
+/// edi — kim, qachon va NEGA o'zgartirgani hech qayerda qolmasdi. Endi har
+/// to'g'rilash sababi bilan yoziladi.
+///
+///   "inventarizatsiya" — sanaldi, haqiqiy qoldiq boshqa chiqdi (farq ±);
+///   "chiqarish"        — buzildi/yo'qoldi/sovg'a qilindi (farq har doim −).
+model StockAdjustment {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  turi        String
+  eskiMiqdor  Int
+  yangiMiqdor Int
+  /// yangiMiqdor − eskiMiqdor (manfiy bo'lishi mumkin).
+  farq        Int
+  sabab       String
+  userId      String
+  createdAt   DateTime @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([productId])
 }
 
 /// Mahsulot/mashinaga bog'langan xarajat (avto rejimida: ta'mirlash, bo'yoq,
@@ -314,9 +479,9 @@ model Product {
 model ProductExpense {
   id            String   @id @default(cuid())
   businessId    String
-  business      Business @relation(fields: [businessId], references: [id])
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
   productId     String
-  product       Product  @relation(fields: [productId], references: [id])
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
   /// "tamirlash" | "boyoq" | "yuvish" | "rasmiylashtirish" | "ehtiyot_qism" | "boshqa"
   turi          String
   summa         Int
@@ -336,9 +501,9 @@ model ProductExpense {
 model StockEntry {
   id         String   @id @default(cuid())
   businessId String
-  business   Business @relation(fields: [businessId], references: [id])
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
   productId  String
-  product    Product  @relation(fields: [productId], references: [id])
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
   miqdor     Int
   birlikNarx Int // o'sha paytdagi tannarx snapshot
   userId     String
@@ -350,26 +515,41 @@ model StockEntry {
 }
 
 /// Sotuv — mahsulot qoldig'ini kamaytiradi. Naqd → kirim tranzaksiya; qarz → Debt.
+///
+/// `sana` ALOHIDA maydon (createdAt emas): kechagi sotuvni bugun kiritish
+/// mumkin bo'lishi kerak, aks holda u kechagi hisobotga tushmaydi.
+/// `deletedAt` — xato kiritilgan sotuvni bekor qilish (kassa dasturi uchun shart).
 model Sale {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   businessId    String
-  business      Business @relation(fields: [businessId], references: [id])
+  business      Business  @relation(fields: [businessId], references: [id], onDelete: Restrict)
   productId     String
-  product       Product  @relation(fields: [productId], references: [id])
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
   miqdor        Int
   birlikNarx    Int // sotuv narxi snapshot
   tannarx       Int // kelgan narx snapshot (marja hisobi uchun)
   jamiSumma     Int
   tolovTuri     String // "naqd" | "qarz"
+  /// Mijoz kartochkasiga bog'lanish (ixtiyoriy — eski yozuvlarda null).
+  contactId     String?
+  contact       Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
   mijozNomi     String?
   mijozTel      String?
   userId        String
   transactionId String? // naqd bo'lsa bog'langan kirim tranzaksiya
-  createdAt     DateTime @default(now())
+  /// Sotuv sanasi (UTC yarim tuni). Migratsiyada createdAt dan to'ldiriladi.
+  sana          DateTime
+  createdAt     DateTime  @default(now())
+  /// Bekor qilingan sotuv — yumshoq o'chirish (tarix saqlanadi).
+  deletedAt     DateTime?
+  cancelledBy   String?
+  cancelReason  String?
   debt          Debt?
 
-  @@index([businessId])
+  @@index([businessId, sana])
+  @@index([businessId, deletedAt, sana])
   @@index([productId])
+  @@index([contactId])
 }
 
 /// Qarzdorlik. Ikki yo'nalishli:
@@ -379,13 +559,16 @@ model Sale {
 model Debt {
   id         String        @id @default(cuid())
   businessId String
-  business   Business      @relation(fields: [businessId], references: [id])
+  business   Business      @relation(fields: [businessId], references: [id], onDelete: Restrict)
   turi       String        @default("olinadigan")
   saleId     String?       @unique
-  sale       Sale?         @relation(fields: [saleId], references: [id])
+  sale       Sale?         @relation(fields: [saleId], references: [id], onDelete: Restrict)
   /// Qarz qaysi mahsulot/mashinaga tegishli (ixtiyoriy).
   productId  String?
-  product    Product?      @relation(fields: [productId], references: [id])
+  product    Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
+  /// Mijoz kartochkasiga bog'lanish (ixtiyoriy — eski yozuvlarda null).
+  contactId  String?
+  contact    Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
   mijozNomi  String
   mijozTel   String?
   jamiSumma  Int
@@ -398,27 +581,115 @@ model Debt {
   createdAt  DateTime      @default(now())
   payments   DebtPayment[]
 
-  @@index([businessId])
+  @@index([businessId, isYopilgan, turi])
   @@index([businessId, turi])
+  @@index([businessId, contactId, isYopilgan])
   @@index([productId])
+  @@index([contactId])
+}
+
+// ==== XARID moduli (Faza 6.1) ====
+
+/// TA'MINOTCHI — kimdan tovar olamiz.
+///
+/// CRM'dagi `Contact` mijozlar uchun; ta'minotchi esa boshqa tomon: undan
+/// tovar olamiz va UNGA qarzdor bo'lamiz. Ikkalasini aralashtirish qarzdorlik
+/// yo'nalishini chalkashtirardi.
+model Supplier {
+  id         String          @id @default(cuid())
+  businessId String
+  business   Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  nomi       String
+  tel        String?
+  manzil     String?
+  izoh       String?
+  isActive   Boolean         @default(true)
+  createdAt  DateTime        @default(now())
+  deletedAt  DateTime?
+  orders     PurchaseOrder[]
+  contracts  Contract[]
+
+  @@index([businessId, isActive])
+  @@index([businessId, nomi])
+}
+
+/// XARID BUYURTMASI.
+///
+/// Holat oqimi: "qoralama" → "tasdiqlangan" → "qabul_qilingan" (yoki "bekor").
+/// QABUL QILINGANDA (va faqat o'shanda) ombor va pul harakati yoziladi:
+///   - har satr uchun StockEntry (qoldiq oshadi, tannarx snapshot);
+///   - naqd bo'lsa chiqim tranzaksiya, qarzga bo'lsa "beriladigan" qarz.
+/// Qoralama va tasdiqlangan buyurtma hech narsaga ta'sir qilmaydi — bu
+/// ataylab: reja bilan haqiqat aralashmasligi kerak.
+model PurchaseOrder {
+  id            String              @id @default(cuid())
+  businessId    String
+  business      Business            @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  supplierId    String
+  supplier      Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  /// "qoralama" | "tasdiqlangan" | "qabul_qilingan" | "bekor"
+  holat         String              @default("qoralama")
+  /// Buyurtma sanasi (reja).
+  sana          DateTime
+  /// Haqiqiy qabul qilingan payt.
+  qabulSana     DateTime?
+  /// "naqd" | "qarz" — qabul qilishda pul harakati shunga qarab yoziladi.
+  tolovTuri     String              @default("naqd")
+  /// Satrlar yig'indisi (qabul paytida qayta hisoblanadi).
+  jamiSumma     Int                 @default(0)
+  izoh          String?
+  userId        String
+  /// Qabul qilinganda yozilgan chiqim tranzaksiyasi (naqd bo'lsa).
+  transactionId String?
+  /// Qabul qilinganda ochilgan "beriladigan" qarz (qarzga bo'lsa).
+  debtId        String?
+  createdAt     DateTime            @default(now())
+  items         PurchaseOrderItem[]
+
+  @@index([businessId, holat, sana])
+  @@index([supplierId])
+}
+
+/// Xarid buyurtmasi satri — qaysi mahsulotdan qancha va qanday narxda.
+model PurchaseOrderItem {
+  id         String        @id @default(cuid())
+  businessId String
+  business   Business      @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  orderId    String
+  order      PurchaseOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+  miqdor     Int
+  /// Birlik narxi (tannarx). Qabul qilishda Product.kelganNarx shunga yangilanadi.
+  birlikNarx Int
+  jamiSumma  Int
+
+  @@index([orderId])
+  @@index([businessId])
 }
 
 // ==== CRM moduli (BOS-2) ====
 
 /// Mijoz/kontakt — CRM'ning asosiy sub'ekti.
 model Contact {
-  id         String    @id @default(cuid())
+  id         String     @id @default(cuid())
   businessId String
-  business   Business  @relation(fields: [businessId], references: [id])
+  business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
   ism        String
   tel        String?
   telegram   String?
   izoh       String?
   createdBy  String
-  createdAt  DateTime  @default(now())
+  /// Ochiq qarz shu chegaradan oshsa yangi qarzga sotuv rad etiladi.
+  /// null — chegara yo'q (avvalgi xatti-harakat).
+  qarzLimit  Int?
+  createdAt  DateTime   @default(now())
   deletedAt  DateTime?
   deals      Deal[]
   activities Activity[]
+  sales      Sale[]
+  debts      Debt[]
+  contracts  Contract[]
 
   @@index([businessId])
   @@index([businessId, tel])
@@ -428,7 +699,7 @@ model Contact {
 model Stage {
   id         String   @id @default(cuid())
   businessId String
-  business   Business @relation(fields: [businessId], references: [id])
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   nomi       String
   tartib     Int      @default(0)
   turi       String   @default("OPEN")
@@ -440,22 +711,22 @@ model Stage {
 /// Bitim. Alohida "Lead" modeli YO'Q — birinchi bosqichdagi bitim = lead
 /// (sodda UX, konvertatsiya bosqichi degan ortiqcha qadam yo'q).
 model Deal {
-  id            String    @id @default(cuid())
+  id            String     @id @default(cuid())
   businessId    String
-  business      Business  @relation(fields: [businessId], references: [id])
+  business      Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
   contactId     String?
-  contact       Contact?  @relation(fields: [contactId], references: [id])
+  contact       Contact?   @relation(fields: [contactId], references: [id], onDelete: SetNull)
   nomi          String
-  summa         Int       @default(0)
+  summa         Int        @default(0)
   stageId       String
-  stage         Stage     @relation(fields: [stageId], references: [id])
-  masulId       String    // mas'ul foydalanuvchi
-  manba         String?   // "qolda" | "telegram" | ...
+  stage         Stage      @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  masulId       String // mas'ul foydalanuvchi
+  manba         String? // "qolda" | "telegram" | ...
   muddat        DateTime?
   yopilganAt    DateTime?
-  transactionId String?   // Yutildi -> yozilgan kirim tranzaksiyasi
+  transactionId String? // Yutildi -> yozilgan kirim tranzaksiyasi
   izoh          String?
-  createdAt     DateTime  @default(now())
+  createdAt     DateTime   @default(now())
   deletedAt     DateTime?
   activities    Activity[]
   tasks         Task[]
@@ -470,14 +741,14 @@ model Deal {
 model Task {
   id          String    @id @default(cuid())
   businessId  String
-  business    Business  @relation(fields: [businessId], references: [id])
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
   nomi        String
   izoh        String?
   holat       String    @default("OCHIQ")
-  masulId     String    // mas'ul foydalanuvchi
+  masulId     String // mas'ul foydalanuvchi
   muddat      DateTime?
-  dealId      String?   // CRM bitimiga bog'lash (ixtiyoriy)
-  deal        Deal?     @relation(fields: [dealId], references: [id])
+  dealId      String? // CRM bitimiga bog'lash (ixtiyoriy)
+  deal        Deal?     @relation(fields: [dealId], references: [id], onDelete: SetNull)
   createdBy   String
   bajarildiAt DateTime?
   createdAt   DateTime  @default(now())
@@ -492,12 +763,12 @@ model Task {
 model Activity {
   id         String   @id @default(cuid())
   businessId String
-  business   Business @relation(fields: [businessId], references: [id])
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   contactId  String?
-  contact    Contact? @relation(fields: [contactId], references: [id])
+  contact    Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
   dealId     String?
-  deal       Deal?    @relation(fields: [dealId], references: [id])
-  turi       String   // "izoh" | "qongiroq" | "uchrashuv" | "tizim"
+  deal       Deal?    @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  turi       String // "izoh" | "qongiroq" | "uchrashuv" | "tizim"
   matn       String
   userId     String
   createdAt  DateTime @default(now())
@@ -510,9 +781,9 @@ model Activity {
 model DebtPayment {
   id            String   @id @default(cuid())
   debtId        String
-  debt          Debt     @relation(fields: [debtId], references: [id])
+  debt          Debt     @relation(fields: [debtId], references: [id], onDelete: Restrict)
   businessId    String
-  business      Business @relation(fields: [businessId], references: [id])
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
   summa         Int
   userId        String
   transactionId String?
@@ -520,4 +791,271 @@ model DebtPayment {
 
   @@index([debtId])
   @@index([businessId])
+}
+
+/// TASDIQLASH QOIDASI — qaysi chiqim rahbar tasdig'isiz o'tmaydi.
+///
+/// Nega kerak: kassir yoki sotuvchi istalgan summani chiqim qilib yozib
+/// yuborardi — direktor buni faqat oy oxirida hisobotda ko'rardi. Endi
+/// chegaradan oshgan chiqim darhol yozilmaydi, "kutilmoqda" holatiga
+/// tushadi va Telegramdagi tugma bilan tasdiqlanadi yoki rad etiladi.
+///
+/// `categoryId` null bo'lsa — qoida BARCHA chiqim kategoriyalariga tegishli.
+/// Bir nechta qoida mos kelsa, eng QATTIQI (chegarasi eng pasti) ishlaydi.
+model ApprovalRule {
+  id              String            @id @default(cuid())
+  businessId      String
+  business        Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  categoryId      String?
+  category        Category?         @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  /// Shu summadan KATTA chiqim tasdiq talab qiladi (so'm, Int).
+  chegara         Int
+  /// Kim tasdiqlaydi: "OWNER" | "ADMIN".
+  tasdiqlovchiRol String            @default("OWNER")
+  isActive        Boolean           @default(true)
+  izoh            String?
+  createdAt       DateTime          @default(now())
+  deletedAt       DateTime?
+  requests        ApprovalRequest[]
+
+  @@index([businessId, isActive, deletedAt])
+  @@index([categoryId])
+}
+
+/// TASDIQ SO'ROVI — hali yozilmagan chiqim.
+///
+/// Bu tranzaksiya EMAS: hisobotlarga, kassa qoldig'iga va budjetga ta'sir
+/// qilmaydi. Tasdiqlangandagina haqiqiy `Transaction` yoziladi va shu yerga
+/// `transactionId` bilan bog'lanadi — kim so'ragani va kim tasdiqlagani
+/// keyin ham ko'rinib turadi.
+model ApprovalRequest {
+  id             String        @id @default(cuid())
+  businessId     String
+  business       Business      @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  ruleId         String?
+  rule           ApprovalRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  categoryId     String
+  category       Category      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  accountId      String?
+  account        Account?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  summa          Int
+  sana           DateTime
+  izoh           String?
+  filial         String?
+  /// "kutilmoqda" | "tasdiqlangan" | "rad"
+  holat          String        @default("kutilmoqda")
+  /// So'rovni yuborgan xodim.
+  userId         String
+  user           User          @relation("TasdiqSorovchi", fields: [userId], references: [id], onDelete: Restrict)
+  tasdiqlovchiId String?
+  tasdiqlovchi   User?         @relation("TasdiqQaror", fields: [tasdiqlovchiId], references: [id], onDelete: SetNull)
+  qarorSana      DateTime?
+  radSabab       String?
+  transactionId  String?       @unique
+  transaction    Transaction?  @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  createdAt      DateTime      @default(now())
+
+  @@index([businessId, holat, createdAt])
+  @@index([businessId, userId])
+  @@index([categoryId])
+  @@index([accountId])
+  @@index([userId])
+  @@index([tasdiqlovchiId])
+  @@index([ruleId])
+}
+
+// ==== HR-LITE moduli (Faza 6.4) ====
+
+/// XODIM KARTOCHKASI — `User` dan ataylab ajratilgan.
+///
+/// `User` — tizimga KIRADIGAN hisob. Xodimlarning ko'pchiligi esa tizimga
+/// umuman kirmaydi (yuk tashuvchi, oshpaz, farrosh), lekin ularga oylik
+/// to'lanadi. Ikkalasini bitta jadvalga tiqish "loginsiz foydalanuvchi"
+/// degan g'alati yozuvlarni tug'dirardi. `userId` — ixtiyoriy ko'prik.
+model Employee {
+  id           String    @id @default(cuid())
+  businessId   String
+  business     Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  /// Tizim hisobi bilan bog'lanish (ixtiyoriy).
+  userId       String?
+  user         User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  ism          String
+  lavozim      String?
+  tel          String?
+  /// Stavka (so'm). `stavkaTuri` ga qarab oylik yoki bir kunlik.
+  stavka       Int       @default(0)
+  /// "oylik" | "kunlik"
+  stavkaTuri   String    @default("oylik")
+  ishBoshlagan DateTime?
+  isActive     Boolean   @default(true)
+  izoh         String?
+  createdAt    DateTime  @default(now())
+  deletedAt    DateTime?
+
+  attendances Attendance[]
+  payrolls    Payroll[]
+  advances    PayrollAdvance[]
+
+  @@index([businessId, isActive, deletedAt])
+  @@index([userId])
+}
+
+/// DAVOMAT — bir xodim, bir kun, bir yozuv.
+///
+/// `holat`: "keldi" | "yarim" | "kelmadi" | "tatil". Kunlik stavkada oylik
+/// shu yozuvlardan hisoblanadi. Yarim kunni kasr bilan saqlamaslik uchun
+/// `Payroll.yarimKunlar` ikkilangan sonda yuritiladi (1 kun = 2).
+model Attendance {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  sana       DateTime
+  holat      String   @default("keldi")
+  izoh       String?
+  createdAt  DateTime @default(now())
+
+  @@unique([employeeId, sana])
+  @@index([businessId, sana])
+  @@index([employeeId, sana])
+}
+
+/// AVANS — oy o'rtasida berilgan pul.
+///
+/// Avans DARHOL chiqim tranzaksiyasi yozadi: pul haqiqatan kassadan chiqdi.
+/// Oy yopilganda esa u `Payroll.avans` sifatida hisobdan chegiriladi —
+/// aks holda bir xil pul ikki marta chiqim bo'lib ko'rinardi.
+model PayrollAdvance {
+  id            String       @id @default(cuid())
+  businessId    String
+  business      Business     @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  employeeId    String
+  employee      Employee     @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  /// Qaysi oyning oyligidan chegiriladi — "YYYY-MM".
+  oy            String
+  summa         Int
+  sana          DateTime
+  izoh          String?
+  transactionId String?      @unique
+  transaction   Transaction? @relation("AvansChiqimi", fields: [transactionId], references: [id], onDelete: SetNull)
+  userId        String
+  createdAt     DateTime     @default(now())
+
+  @@index([businessId, oy])
+  @@index([employeeId, oy])
+  @@index([transactionId])
+}
+
+/// OYLIK VEDOMOSTI — bir xodim, bir oy.
+///
+/// `qoralama` holatida hech qanday pul yozuvi yo'q: bu hali hisob-kitob.
+/// `tolangan` holatida `tolanadigan` summa bitta chiqim tranzaksiyasiga
+/// aylanadi (avans allaqachon chiqim bo'lgani uchun undan chegirilgan).
+model Payroll {
+  id            String       @id @default(cuid())
+  businessId    String
+  business      Business     @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  employeeId    String
+  employee      Employee     @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  /// "YYYY-MM"
+  oy            String
+  /// Kunlik stavkada — davomatdan hisoblangan ikkilangan kunlar (1 kun = 2).
+  yarimKunlar   Int          @default(0)
+  /// Stavka bo'yicha asosiy hisob.
+  hisoblangan   Int          @default(0)
+  /// Ustama/mukofot.
+  qoshimcha     Int          @default(0)
+  /// Ushlab qolish (jarima, yetishmovchilik).
+  ushlab        Int          @default(0)
+  /// Shu oyda berilgan avanslar yig'indisi (snapshot).
+  avans         Int          @default(0)
+  /// hisoblangan + qoshimcha - ushlab - avans (manfiy bo'lmaydi).
+  tolanadigan   Int          @default(0)
+  /// "qoralama" | "tolangan"
+  holat         String       @default("qoralama")
+  tolanganSana  DateTime?
+  transactionId String?      @unique
+  transaction   Transaction? @relation("OylikChiqimi", fields: [transactionId], references: [id], onDelete: SetNull)
+  izoh          String?
+  userId        String
+  createdAt     DateTime     @default(now())
+
+  @@unique([employeeId, oy])
+  @@index([businessId, oy, holat])
+  @@index([transactionId])
+}
+
+// ==== HUJJATLAR moduli (Faza 6.6) ====
+
+/// SHARTNOMA REYESTRI.
+///
+/// Shartnomalar papkada yotardi va muddati o'tib ketgani faqat kimdir
+/// eslaganda ma'lum bo'lardi. Endi muddat bazada: `eslatmaKun` kun qolganda
+/// bildirishnomalar ro'yxatida ogohlantirish chiqadi.
+///
+/// Kontragent ataylab ikki xil bog'lanadi: mijoz (`contactId`) yoki
+/// ta'minotchi (`supplierId`). Ikkalasi ham null bo'lsa — `kontragent`
+/// matni ishlatiladi (kartochkasi yo'q bir martalik tomon uchun).
+model Contract {
+  id         String    @id @default(cuid())
+  businessId String
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  raqam      String
+  nomi       String
+  /// "mijoz" | "taminotchi" | "boshqa"
+  turi       String    @default("mijoz")
+  contactId  String?
+  contact    Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  supplierId String?
+  supplier   Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  /// Kartochkasiz kontragent nomi.
+  kontragent String?
+  summa      Int       @default(0)
+  boshlanish DateTime
+  tugash     DateTime?
+  /// Tugashiga shuncha kun qolganda ogohlantiriladi.
+  eslatmaKun Int       @default(30)
+  /// "faol" | "tugagan" | "bekor"
+  holat      String    @default("faol")
+  izoh       String?
+  userId     String
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
+
+  @@unique([businessId, raqam])
+  @@index([businessId, holat, tugash])
+  @@index([contactId])
+  @@index([supplierId])
+}
+
+/// FAYL ILOVASI.
+///
+/// Ikki rejim bor va ikkalasi ham `url` maydonida yashaydi:
+///  - "havola" — tashqi manzil (Google Drive, Telegram). Hech qanday
+///    saqlagich talab qilmaydi va har doim ishlaydi;
+///  - "blob"  — Vercel Blob'ga yuklangan fayl (token sozlangan bo'lsa).
+///
+/// `entity` + `entityId` — polimorf bog'lanish. FK qo'yilmagan, chunki bitta
+/// jadval to'rt xil yozuvga ilova bo'ladi; egalik `businessId` va xizmat
+/// qatlamidagi tekshiruv bilan ta'minlanadi.
+model Attachment {
+  id         String    @id @default(cuid())
+  businessId String
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  /// "transaction" | "debt" | "deal" | "task" | "contract"
+  entity     String
+  entityId   String
+  nomi       String
+  url        String
+  /// "havola" | "blob"
+  saqlagich  String    @default("havola")
+  mimeType   String?
+  hajm       Int?
+  userId     String
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
+
+  @@index([businessId, entity, entityId])
+  @@index([businessId, createdAt])
 }

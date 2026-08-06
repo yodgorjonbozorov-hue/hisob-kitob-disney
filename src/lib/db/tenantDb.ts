@@ -1,5 +1,6 @@
 import { rawPrisma } from "./rawPrisma";
 import { ForbiddenError } from "@/lib/auth/guard";
+import { auditYoz, entityNomi, type AuditAmal } from "./auditWriter";
 
 /**
  * Tenant-himoyalangan Prisma client (Prisma client extension).
@@ -16,7 +17,39 @@ import { ForbiddenError } from "@/lib/auth/guard";
  *    (signup/superadmin rawPrisma bilan ishlaydi).
  */
 
-const TENANT_DIRECT = new Set(["Business", "User", "Subscription", "Payment", "TenantModule"]);
+/**
+ * MODEL TASNIFI — har model ANIQ bittasiga tegishli bo'lishi shart.
+ *
+ * Nega bu jiddiy: quyidagi `buildTenantClient` da ro'yxatlarga tushmagan model
+ * so'rovi FILTRSIZ o'tkaziladi (`return query(args)`). Ya'ni yangi model
+ * ro'yxatga qo'shilmasa, u barcha tenantlarga ko'rinadi va buni hech kim
+ * sezmaydi — bu FAIL-OPEN.
+ *
+ * `tests/izolyatsiya-royxati.test.ts` sxemadan chiqib har modelni tekshiradi:
+ * `tenantId` yoki `businessId` maydoni bor model albatta ro'yxatda bo'lishi,
+ * yoki `TIZIM_MODELLAR` da SABABI bilan yozilishi kerak.
+ */
+export const TENANT_DIRECT = new Set(["Business", "User", "Subscription", "Payment", "TenantModule"]);
+
+/**
+ * ATAYLAB tenantga bog'lanmagan tizim jadvallari — sababi bilan.
+ *
+ * Bularga tenant filtri qo'llanmaydi va bu TO'G'RI. Lekin har biri ochiq
+ * qaror bo'lishi kerak, unutilgan model emas.
+ */
+export const TIZIM_MODELLAR: Record<string, string> = {
+  // Tenant modelining o'zi extension'da alohida ishlanadi (faqat o'qish).
+  Tenant: "extension'da alohida qoida: faqat o'z tenantini o'qish mumkin",
+  // Global kalit-qiymat: rate limit hisoblagichlari, cron bayroqlari.
+  AppSetting: "global tizim sozlamalari, tenantga tegishli emas",
+  // Kalit — chatId; bot foydalanuvchi tenanti aniqlanishidan OLDIN o'qiydi.
+  BotConversation: "bot holati tenant aniqlanishidan oldin o'qiladi (chatId kaliti)",
+  // tenantId/businessId bor, LEKIN faqat rawPrisma va kompozit kalit
+  // (businessId + userId) bilan o'qiladi; businessId egaligi withTenant'da
+  // yuqorida tekshiriladi. Scoped client orqali umuman ishlatilmaydi.
+  AiConversation: "faqat rawPrisma va (businessId, userId) kompozit kaliti bilan o'qiladi",
+};
+
 const BUSINESS_SCOPED = new Set([
   "Category",
   "Transaction",
@@ -36,9 +69,31 @@ const BUSINESS_SCOPED = new Set([
   "Activity",
   // Vazifalar (BOS-3)
   "Task",
+  // Kassa / hisob-raqamlar (Faza 4.1)
+  "Account",
+  "AccountTransfer",
+  "StockAdjustment",
+  // Xarid (Faza 6.1)
+  "Supplier",
+  "PurchaseOrder",
+  "PurchaseOrderItem",
+  // Tasdiqlash (Faza 6.2)
+  "ApprovalRule",
+  "ApprovalRequest",
+  // HR-lite (Faza 6.4)
+  "Employee",
+  "Attendance",
+  "Payroll",
+  "PayrollAdvance",
+  // Hujjatlar (Faza 6.6)
+  "Contract",
+  "Attachment",
 ]);
 // AuditLog: businessId nullable — biznesga bog'langan yozuvlar tenant bo'yicha filtrlanadi.
-const AUDIT_MODEL = "AuditLog";
+export const AUDIT_MODEL = "AuditLog";
+
+/** Biznes orqali tenantga bog'lanadigan modellar (test uchun ochiq). */
+export const BUSINESS_SCOPED_MODELLAR: ReadonlySet<string> = BUSINESS_SCOPED;
 
 const FILTER_OPS = new Set([
   "findMany",
@@ -56,6 +111,29 @@ const CREATE_OPS = new Set(["create", "createMany"]);
 function delegateOf(model: string): any {
   const key = model.charAt(0).toLowerCase() + model.slice(1);
   return (rawPrisma as any)[key];
+}
+
+/**
+ * Audit qilinadigan yozish amallari. O'qish amallari yozilmaydi (shovqin),
+ * `AuditLog`ning o'zi ham — aks holda cheksiz sikl bo'lardi.
+ */
+const AUDIT_AMALLARI: Record<string, AuditAmal> = {
+  create: "create",
+  createMany: "create",
+  update: "update",
+  updateMany: "update",
+  upsert: "update",
+  delete: "delete",
+  deleteMany: "delete",
+};
+
+/** `deletedAt` qo'yilgan update — bu aslida o'chirish; olib tashlangani — tiklash. */
+function amalniAniqlash(operation: string, data: unknown): AuditAmal {
+  const amal = AUDIT_AMALLARI[operation];
+  if (amal !== "update" || data == null || typeof data !== "object") return amal;
+  const d = data as Record<string, unknown>;
+  if (!("deletedAt" in d)) return amal;
+  return d.deletedAt == null ? "restore" : "delete";
 }
 
 async function assertBusinessInTenant(businessId: string, tenantId: string): Promise<void> {
@@ -93,12 +171,34 @@ function buildTenantClient(tenantId: string) {
             return query(args);
           }
 
-          const scope = isDirect ? { tenantId } : { business: { tenantId } };
+          // AuditLog: biznesga bog'lanmagan yozuvlar ham (foydalanuvchi, modul,
+          // biznes o'chirish) tenantga tegishli — `tenantId` ustuni orqali.
+          // Ilgari ular `businessId: null` bilan hech kimga ko'rinmasdi.
+          const scope: any =
+            model === AUDIT_MODEL
+              ? { OR: [{ tenantId }, { business: { tenantId } }] }
+              : isDirect
+                ? { tenantId }
+                : { business: { tenantId } };
           const a: any = args ?? {};
+          // AuditLog'ning o'zi audit qilinmaydi — aks holda cheksiz sikl.
+          const auditQilinsin = model !== AUDIT_MODEL && operation in AUDIT_AMALLARI;
 
           if (FILTER_OPS.has(operation)) {
             a.where = a.where ? { AND: [a.where, scope] } : scope;
-            return query(a);
+            const natija = await query(a);
+            if (auditQilinsin) {
+              // updateMany/deleteMany: alohida id'lar yo'q — guruh yozuvi.
+              await auditYoz({
+                tenantId,
+                businessId: typeof a.where?.businessId === "string" ? a.where.businessId : null,
+                amal: amalniAniqlash(operation, a.data),
+                entity: entityNomi(model),
+                entityId: "bulk",
+                after: { operation, count: (natija as any)?.count ?? null, data: a.data },
+              });
+            }
+            return natija;
           }
 
           if (UNIQUE_OPS.has(operation)) {
@@ -109,12 +209,37 @@ function buildTenantClient(tenantId: string) {
               );
             }
             // Yozuv shu tenantga tegishli ekanini oldindan tekshirish (IDOR himoya).
+            // Audit uchun yozuvning TO'LIQ holati olinadi ("before") — qo'shimcha
+            // so'rov emas, o'sha mavjud tekshiruvning o'zi (select olib tashlandi).
             const found = await delegateOf(model).findFirst({
               where: { AND: [{ id }, scope] },
-              select: { id: true },
             });
             if (!found) {
               if (operation === "findUnique") return null;
+              // upsert: yozuv yo'q bo'lsa `create` bo'limi ishlaydi — buni bloklamaymiz,
+              // lekin yaratiladigan yozuv shu tenantniki ekani tekshiriladi.
+              if (operation === "upsert") {
+                const yaratish = a.create ?? {};
+                if (isDirect) {
+                  a.create = { ...yaratish, tenantId };
+                } else if (typeof yaratish.businessId === "string") {
+                  await assertBusinessInTenant(yaratish.businessId, tenantId);
+                } else {
+                  throw new Error(`${model}.upsert: tenant rejimida businessId majburiy`);
+                }
+                const yaratilgan = await query(a);
+                if (auditQilinsin) {
+                  await auditYoz({
+                    tenantId,
+                    businessId: (yaratilgan as any)?.businessId ?? null,
+                    amal: "create",
+                    entity: entityNomi(model),
+                    entityId: (yaratilgan as any)?.id ?? id,
+                    after: yaratilgan,
+                  });
+                }
+                return yaratilgan;
+              }
               throw new ForbiddenError("Yozuv topilmadi yoki boshqa kompaniyaga tegishli");
             }
             // update ma'lumotida businessId almashtirilayotgan bo'lsa — u ham shu tenantniki bo'lsin.
@@ -122,7 +247,19 @@ function buildTenantClient(tenantId: string) {
             if (typeof dataBusinessId === "string") {
               await assertBusinessInTenant(dataBusinessId, tenantId);
             }
-            return query(a);
+            const natija = await query(a);
+            if (auditQilinsin) {
+              await auditYoz({
+                tenantId,
+                businessId: (found as any)?.businessId ?? null,
+                amal: amalniAniqlash(operation, a.data ?? a.update),
+                entity: entityNomi(model),
+                entityId: id,
+                before: found,
+                after: operation === "delete" ? undefined : natija,
+              });
+            }
+            return natija;
           }
 
           if (CREATE_OPS.has(operation)) {
@@ -137,19 +274,30 @@ function buildTenantClient(tenantId: string) {
                 const rows = Array.isArray(a.data) ? a.data : [a.data];
                 a.data = rows.map((d: any) => ({ ...d, tenantId }));
               }
-              return query(a);
-            }
-            // Biznesga bog'liq modellar: businessId majburiy va shu tenantniki bo'lishi shart.
-            const rows = operation === "create" ? [a.data] : Array.isArray(a.data) ? a.data : [a.data];
-            for (const d of rows) {
-              const businessId = d?.businessId;
-              if (model === AUDIT_MODEL && businessId == null) continue;
-              if (typeof businessId !== "string") {
-                throw new Error(`${model}.${operation}: tenant rejimida businessId majburiy`);
+            } else {
+              // Biznesga bog'liq modellar: businessId majburiy va shu tenantniki bo'lishi shart.
+              const rows = operation === "create" ? [a.data] : Array.isArray(a.data) ? a.data : [a.data];
+              for (const d of rows) {
+                const businessId = d?.businessId;
+                if (model === AUDIT_MODEL && businessId == null) continue;
+                if (typeof businessId !== "string") {
+                  throw new Error(`${model}.${operation}: tenant rejimida businessId majburiy`);
+                }
+                await assertBusinessInTenant(businessId, tenantId);
               }
-              await assertBusinessInTenant(businessId, tenantId);
             }
-            return query(a);
+            const natija = await query(a);
+            if (auditQilinsin) {
+              await auditYoz({
+                tenantId,
+                businessId: (natija as any)?.businessId ?? null,
+                amal: "create",
+                entity: entityNomi(model),
+                entityId: operation === "create" ? (natija as any)?.id ?? "?" : "bulk",
+                after: operation === "create" ? natija : { count: (natija as any)?.count ?? null },
+              });
+            }
+            return natija;
           }
 
           // Noma'lum amal — xavfsizlik uchun bloklanadi.
@@ -162,14 +310,46 @@ function buildTenantClient(tenantId: string) {
 
 export type TenantDb = ReturnType<typeof buildTenantClient>;
 
-// Har tenant uchun extension bir marta quriladi (kesh).
+/**
+ * Har tenant uchun extension bir marta quriladi (kesh).
+ *
+ * Kesh CHEGARALANGAN. Ilgari oddiy `Map` edi va hech qachon tozalanmasdi:
+ * uzoq yashaydigan jarayonda (bot, cron, issiq lambda) har yangi tenant
+ * yangi client qoldirardi va xotira monoton o'sardi. 500+ mijoz maqsadida
+ * bu sezilarli.
+ *
+ * LRU: chegaraga yetganda eng UZOQ VAQT ishlatilmagani chiqariladi.
+ * `Map` kalitlar tartibini kiritilish bo'yicha saqlaydi, shuning uchun
+ * har murojaatda kalitni o'chirib qayta qo'yish "eng oxirgi ishlatilgan"
+ * ni oxiriga suradi — birinchi kalit har doim eng eskisi bo'ladi.
+ *
+ * Chiqarilgan client shunchaki qayta quriladi (u faqat extension o'ramchisi,
+ * ulanish emas — ulanish `rawPrisma` da bitta va umumiy).
+ */
+export const TENANT_KESH_CHEGARASI = 200;
+
 const cache = new Map<string, TenantDb>();
 
 export function tenantClient(tenantId: string): TenantDb {
-  let client = cache.get(tenantId);
-  if (!client) {
-    client = buildTenantClient(tenantId);
-    cache.set(tenantId, client);
+  const mavjud = cache.get(tenantId);
+  if (mavjud) {
+    // Oxiriga suramiz — bu kalit endi "eng yangi ishlatilgan".
+    cache.delete(tenantId);
+    cache.set(tenantId, mavjud);
+    return mavjud;
+  }
+
+  const client = buildTenantClient(tenantId);
+  cache.set(tenantId, client);
+
+  if (cache.size > TENANT_KESH_CHEGARASI) {
+    const engEski = cache.keys().next().value;
+    if (engEski !== undefined) cache.delete(engEski);
   }
   return client;
+}
+
+/** Kesh hajmi — test va diagnostika uchun. */
+export function tenantKeshHajmi(): number {
+  return cache.size;
 }
