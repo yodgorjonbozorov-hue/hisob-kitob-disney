@@ -23,3 +23,8 @@ prisma/backups/
 # Vercel'ning o'z (Linux) muhitida standart npm bilan o'rnatilishi uchun bularni commit qilmaymiz.
 pnpm-lock.yaml
 pnpm-workspace.yaml
+
+# Playwright (brauzer testlari)
+/test-results/
+/playwright-report/
+/blob-report/
