@@ -1736,3 +1736,63 @@ endi majburiy zaxira bilan.
 qo'riqchisi ataylab buzib sinaldi (build'da `deploy-zaxira` `db-migrate`
 dan keyinga surildi → test qizil bo'ldi). `test:apply-oqimi` 9/9 —
 refaktor eski oqimni buzmadi.
+
+---
+
+## 2026-08-06 · Postgres yo'li haqiqiy Postgres'da sinaldi
+
+**Sabab.** Faza 5.1 da yozilgan Postgres kodi uzoq vaqt **bajarilmagan**
+holda turdi. `src/lib/db/dialect.ts` dagi Postgres tarmog'i, generatsiya
+qilingan `prisma/migrations-postgres/` — hech qachon haqiqiy Postgres
+ko'rmagan. Noto'g'ri yozilgan `to_char` yoki qo'llanmaydigan sxema faqat
+ko'chish kuni, production ma'lumoti bilan bilinardi.
+
+Bu mashinada PostgreSQL 16 mavjud ekan — shu tarmoqni yuritish imkoni
+paydo bo'ldi.
+
+**`tests/postgres.test.ts` (9 test).** `PG_TEST_URL` berilsa haqiqiy
+bazada ishlaydi, berilmasa baza talab qiladiganlari o'tkazib yuboriladi
+(Postgres yo'q mashinada to'plam yashil qoladi).
+
+| Tekshirilgan | Natija |
+|---|---|
+| `migrations-postgres/` toza bazaga qo'llanadi | 40 jadval, 76 FK |
+| `User_login_lower_idx` funksional indeksi | `lower(login)` |
+| `registrsizTeng()` registrga befarq | 3 xil yozilish topildi |
+| `registrsizTeng()` indeksdan foydalanadi | planner tanladi |
+| `sanaKalitSql(10)` / `(7)` | `to_char` kunlik va oylik to'g'ri |
+| Rate limit `UPDATE ... RETURNING` atomikligi | 20 parallel = 1..20, takror yo'q |
+| `migrations-postgres/` sxemadan orqada emas | bazasiz ham ishlaydi |
+
+**Topilgan xato — hujjatdagi ko'chish tartibi noto'g'ri edi.**
+`docs/POSTGRES-KOCHISH.md` `DATABASE_URL` ni Postgres'ga qaratib
+`npm run restore` ishlatishni yozgan edi. Amalda bu ishlamaydi:
+
+```
+The Driver Adapter `@prisma/adapter-pg`, based on `postgres`,
+is not compatible with the provider `sqlite` specified in the Prisma schema.
+```
+
+Prisma client provayderni **generatsiya paytida** qotiradi. Ya'ni sxemani
+almashtirib `prisma generate` qilish — 0-qadam, uni o'tkazib bo'lmaydi.
+Hujjatga shu qadam va xato matni qo'shildi.
+
+**Ikkinchi bo'shliq.** Libsql klientiga to'g'ridan-to'g'ri qurilgan
+skriptlar (`db-migrate.mjs`, `lib/xom-surat.mjs`, `deploy-zaxira.mjs`)
+Postgres'da ishlamaydi va ular `npm run build` zanjirida turibdi — ya'ni
+Postgres'ga birinchi deploy build bosqichida yiqilardi. Hujjatga jadval
+bilan yozildi.
+
+**Kichik o'zgarish.** `scripts/pg-migratsiya.mjs` ga `--chiqish <yol>`
+qo'shildi. Chiqish yo'li qotib qolgan bo'lsa, eskirish testi tekshirayotgan
+faylning O'ZINI qayta yozib yuborardi va hech qachon qizil bo'lmasdi.
+
+**Tekshirildi:** `test:postgres` 9/9 (haqiqiy PG 16.13), `PG_TEST_URL`siz
+2 o'tdi / 7 o'tkazib yuborildi / 0 xato. Eskirish qo'riqchisi ataylab
+buzib sinaldi — migratsiya fayliga bitta satr qo'shilganda qizil bo'ldi.
+`test:dialect` 11/11, `test:agregat` 7/7 (regressiya yo'q), `tsc` toza.
+
+**Qolgan ish (baza ulangan muhitni talab qiladi):** sxemada provayderni
+almashtirish, string maydonlarni Prisma enum'ga o'tkazish, build
+zanjiridagi libsql skriptlarini almashtirish, staging'da to'liq ma'lumot
+bilan ko'chirish.

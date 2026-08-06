@@ -27,10 +27,27 @@ Provayderga bog'liq hech narsasi yo'q — `DATABASE_URL` PostgreSQL'ni
 ko'rsatsa, o'sha yerga yozadi. Ikkinchi, deyarli bir xil skript yozish
 faqat ikkita saqlanadigan joy hosil qilardi va biri eskirib qolardi.
 
+**⚠️ Oldin sxema, keyin ma'lumot.** `DATABASE_URL` ni Postgres'ga
+qaratishning O'ZI yetarli emas. Prisma client provayderni **generatsiya
+paytida** qotiradi, shuning uchun `sqlite` sxemasi bilan Postgres adapteri
+ishga tushmaydi. Tekshirildi — aynan shu xato chiqadi:
+
+```
+The Driver Adapter `@prisma/adapter-pg`, based on `postgres`,
+is not compatible with the provider `sqlite` specified in the Prisma schema.
+```
+
+Ya'ni quyidagi 0-qadamni o'tkazib bo'lmaydi.
+
 **Ko'chirish tartibi:**
 
 ```bash
-# 1) Eski (SQLite/Turso) muhitda
+# 0) Eski muhitda zaxira olinganidan KEYIN sxemani almashtirish
+#    prisma/schema.prisma:  provider = "sqlite"  ->  "postgresql"
+#    prisma/migrations/  ->  chetga; prisma/migrations-postgres/  ->  o'rniga
+npx prisma generate               # client qayta generatsiya qilinadi
+
+# 1) Eski (SQLite/Turso) muhitda — 0-qadamdan OLDIN bajariladi
 npm run backup                    # zaxira JSON hosil bo'ladi
 
 # 2) Yangi Postgres bazasida sxemani qurish
@@ -42,6 +59,10 @@ DATABASE_URL="postgresql://..." npm run restore -- <fayl.json> --confirm
 # 4) Skript o'zi har jadval sonini solishtiradi.
 #    "❌ Yozuvlar soni mos kelmadi" chiqsa — bazani ISHLATMANG.
 ```
+
+`restore.ts` sonlarni haqiqatan solishtiradi va mos kelmasa `exit 1` qiladi
+(`scripts/restore.ts`, 46–57-satrlar) — bu tekshirildi, ishonch bilan
+tayanish mumkin.
 
 **⚠️ Unumdorlik ogohlantirishi:** `restoreDump` yozuvlarni **bittalab**
 yozadi (`createMany` SQLite'da cheklangan edi). Uzoqdagi Postgres bilan har
@@ -82,6 +103,7 @@ tegish shart emas:
 | Postgres boshlang'ich migratsiyasi (40 jadval, 104 indeks, 76 FK) | `prisma/migrations-postgres/` |
 | Migratsiyani qayta generatsiya qilish | `npm run pg:migratsiya` |
 | Dialekt testlari (ikkala yo'l ham) | `tests/dialect.test.ts` (11 ta) |
+| **Haqiqiy Postgres'da sinalgan** | `tests/postgres.test.ts` (9 ta) |
 
 Dialekt qatlami provayderni `DATABASE_URL` sxemasidan aniqlaydi
 (`postgresql://` yoki `postgres://`), chunki Prisma'ning o'z provayderi build
@@ -91,6 +113,38 @@ yuklanadi — SQLite deploy'ida `pg` paketi bundle'ga umuman tushmaydi.
 **Ya'ni ko'chishda qoladigan ish:** sxemada bitta satrni almashtirish,
 migratsiya papkalarini almashtirish, ma'lumotni ko'chirish va staging'da
 sinash. Kod tayyor.
+
+### 1.6 HAQIQIY POSTGRES'DA TEKSHIRILGANI
+
+Yuqoridagi kod uzoq vaqt **bajarilmagan** holda turdi: u faqat SQLite
+yo'lida ishlab, Postgres tarmog'i hech qachon ochilmagan edi. Noto'g'ri
+yozilgan `to_char` yoki qo'llanmaydigan sxema faqat ko'chish kuni,
+production ma'lumoti bilan bilinardi.
+
+`tests/postgres.test.ts` shu tarmoqni haqiqiy PostgreSQL 16 da yuritadi:
+
+| Tekshirilgan | Natija |
+|---|---|
+| `migrations-postgres/` toza bazaga qo'llanadi | ✅ 40 jadval, 76 FK |
+| `User_login_lower_idx` funksional indeksi yaratiladi | ✅ `lower(login)` |
+| `registrsizTeng()` registrga befarq topadi | ✅ 3 xil yozilish |
+| `registrsizTeng()` o'sha indeksdan foydalanadi | ✅ planner tanladi |
+| `sanaKalitSql(10)` kunlik guruhlash | ✅ `to_char` to'g'ri |
+| `sanaKalitSql(7)` oylik guruhlash | ✅ |
+| Rate limit `UPDATE ... RETURNING` atomikligi | ✅ 20 parallel = 1..20 |
+| `migrations-postgres/` sxemadan orqada qolmagani | ✅ (bazasiz ham ishlaydi) |
+
+Ishga tushirish:
+
+```bash
+PG_TEST_URL="postgresql://postgres@127.0.0.1:5432/balansa_test" \
+  npm run test:postgres
+```
+
+`PG_TEST_URL` berilmasa baza talab qiladigan testlar o'tkazib yuboriladi,
+sxema eskirmaganini tekshiradigan test esa har doim ishlaydi.
+
+> ⚠️ Ko'rsatilgan baza to'liq tozalanadi (`DROP SCHEMA public CASCADE`).
 
 ---
 
@@ -160,11 +214,14 @@ RETURNING "value"
 `CAST` va `RETURNING` — ikkalasi ham standart SQL, PostgreSQL to'liq
 qo'llab-quvvatlaydi. **O'zgartirish kerak emas.**
 
-Lekin sinash shart: `RETURNING` ning butun ma'nosi — parallel so'rovlarning
-har biri **o'z** oshirilgan qiymatini olishi. Alohida `SELECT` bilan
-hammasi bir xil (yig'ilgan) qiymatni o'qib, 10 tadan faqat 1 tasi
-o'tardi — bu xato bir marta bo'lgan va tuzatilgan. Postgres'da parallel
-test qayta o'tkazilsin.
+`RETURNING` ning butun ma'nosi — parallel so'rovlarning har biri **o'z**
+oshirilgan qiymatini olishi. Alohida `SELECT` bilan hammasi bir xil
+(yig'ilgan) qiymatni o'qib, 10 tadan faqat 1 tasi o'tardi — bu xato bir
+marta bo'lgan va tuzatilgan.
+
+**Postgres'da tekshirildi:** 20 ta alohida ulanish bir vaqtda oshirganda
+har biri 1..20 oralig'idan o'z raqamini oldi, takror yo'q
+(`tests/postgres.test.ts`).
 
 ### 2.4 `contains` qidiruvi — 3 fayl
 
@@ -192,9 +249,22 @@ datasource db {
 ```
 
 `driverAdapters` saqlanadi, lekin adapter almashadi:
-`@prisma/adapter-libsql` → `@prisma/adapter-neon` (yoki to'g'ridan-to'g'ri
-`pg`). Ta'sir qiladigan fayllar: `src/lib/db/rawPrisma.ts` va
-`scripts/db-migrate.mjs` (u libsql klientiga qurilgan).
+`@prisma/adapter-libsql` → `@prisma/adapter-pg`. `rawPrisma.ts` buni
+`DATABASE_URL` sxemasidan o'zi tanlaydi, ya'ni unga tegish shart emas.
+
+**Libsql klientiga to'g'ridan-to'g'ri qurilgan skriptlar** — bularni
+Postgres yo'liga o'tkazish kerak, chunki ular Prisma'dan o'tmaydi:
+
+| Skript | Vazifasi | Ko'chishda |
+|---|---|---|
+| `scripts/db-migrate.mjs` | migratsiya qo'llash | `prisma migrate deploy` bilan almashtiriladi |
+| `scripts/lib/xom-surat.mjs` | xom surat (`sqlite_master`, `PRAGMA`) | Postgres uchun `pg_dump` yoki `information_schema` varianti kerak |
+| `scripts/deploy-zaxira.mjs` | deploy oldidan majburiy zaxira | yuqoridagiga tayanadi |
+| `scripts/migratsiya-belgila.mjs` | `_applied_migrations` hisoboti | Postgres'da hisobotni Prisma yuritadi, kerak emas |
+
+⚠️ Bu `npm run build` zanjiriga tegadi: `deploy-zaxira` va `db-migrate`
+almashtirilmasa, Postgres'ga birinchi deploy build bosqichida yiqiladi.
+Ko'chish rejasida shu qadam alohida turishi shart.
 
 **String maydonlarni enum'ga o'tkazish** (prompt talabi): `rol`, `turi`,
 `status`, `holat` va h.k. Bu **alohida qadam sifatida, ko'chishdan KEYIN**
