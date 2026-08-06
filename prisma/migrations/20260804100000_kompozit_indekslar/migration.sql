@@ -19,52 +19,56 @@
 -- qo'lda ko'rib chiqing (qaysi to'lov haqiqiy ekanini aniqlab, ortiqchasining
 -- externalId'sini NULL qiling), keyin migratsiyani qayta ishga tushiring.
 
--- DropIndex
-DROP INDEX "AuditLog_businessId_idx";
+-- IF EXISTS / IF NOT EXISTS (2026-08-06): production bazada sxema drifti bor —
+-- ba'zi eski indekslar (masalan AuditLog_businessId_idx) bazada yo'q, shuning
+-- uchun oddiy DROP INDEX deploy'ni yiqitardi. Indeks amallari idempotent qilindi.
 
 -- DropIndex
-DROP INDEX "Debt_businessId_idx";
+DROP INDEX IF EXISTS "AuditLog_businessId_idx";
 
 -- DropIndex
-DROP INDEX "Payment_externalId_idx";
+DROP INDEX IF EXISTS "Debt_businessId_idx";
 
 -- DropIndex
-DROP INDEX "Sale_businessId_idx";
+DROP INDEX IF EXISTS "Payment_externalId_idx";
 
 -- DropIndex
-DROP INDEX "Transaction_deletedAt_idx";
+DROP INDEX IF EXISTS "Sale_businessId_idx";
 
 -- DropIndex
-DROP INDEX "Transaction_businessId_idx";
+DROP INDEX IF EXISTS "Transaction_deletedAt_idx";
 
 -- DropIndex
-DROP INDEX "Transaction_turi_idx";
+DROP INDEX IF EXISTS "Transaction_businessId_idx";
 
 -- DropIndex
-DROP INDEX "Transaction_sana_idx";
+DROP INDEX IF EXISTS "Transaction_turi_idx";
+
+-- DropIndex
+DROP INDEX IF EXISTS "Transaction_sana_idx";
 
 
 -- CreateIndex
-CREATE INDEX "AuditLog_businessId_createdAt_idx" ON "AuditLog"("businessId", "createdAt");
+CREATE INDEX IF NOT EXISTS "AuditLog_businessId_createdAt_idx" ON "AuditLog"("businessId", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "Debt_businessId_isYopilgan_turi_idx" ON "Debt"("businessId", "isYopilgan", "turi");
+CREATE INDEX IF NOT EXISTS "Debt_businessId_isYopilgan_turi_idx" ON "Debt"("businessId", "isYopilgan", "turi");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Payment_externalId_key" ON "Payment"("externalId");
+CREATE UNIQUE INDEX IF NOT EXISTS "Payment_externalId_key" ON "Payment"("externalId");
 
 -- CreateIndex
-CREATE INDEX "Sale_businessId_createdAt_idx" ON "Sale"("businessId", "createdAt");
+CREATE INDEX IF NOT EXISTS "Sale_businessId_createdAt_idx" ON "Sale"("businessId", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "Transaction_businessId_deletedAt_sana_idx" ON "Transaction"("businessId", "deletedAt", "sana");
+CREATE INDEX IF NOT EXISTS "Transaction_businessId_deletedAt_sana_idx" ON "Transaction"("businessId", "deletedAt", "sana");
 
 -- CreateIndex
-CREATE INDEX "Transaction_businessId_turi_deletedAt_sana_idx" ON "Transaction"("businessId", "turi", "deletedAt", "sana");
+CREATE INDEX IF NOT EXISTS "Transaction_businessId_turi_deletedAt_sana_idx" ON "Transaction"("businessId", "turi", "deletedAt", "sana");
 
 -- CreateIndex
-CREATE INDEX "Transaction_businessId_categoryId_sana_idx" ON "Transaction"("businessId", "categoryId", "sana");
+CREATE INDEX IF NOT EXISTS "Transaction_businessId_categoryId_sana_idx" ON "Transaction"("businessId", "categoryId", "sana");
 
 -- CreateIndex
-CREATE INDEX "Transaction_businessId_userId_sana_idx" ON "Transaction"("businessId", "userId", "sana");
+CREATE INDEX IF NOT EXISTS "Transaction_businessId_userId_sana_idx" ON "Transaction"("businessId", "userId", "sana");
 
