@@ -18,7 +18,22 @@ import { dirname, join } from "node:path";
 const ILDIZ = join(dirname(new URL(import.meta.url).pathname), "..");
 const SXEMA = join(ILDIZ, "prisma/schema.prisma");
 const VAQTINCHA = join(ILDIZ, "prisma/.pg-schema.tmp.prisma");
-const MAQSAD = join(ILDIZ, "prisma/migrations-postgres/00000000000000_init/migration.sql");
+const ODATDAGI = join(ILDIZ, "prisma/migrations-postgres/00000000000000_init/migration.sql");
+
+/**
+ * `--chiqish <yol>` — boshqa faylga yozish.
+ *
+ * Nega kerak: `tests/postgres.test.ts` fayl eskirmaganini tekshiradi, ya'ni
+ * qayta generatsiya qilib solishtiradi. Chiqish yo'li qotib qolgan bo'lsa,
+ * test tekshirayotgan faylning O'ZINI qayta yozib yuborardi va hech qachon
+ * qizil bo'lmasdi.
+ */
+function chiqishYoli() {
+  const i = process.argv.indexOf("--chiqish");
+  return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : ODATDAGI;
+}
+
+const MAQSAD = chiqishYoli();
 
 /**
  * Login uchun funksional indeks — Prisma sxemadan generatsiya qilmaydi.
