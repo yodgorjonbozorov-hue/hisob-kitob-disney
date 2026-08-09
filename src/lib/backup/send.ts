@@ -18,6 +18,7 @@
 import { gzipSync } from "node:zlib";
 import { BRAND } from "@/lib/brand";
 import { createDump, jamiYozuvlar } from "./dump";
+import { shifrla } from "./shifr";
 
 /** Telegram bot hujjat limiti 50 MB — biroz zaxira bilan cheklaymiz. */
 const MAKS_BAYT = 45 * 1024 * 1024;
@@ -41,20 +42,33 @@ export async function sendBackupToTelegram(): Promise<ZaxiraNatija> {
   const zaxira = await createDump();
   const gz = gzipSync(Buffer.from(JSON.stringify(zaxira)));
 
-  if (gz.byteLength > MAKS_BAYT) {
-    console.error(`Zaxira juda katta (${gz.byteLength} bayt) — Telegramga sig'maydi.`);
-    return { holat: "juda-katta", bayt: gz.byteLength };
+  // C-4: faylda parol hash'lari bilan butun baza bor — kanalga chiqishidan
+  // oldin shifrlanadi. Parol yo'q bo'lsa zaxira baribir yuboriladi (zaxirasiz
+  // qolish undan ham xavfli), lekin muammo har kuni kanalning o'zida ko'rinadi.
+  const parol = process.env.ZAXIRA_PAROL;
+  const hujjat = parol ? shifrla(gz, parol) : gz;
+  if (!parol) {
+    console.warn("Zaxira SHIFRLANMAGAN holda yuborilmoqda — ZAXIRA_PAROL o'rnating.");
+  }
+
+  if (hujjat.byteLength > MAKS_BAYT) {
+    console.error(`Zaxira juda katta (${hujjat.byteLength} bayt) — Telegramga sig'maydi.`);
+    return { holat: "juda-katta", bayt: hujjat.byteLength };
   }
 
   const sana = zaxira.createdAt.slice(0, 10);
   const yozuvlar = jamiYozuvlar(zaxira);
   const caption = [
     `🗄 ${BRAND.nomi} — kunlik zaxira`,
+    parol
+      ? "🔐 Shifrlangan (AES-256) — tiklashda ZAXIRA_PAROL kerak"
+      : "⚠️ SHIFRLANMAGAN — Vercel env'ga ZAXIRA_PAROL qo'ying",
     `Sana: ${sana}`,
     `Jami yozuv: ${yozuvlar}`,
     `Tenant: ${zaxira.counts.tenant ?? 0} · Tranzaksiya: ${zaxira.counts.transaction ?? 0}`,
     "",
-    "Tiklash: npm run restore -- <fayl.json> --confirm",
+    "Tiklash: npm run restore -- <fayl> --confirm",
+    ...(parol ? ["(fayl avval ochilmaydi — restore o'zi ochadi)"] : []),
   ].join("\n");
 
   const form = new FormData();
@@ -62,8 +76,8 @@ export async function sendBackupToTelegram(): Promise<ZaxiraNatija> {
   form.append("caption", caption);
   form.append(
     "document",
-    new Blob([gz], { type: "application/gzip" }),
-    `balansa-zaxira-${sana}.json.gz`
+    new Blob([new Uint8Array(hujjat)], { type: "application/octet-stream" }),
+    `balansa-zaxira-${sana}.json.gz${parol ? ".shifr" : ""}`
   );
 
   const res = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
@@ -77,5 +91,5 @@ export async function sendBackupToTelegram(): Promise<ZaxiraNatija> {
     throw new Error(`Telegram zaxirani qabul qilmadi (${res.status}): ${sabab.slice(0, 300)}`);
   }
 
-  return { holat: "yuborildi", bayt: gz.byteLength, yozuvlar };
+  return { holat: "yuborildi", bayt: hujjat.byteLength, yozuvlar };
 }

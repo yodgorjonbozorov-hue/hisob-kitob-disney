@@ -21,6 +21,23 @@ export const ROL_LABEL: Record<Rol, string> = {
 /** Tenant boshqaruvchilari — Prisma `where: { rol: { in: ... } }` uchun. */
 export const MANAGER_ROLLAR: Rol[] = ["OWNER", "ADMIN"];
 
+/**
+ * Rol darajasi — kim kimni boshqara oladi (tasdiqlash va foydalanuvchi
+ * boshqaruvi bitta ierarxiyadan foydalanadi).
+ */
+export const ROL_DARAJA: Record<Rol, number> = {
+  SUPERADMIN: 4,
+  OWNER: 3,
+  ADMIN: 2,
+  CASHIER: 1,
+  SELLER: 1,
+};
+
+export function rolDaraja(rol: string | undefined | null): number {
+  if (!rol) return 0;
+  return ROL_DARAJA[normalizeRol(rol)] ?? 0;
+}
+
 /** Tenant boshqaruvchisimi (avvalgi `rol === "admin"` tekshiruvi o'rnida). */
 export function isManager(rol: string | undefined | null): boolean {
   return rol === "OWNER" || rol === "ADMIN";

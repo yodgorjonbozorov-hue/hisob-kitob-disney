@@ -180,6 +180,7 @@ function ishga(
       TELEGRAM_BOT_TOKEN: "",
       TELEGRAM_API_BASE: "",
       ZAXIRASIZ_DAVOM: "",
+      ZAXIRA_PAROL: "",
       ...env,
     },
   });
@@ -326,6 +327,49 @@ test("zaxira yuboriladi va u haqiqiy, tiklanadigan surat", async () => {
     0
   );
   assert.equal(jami, 7_800_000, "summalar buzilmasdan suratga tushishi kerak");
+});
+
+test("ZAXIRA_PAROL bilan yuborilgan fayl shifrlangan va ochilib tiklanadi (C-4)", async () => {
+  const oldin = telegram.qabullar.length;
+  const res = await ishga({
+    DATABASE_URL: url(ESKI_DB),
+    BACKUP_CHAT_ID: "-100123",
+    BACKUP_BOT_TOKEN: "sinov-token",
+    TELEGRAM_API_BASE: telegram.manzil(),
+    ZAXIRA_PAROL: "sinov-shifr-paroli",
+  });
+  assert.equal(res.status, 0, `${res.stdout}\n${res.stderr}`);
+  assert.equal(telegram.qabullar.length, oldin + 1);
+
+  const kelgan = telegram.qabullar[telegram.qabullar.length - 1];
+  assert.match(kelgan.nom, /\.json\.gz\.shifr$/);
+  assert.match(kelgan.izoh, /Shifrlangan/);
+
+  // Kanalga chiqqan baytlarda ochiq ma'lumot bo'lmasligi kerak.
+  assert.equal(kelgan.bayt.subarray(0, 4).toString("utf8"), "BZX1");
+  assert.ok(!kelgan.bayt.includes(Buffer.from("parolHash")));
+
+  // Va u haqiqatan ochiladigan surat: shifr → gzip → JSON.
+  const { shifrOch } = await import("@/lib/backup/shifr");
+  const surat = JSON.parse(gunzipSync(shifrOch(kelgan.bayt, "sinov-shifr-paroli")).toString("utf8"));
+  assert.equal(surat.jadvallar.Transaction.qatorlar.length, 12);
+});
+
+test("parolsiz yuborilganda izohda SHIFRLANMAGAN ogohlantirishi turadi", async () => {
+  // Zaxirasiz qolishdan ko'ra shifrsiz zaxira yaxshi — lekin muammo
+  // kanalning o'zida har safar ko'rinib turishi shart.
+  const res = await ishga({
+    DATABASE_URL: url(ESKI_DB),
+    BACKUP_CHAT_ID: "-100123",
+    BACKUP_BOT_TOKEN: "sinov-token",
+    TELEGRAM_API_BASE: telegram.manzil(),
+  });
+  assert.equal(res.status, 0, res.stderr);
+  assert.match(res.stdout + res.stderr, /SHIFRLANMAGAN/);
+
+  const kelgan = telegram.qabullar[telegram.qabullar.length - 1];
+  assert.match(kelgan.izoh, /SHIFRLANMAGAN/);
+  assert.match(kelgan.nom, /\.json\.gz$/);
 });
 
 // ---------- Ehtiyotkorlik va zanjir ----------

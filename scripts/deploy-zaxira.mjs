@@ -36,6 +36,7 @@ import {
   hisobotSoni,
 } from "./lib/xom-surat.mjs";
 import { hujjatYubor } from "./lib/telegram.mjs";
+import { shifrla } from "./lib/shifr.mjs";
 
 /** Build'ni to'xtatadi. `qoshimcha` — oxirida ko'rsatiladigan qo'shimcha satr. */
 function yiqit(sarlavha, satrlar, qoshimcha) {
@@ -138,24 +139,36 @@ async function main() {
     ]);
   }
 
+  // C-4: suratda parol hash'lari bilan butun baza bor — kanalga chiqishidan
+  // oldin shifrlanadi. Parol yo'q bo'lsa zaxira baribir yuboriladi (zaxirasiz
+  // migratsiya undan ham xavfli), lekin muammo kanalning o'zida ko'rinadi.
+  const parol = process.env.ZAXIRA_PAROL;
+  const hujjat = parol ? shifrla(bayt, parol) : bayt;
+  if (!parol) {
+    console.warn("   ⚠️  Zaxira SHIFRLANMAGAN holda yuboriladi — ZAXIRA_PAROL o'rnating.");
+  }
+
   const sana = surat.olingan.slice(0, 10);
   const izoh = [
     "🛟 Balansa — migratsiya oldidan zaxira",
+    parol
+      ? "🔐 Shifrlangan (AES-256) — tiklashda ZAXIRA_PAROL kerak"
+      : "⚠️ SHIFRLANMAGAN — deploy env'ga ZAXIRA_PAROL qo'ying",
     `Sana: ${sana}`,
     `Jami yozuv: ${yozuvlar}`,
     `Kutayotgan migratsiya: ${kutayotgan.length} ta`,
     kutayotgan.map((d) => `· ${d}`).join("\n"),
     "",
-    "Tiklash: npm run zaxira:xom -- --tikla <fayl.json>",
-    "(fayl gzip — avval oching: gunzip <fayl.json.gz>)",
+    "Tiklash: npm run zaxira:xom -- --tikla <fayl>",
+    "(shifr va gzip'ni tiklash skripti o'zi ochadi)",
   ].join("\n");
 
   try {
     await hujjatYubor({
       token,
       chatId,
-      bayt,
-      nom: `balansa-migratsiya-oldidan-${sana}.json.gz`,
+      bayt: hujjat,
+      nom: `balansa-migratsiya-oldidan-${sana}.json.gz${parol ? ".shifr" : ""}`,
       izoh,
     });
   } catch (e) {

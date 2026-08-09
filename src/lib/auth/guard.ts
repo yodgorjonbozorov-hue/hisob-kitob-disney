@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { Rol } from "./session";
-import { isManager } from "./roles";
+import { isManager, rolDaraja } from "./roles";
 
 export class ForbiddenError extends Error {
   constructor(message = "Ruxsat yo'q") {
@@ -41,6 +41,36 @@ export function requireManager(rol: Rol): void {
 export function forbidSeller(rol: Rol): void {
   if (rol === "SELLER") {
     throw new ForbiddenError("Sotuvchi faqat kirim va chiqim kirita oladi");
+  }
+}
+
+/**
+ * Foydalanuvchi boshqaruvida rol ierarxiyasi (audit H-13):
+ * quyi boshqaruvchi yuqori rolli foydalanuvchini o'zgartira/o'chira olmaydi —
+ * aks holda ADMIN direktorning parolini almashtirib hisobni egallab olardi.
+ * Teng darajada faqat o'zini o'zgartirish mumkin; OWNER bundan mustasno
+ * (ikkita direktor bir-birini boshqara oladi — undan yuqori pog'ona yo'q).
+ */
+export function requireRolAuthority(
+  aktorRol: Rol,
+  aktorId: string,
+  nishonRol: string,
+  nishonId: string
+): void {
+  const aktor = rolDaraja(aktorRol);
+  const nishon = rolDaraja(nishonRol);
+  if (nishon > aktor) {
+    throw new ForbiddenError("Sizdan yuqori rolli foydalanuvchini o'zgartira olmaysiz");
+  }
+  if (nishon === aktor && nishonId !== aktorId && aktorRol !== "OWNER") {
+    throw new ForbiddenError("Teng rolli foydalanuvchini faqat direktor o'zgartira oladi");
+  }
+}
+
+/** Rol berishda ham ierarxiya: hech kim o'zidan yuqori rol tayinlay olmaydi. */
+export function requireRolAssignable(aktorRol: Rol, yangiRol: string): void {
+  if (rolDaraja(yangiRol) > rolDaraja(aktorRol)) {
+    throw new ForbiddenError("O'zingizdan yuqori rol tayinlay olmaysiz");
   }
 }
 

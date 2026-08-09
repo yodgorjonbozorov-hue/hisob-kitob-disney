@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireManager } from "@/lib/auth/guard";
+import { requireManager, requireRolAssignable, requireRolAuthority } from "@/lib/auth/guard";
 import { withTenant } from "@/lib/auth/tenant";
 import { updateUserSchema } from "@/lib/validation/user";
 import { hashPassword } from "@/lib/auth/password";
@@ -34,6 +34,8 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
   }
 
   const { parol, businessId, rol, ...rest } = parsed.data;
+  requireRolAuthority(user.rol, user.userId, existing.rol, params.id);
+  if (rol !== undefined) requireRolAssignable(user.rol, rol);
   const effectiveRol = rol ?? existing.rol;
 
   // Biznesni rol asosida hal qilamiz:
@@ -86,8 +88,12 @@ export const DELETE = withTenant<{ params: { id: string } }>(async (request, { p
     return NextResponse.json({ error: "O'zingizni o'chira olmaysiz" }, { status: 400 });
   }
 
-  const target = await prisma.user.findUnique({ where: { id }, select: { id: true, ism: true, login: true } });
+  const target = await prisma.user.findUnique({
+    where: { id },
+    select: { id: true, ism: true, login: true, rol: true },
+  });
   if (!target) return NextResponse.json({ error: "Foydalanuvchi topilmadi" }, { status: 404 });
+  requireRolAuthority(user.rol, user.userId, target.rol, id);
 
   const txCount = await prisma.transaction.count({ where: { userId: id } });
   if (txCount > 0) {

@@ -1888,3 +1888,75 @@ notif-count — 200. Linux CI'da to'liq yurishi kutiladi.
 **Qolgan operatsion ish (kod emas, egasi bajaradi):** Turso'ni fra
 (Frankfurt) ga ko'chirish → Vercel funksiya regionini fra1 → balansa.uz
 domenini ulash. Tartib muhim: avval baza, keyin region (docs/MIGRATSIYA.md).
+
+---
+
+## 2026-08-09 — Auditning ochiq qolgan ikki xavfsizlik bandi: C-4 va H-13
+
+**Sabab.** Jurnal bilan auditni solishtirishda ikki band hech qaysi fazada
+qamrab olinmagani chiqdi: **C-4** (zaxira SHIFRLANMAGAN holda, parol
+hash'lari bilan Telegram kanaliga ketadi — kritik) va **H-13** (ADMIN
+direktorning parolini almashtira oladi — hisobni egallash yo'li).
+
+### C-4 — zaxira endi AES-256-GCM bilan shifrlanadi
+
+- Yangi format (v1): `"BZX1" | salt(16) | iv(12) | tag(16) | shifrmatn`;
+  kalit `ZAXIRA_PAROL` env'idan scrypt bilan olinadi. GCM
+  autentifikatsiyalangan — noto'g'ri parol ham, buzilgan fayl ham ochishda
+  ANIQ xato beradi, jimgina buzuq JSON qaytmaydi.
+- Ikki nusxa, bitta format: `src/lib/backup/shifr.ts` (ilova/ts-node) va
+  `scripts/lib/shifr.mjs` (build skriptlari Prisma'siz muhitda; CJS ts-node
+  .mjs ni import qila olmaydi). Moslikni `tests/shifr.test.ts` O'ZARO ochib
+  qo'riqlaydi — format o'zgarib bittasi yangilansa test qizil.
+- Shifrlash ikkala yuborish nuqtasida: kunlik cron (`backup/send.ts`) va
+  migratsiya oldi zaxirasi (`deploy-zaxira.mjs`). Fayl nomi `.json.gz.shifr`.
+- **Parol yo'q bo'lsa zaxira BARIBIR yuboriladi** — zaxirasiz qolish
+  shifrsiz zaxiradan xavfliroq. Lekin muammo yashirilmaydi: log'da ham,
+  kanalning o'zidagi izohda ham "⚠️ SHIFRLANMAGAN — ZAXIRA_PAROL o'rnating"
+  chiqadi (har kuni ko'zga tashlanadi).
+- Tiklash yo'llari shifrni O'ZI ochadi: `npm run restore` va
+  `npm run zaxira:xom -- --tikla` endi shifr + gzip + ochiq JSON uchalasini
+  qabul qiladi (eski fayllar orqaga mos). Qo'lda ko'rish: yangi
+  `npm run zaxira:och -- <fayl>` (bosib yozishdan himoyalangan).
+- GitHub Actions artefaktlari ataylab shifrlanmadi — ular repo ichida,
+  kirish allaqachon cheklangan; xavf Telegram kanalida edi.
+
+### H-13 — foydalanuvchi boshqaruvida rol ierarxiyasi
+
+- Teshik: `requireManager` OWNER va ADMIN'ni tenglashtirardi, `PATCH
+  /api/users/[id]` esa nishonning rolini tekshirmasdi — ADMIN direktorga
+  yangi parol qo'yib butun tenantni egallashi mumkin edi.
+- Yangi tekshiruvlar (`lib/auth/guard.ts`):
+  `requireRolAuthority` — o'zidan yuqori rolga tegib bo'lmaydi; teng
+  darajada faqat o'zini (OWNER mustasno — ikki direktor bir-birini
+  boshqara oladi). `requireRolAssignable` — hech kim o'zidan yuqori rol
+  tayinlay olmaydi (PATCH'da ham, POST/yaratishda ham).
+- Daraja jadvali endi bitta joyda: `ROL_DARAJA` `lib/auth/roles.ts` ga
+  ko'chdi, tasdiqlash moduli (`services/approval.ts`) ham o'shandan
+  foydalanadi (ikki nusxa edi).
+- Eski rol nomlari (`admin` → OWNER) ham ierarxiyadan to'g'ri o'tadi.
+
+**Testlar (yangi):** `tests/shifr.test.ts` (10) — `npm run test:shifr`;
+`tests/rol-ierarxiya.test.ts` (7) — `npm run test:rol-ierarxiya`;
+`tests/deploy-zaxira.test.ts` +2 (shifrlangan fayl kanalda ochiq matn
+saqlamasligi va ochilib tiklanishi; parolsiz rejimda ogohlantirish).
+
+**Tekshirildi:** `npm run build` ✅ · `tsc --noEmit` ✅ · test:shifr 10/10,
+test:rol-ierarxiya 7/7, test:deploy-zaxira 12/12, test:tasdiqlash 20/20,
+test:backup 6/6, test:apply-oqimi 9/9, test:isolation 22/22.
+
+**Fayllar:** `src/lib/backup/shifr.ts`, `scripts/lib/shifr.mjs`,
+`src/lib/backup/send.ts`, `scripts/deploy-zaxira.mjs`,
+`scripts/xom-zaxira.mjs`, `scripts/restore.ts`, `scripts/zaxira-och.mjs`,
+`src/lib/auth/roles.ts`, `src/lib/auth/guard.ts`,
+`src/lib/services/approval.ts`, `src/app/api/users/route.ts`,
+`src/app/api/users/[id]/route.ts`, `package.json`, `README.md`,
+`TELEFONDAN-APPLY.md`, 3 ta test fayli.
+
+**Sizdan kutiladi (real muhitda)**
+- [ ] Vercel env'ga `ZAXIRA_PAROL` qo'ying (kuchli parol) va uni parol
+      menejerida saqlang — **usiz shifrlangan zaxira tiklanmaydi**
+- [ ] Ertasi kuni zaxira kanalida fayl `.json.gz.shifr` bilan kelganini va
+      izohda "🔐 Shifrlangan" turganini tekshiring
+- [ ] ADMIN hisobidan direktorning parolini almashtirishga urinib ko'ring —
+      403 "Sizdan yuqori rolli foydalanuvchini o'zgartira olmaysiz"

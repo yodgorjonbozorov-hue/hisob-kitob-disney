@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { rawPrisma } from "@/lib/db/rawPrisma";
-import { requireManager } from "@/lib/auth/guard";
+import { requireManager, requireRolAssignable } from "@/lib/auth/guard";
 import { withTenant } from "@/lib/auth/tenant";
 import { createUserSchema } from "@/lib/validation/user";
 import { hashPassword } from "@/lib/auth/password";
@@ -36,6 +36,7 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
   }
+  requireRolAssignable(user.rol, parsed.data.rol);
 
   // Kassir uchun biznes MAJBURIY; sotuvchi uchun IXTIYORIY (biriktirilsa — yozuvlari
   // doim shu biznesga tushadi; biriktirilmasa — ko'p-biznesli). Owner/admin — biznessiz.

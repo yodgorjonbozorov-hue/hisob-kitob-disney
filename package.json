@@ -20,6 +20,7 @@
     "kassa:migratsiya": "node -r ts-node/register scripts/kassa-migratsiya.ts",
     "backup": "node -r ts-node/register scripts/backup.ts",
     "zaxira:xom": "node scripts/xom-zaxira.mjs",
+    "zaxira:och": "node scripts/zaxira-och.mjs",
     "migratsiya:belgila": "node scripts/migratsiya-belgila.mjs",
     "restore": "node -r ts-node/register scripts/restore.ts",
     "pg:migratsiya": "node scripts/pg-migratsiya.mjs",
@@ -62,7 +63,9 @@
     "test:postgres": "node -r ts-node/register tests/postgres.test.ts",
     "e2e:tayyorla": "node scripts/e2e-tayyorla.mjs",
     "test:smoke": "node -r ts-node/register tests/smoke-brauzer.test.ts",
-    "test:kelishilgan-narx": "node -r ts-node/register tests/kelishilgan-narx.test.ts"
+    "test:kelishilgan-narx": "node -r ts-node/register tests/kelishilgan-narx.test.ts",
+    "test:shifr": "node -r ts-node/register tests/shifr.test.ts",
+    "test:rol-ierarxiya": "node -r ts-node/register tests/rol-ierarxiya.test.ts"
   },
   "prisma": {
     "seed": "node -r ts-node/register prisma/seed.ts"

@@ -9,26 +9,16 @@ import {
 } from "@/lib/services/transactionService";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { logAudit } from "@/lib/services/audit";
-import { normalizeRol, type Rol } from "@/lib/auth/roles";
+import { rolDaraja } from "@/lib/auth/roles";
 import { formatSom } from "@/lib/format";
 import type { CreateRuleInput, UpdateRuleInput } from "@/lib/validation/approval";
 
 /**
- * Rol darajasi — kim kimning so'rovini tasdiqlay oladi.
  * So'rovchining darajasi tasdiqlovchi darajasidan past bo'lsagina tasdiq kerak:
- * direktor o'z chiqimini o'zi tasdiqlab o'tirmaydi.
+ * direktor o'z chiqimini o'zi tasdiqlab o'tirmaydi. Daraja jadvali —
+ * `lib/auth/roles.ts` (foydalanuvchi boshqaruvi bilan umumiy).
  */
-const ROL_DARAJA: Record<Rol, number> = {
-  SUPERADMIN: 4,
-  OWNER: 3,
-  ADMIN: 2,
-  CASHIER: 1,
-  SELLER: 1,
-};
-
-function daraja(rol: string): number {
-  return ROL_DARAJA[normalizeRol(rol)] ?? 0;
-}
+const daraja = rolDaraja;
 
 // ---------------------------------------------------------------------------
 // Qoidalar

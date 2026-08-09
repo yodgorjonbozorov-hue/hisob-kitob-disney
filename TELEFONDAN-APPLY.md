@@ -22,11 +22,14 @@ tekshiradi:
   umuman ishga tushmaydi**.
 
 Ya'ni zaxirasiz migratsiya qo'llanmaydi. Zaxira o'sha kanalda turadi,
-tiklash: `npm run zaxira:xom -- --tikla <fayl>.json` (fayl gzip — avval
-`gunzip` qiling).
+tiklash: `npm run zaxira:xom -- --tikla <fayl>` (shifr va gzip'ni skript
+o'zi ochadi).
 
 Kerak bo'lgan env: `BACKUP_CHAT_ID` va `BACKUP_BOT_TOKEN` (yoki
 `TELEGRAM_BOT_TOKEN`) — kunlik zaxira uchun allaqachon sozlangan.
+Qo'shimcha tavsiya: `ZAXIRA_PAROL` — qo'yilsa fayl kanalga chiqishidan
+oldin AES-256 bilan shifrlanadi (ichida parol hash'lari bilan butun baza
+bor). Parolni yo'qotmang — usiz shifrlangan zaxira tiklanmaydi.
 
 ---
 

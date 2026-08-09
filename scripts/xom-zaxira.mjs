@@ -11,7 +11,9 @@
 import "dotenv/config";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { gunzipSync } from "node:zlib";
 import { klient, suratOl, suratTikla, jamiYozuv } from "./lib/xom-surat.mjs";
+import { zaxiraFayliniOch } from "./lib/shifr.mjs";
 
 async function ol(yol) {
   const surat = await suratOl(klient());
@@ -28,7 +30,9 @@ async function ol(yol) {
 }
 
 async function tikla(yol) {
-  const surat = JSON.parse(readFileSync(yol, "utf8"));
+  // Telegram'dan kelgan fayl shifrlangan va/yoki gzip bo'lishi mumkin —
+  // ikkalasini ham shu yerda ochamiz, foydalanuvchi qo'lda ochib o'tirmaydi.
+  const surat = JSON.parse(zaxiraFayliniOch(readFileSync(yol), gunzipSync).toString("utf8"));
   console.log(`Tiklanmoqda: ${yol} (${surat.olingan})\n`);
 
   const jami = await suratTikla(klient(), surat, (jadval, soni) => {

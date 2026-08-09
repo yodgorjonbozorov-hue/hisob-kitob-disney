@@ -292,6 +292,7 @@ git push -u origin main
 | `CRON_SECRET` | o'zingiz o'ylab topgan maxfiy satr |
 | `BACKUP_CHAT_ID` | kunlik zaxira yuboriladigan yopiq Telegram kanal id (qarang: [docs/MIGRATSIYA.md](docs/MIGRATSIYA.md)) |
 | `BACKUP_BOT_TOKEN` | zaxira kanaliga admin qilingan **alohida** bot tokeni |
+| `ZAXIRA_PAROL` | zaxira faylini shifrlash paroli (AES-256). Qo'yilmasa zaxira ochiq ketadi va kanalda ogohlantirish chiqadi. **Yo'qotmang** — usiz zaxira tiklanmaydi |
 
 "Deploy" tugmasini bosing.
 
@@ -341,7 +342,9 @@ Eski `/api/cron/monthly-report` moslik uchun saqlangan va avvalgidek to'rtala is
 ### 6. Zaxira (backup)
 
 Kunlik zaxira cron'i (`/api/cron/backup`, 03:00) butun bazani JSON+gzip qilib `BACKUP_CHAT_ID` kanaliga yuboradi.
-Qo'lda: `npm run backup`, tiklash: `npm run restore -- <fayl.json> --confirm`.
+`ZAXIRA_PAROL` qo'yilgan bo'lsa fayl kanalga chiqishidan oldin AES-256 bilan shifrlanadi (faylda parol
+hash'lari bilan butun baza bor). Tiklash skriptlari shifrni o'zi ochadi; qo'lda ko'rish uchun: `npm run zaxira:och -- <fayl>`.
+Qo'lda: `npm run backup`, tiklash: `npm run restore -- <fayl> --confirm`.
 To'liq tartib va server ko'chirish yo'riqnomasi — [docs/MIGRATSIYA.md](docs/MIGRATSIYA.md).
 
 ## Kelajakdagi ishlar (v1'da qasddan kiritilmagan)

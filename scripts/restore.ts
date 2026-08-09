@@ -16,6 +16,7 @@ import "dotenv/config";
 import { readFileSync } from "node:fs";
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { restoreDump, jamiYozuvlar, type Zaxira } from "@/lib/backup/dump";
+import { zaxiraFayliniOch } from "@/lib/backup/shifr";
 
 async function main() {
   const args = process.argv.slice(2);
@@ -32,7 +33,9 @@ async function main() {
     process.exit(1);
   }
 
-  const zaxira: Zaxira = JSON.parse(readFileSync(yol, "utf8"));
+  // Telegram'dan kelgan fayl shifrlangan va/yoki gzip bo'lishi mumkin —
+  // ikkalasi ham shu yerda ochiladi, eski ochiq .json fayllar o'zgarishsiz o'tadi.
+  const zaxira: Zaxira = JSON.parse(zaxiraFayliniOch(readFileSync(yol)).toString("utf8"));
   const maqsad = process.env.DATABASE_URL ?? "(DATABASE_URL yo'q)";
 
   console.log(`Fayl:   ${yol} (${zaxira.createdAt}, ${jamiYozuvlar(zaxira)} yozuv)`);
