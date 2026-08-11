@@ -1888,3 +1888,23 @@ notif-count — 200. Linux CI'da to'liq yurishi kutiladi.
 **Qolgan operatsion ish (kod emas, egasi bajaradi):** Turso'ni fra
 (Frankfurt) ga ko'chirish → Vercel funksiya regionini fra1 → balansa.uz
 domenini ulash. Tartib muhim: avval baza, keyin region (docs/MIGRATSIYA.md).
+
+---
+
+## 2026-08-11 · Holat tekshiruvi va ishga tushirish yo'riqnomasi
+
+**Branch:** `claude/balansa-progress-check-l8m4ha` · **Kod o'zgarishi YO'Q**
+
+Loyiha egasi "qaysi qismga keldik, full ishga tushiraylik" deb so'radi.
+Tekshiruv natijasi: `main` bilan farq yo'q, Faza 0–6 to'liq merge qilingan,
+qolgan ish faqat operatsion (egasi bajaradi).
+
+**Aniqlangan:** GitHub Actions "Migratsiya qo'llash" workflow'i 2026-08-06 da
+bir marta ishga tushirilgan va yiqilgan (sekretlar qo'yilmagani uchun) —
+endi kritik emas, deploy zanjiri o'zi zaxira + migratsiya qiladi.
+
+**Yangi fayl:** `ISHGA-TUSHIRISH.md` — barcha operatsion qadamlar bitta
+tartibli ro'yxatda: holat tekshiruv SQL'lari, zaxira, Turso→Frankfurt,
+Vercel region fra1, balansa.uz domeni, jonli tekshiruv ro'yxati, Postgres
+(keyinroq). Manbalar: `docs/MIGRATSIYA.md`, fazalarning "Sizdan kutiladi"
+bo'limlari.
