@@ -38,7 +38,7 @@ const SURAT = "prisma/backups/test-launch-surat.json";
 
 type Sorov = { method: string; url: string; body: string };
 const sorovlar: Sorov[] = [];
-const holat = { saytStatus: 200 };
+const holat = { saytStatus: 200, sayt2Status: 200, deployUrlBer: false };
 let server: Server;
 let baza = "";
 
@@ -78,10 +78,16 @@ function soxtaServer(): Promise<void> {
       if (u === "/v9/projects/prj_1" && req.method === "PATCH") return j(200, {});
       if (u === "/v13/deployments" && req.method === "POST")
         return j(200, { id: "dpl_1", readyState: "QUEUED" });
-      if (u === "/v13/deployments/dpl_1") return j(200, { readyState: "READY" });
-      // ---- Sayt ----
+      if (u === "/v13/deployments/dpl_1")
+        return j(200, {
+          readyState: "READY",
+          ...(holat.deployUrlBer ? { url: `${baza}/sayt2` } : {}),
+        });
+      // ---- Sayt (alias) va deployment URL ----
       if (u === "/sayt/login")
         return j(holat.saytStatus, { ok: holat.saytStatus === 200 }, { "x-vercel-id": "fra1::abc" });
+      if (u === "/sayt2/login")
+        return j(holat.sayt2Status, { ok: holat.sayt2Status === 200 }, { "x-vercel-id": "fra1::dpl" });
       j(404, { xato: `nomalum yol: ${u}` });
     });
   });
@@ -279,6 +285,24 @@ test("to'liq oqim: haqiqiy ma'lumot file: bazalar orqali ko'chadi", async () => 
     JSON.parse(envSorov!.body).find((e: any) => e.key === "DATABASE_URL").value,
     `file:./${YANGI_DB}`
   );
+});
+
+test("alias yiqilsa lekin deployment URL ishlasa — muvaffaqiyat, rollback YO'Q", async () => {
+  // Host-darajali redirect (eski vercel.app → balansa.uz) ostidagi alias
+  // domen DNS'da bo'lmasa yiqiladi — bu baza ko'chirishning aybi emas.
+  sorovlar.length = 0;
+  holat.saytStatus = 500;
+  holat.deployUrlBer = true;
+  try {
+    const r = await launch({ TURSO_API_TOKEN: "tt", LAUNCH_KOCHIRISH_SKRIPT: STUB_OK });
+    assert.equal(r.status, 0, `launch yiqildi:\n${r.stdout}\n${r.stderr}`);
+    assert.match(r.stdout, /alias\/domen masalasi/);
+    const envSorovlar = sorovlar.filter((s) => s.url === "/v10/projects/prj_1/env?upsert=true");
+    assert.equal(envSorovlar.length, 1, "rollback bo'lmasligi kerak edi");
+  } finally {
+    holat.saytStatus = 200;
+    holat.deployUrlBer = false;
+  }
 });
 
 test("health-check yiqilsa — env ESKI qiymatlarga qaytadi (rollback)", async () => {
