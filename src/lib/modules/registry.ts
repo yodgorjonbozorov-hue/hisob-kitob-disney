@@ -59,6 +59,19 @@ export const MODULLAR: ModulTarifi[] = [
     ],
   },
   {
+    code: "KUNLIK",
+    nomi: "Kunlik hisobot",
+    tavsif:
+      "Kun davomida tushumlar (naqd, Click, qarz) alohida yuritiladi, kun yakunini tayinlangan direktor tasdiqlaydi. Oylik hisobot va kassa qoldig'iga ta'sir qilmaydi.",
+    core: false,
+    // Tushum kiritish — xodimning asosiy amali, shuning uchun hammaga ochiq;
+    // tasdiqlash/tarix server tomonda direktor/boshqaruvchi bilan cheklanadi.
+    rollar: HAMMA,
+    nav: [
+      { href: "/app/kunlik", label: "Kunlik hisobot", icon: "daily", tartib: 15, rollar: HAMMA },
+    ],
+  },
+  {
     code: "OMBOR",
     nomi: "Ombor va sotuv",
     tavsif: "Mahsulot qoldig'i, sotuv (naqd/qarz), qarzdorlik nazorati. Tovar sotadigan bizneslar uchun.",

@@ -15,7 +15,7 @@ export const PLANLAR: Plan[] = [
     nomi: "Standart",
     oylikNarx: 199_000,
     tavsif: "Cheksiz biznes, foydalanuvchi va tranzaksiya · Hisobotlar (PDF/Excel) · Telegram bot",
-    modullar: ["MOLIYA", "OMBOR"],
+    modullar: ["MOLIYA", "OMBOR", "KUNLIK"],
   },
   {
     code: "AVTO",
@@ -23,7 +23,7 @@ export const PLANLAR: Plan[] = [
     tavsif:
       "Avto olib-sotarlar uchun: avtopark (har mashina alohida), har mashina bo'yicha sof foyda, ikki tomonlama qarzdorlik · Hisobotlar · Telegram bot",
     oylikNarx: 200_000,
-    modullar: ["MOLIYA", "OMBOR"],
+    modullar: ["MOLIYA", "OMBOR", "KUNLIK"],
   },
   {
     code: "PRO",
@@ -31,7 +31,7 @@ export const PLANLAR: Plan[] = [
     oylikNarx: 399_000,
     tavsif:
       "Standart'dagi hammasi + Xarid (ta'minotchi, buyurtma, qabul qilish) + CRM (bitimlar kanbani, kontaktlar) + Vazifalar + AI yordamchi",
-    modullar: ["MOLIYA", "OMBOR", "XARID", "TASDIQLASH", "MIJOZLAR", "HR", "HUJJATLAR", "CRM", "VAZIFALAR", "AI"],
+    modullar: ["MOLIYA", "OMBOR", "KUNLIK", "XARID", "TASDIQLASH", "MIJOZLAR", "HR", "HUJJATLAR", "CRM", "VAZIFALAR", "AI"],
   },
 ];
 

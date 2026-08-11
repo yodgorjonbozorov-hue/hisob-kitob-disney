@@ -88,6 +88,10 @@ const BUSINESS_SCOPED = new Set([
   // Hujjatlar (Faza 6.6)
   "Contract",
   "Attachment",
+  // Kunlik hisobot
+  "DailyReport",
+  "DailyTransaction",
+  "DailyReportSetting",
 ]);
 // AuditLog: businessId nullable — biznesga bog'langan yozuvlar tenant bo'yicha filtrlanadi.
 export const AUDIT_MODEL = "AuditLog";
