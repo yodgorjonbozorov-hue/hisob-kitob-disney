@@ -232,15 +232,37 @@ async function deployniKut(vt, id) {
   }
 }
 
-async function saytniTekshir(saytUrl, region) {
-  const res = await fetch(`${saytUrl}/login`, { redirect: "follow" });
-  if (!res.ok) throw new Error(`Sayt ${res.status} qaytardi (${saytUrl}/login).`);
-  const vercelId = res.headers.get("x-vercel-id") || "";
-  if (vercelId && !vercelId.includes(region)) {
-    ogoh(`x-vercel-id "${vercelId}" — ${region} ko'rinmayapti (region keshda kechikishi mumkin).`);
-  } else if (vercelId) {
-    ok(`Region tasdiqlandi: ${vercelId}`);
+/**
+ * Sayt tekshiruvi bir nechta nomzod URL bilan. Sabab: production alias
+ * host-darajali redirect (masalan eski *.vercel.app → balansa.uz) ostida
+ * bo'lishi mumkin — domen hali DNS'da bo'lmasa alias tekshiruvi yiqiladi,
+ * lekin bu BAZA ko'chirishning aybi emas va rollback uni tuzatmaydi.
+ * Deployment'ning o'z URL'iga host-redirect tegmaydi — u zaxira nomzod.
+ */
+async function saytniTekshir(nomzodlar, region) {
+  const xatolar = [];
+  for (const saytUrl of nomzodlar.filter(Boolean)) {
+    try {
+      const res = await fetch(`${saytUrl}/login`, { redirect: "follow" });
+      if (!res.ok) {
+        xatolar.push(`${saytUrl} → ${res.status}`);
+        continue;
+      }
+      const vercelId = res.headers.get("x-vercel-id") || "";
+      if (vercelId && !vercelId.includes(region)) {
+        ogoh(`x-vercel-id "${vercelId}" — ${region} ko'rinmayapti (region keshda kechikishi mumkin).`);
+      } else if (vercelId) {
+        ok(`Region tasdiqlandi: ${vercelId}`);
+      }
+      if (xatolar.length) {
+        ogoh(`Oldingi nomzod(lar) ishlamadi: ${xatolar.join("; ")} — bu baza emas, alias/domen masalasi.`);
+      }
+      return saytUrl;
+    } catch (e) {
+      xatolar.push(`${saytUrl} → ${e.message}`);
+    }
   }
+  throw new Error(`Sayt hech bir manzilda ochilmadi: ${xatolar.join("; ")}`);
 }
 
 // ─────────────────────────────────── Oqim ───────────────────────────────────
@@ -313,13 +335,18 @@ async function main() {
   }
 
   bolim(5, "Deploy va tekshiruv");
-  const saytUrl = process.env.SAYT_URL || `https://${loyiha.name}.vercel.app`;
+  let saytUrl = process.env.SAYT_URL || `https://${loyiha.name}.vercel.app`;
   try {
     const d = await deployQil(vt, loyiha);
     ok(`Deploy boshlandi: ${d.id}`);
-    await deployniKut(vt, d.id);
+    const tayyor = await deployniKut(vt, d.id);
     ok("Deploy tayyor.");
-    await saytniTekshir(saytUrl, region);
+    const deployUrl = tayyor.url || d.url;
+    const nomzodlar = [
+      saytUrl,
+      deployUrl ? (deployUrl.startsWith("http") ? deployUrl : `https://${deployUrl}`) : null,
+    ];
+    saytUrl = await saytniTekshir(nomzodlar, region);
     ok(`Sayt ishlayapti: ${saytUrl}`);
   } catch (e) {
     // ROLLBACK: yangi baza bilan sayt ko'tarilmadi — eski env qaytariladi.

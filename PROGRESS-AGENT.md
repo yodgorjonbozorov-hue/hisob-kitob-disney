@@ -2014,3 +2014,12 @@ JONLI so'rov yuborilmadi — API sxemalari hujjat bo'yicha yozildi va soxta
 server bilan sinaldi. Birinchi haqiqiy yurishda API javobi kutilgandan
 farq qilsa, skript aniq xato matni bilan to'xtaydi (jimgina davom etmaydi)
 va hech narsani buzmaydi — shunga mo'ljallab qurilgan.
+
+**Qo'shimcha (o'sha kun):** egasi main'ga eski *.vercel.app → balansa.uz
+host-redirect qo'shgani aniqlandi. Bu health-check'ni buzardi: domen hali
+DNS'da bo'lmasa alias tekshiruvi yiqilib, BEKORGA rollback bo'lardi.
+`saytniTekshir` endi bir nechta nomzod bilan ishlaydi — alias yiqilsa
+deployment'ning o'z URL'i tekshiriladi (unga host-redirect tegmaydi);
+u ishlayotgan bo'lsa muvaffaqiyat (ogohlantirish bilan): baza sog',
+alias/domen masalasi rollback bilan tuzalmaydi. Yangi test qo'shildi —
+`test:launch` endi 7/7.
