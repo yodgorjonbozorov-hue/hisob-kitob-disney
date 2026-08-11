@@ -1888,3 +1888,74 @@ notif-count — 200. Linux CI'da to'liq yurishi kutiladi.
 **Qolgan operatsion ish (kod emas, egasi bajaradi):** Turso'ni fra
 (Frankfurt) ga ko'chirish → Vercel funksiya regionini fra1 → balansa.uz
 domenini ulash. Tartib muhim: avval baza, keyin region (docs/MIGRATSIYA.md).
+
+---
+
+## 2026-08-11 · Holat tekshiruvi va ishga tushirish yo'riqnomasi
+
+**Branch:** `claude/balansa-progress-check-l8m4ha` · **Kod o'zgarishi YO'Q**
+
+Loyiha egasi "qaysi qismga keldik, full ishga tushiraylik" deb so'radi.
+Tekshiruv natijasi: `main` bilan farq yo'q, Faza 0–6 to'liq merge qilingan,
+qolgan ish faqat operatsion (egasi bajaradi).
+
+**Aniqlangan:** GitHub Actions "Migratsiya qo'llash" workflow'i 2026-08-06 da
+bir marta ishga tushirilgan va yiqilgan (sekretlar qo'yilmagani uchun) —
+endi kritik emas, deploy zanjiri o'zi zaxira + migratsiya qiladi.
+
+**Yangi fayl:** `ISHGA-TUSHIRISH.md` — barcha operatsion qadamlar bitta
+tartibli ro'yxatda: holat tekshiruv SQL'lari, zaxira, Turso→Frankfurt,
+Vercel region fra1, balansa.uz domeni, jonli tekshiruv ro'yxati, Postgres
+(keyinroq). Manbalar: `docs/MIGRATSIYA.md`, fazalarning "Sizdan kutiladi"
+bo'limlari.
+
+---
+
+## 2026-08-11 · Frankfurtga ko'chirish BITTA TUGMA bo'ldi
+
+**Branch:** `claude/balansa-progress-check-l8m4ha` · **Migratsiya YO'Q**
+
+Loyiha egasi launch qadamlarini o'zi bajarishga qo'shilmadi — "o'zing
+qilib ber" dedi. Turso/Vercel hisoblariga kirish faqat egasida, shuning
+uchun qilinishi mumkin bo'lgan eng katta ish qilindi: **ko'chirishning
+o'zi avtomatlashtirildi** — egasiga faqat sekretlarni bir marta qo'yish
+va bitta tugma qoladi.
+
+**Yangi: `scripts/kochirish.mjs`** (`npm run kochirish`) — eski bazadan
+yangi (Frankfurt) bazaga to'liq ko'chirish orkestri:
+
+1. Fail-closed tekshiruvlar: `YANGI_DATABASE_URL` ataylab alohida nom
+   (yozish qaysi bazaga borishi hech qachon taxminga qolmaydi); eski va
+   yangi URL bir xil bo'lsa to'xtaydi; eski baza to'liq migratsiya
+   qilinmagan yoki kassasiz tranzaksiyasi bo'lsa to'xtaydi (xato yangi
+   bazaga ko'chib o'tmasin); yangi baza BO'SH bo'lmasa to'xtaydi (bu ham
+   noto'g'ri nishon himoyasi, ham takror urinish idempotentligi).
+2. Oqim: zaxira → yangi bazaga migratsiyalar → tiklash → **mustaqil
+   verifikatsiya**. Verifikatsiya restore skriptining o'z solishtiruviga
+   ishonmaydi: ikkala JONLI bazani jadval-bajadval sonlar va pul
+   summalari (Transaction.summa, Sale.jamiSumma, Debt.jamiSumma)
+   bo'yicha to'g'ridan-to'g'ri solishtiradi, FK yaxlitligini tekshiradi.
+3. **Eski bazaga faqat o'qish bilan tegiladi** — jarayonning istalgan
+   nuqtasida orqaga yo'l ochiq.
+
+**Yangi: `.github/workflows/kochirish.yml`** — "Bazani ko'chirish",
+telefondan: Actions → Run workflow → `HA`. Sekretlar: eski
+`DATABASE_URL`/`DATABASE_AUTH_TOKEN` + yangi `YANGI_DATABASE_URL`/
+`YANGI_DATABASE_AUTH_TOKEN`. Zaxira artefakt sifatida 30 kun (har doim,
+yiqilganda ham). `concurrency: migratsiya` — migratsiya workflow'i bilan
+bir vaqtda ishlamaydi. Yakuniy summary'da Vercel qadamlar yozilgan.
+
+**Test: `tests/kochirish.test.ts` (8)** — `npm run test:kochirish`.
+Har himoya alohida sinaladi + to'liq oqim haqiqiy ma'lumot bilan (20
+tranzaksiya, sotuv, qarz, kassa) va "eski baza o'zgarmagan" tekshiruvi.
+
+**Aniqlangan:** GitHub Actions'dagi "Migratsiya qo'llash" 2026-08-06 da
+sekretsiz ishga tushirilib yiqilgan ekan — 1-qadam sekretlari qo'yilgach
+u ham ishlaydigan bo'ladi (lekin endi shart emas, deploy o'zi qiladi).
+
+**`ISHGA-TUSHIRISH.md` yangilandi:** egasining qismi 3 qadamga tushdi —
+(1) Turso'da fra baza + 4 sekret, (2) workflow tugmasi, (3) Vercel'da
+env + region + redeploy. Domen va jonli tekshiruv ro'yxati o'z joyida.
+
+**Tekshirildi:** `npm run build` exit 0 · `test:kochirish` 8/8 ·
+`test:apply-oqimi` 9/9 · `test:backup` 6/6.

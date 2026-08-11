@@ -1,0 +1,114 @@
+# Bazani yangi serverga TELEFONDAN ko'chirish (masalan Tokio → Frankfurt).
+#
+# GitHub mobil ilovasi yoki brauzeridan:
+#   Actions -> "Bazani ko'chirish" -> "Run workflow" -> tasdiq: HA -> Run
+#
+# Oldindan bir marta sozlanadi (Settings -> Secrets -> Actions):
+#   DATABASE_URL / DATABASE_AUTH_TOKEN            — ESKI (hozirgi) baza
+#   YANGI_DATABASE_URL / YANGI_DATABASE_AUTH_TOKEN — YANGI (Frankfurt) baza
+#
+# Skript (scripts/kochirish.mjs) eski bazaga FAQAT o'qish bilan tegadi:
+# workflow yiqilsa ham hech narsa buzilmagan bo'ladi. Muvaffaqiyatdan
+# keyin qoladigan yagona ish — Vercel'da env almashtirish (summary'da
+# qadamlab yozilgan).
+name: Bazani ko'chirish
+
+on:
+  workflow_dispatch:
+    inputs:
+      tasdiq:
+        description: 'Yangi bazaga yoziladi. Davom etish uchun "HA" deb yozing'
+        required: true
+        default: ""
+
+# Migratsiya bilan ham, o'zi bilan ham bir vaqtda ishlamasin —
+# ikkalasi bitta bazalar to'plamiga tegadi.
+concurrency:
+  group: migratsiya
+  cancel-in-progress: false
+
+jobs:
+  kochirish:
+    name: Zaxira + ko'chirish + verifikatsiya
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Tasdiqni tekshirish
+        if: inputs.tasdiq != 'HA'
+        run: |
+          echo "::error::Tasdiq berilmadi. Yangi bazaga yozadigan amal — tasodifan"
+          echo "::error::ishga tushmasligi uchun 'HA' deb yozish shart."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Bog'liqliklar
+        run: npm ci
+
+      - name: Sirlar borligini tekshirish
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          YANGI_DATABASE_URL: ${{ secrets.YANGI_DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL (eski baza) sekret sozlanmagan."
+            echo "::error::Settings -> Secrets and variables -> Actions -> New repository secret"
+            exit 1
+          fi
+          if [ -z "$YANGI_DATABASE_URL" ]; then
+            echo "::error::YANGI_DATABASE_URL (yangi baza) sekret sozlanmagan."
+            echo "::error::Turso'da fra regionida yangi baza yarating va URL+token'ini sekretga qo'ying."
+            exit 1
+          fi
+          echo "Ikkala baza sekreti sozlangan."
+
+      - name: Ko'chirish
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          YANGI_DATABASE_URL: ${{ secrets.YANGI_DATABASE_URL }}
+          YANGI_DATABASE_AUTH_TOKEN: ${{ secrets.YANGI_DATABASE_AUTH_TOKEN }}
+        run: npm run kochirish
+
+      # Zaxira HAR DOIM yuklanadi — jarayon yiqilgan bo'lsa u ayniqsa kerak.
+      - name: Zaxirani saqlash
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kochirish-zaxira-${{ github.run_number }}
+          path: prisma/backups/
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Yakun
+        if: success()
+        run: |
+          echo "### ✅ Ko'chirish tugadi — ma'lumot yangi bazada, sonlar tekshirildi" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Zaxira \`kochirish-zaxira-${{ github.run_number }}\` artefaktida (30 kun)." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Qolgan qadamlar (Vercel'da, ~2 daqiqa):**" >> $GITHUB_STEP_SUMMARY
+          echo "1. Settings → Environment Variables: \`DATABASE_URL\` va \`DATABASE_AUTH_TOKEN\` ni YANGI qiymatlarga almashtiring" >> $GITHUB_STEP_SUMMARY
+          echo "2. Settings → Functions → Function Region → \`fra1\`" >> $GITHUB_STEP_SUMMARY
+          echo "3. Deployments → eng oxirgisini **Redeploy** qiling" >> $GITHUB_STEP_SUMMARY
+          echo "4. Saytda login + dashboard + bitta kirim qo'shib tekshiring" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Orqaga yo'l: env'ni eski qiymatga qaytarib redeploy (2 daqiqa)." >> $GITHUB_STEP_SUMMARY
+          echo "Eski bazani kamida **2 hafta** o'chirmang." >> $GITHUB_STEP_SUMMARY
+
+      - name: Xatolik yuz berdi
+        if: failure()
+        run: |
+          echo "### ❌ Ko'chirish yiqildi — HECH NARSA BUZILMAGAN" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Skript eski bazaga faqat o'qish bilan tegadi va Vercel'ga tegmaydi —" >> $GITHUB_STEP_SUMMARY
+          echo "sayt avvalgidek ishlashda davom etyapti." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Log'ni o'qing — xato sababi va yechimi yozilgan. Tuzatib qayta ishga tushiring" >> $GITHUB_STEP_SUMMARY
+          echo "(chala qolgan yangi bazani Turso'da o'chirib qaytadan ochish kifoya)." >> $GITHUB_STEP_SUMMARY
