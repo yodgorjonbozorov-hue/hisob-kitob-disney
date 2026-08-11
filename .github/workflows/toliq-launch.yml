@@ -1,0 +1,123 @@
+# TO'LIQ ISHGA TUSHIRISH — telefondan bitta tugma.
+#
+# GitHub mobil ilovasi yoki brauzeridan:
+#   Actions -> "To'liq ishga tushirish" -> "Run workflow" -> tasdiq: HA -> Run
+#
+# Hammasi avtomatik: Turso'da Frankfurt bazasi -> ma'lumot ko'chirish
+# (zaxira, migratsiya, tiklash, ikkala bazani solishtirish) -> Vercel env
+# almashtirish -> region fra1 -> redeploy -> sayt tekshiruvi. Tekshiruv
+# yiqilsa env ESKI qiymatlarga o'zi qaytadi (avtomatik rollback).
+#
+# Oldindan bir marta sozlanadi (Settings -> Secrets -> Actions):
+#   DATABASE_URL / DATABASE_AUTH_TOKEN — eski baza (Vercel env'dan ko'chiring)
+#   TURSO_API_TOKEN — Turso dashboard -> Account -> API Tokens
+#   VERCEL_TOKEN    — Vercel -> Account Settings -> Tokens
+# Ixtiyoriy: TURSO_ORG, VERCEL_PROJECT_NAME (mos ravishda bittadan ko'p
+# tashkilot/loyiha bo'lsagina kerak), SAYT_URL.
+name: To'liq ishga tushirish
+
+on:
+  workflow_dispatch:
+    inputs:
+      tasdiq:
+        description: 'Production o''zgaradi. Davom etish uchun "HA" deb yozing'
+        required: true
+        default: ""
+
+# Migratsiya/ko'chirish workflow'lari bilan bir vaqtda ishlamasin.
+concurrency:
+  group: migratsiya
+  cancel-in-progress: false
+
+jobs:
+  launch:
+    name: Baza + ko'chirish + Vercel + tekshiruv
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Tasdiqni tekshirish
+        if: inputs.tasdiq != 'HA'
+        run: |
+          echo "::error::Tasdiq berilmadi. Production'ni o'zgartiradigan amal —"
+          echo "::error::tasodifan ishga tushmasligi uchun 'HA' deb yozish shart."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Bog'liqliklar
+        run: npm ci
+
+      - name: Sirlar borligini tekshirish
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TURSO_API_TOKEN: ${{ secrets.TURSO_API_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          xato=0
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL (eski baza) sekret sozlanmagan — Vercel env'dan ko'chiring."
+            xato=1
+          fi
+          if [ -z "$TURSO_API_TOKEN" ]; then
+            echo "::error::TURSO_API_TOKEN sekret sozlanmagan — Turso dashboard -> Account -> API Tokens."
+            xato=1
+          fi
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::error::VERCEL_TOKEN sekret sozlanmagan — Vercel -> Account Settings -> Tokens."
+            xato=1
+          fi
+          [ "$xato" = "0" ] && echo "Barcha sekretlar sozlangan." || exit 1
+
+      - name: To'liq ishga tushirish
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          TURSO_API_TOKEN: ${{ secrets.TURSO_API_TOKEN }}
+          TURSO_ORG: ${{ secrets.TURSO_ORG }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_NAME: ${{ secrets.VERCEL_PROJECT_NAME }}
+          SAYT_URL: ${{ secrets.SAYT_URL }}
+        run: npm run launch
+
+      # Zaxira HAR DOIM yuklanadi — jarayon yiqilgan bo'lsa u ayniqsa kerak.
+      - name: Zaxirani saqlash
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: launch-zaxira-${{ github.run_number }}
+          path: prisma/backups/
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Yakun
+        if: success()
+        run: |
+          echo "### ✅ Balansa Frankfurtda ishga tushdi" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Baza ko'chirildi va solishtirildi, Vercel env va region almashtirildi," >> $GITHUB_STEP_SUMMARY
+          echo "sayt qayta deploy qilinib tekshirildi." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Zaxira \`launch-zaxira-${{ github.run_number }}\` artefaktida (30 kun)." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Sizdan:** saytga kirib login, dashboard va bitta kirimni ko'zdan kechiring." >> $GITHUB_STEP_SUMMARY
+          echo "Eski bazani kamida **2 hafta** o'chirmang (orqaga yo'l)." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Qolgan ixtiyoriy qadam: balansa.uz domeni (ISHGA-TUSHIRISH.md, 5-qadam)." >> $GITHUB_STEP_SUMMARY
+
+      - name: Xatolik yuz berdi
+        if: failure()
+        run: |
+          echo "### ❌ Ishga tushirish yiqildi" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Skript fail-fast va o'zini himoya qiladi:" >> $GITHUB_STEP_SUMMARY
+          echo "- ko'chirishgacha yiqilgan bo'lsa — hech narsaga tegilmagan;" >> $GITHUB_STEP_SUMMARY
+          echo "- sayt tekshiruvida yiqilgan bo'lsa — env ESKI qiymatlarga avtomatik qaytarilgan." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Ikkala holatda ham sayt eski bazada ishlashda davom etadi va ma'lumot yo'qolmagan." >> $GITHUB_STEP_SUMMARY
+          echo "Log'ni o'qing — xato sababi va yechimi yozilgan. Qayta ishga tushirish xavfsiz." >> $GITHUB_STEP_SUMMARY

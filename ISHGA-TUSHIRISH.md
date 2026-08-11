@@ -22,7 +22,8 @@ Batafsil manbalar: `docs/MIGRATSIYA.md` (ko'chirish), `TELEFONDAN-APPLY.md`
 | Vercel funksiya regioni | ⏳ iad1 (AQSh) — **fra1 qilinishi kerak** |
 | balansa.uz domeni | ⏳ ulanmagan |
 | GitHub Actions "Migratsiya qo'llash" | ⚠️ 2026-08-06 da yiqilgan — sekretlar qo'yilmagan edi. Endi **shart emas** (deploy o'zi zaxira + migratsiya qiladi). 1-qadamda sekretlar qo'yilgach bu ham ishlaydigan bo'ladi. |
-| GitHub Actions "Bazani ko'chirish" | ✅ tayyor — Frankfurtga ko'chirish **bitta tugma** (2-qadam) |
+| GitHub Actions "To'liq ishga tushirish" | ✅ tayyor — baza + ko'chirish + Vercel + tekshiruv, **bitta tugma** (2-qadam) |
+| GitHub Actions "Bazani ko'chirish" | ✅ tayyor — faqat ma'lumot ko'chirish (3-qadam, zaxira yo'l) |
 
 ---
 
@@ -53,62 +54,74 @@ Vercel env tekshiruvi (Settings → Environment Variables):
 
 ---
 
-## 1-qadam · Sekretlarni bir marta sozlash (5 daqiqa, telefondan ham bo'ladi)
+## 1-qadam · Sekretlarni bir marta sozlash (5–10 daqiqa, telefondan ham bo'ladi)
 
-1. Turso'da **`fra` (Frankfurt)** regionida yangi, bo'sh baza yarating —
-   URL va token'ini oling.
-2. GitHub → repo → Settings → Secrets and variables → Actions →
-   New repository secret — to'rtta sekret:
+Ikkita token yaratasiz (buni faqat siz qila olasiz — hisoblar sizniki):
+
+1. **Turso:** dashboard → Account → **API Tokens** → yangi token.
+2. **Vercel:** Account Settings → **Tokens** → yangi token.
+
+Keyin GitHub → repo → Settings → Secrets and variables → Actions →
+New repository secret — to'rtta sekret:
 
 | Sekret | Qiymat |
 |---|---|
 | `DATABASE_URL` | eski (hozirgi) baza — Vercel env'dan ko'chiring |
-| `DATABASE_AUTH_TOKEN` | eski baza tokeni |
-| `YANGI_DATABASE_URL` | yangi Frankfurt bazasi |
-| `YANGI_DATABASE_AUTH_TOKEN` | yangi baza tokeni |
+| `DATABASE_AUTH_TOKEN` | eski baza tokeni — Vercel env'dan |
+| `TURSO_API_TOKEN` | 1-banddagi Turso tokeni |
+| `VERCEL_TOKEN` | 2-banddagi Vercel tokeni |
+
+(Turso'da bittadan ortiq tashkilot yoki Vercel'da bittadan ortiq loyiha
+bo'lsa qo'shimcha `TURSO_ORG` / `VERCEL_PROJECT_NAME` sekretlarini ham
+qo'ying — workflow qaysi biri ekanini o'zi so'rab aytadi.)
 
 ---
 
-## 2-qadam · Ko'chirish — BITTA TUGMA
+## 2-qadam · Hammasi — BITTA TUGMA
 
-**GitHub → Actions → "Bazani ko'chirish" → Run workflow → tasdiq: `HA` → Run**
+**GitHub → Actions → "To'liq ishga tushirish" → Run workflow → tasdiq: `HA` → Run**
 
-Workflow o'zi hammasini qiladi va har qadamda o'zini tekshiradi:
-zaxira olish → yangi bazaga 27 migratsiya → tiklash → **ikkala jonli
-bazani jadval-bajadval va pul summalari bo'yicha solishtirish** → FK
-yaxlitligi. Bironta son mos kelmasa to'xtaydi va aniq aytadi.
+Workflow o'zi qiladi va har qadamda o'zini tekshiradi:
 
-Muhim kafolat: **eski bazaga faqat o'qish bilan tegiladi** — workflow
-yiqilsa ham sayt avvalgidek ishlashda davom etadi, hech narsa buzilmaydi.
-Zaxira fayli artefakt sifatida 30 kun saqlanadi.
+1. Turso'da **Frankfurt** guruhida yangi baza yaratadi;
+2. ma'lumotni ko'chiradi: zaxira → 27 migratsiya → tiklash → **ikkala
+   jonli bazani jadval-bajadval va pul summalari bo'yicha solishtirish**
+   → FK yaxlitligi (bironta so'm farq qilsa to'xtaydi);
+3. Vercel'da `DATABASE_URL`/`DATABASE_AUTH_TOKEN` ni yangisiga almashtiradi;
+4. funksiya regionini `fra1` qiladi;
+5. saytni qayta deploy qilib, tayyor bo'lishini kutadi va tekshiradi;
+6. tekshiruv yiqilsa — env'ni **eski qiymatlarga o'zi qaytaradi**
+   (avtomatik rollback): sayt eski bazada ishlashda davom etadi.
 
-(Terminaldan bo'lsa: `YANGI_DATABASE_URL=... YANGI_DATABASE_AUTH_TOKEN=...
-npm run kochirish` — xuddi shu skript.)
+Kafolatlar: eski bazaga **faqat o'qish** bilan tegiladi; zaxira fayli
+artefakt sifatida 30 kun saqlanadi; workflow yiqilsa ham ma'lumot
+yo'qolmaydi va sayt to'xtamaydi.
 
----
+> Kechqurun, mijozlar yozmayotgan paytda bosing: workflow davomida (~5–10
+> daqiqa) kiritilgan yangi yozuvlar eski bazada qolib ketadi.
 
-## 3-qadam · Vercel'da almashtirish (~2 daqiqa, downtime shu yerda)
-
-Workflow yashil bo'lgach:
-
-1. Vercel → Settings → Environment Variables: `DATABASE_URL` va
-   `DATABASE_AUTH_TOKEN` ni **yangi** qiymatlarga almashtiring.
-2. Settings → Functions → Function Region → **`fra1`**.
-3. Deployments → eng oxirgisini **Redeploy**.
-4. Saytda tekshiring: login, dashboard raqamlari, bitta kirim qo'shish.
-
-**Rollback:** eski Tokio bazasini kamida 2 hafta o'chirmang — muammo bo'lsa
-env'ni qaytarib redeploy qilasiz (2 daqiqa).
-
-> Kechqurun, mijozlar ishlamayotgan paytda qiling: workflow tugagach env
-> almashtirilguncha kiritilgan yangi yozuvlar eski bazada qoladi. Xavfsiz
-> yo'l — ko'chirishni mijozlar yozmayotgan paytda boshlash.
+**Workflow yashil bo'lgach sizdan bitta narsa:** saytga kirib login,
+dashboard raqamlari va bitta kirim qo'shilishini ko'zdan kechiring.
+Eski bazani kamida **2 hafta** o'chirmang (orqaga yo'l).
 
 ---
 
-> ⚠️ Region almashtirishni bazadan OLDIN qilmang: funksiya Frankfurtda,
-> baza Tokioda qolsa sayt hozirgidan ham sekinlashadi. Yuqoridagi tartib
-> shuning uchun: avval baza (2-qadam), keyin region (3-qadam).
+## 3-qadam (zaxira yo'l) · Qo'lda, bosqichma-bosqich
+
+2-qadam biror sababdan ishlamasa — xuddi shu ishni ikki bo'lakda qilish
+mumkin: Actions'dagi **"Bazani ko'chirish"** workflow'i faqat ma'lumotni
+ko'chiradi (sekretlarga `YANGI_DATABASE_URL`/`YANGI_DATABASE_AUTH_TOKEN`
+qo'shiladi), keyin Vercel'da qo'lda: Environment Variables almashtirish →
+Functions → Function Region → `fra1` → Redeploy.
+
+Terminaldan bo'lsa: `npm run kochirish` (faqat ma'lumot) yoki
+`npm run launch` (to'liq oqim) — workflow'lar ham aynan shularni chaqiradi.
+
+---
+
+> ⚠️ Qo'lda yo'lda ham region almashtirishni bazadan OLDIN qilmang:
+> funksiya Frankfurtda, baza Tokioda qolsa sayt hozirgidan ham
+> sekinlashadi. ("To'liq ishga tushirish" workflow'i tartibni o'zi saqlaydi.)
 
 ---
 
