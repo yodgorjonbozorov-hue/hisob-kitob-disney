@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "uz.balansa.app",
+      "sha256_cert_fingerprints": [
+        "70:97:16:22:76:3C:DE:BD:53:98:4F:6C:07:66:85:AB:91:D1:C4:8D:63:21:83:1C:FF:68:58:E2:5F:D7:80:A5"
+      ]
+    }
+  }
+]
