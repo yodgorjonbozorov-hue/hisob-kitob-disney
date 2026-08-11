@@ -2049,3 +2049,88 @@ funksiya regioni `dub1` → redeploy. Eski Tokio bazasi rollback uchun turibdi.
 
 **O'lchov (keyin):** login POST (DB bilan) 0.5–1 s (oldin 2.5–3.8 s edi),
 SSR sahifa 150–600 ms, `x-vercel-id: hkg1::dub1`.
+
+---
+
+## 2026-08-11 · KUNLIK HISOBOT moduli (Disney Flowers so'rovi)
+
+**Branch:** `claude/disney-flowers-daily-report-q272aw` · **Migratsiya: 1 ta (faqat CREATE TABLE)**
+
+Loyiha egasi Disney Flowers biznesi uchun oylik hisobotdan ALOHIDA kunlik
+moliyaviy hisobot so'radi: naqd / Click / qarz tushumlari, kun yakunini
+tayinlangan direktor tasdiqlashi, ertasi kuni 0 dan boshlanishi, tarix.
+
+**Asosiy qaror — oylik tizimga tegilmadi.** Kunlik tushumlar `Transaction`
+jadvaliga YOZILMAYDI: alohida `DailyReport` + `DailyTransaction` jadvallari.
+Shuning uchun oylik hisobot, kassa qoldig'i, budjet va dashboard raqamlari
+o'zgarmaydi. (Modul istalgan biznesda ishlaydi — "Disney Flowers" alohida
+kod emas, biznes tanlagichdagi oddiy biznes.)
+
+**Sxema (3 yangi model):**
+- `DailyReport` — `@@unique([businessId, sana])`: bir biznes + bir sana =
+  bitta hisobot. Bazadagi unique kalit parallel kiritish race'ini yopadi.
+  Summalar (naqd/click/qarz/jami) har mutatsiyada `jamlashTx` bilan bazadan
+  qayta hisoblanadi — frontend yuborgan songa ishonilmaydi.
+- `DailyTransaction` — summa (Int, musbat), tolovTuri CASH|CLICK|DEBT, izoh,
+  userId + userIsm snapshot (kim kiritgani), soft-delete.
+- `DailyReportSetting` — biznes uchun tayinlangan direktor (`direktorId`).
+  Tekshiruv xizmat qatlamida: faqat shu tenantning faol foydalanuvchisi,
+  kassir bo'lsa aynan shu biznesniki.
+
+Uchalasi `BUSINESS_SCOPED` (tenantDb) va `ZAXIRA_JADVALLARI` (dump, FK
+tartibida oxirida) ro'yxatlarida. Migratsiya: `20260811120000_kunlik_hisobot`
+(faqat CREATE TABLE — xavf past); `migrations-postgres` qayta generatsiya
+qilindi (43 jadval).
+
+**Kun chegarasi — Toshkent.** `todayTashkentDateOnlyString()` (`lib/date.ts`,
+UTC+5, DSTsiz): server UTC'da bo'lsa ham kun O'zbekiston yarim tunida
+almashadi. Tushum HAR DOIM bugungi (Toshkent) hisobotga yoziladi — hisobot
+yo'q bo'lsa tranzaksiya ichida `upsert` bilan ochiladi. UI'dagi soatlar ham
+Toshkent bo'yicha (`app/kunlik/vaqt.ts`, brauzer timezone'iga tayanmaydi).
+
+**Holat oqimi:** OPEN → (faqat direktor) → CONFIRMED. Qayta tasdiqlash
+`updateMany + holat: "OPEN"` sharti bilan bazada rad etiladi. CONFIRMED
+kunga tushum kiritish/tahrirlash/o'chirish taqiqlanadi; tuzatish uchun
+direktor/boshqaruvchi kunni "qayta ochadi", tuzatadi, qayta tasdiqlaydi.
+Tasdiqlagan kim va qachon — `confirmedBy/confirmedByIsm/confirmedAt`.
+
+**Ruxsatlar (`getKunlikRuxsat` — yagona manba):**
+- Xodim (kassir/sotuvchi): bugungi hisobotni ko'radi, tushum kiritadi,
+  faqat O'Z tushumini (kun ochiq bo'lsa) o'zgartira oladi. Tarix yopiq.
+- Direktor (tayinlangan foydalanuvchi, roli muhim emas): tasdiqlash, tarix,
+  istalgan tushumni tahrirlash, qayta ochish.
+- Boshqaruvchi (OWNER/ADMIN): tarix, tahrirlash, qayta ochish, direktorni
+  tayinlash/almashtirish. Direktor tayinlanmagan bo'lsa tasdiqlash ham
+  (ish to'xtab qolmasin); tayinlangach tasdiqlash FAQAT direktorda.
+
+**Atomiklik:** barcha yozish amallari `runBusinessTx` ichida (har so'rovda
+businessId qo'lda), audit `logAudit` bilan qo'lda (kirit/tahrir/o'chir/
+tasdiqlash/qayta ochish/direktor almashishi).
+
+**Fayllar:**
+- `prisma/schema.prisma` + `prisma/migrations/20260811120000_kunlik_hisobot/`
+- `src/lib/validation/kunlik.ts`, `src/lib/services/kunlik.ts`, `src/lib/queries/kunlik.ts`
+- `src/app/api/kunlik/{hisobot,tushum,tushum/[id],tasdiqlash,qayta-ochish,tarix,direktor}/route.ts`
+- `src/app/app/kunlik/{page,loading,error}.tsx`, `KunlikClient.tsx`,
+  `TushumForm.tsx`, `DirektorModal.tsx`, `vaqt.ts`, `tarix/{page,loading}.tsx`, `tarix/TarixClient.tsx`
+- `src/lib/modules/registry.ts` (KUNLIK, rollar HAMMA), `src/lib/billing/plans.ts`
+  (barcha tariflarga), `src/components/nav/Sidebar.tsx` (daily ikon),
+  `src/lib/db/tenantDb.ts`, `src/lib/backup/dump.ts`, `src/lib/services/audit.ts`,
+  `src/lib/date.ts`, `package.json` (test:kunlik)
+
+**Test: `tests/kunlik.test.ts` (18)** — Toshkent kun chegarasi, zod (0/manfiy/
+kasr summa rad), jamlash, parallel kiritishda bitta report, direktor
+tayinlash (begona tenant rad), tasdiqlash huquqlari, qayta tasdiqlash rad,
+tasdiqlangan kun qulfi, qayta ochish + tuzatish + qayta tasdiqlash, tarix
+va 0 dan boshlanadigan yangi kun, ruxsat matritsasi, tenant izolyatsiyasi, audit.
+
+**Tekshirildi:** `npm run build` ✅ · `tsc --noEmit` toza (bitta MAVJUD xato
+`tests/toliq-ishga-tushirish.test.ts:158` — bu muhitdagi @libsql tip versiyasi,
+main'da ham bor, tegilmadi) · test:kunlik 18/18 · regressiya: isolation 22/22,
+izolyatsiya-royxati 9/9, backup 6/6, modules 13/13, dialect 11/11,
+migratsiya 10/10, audit 12/12, soft-delete 8/8, agregat 7/7, audit-qoldiq 10/10 ·
+smoke (brauzer) 7/7 — yangi /app/kunlik sahifasi ham ochiladi.
+
+**Eslatma (deploy):** modul barcha tariflarda bor, lekin core emas —
+Sozlamalar → Modullar'da "Kunlik hisobot" yoqiladi, keyin boshqaruvchi
+sahifadagi "Direktor" tugmasi bilan direktorni tayinlaydi.

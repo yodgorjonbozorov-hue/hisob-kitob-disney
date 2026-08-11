@@ -604,6 +604,53 @@ CREATE TABLE "Payroll" (
 );
 
 -- CreateTable
+CREATE TABLE "DailyReport" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "sana" TIMESTAMP(3) NOT NULL,
+    "holat" TEXT NOT NULL DEFAULT 'OPEN',
+    "naqdSumma" INTEGER NOT NULL DEFAULT 0,
+    "clickSumma" INTEGER NOT NULL DEFAULT 0,
+    "qarzSumma" INTEGER NOT NULL DEFAULT 0,
+    "jamiSumma" INTEGER NOT NULL DEFAULT 0,
+    "confirmedBy" TEXT,
+    "confirmedByIsm" TEXT,
+    "confirmedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "DailyReport_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "DailyTransaction" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "reportId" TEXT NOT NULL,
+    "summa" INTEGER NOT NULL,
+    "tolovTuri" TEXT NOT NULL,
+    "izoh" TEXT,
+    "userId" TEXT NOT NULL,
+    "userIsm" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "DailyTransaction_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "DailyReportSetting" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "direktorId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "DailyReportSetting_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "Contract" (
     "id" TEXT NOT NULL,
     "businessId" TEXT NOT NULL,
@@ -936,6 +983,21 @@ CREATE INDEX "Payroll_transactionId_idx" ON "Payroll"("transactionId");
 CREATE UNIQUE INDEX "Payroll_employeeId_oy_key" ON "Payroll"("employeeId", "oy");
 
 -- CreateIndex
+CREATE INDEX "DailyReport_businessId_holat_sana_idx" ON "DailyReport"("businessId", "holat", "sana");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "DailyReport_businessId_sana_key" ON "DailyReport"("businessId", "sana");
+
+-- CreateIndex
+CREATE INDEX "DailyTransaction_reportId_deletedAt_idx" ON "DailyTransaction"("reportId", "deletedAt");
+
+-- CreateIndex
+CREATE INDEX "DailyTransaction_businessId_deletedAt_createdAt_idx" ON "DailyTransaction"("businessId", "deletedAt", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "DailyReportSetting_businessId_key" ON "DailyReportSetting"("businessId");
+
+-- CreateIndex
 CREATE INDEX "Contract_businessId_holat_tugash_idx" ON "Contract"("businessId", "holat", "tugash");
 
 -- CreateIndex
@@ -1168,6 +1230,18 @@ ALTER TABLE "Payroll" ADD CONSTRAINT "Payroll_employeeId_fkey" FOREIGN KEY ("emp
 
 -- AddForeignKey
 ALTER TABLE "Payroll" ADD CONSTRAINT "Payroll_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "DailyReport" ADD CONSTRAINT "DailyReport_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "DailyTransaction" ADD CONSTRAINT "DailyTransaction_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "DailyTransaction" ADD CONSTRAINT "DailyTransaction_reportId_fkey" FOREIGN KEY ("reportId") REFERENCES "DailyReport"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "DailyReportSetting" ADD CONSTRAINT "DailyReportSetting_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Contract" ADD CONSTRAINT "Contract_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;

@@ -31,6 +31,7 @@
     "test:agregat": "node -r ts-node/register tests/agregat.test.ts",
     "test:audit": "node -r ts-node/register tests/audit.test.ts",
     "test:kassa": "node -r ts-node/register tests/kassa.test.ts",
+    "test:kunlik": "node -r ts-node/register tests/kunlik.test.ts",
     "test:sotuv-bekor": "node -r ts-node/register tests/sotuv-bekor.test.ts",
     "test:inventarizatsiya": "node -r ts-node/register tests/inventarizatsiya.test.ts",
     "test:csv-import": "node -r ts-node/register tests/csv-import.test.ts",
