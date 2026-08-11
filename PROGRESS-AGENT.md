@@ -2023,3 +2023,10 @@ deployment'ning o'z URL'i tekshiriladi (unga host-redirect tegmaydi);
 u ishlayotgan bo'lsa muvaffaqiyat (ogohlantirish bilan): baza sog',
 alias/domen masalasi rollback bilan tuzalmaydi. Yangi test qo'shildi —
 `test:launch` endi 7/7.
+
+**Jonli urinish (2026-08-11):** "To'liq ishga tushirish" workflow'i agent
+tomonidan GitHub API orqali ishga tushirildi (run 31485427924). Sekretlar
+tekshiruvida xavfsiz to'xtadi: `DATABASE_URL`, `TURSO_API_TOKEN`,
+`VERCEL_TOKEN` — repo'da BITTASI ham qo'yilmagan. Hech narsaga tegilmadi.
+Bu jismoniy chegara: token/parollar faqat egasida. Egasi sekretlarni
+qo'yishi bilan agent workflow'ni qayta ishga tushiradi.
