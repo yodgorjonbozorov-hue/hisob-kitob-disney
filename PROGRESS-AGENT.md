@@ -2030,3 +2030,22 @@ tekshiruvida xavfsiz to'xtadi: `DATABASE_URL`, `TURSO_API_TOKEN`,
 `VERCEL_TOKEN` — repo'da BITTASI ham qo'yilmagan. Hech narsaga tegilmadi.
 Bu jismoniy chegara: token/parollar faqat egasida. Egasi sekretlarni
 qo'yishi bilan agent workflow'ni qayta ishga tushiradi.
+
+---
+
+## 2026-08-11 — balansa.uz jonli + baza Irlandiyaga ko'chirildi
+
+**Domen:** balansa.uz Vercel'ga ulandi (A 216.198.79.1 / 64.29.17.1, CNAME www),
+SSL avtomatik chiqdi, www→apex 308, eski *.vercel.app hostlardan sahifalar
+balansa.uz'ga 308 (`/api/*` ataylab chetlab o'tilgan — bot webhooki va cron
+eski hostda ishlayveradi). Yo'lda: registrator (domains.uz) NS'ni alohida
+biriktirish kerak ekan (`not.defined` edi).
+
+**Baza ko'chirish (docs/MIGRATSIYA.md runbook'i):** Turso'da `fra` yo'q ekan —
+foydalanuvchi tarmog'idan o'lchab Irlandiya tanlandi (118 ms; Mumbai 203,
+Tokio 154). Zaxira → yangi `balansa` bazasi (aws-eu-west-1) → 30 migratsiya →
+restore (1715 yozuv, sonlar mos) → Vercel env almashtirildi → redeploy →
+funksiya regioni `dub1` → redeploy. Eski Tokio bazasi rollback uchun turibdi.
+
+**O'lchov (keyin):** login POST (DB bilan) 0.5–1 s (oldin 2.5–3.8 s edi),
+SSR sahifa 150–600 ms, `x-vercel-id: hkg1::dub1`.
