@@ -59,7 +59,17 @@ const nextConfig = {
       "/takroriy",
       "/bildirishnomalar",
     ];
+    // Eski *.vercel.app manzillaridan balansa.uz'ga (mijoz bookmark'lari,
+    // Telegram'dagi eski havolalar). `/api/*` ATAYLAB chetlab o'tiladi:
+    // bot webhooki va cron'lar eski manzilga bog'langan — redirect ularni buzadi.
+    const eskiHostlar = ["balansa-uz.vercel.app", "hisob-kitob-disneyn1.vercel.app"];
     return [
+      ...eskiHostlar.map((host) => ({
+        source: "/:yol((?!api/).*)",
+        has: [{ type: "host", value: host }],
+        destination: "https://balansa.uz/:yol",
+        permanent: true,
+      })),
       ...eskiYollar.map((yol) => ({
         source: yol,
         destination: `/app${yol}`,
