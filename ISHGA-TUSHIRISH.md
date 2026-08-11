@@ -21,7 +21,8 @@ Batafsil manbalar: `docs/MIGRATSIYA.md` (ko'chirish), `TELEFONDAN-APPLY.md`
 | Turso region | ⏳ Tokio — **Frankfurtga ko'chirilishi kerak** |
 | Vercel funksiya regioni | ⏳ iad1 (AQSh) — **fra1 qilinishi kerak** |
 | balansa.uz domeni | ⏳ ulanmagan |
-| GitHub Actions "Migratsiya qo'llash" | ⚠️ 2026-08-06 da yiqilgan — sekretlar qo'yilmagan edi. Endi **shart emas** (deploy o'zi zaxira + migratsiya qiladi). Xohlasangiz `DATABASE_URL` va `DATABASE_AUTH_TOKEN` sekretlarini qo'yib, zaxira-artefakt yo'lini ham tiklaysiz. |
+| GitHub Actions "Migratsiya qo'llash" | ⚠️ 2026-08-06 da yiqilgan — sekretlar qo'yilmagan edi. Endi **shart emas** (deploy o'zi zaxira + migratsiya qiladi). 1-qadamda sekretlar qo'yilgach bu ham ishlaydigan bo'ladi. |
+| GitHub Actions "Bazani ko'chirish" | ✅ tayyor — Frankfurtga ko'chirish **bitta tugma** (2-qadam) |
 
 ---
 
@@ -52,42 +53,62 @@ Vercel env tekshiruvi (Settings → Environment Variables):
 
 ---
 
-## 1-qadam · Zaxira
+## 1-qadam · Sekretlarni bir marta sozlash (5 daqiqa, telefondan ham bo'ladi)
 
-```bash
-npm run backup   # production env bilan
-```
+1. Turso'da **`fra` (Frankfurt)** regionida yangi, bo'sh baza yarating —
+   URL va token'ini oling.
+2. GitHub → repo → Settings → Secrets and variables → Actions →
+   New repository secret — to'rtta sekret:
 
-yoki cron'ni qo'lda bir marta chaqirib, zaxira Telegram kanaliga
-(`@balansauzmalumotlar`) tushganini ko'ring. **Zaxirasiz 2-qadamga o'tmang.**
+| Sekret | Qiymat |
+|---|---|
+| `DATABASE_URL` | eski (hozirgi) baza — Vercel env'dan ko'chiring |
+| `DATABASE_AUTH_TOKEN` | eski baza tokeni |
+| `YANGI_DATABASE_URL` | yangi Frankfurt bazasi |
+| `YANGI_DATABASE_AUTH_TOKEN` | yangi baza tokeni |
 
 ---
 
-## 2-qadam · Turso'ni Frankfurtga (tezlikning asosiy davosi)
+## 2-qadam · Ko'chirish — BITTA TUGMA
 
-Toshkent → Frankfurt ≈ 100 ms; hozirgi AQSh ↔ Tokio yo'li har SQL uchun
-~160 ms yeydi. Downtime 3–4 daqiqa — kechqurun qiling.
+**GitHub → Actions → "Bazani ko'chirish" → Run workflow → tasdiq: `HA` → Run**
 
-1. `npm run backup` (production env bilan).
-2. Turso'da `fra` regionida yangi baza yarating.
-3. Yangi bazaga migratsiya: `npm run db:apply` (yangi `DATABASE_URL` bilan).
-4. `npm run restore -- prisma/backups/<fayl>.json --confirm` — sonlar
-   avtomatik solishtiriladi.
-5. Vercel env'da `DATABASE_URL`/`DATABASE_AUTH_TOKEN` ni yangisiga
-   almashtiring → Redeploy.
-6. Sayt tekshiruvi: login, dashboard, bitta kirim.
+Workflow o'zi hammasini qiladi va har qadamda o'zini tekshiradi:
+zaxira olish → yangi bazaga 27 migratsiya → tiklash → **ikkala jonli
+bazani jadval-bajadval va pul summalari bo'yicha solishtirish** → FK
+yaxlitligi. Bironta son mos kelmasa to'xtaydi va aniq aytadi.
+
+Muhim kafolat: **eski bazaga faqat o'qish bilan tegiladi** — workflow
+yiqilsa ham sayt avvalgidek ishlashda davom etadi, hech narsa buzilmaydi.
+Zaxira fayli artefakt sifatida 30 kun saqlanadi.
+
+(Terminaldan bo'lsa: `YANGI_DATABASE_URL=... YANGI_DATABASE_AUTH_TOKEN=...
+npm run kochirish` — xuddi shu skript.)
+
+---
+
+## 3-qadam · Vercel'da almashtirish (~2 daqiqa, downtime shu yerda)
+
+Workflow yashil bo'lgach:
+
+1. Vercel → Settings → Environment Variables: `DATABASE_URL` va
+   `DATABASE_AUTH_TOKEN` ni **yangi** qiymatlarga almashtiring.
+2. Settings → Functions → Function Region → **`fra1`**.
+3. Deployments → eng oxirgisini **Redeploy**.
+4. Saytda tekshiring: login, dashboard raqamlari, bitta kirim qo'shish.
 
 **Rollback:** eski Tokio bazasini kamida 2 hafta o'chirmang — muammo bo'lsa
 env'ni qaytarib redeploy qilasiz (2 daqiqa).
 
+> Kechqurun, mijozlar ishlamayotgan paytda qiling: workflow tugagach env
+> almashtirilguncha kiritilgan yangi yozuvlar eski bazada qoladi. Xavfsiz
+> yo'l — ko'chirishni mijozlar yozmayotgan paytda boshlash.
+
 ---
 
-## 3-qadam · Vercel funksiya regionini fra1
-
-Project → Settings → Functions → Function Region → `fra1`.
-
-> ⚠️ Bu qadamni 2-qadamdan OLDIN qilmang: funksiya Frankfurtda, baza Tokioda
-> qolsa sayt hozirgidan ham sekinlashadi.
+> ⚠️ Region almashtirishni bazadan OLDIN qilmang: funksiya Frankfurtda,
+> baza Tokioda qolsa sayt hozirgidan ham sekinlashadi. Yuqoridagi tartib
+> shuning uchun: avval baza (2-qadam), keyin region (3-qadam).
 
 ---
 
