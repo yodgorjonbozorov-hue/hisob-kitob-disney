@@ -1959,3 +1959,58 @@ env + region + redeploy. Domen va jonli tekshiruv ro'yxati o'z joyida.
 
 **Tekshirildi:** `npm run build` exit 0 · `test:kochirish` 8/8 ·
 `test:apply-oqimi` 9/9 · `test:backup` 6/6.
+
+---
+
+## 2026-08-11 · TO'LIQ launch bitta tugma: Turso + Vercel ham avtomatik
+
+**Branch:** `claude/balansa-progress-check-l8m4ha` · **Migratsiya YO'Q**
+
+Loyiha egasi qolgan 3 qadamga ham qo'shilmadi — "o'zing qilib ber".
+Turso/Vercel'dagi QOLGAN qo'lda qadamlar ham API orqali avtomatlashtirildi.
+Egasiga qoladigan jismoniy minimum: 2 ta token yaratish (hisoblar unda) +
+4 sekret + bitta tugma. Bundan kam bo'lishi mumkin emas.
+
+**Yangi: `scripts/toliq-ishga-tushirish.mjs`** (`npm run launch`):
+
+1. Turso API: Frankfurt guruhida baza yaratadi (bor bo'lsa qayta
+   ishlatadi — bo'shligini baribir kochirish.mjs tekshiradi), token oladi.
+   Tashkilot bitta bo'lsa o'zi topadi.
+2. `scripts/kochirish.mjs` ni chaqiradi — barcha himoyalari bilan
+   (eski bazaga faqat o'qish, mustaqil son/summa solishtiruvi).
+3. Vercel API: env upsert (`DATABASE_URL`, `DATABASE_AUTH_TOKEN`),
+   region `fra1` (PATCH; xato bo'lsa oqim to'xtamaydi — tezlik masalasi,
+   to'g'rilik emas), git'dan production redeploy, READY holatini kutadi.
+4. Health-check: sayt `/login` 200 qaytarishi, `x-vercel-id` regionni
+   ko'rsatishi. **Yiqilsa — env eski qiymatlarga avtomatik qaytariladi
+   va qayta deploy qilinadi (rollback), skript xato bilan tugaydi.**
+   Vercel loyihasi ko'chirishdan OLDIN topiladi — "ko'chirilgan lekin
+   ulanmagan" oraliq holat bo'lmasligi uchun.
+
+**Yangi: `.github/workflows/toliq-launch.yml`** — "To'liq ishga tushirish".
+Sekretlar: eski `DATABASE_URL`/`DATABASE_AUTH_TOKEN` + `TURSO_API_TOKEN` +
+`VERCEL_TOKEN` (+ixtiyoriy `TURSO_ORG`, `VERCEL_PROJECT_NAME`, `SAYT_URL`).
+`concurrency: migratsiya` — boshqa baza workflow'lari bilan to'qnashmaydi.
+
+**Test: `tests/toliq-ishga-tushirish.test.ts` (6)** — `npm run test:launch`.
+Turso/Vercel/sayt SOXTA HTTP server bilan (deploy-zaxira'dagi Telegram
+uslubi), har so'rov yozib boriladi: fail-closed (API umuman chaqirilmaydi),
+Turso yo'li (guruh+baza+token, env'ga AYNAN yangi URL), **ko'chirish
+yiqilsa Vercel'ga umuman tegilmasligi**, to'liq oqim haqiqiy ma'lumot
+bilan (file: bazalar, asl kochirish.mjs), **rollback** (sayt 500 → env
+ikkinchi marta ESKI qiymatlar bilan yozilishi + ikkinchi redeploy).
+Soxta server test jarayonida turgani uchun launch `spawn` (async) bilan —
+`spawnSync` deadlock tuzog'i takrorlanmadi. Test seam:
+`LAUNCH_KOCHIRISH_SKRIPT` — soxta ko'chirish skripti qo'yish uchun.
+
+**`ISHGA-TUSHIRISH.md`:** asosiy yo'l endi 2 qadam (sekretlar + tugma),
+eski ikki bosqichli yo'l "zaxira yo'l" sifatida saqlandi.
+
+**Tekshirildi:** `npm run build` exit 0 · `test:launch` 6/6 ·
+`test:kochirish` 8/8 · `test:apply-oqimi` 9/9.
+
+**Eslatma:** Turso/Vercel API'lariga bu muhitdan token yo'qligi uchun
+JONLI so'rov yuborilmadi — API sxemalari hujjat bo'yicha yozildi va soxta
+server bilan sinaldi. Birinchi haqiqiy yurishda API javobi kutilgandan
+farq qilsa, skript aniq xato matni bilan to'xtaydi (jimgina davom etmaydi)
+va hech narsani buzmaydi — shunga mo'ljallab qurilgan.
