@@ -1,0 +1,4 @@
+balansa-upload.keystore
+build/
+.gradle/
+*.log

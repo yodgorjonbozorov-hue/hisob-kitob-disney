@@ -1,0 +1,46 @@
+# TWA (Play Market ilovasi) qurilishi.
+#
+# Nega bulutda: lokal Windows mashinada Java loopback soketlari (VPN/antivirus)
+# bloklanadi — gradle ishlamaydi. Bu workflow imzolanmagan AAB/APK quradi va
+# ularni `twa-artifacts` branchiga push qiladi; imzolash lokalda (jarsigner)
+# bajariladi — kalit repoga hech qachon tushmaydi.
+name: TWA qurilishi
+
+on:
+  push:
+    branches: [main]
+    paths: ["twa/**", ".github/workflows/twa-build.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Gradle qurilishi
+        working-directory: twa
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon bundleRelease assembleRelease
+
+      - name: Artefaktlarni twa-artifacts branchiga joylash
+        run: |
+          mkdir -p /tmp/chiqish
+          cp twa/app/build/outputs/bundle/release/app-release.aab /tmp/chiqish/
+          cp twa/app/build/outputs/apk/release/app-release-unsigned.apk /tmp/chiqish/
+          cd /tmp/chiqish
+          git init -b twa-artifacts
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add .
+          git commit -m "TWA artefaktlari: $GITHUB_SHA"
+          git push --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" twa-artifacts
