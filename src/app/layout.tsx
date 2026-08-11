@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Manrope, Poppins } from "next/font/google";
 import { BRAND } from "@/lib/brand";
+import { PwaSetup } from "@/components/PwaSetup";
 import "./globals.css";
 
 const inter = Inter({
@@ -86,7 +87,10 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <PwaSetup />
+      </body>
     </html>
   );
 }
