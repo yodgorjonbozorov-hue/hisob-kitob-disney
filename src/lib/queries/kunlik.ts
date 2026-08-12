@@ -13,6 +13,8 @@ export interface KunlikTushumDTO {
   izoh: string | null;
   userId: string;
   userIsm: string | null;
+  /** Yozuvlar (Transaction) dan avtomatik ulangan bo'lsa true — kunlikda tahrirlanmaydi. */
+  yozuvdan: boolean;
   /** ISO — kiritilgan vaqt (soat UI'da Toshkent bo'yicha ko'rsatiladi). */
   createdAt: string;
 }
@@ -78,6 +80,7 @@ export async function getKunlikReport(businessId: string, sanaStr: string): Prom
       izoh: t.izoh,
       userId: t.userId,
       userIsm: t.userIsm,
+      yozuvdan: !!t.transactionId,
       createdAt: t.createdAt.toISOString(),
     })),
   };

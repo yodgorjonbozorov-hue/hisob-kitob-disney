@@ -211,11 +211,12 @@ export function KunlikClient({
                   </p>
                   <p className="text-2xs text-faint">
                     {t.userIsm ?? "—"} · {soatToshkent(t.createdAt)}
+                    {t.yozuvdan && <span> · Yozuvlardan</span>}
                   </p>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <Money value={t.summa} size="md" tone="neutral" />
-                  {ochiq && ruxsat.tahrirlaydi && (
+                  {ochiq && ruxsat.tahrirlaydi && !t.yozuvdan && (
                     <button
                       onClick={() => ochir(t.id)}
                       className="text-2xs text-expense hover:underline"

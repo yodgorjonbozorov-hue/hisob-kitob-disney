@@ -1044,6 +1044,11 @@ model DailyTransaction {
   izoh       String?
   userId     String
   userIsm    String?
+  /// Yozuvlar (Transaction) dan AVTOMATIK ulangan bo'lsa — o'sha yozuv IDsi.
+  /// Bugungi sanali kirim tranzaksiyasi kunlikka o'zi tushadi (kunlikSinxron);
+  /// boshqa sana tanlangan yozuv tushmaydi. FK ataylab yo'q — tranzaksiyani
+  /// butunlay o'chirishni to'sib qo'ymasin; sinxron xizmat qatlamida.
+  transactionId String? @unique
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
   /// Yumshoq o'chirish — o'chirilgan tushum jamiga kirmaydi, tarixda qoladi.

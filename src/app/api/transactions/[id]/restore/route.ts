@@ -4,6 +4,7 @@ import { requireOwnerOrAdmin, ForbiddenError } from "@/lib/auth/guard";
 import { withTenant } from "@/lib/auth/tenant";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { dashboardYangilandi } from "@/lib/cache";
+import { kunlikSinxron } from "@/lib/services/kunlik";
 
 /** O'chirilgan tranzaksiyani tiklaydi (undo yoki savatdan). */
 export const POST = withTenant<{ params: { id: string } }>(async (request, { params }, { session: user }) => {
@@ -23,6 +24,9 @@ export const POST = withTenant<{ params: { id: string } }>(async (request, { par
     data: { deletedAt: null },
     include: { category: true, user: { select: { id: true, ism: true } } },
   });
+
+  // Tiklangan yozuv hali ham bugungi kirim bo'lsa — kunlikka qaytadi.
+  await kunlikSinxron(restored, restored.user.ism);
 
   dashboardYangilandi(existing.businessId);
   return NextResponse.json(restored);

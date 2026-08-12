@@ -335,6 +335,131 @@ test("begona tenant kunlik hisobotni ko'rmaydi va yoza olmaydi", async () => {
 
 // ---------- Audit ----------
 
+// ---------- Yozuvlar (Transaction) bilan avto-sinxron ----------
+
+test("Yozuvlardan bugungi kirim kunlikka o'zi tushadi; boshqa sana va chiqim tushmaydi", async () => {
+  const { createTransaction } = await import("@/lib/services/transactionService");
+
+  // KUNLIK modulini tenant A uchun yoqamiz (sinxron modul yoqiqligini tekshiradi)
+  await A(() => prisma.tenantModule.create({ data: { code: "KUNLIK", isActive: true } }));
+  // Oldingi testlarda bugun tasdiqlangan edi — qayta ochamiz
+  await A(() => kunlikSvc.reopenKunlikReport(tA.business.id, egaAktor(), bugun));
+  const bosh = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+
+  const kirimCat = await A(() =>
+    prisma.category.findFirst({ where: { businessId: tA.business.id, turi: "kirim" } })
+  );
+  const chiqimCat = await A(() =>
+    prisma.category.findFirst({ where: { businessId: tA.business.id, turi: "chiqim" } })
+  );
+
+  // 1) Bugungi kirim (naqd kassa) -> kunlikka CASH bo'lib tushadi
+  const t1 = await A(() =>
+    createTransaction(tA.user.id, tA.business.id, {
+      turi: "kirim", categoryId: kirimCat.id, summa: 700_000, sana: bugun,
+    })
+  );
+  let r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  assert.equal(r.naqdSumma, bosh.naqdSumma + 700_000);
+  const ulangan = r.items.find((i: any) => i.yozuvdan);
+  assert.ok(ulangan, "ulangan tushum ko'rinishi kerak");
+
+  // 2) KECHAGI sanali kirim -> kunlikka TUSHMAYDI
+  const kecha = date.utcDateToDateOnlyString(
+    new Date(date.dateOnlyStringToUTCDate(bugun).getTime() - 24 * 60 * 60 * 1000)
+  );
+  await A(() =>
+    createTransaction(tA.user.id, tA.business.id, {
+      turi: "kirim", categoryId: kirimCat.id, summa: 999_000, sana: kecha,
+    })
+  );
+  r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  assert.equal(r.naqdSumma, bosh.naqdSumma + 700_000, "kechagi kirim bugungi kunlikka qo'shilmasin");
+  const kechaR = await A(() => kunlikQ.getKunlikReport(tA.business.id, kecha));
+  assert.equal(kechaR.jamiSumma, 0, "kechagi kunlik ham ochilmasin");
+
+  // 3) Bugungi CHIQIM -> kunlikka tushmaydi (kunlik faqat tushum)
+  await A(() =>
+    createTransaction(tA.user.id, tA.business.id, {
+      turi: "chiqim", categoryId: chiqimCat.id, summa: 50_000, sana: bugun,
+    })
+  );
+  r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  assert.equal(r.jamiSumma, bosh.jamiSumma + 700_000);
+
+  // 4) Plastik kassaga kirim -> CLICK bo'lib tushadi
+  const accountsSvc = await import("@/lib/services/accounts");
+  const plastik = await A(() =>
+    accountsSvc.createAccount(tA.business.id, { nomi: "Terminal", turi: "plastik" })
+  );
+  await A(() =>
+    createTransaction(tA.user.id, tA.business.id, {
+      turi: "kirim", categoryId: kirimCat.id, summa: 300_000, sana: bugun, accountId: plastik.id,
+    })
+  );
+  r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  assert.equal(r.clickSumma, bosh.clickSumma + 300_000);
+
+  // 5) Ulangan tushumni kunlikdan o'chirib/tahrirlab bo'lmaydi — manba Yozuvlarda
+  await assert.rejects(
+    () => A(() => kunlikSvc.deleteKunlikTushum(tA.business.id, egaAktor(), ulangan.id)),
+    /Yozuvlar/
+  );
+  await assert.rejects(
+    () => A(() => kunlikSvc.updateKunlikTushum(tA.business.id, egaAktor(), ulangan.id, { summa: 1 })),
+    /Yozuvlar/
+  );
+
+  // 6) Yozuv o'chirilsa -> kunlikdan ham chiqadi; tiklansa -> qaytadi
+  await A(() => kunlikSvc.kunlikSinxron({ ...t1, deletedAt: new Date() }, null));
+  r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  assert.equal(r.naqdSumma, bosh.naqdSumma, "o'chirilgan yozuv kunlikdan chiqishi kerak");
+  await A(() => kunlikSvc.kunlikSinxron({ ...t1, deletedAt: null }, "A egasi"));
+  r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  assert.equal(r.naqdSumma, bosh.naqdSumma + 700_000, "tiklangan yozuv kunlikka qaytishi kerak");
+
+  // 7) Sana kechaga o'zgartirilsa -> kunlikdan chiqadi
+  await A(() =>
+    kunlikSvc.kunlikSinxron({ ...t1, sana: date.dateOnlyStringToUTCDate(kecha), deletedAt: null }, "A egasi")
+  );
+  r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  assert.equal(r.naqdSumma, bosh.naqdSumma, "sanasi o'zgargan yozuv kunlikdan chiqishi kerak");
+});
+
+test("modul yoqilmagan tenantda sinxron ishlamaydi", async () => {
+  const { createTransaction } = await import("@/lib/services/transactionService");
+  const kirimCatB = await B(() =>
+    prisma.category.findFirst({ where: { businessId: tB.business.id, turi: "kirim" } })
+  );
+  await B(() =>
+    createTransaction(tB.user.id, tB.business.id, {
+      turi: "kirim", categoryId: kirimCatB.id, summa: 500_000, sana: kunlikSvc.kunlikBugun(),
+    })
+  );
+  const soni = await B(() => prisma.dailyReport.count());
+  assert.equal(soni, 0, "KUNLIK yoqilmagan tenantda hisobot ochilmasin");
+});
+
+test("tasdiqlangan kunga sinxron tegmaydi, asosiy yozuv esa yoziladi", async () => {
+  const { createTransaction } = await import("@/lib/services/transactionService");
+  await A(() => kunlikSvc.confirmKunlikReport(tA.business.id, kassirAktor(), bugun));
+  const oldin = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+
+  const kirimCat = await A(() =>
+    prisma.category.findFirst({ where: { businessId: tA.business.id, turi: "kirim" } })
+  );
+  const t = await A(() =>
+    createTransaction(tA.user.id, tA.business.id, {
+      turi: "kirim", categoryId: kirimCat.id, summa: 111_000, sana: bugun,
+    })
+  );
+  assert.ok(t.id, "asosiy yozuv baribir yozilishi kerak");
+
+  const keyin = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  assert.equal(keyin.jamiSumma, oldin.jamiSumma, "yopilgan kun o'zgarmasin");
+  assert.equal(keyin.items.length, oldin.items.length);
+});
+
 test("tushum va tasdiqlash audit jurnaliga tushadi", async () => {
   const loglar = await rawPrisma.auditLog.findMany({
     where: { businessId: tA.business.id, entity: { in: ["dailyTransaction", "dailyReport", "dailyReportSetting"] } },

@@ -2134,3 +2134,46 @@ smoke (brauzer) 7/7 — yangi /app/kunlik sahifasi ham ochiladi.
 **Eslatma (deploy):** modul barcha tariflarda bor, lekin core emas —
 Sozlamalar → Modullar'da "Kunlik hisobot" yoqiladi, keyin boshqaruvchi
 sahifadagi "Direktor" tugmasi bilan direktorni tayinlaydi.
+
+---
+
+## 2026-08-12 · Kunlik hisobot: Yozuvlar bilan avto-sinxron
+
+**Branch:** `claude/disney-flowers-daily-report-q272aw` · **Migratsiya: 1 ta (ADD COLUMN)**
+
+Egasining talabi: xodim kirimni Yozuvlar (tranzaksiya) formasidan kiritsa ham
+u kunlik hisobotga O'ZI tushsin; boshqa (eski) sana tanlansa — tushmasin.
+
+**Yechim — `kunlikSinxron` (lib/services/kunlik.ts):** har yaratish/tahrir/
+o'chirish/tiklashdan keyin bitta qoida tekshiriladi: *bugungi (Toshkent)
+sanali, o'chirilmagan KIRIM kunlikda bo'lishi kerak; qolgan har qanday holat —
+bo'lmasligi kerak*. `DailyTransaction.transactionId @unique` bilan ulanadi.
+
+- Ulanish nuqtasi — `createTransaction` xizmatining o'zi (API, bot va CRM
+  "yutildi" oqimi hammasi shu yerdan o'tadi). Chiqim hech qachon sinxronlanmaydi.
+- Kassa turi -> to'lov turi: naqd->CASH, plastik/bank->CLICK.
+- Sinxron XATOSI asosiy pul yozuvini buzmaydi (try/catch, console.error).
+- KUNLIK moduli yoqilmagan tenantda umuman ishlamaydi.
+- Tasdiqlangan (CONFIRMED) kunga tegilmaydi: yozuv baribir yoziladi, kunlik
+  o'zgarmaydi (kun yopilgan — tuzatish qayta ochish orqali).
+- Ulangan tushum kunlik sahifasida tahrirlanmaydi/o'chirilmaydi ("Yozuvlardan"
+  belgisi) — manba Transaction, aks holda ikkala tomon ajralib ketardi.
+- Yumshoq o'chirilgan ulangan yozuv tiklashda QAYTA OCHILADI (unique
+  transactionId yangi create'ga yo'l bermaydi — shu bug testda ushlandi).
+- Sana boshqa kunga o'zgartirilsa kunlikdan chiqadi; keyin bugunga qaytarilsa
+  bugungi hisobotga KO'CHADI (ikkala kun ochiq bo'lsa).
+- Bulk soft-delete va bulk-move: `kunlikBulkUz` ulangan tushumlarni ochiq
+  kunlardan chiqarib, jamini qayta hisoblaydi.
+
+**Yo'l-yo'lakay (oldingi so'rov):** KUNLIK yoqilgan bo'lsa kassir/sotuvchi
+telefonining pastki panelida "Kunlik" tab chiqadigan bo'ldi (computeMobileTabs).
+
+**Fayllar:** prisma/schema.prisma + `20260812090000_kunlik_transaction_link/`,
+lib/services/kunlik.ts, lib/services/transactionService.ts,
+api/transactions/{[id],[id]/restore,bulk,bulk-move}/route.ts,
+lib/queries/kunlik.ts (yozuvdan bayrog'i), app/kunlik/KunlikClient.tsx,
+lib/modules/registry.ts, components/nav/BottomNav.tsx, tests.
+
+**Tekshirildi:** build ✅ · kunlik 21/21 · modules 14/14 · isolation 22/22 ·
+izolyatsiya-royxati 9/9 · backup 6/6 · migratsiya 10/10 · soft-delete 8/8 ·
+agregat 7/7 · atomik 6/6 · audit 12/12.

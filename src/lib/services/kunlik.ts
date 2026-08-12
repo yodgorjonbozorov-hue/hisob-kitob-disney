@@ -2,11 +2,18 @@ import { prisma } from "@/lib/prisma";
 import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { isManager, type Rol } from "@/lib/auth/roles";
 import { runBusinessTx, type BusinessTx } from "@/lib/db/businessTx";
-import { dateOnlyStringToUTCDate, todayTashkentDateOnlyString } from "@/lib/date";
+import { currentTenantId } from "@/lib/db/tenantContext";
+import {
+  dateOnlyStringToUTCDate,
+  todayTashkentDateOnlyString,
+  utcDateToDateOnlyString,
+} from "@/lib/date";
+import { isModuleOnForTenant } from "@/lib/modules/guard";
 import { logAudit } from "@/lib/services/audit";
 import {
   KUNLIK_TOLOV_TURLARI,
   type CreateKunlikTushumInput,
+  type KunlikTolovTuri,
   type UpdateKunlikTushumInput,
 } from "@/lib/validation/kunlik";
 
@@ -170,6 +177,11 @@ export async function updateKunlikTushum(
     if (mavjud.report.holat !== "OPEN") {
       throw new BadRequestError("Tasdiqlangan kun tushumini o'zgartirib bo'lmaydi — avval kunni qayta oching");
     }
+    if (mavjud.transactionId) {
+      // Yozuvlardan ulangan tushum kunlikda tahrirlanmaydi — aks holda ikkala
+      // tomon ajralib ketadi. Manba — Transaction, o'sha yerda o'zgartiriladi.
+      throw new BadRequestError("Bu tushum Yozuvlardan avtomatik ulangan — uni Yozuvlar bo'limida o'zgartiring");
+    }
     if (!ruxsat.tahrirlaydi && mavjud.userId !== aktor.userId) {
       throw new ForbiddenError("Faqat o'zingiz kiritgan tushumni o'zgartira olasiz");
     }
@@ -209,6 +221,9 @@ export async function deleteKunlikTushum(businessId: string, aktor: KunlikAktor,
     if (!mavjud) throw new ForbiddenError("Tushum topilmadi");
     if (mavjud.report.holat !== "OPEN") {
       throw new BadRequestError("Tasdiqlangan kun tushumini o'chirib bo'lmaydi — avval kunni qayta oching");
+    }
+    if (mavjud.transactionId) {
+      throw new BadRequestError("Bu tushum Yozuvlardan avtomatik ulangan — uni Yozuvlar bo'limida o'chiring");
     }
     if (!ruxsat.tahrirlaydi && mavjud.userId !== aktor.userId) {
       throw new ForbiddenError("Faqat o'zingiz kiritgan tushumni o'chira olasiz");
@@ -345,6 +360,170 @@ export async function setKunlikDirektor(businessId: string, direktorId: string |
     after: { direktorId, direktorIsm },
   });
   return sozlama;
+}
+
+// ---------------------------------------------------------------------------
+// YOZUVLAR (Transaction) BILAN AVTO-SINXRON.
+//
+// Talab: xodim oddiy kirimni Yozuvlar formasidan kiritsa ham u kunlik
+// hisobotga o'zi tushsin — LEKIN faqat sana BUGUNGI (Toshkent) bo'lsa.
+// Boshqa (eski) sana tanlangan yozuv kunlikka tushmaydi.
+//
+// Sinxron hech qachon asosiy pul yozuvini buzmaydi: xato bo'lsa console'ga
+// yoziladi va jimgina o'tiladi (kunlik — hosila ko'rinish, Transaction —
+// haqiqat manbai). Tasdiqlangan (CONFIRMED) kunga ham tegilmaydi.
+// ---------------------------------------------------------------------------
+
+/** Kassa turi -> kunlik to'lov turi. Plastik ham, bank ham karta/onlayn tushum — Click. */
+const KASSA_TOLOV_XARITASI: Record<string, KunlikTolovTuri> = {
+  naqd: "CASH",
+  plastik: "CLICK",
+  bank: "CLICK",
+};
+
+export interface KunlikSinxronYozuv {
+  id: string;
+  businessId: string;
+  turi: string;
+  summa: number;
+  sana: Date;
+  izoh: string | null;
+  userId: string;
+  accountId: string | null;
+  deletedAt: Date | null;
+}
+
+async function tolovTuriniAniqlaTx(
+  tx: BusinessTx,
+  businessId: string,
+  accountId: string | null
+): Promise<KunlikTolovTuri> {
+  if (!accountId) return "CASH";
+  const acc = await tx.account.findFirst({
+    where: { id: accountId, businessId },
+    select: { turi: true },
+  });
+  return KASSA_TOLOV_XARITASI[acc?.turi ?? "naqd"] ?? "CASH";
+}
+
+/**
+ * Bitta tranzaksiyani kunlik hisobot bilan sinxronlaydi.
+ * Yaratish, tahrirlash, o'chirish va tiklashdan keyin chaqiriladi:
+ *  - bugungi sanali, o'chirilmagan KIRIM  -> kunlikda bo'lishi kerak;
+ *  - qolgan har qanday holat              -> kunlikda bo'lmasligi kerak.
+ */
+export async function kunlikSinxron(t: KunlikSinxronYozuv, userIsm: string | null): Promise<void> {
+  try {
+    if (!(await isModuleOnForTenant(currentTenantId(), "KUNLIK"))) return;
+
+    const kerak =
+      t.turi === "kirim" && !t.deletedAt && utcDateToDateOnlyString(t.sana) === kunlikBugun();
+
+    const amal = await runBusinessTx(t.businessId, async (tx) => {
+      // deletedAt filtrsiz: transactionId UNIQUE, shuning uchun yumshoq
+      // o'chirilgan ulangan yozuv ham topilib, tiklashda QAYTA OCHILADI
+      // (yangi create UNIQUE cheklovga urilardi).
+      const mavjud = await tx.dailyTransaction.findFirst({
+        where: { transactionId: t.id, businessId: t.businessId },
+        include: { report: { select: { id: true, holat: true } } },
+      });
+
+      if (kerak && !mavjud) {
+        const report = await reportTopYokiYaratTx(tx, t.businessId, t.sana);
+        if (report.holat !== "OPEN") return null; // kun yopilgan — jimgina o'tiladi
+        const yangi = await tx.dailyTransaction.create({
+          data: {
+            businessId: t.businessId,
+            reportId: report.id,
+            summa: t.summa,
+            tolovTuri: await tolovTuriniAniqlaTx(tx, t.businessId, t.accountId),
+            izoh: t.izoh ?? undefined,
+            userId: t.userId,
+            userIsm,
+            transactionId: t.id,
+          },
+        });
+        await jamlashTx(tx, t.businessId, report.id);
+        return { action: "create" as const, id: yangi.id };
+      }
+
+      if (!kerak && mavjud && !mavjud.deletedAt) {
+        if (mavjud.report.holat !== "OPEN") return null;
+        await tx.dailyTransaction.updateMany({
+          where: { id: mavjud.id, businessId: t.businessId },
+          data: { deletedAt: new Date() },
+        });
+        await jamlashTx(tx, t.businessId, mavjud.reportId);
+        return { action: "delete" as const, id: mavjud.id };
+      }
+
+      if (kerak && mavjud) {
+        // Yozuv boshqa kunning hisobotida turgan bo'lishi mumkin (sana keyin
+        // bugunga o'zgartirilgan) — bugungi hisobotga KO'CHIRILADI. Ikkala
+        // kun ham ochiq bo'lishi shart, aks holda tegilmaydi.
+        const target = await reportTopYokiYaratTx(tx, t.businessId, t.sana);
+        if (mavjud.report.holat !== "OPEN" || target.holat !== "OPEN") return null;
+        await tx.dailyTransaction.updateMany({
+          where: { id: mavjud.id, businessId: t.businessId },
+          data: {
+            reportId: target.id,
+            summa: t.summa,
+            izoh: t.izoh,
+            tolovTuri: await tolovTuriniAniqlaTx(tx, t.businessId, t.accountId),
+            deletedAt: null,
+          },
+        });
+        await jamlashTx(tx, t.businessId, target.id);
+        if (mavjud.reportId !== target.id) {
+          await jamlashTx(tx, t.businessId, mavjud.reportId);
+        }
+        return { action: mavjud.deletedAt ? ("restore" as const) : ("update" as const), id: mavjud.id };
+      }
+
+      return null;
+    });
+
+    if (amal) {
+      await logAudit({
+        businessId: t.businessId,
+        action: amal.action,
+        entity: "dailyTransaction",
+        entityId: amal.id,
+        after: { transactionId: t.id, summa: t.summa, sinxron: true },
+      });
+    }
+  } catch (e) {
+    // Kunlik sinxron xatosi asosiy yozuvni BUZMAYDI.
+    console.error("kunlikSinxron xatosi:", e);
+  }
+}
+
+/**
+ * Ommaviy o'chirish/ko'chirishdan keyin: shu tranzaksiyalarga ulangan kunlik
+ * tushumlarni olib tashlaydi (faqat OCHIQ kunlardan). Modul holatidan qat'i
+ * nazar ishlaydi — jami raqamlar halol qolishi kerak.
+ */
+export async function kunlikBulkUz(businessId: string, transactionIds: string[]): Promise<void> {
+  if (transactionIds.length === 0) return;
+  try {
+    await runBusinessTx(businessId, async (tx) => {
+      const ulanganlar = await tx.dailyTransaction.findMany({
+        where: { businessId, transactionId: { in: transactionIds }, deletedAt: null },
+        include: { report: { select: { id: true, holat: true } } },
+      });
+      const ochiqlar = ulanganlar.filter((u) => u.report.holat === "OPEN");
+      if (ochiqlar.length === 0) return;
+      await tx.dailyTransaction.updateMany({
+        where: { id: { in: ochiqlar.map((u) => u.id) }, businessId },
+        data: { deletedAt: new Date() },
+      });
+      for (const reportId of new Set(ochiqlar.map((u) => u.reportId))) {
+        await jamlashTx(tx, businessId, reportId);
+      }
+    });
+  } catch (e) {
+    console.error("kunlikBulkUz xatosi:", e);
+  }
 }
 
 /** Sxemadagi to'lov turlari haqiqatan qamrab olinganini testda tekshirish uchun. */

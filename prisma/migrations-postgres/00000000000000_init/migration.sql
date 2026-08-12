@@ -632,6 +632,7 @@ CREATE TABLE "DailyTransaction" (
     "izoh" TEXT,
     "userId" TEXT NOT NULL,
     "userIsm" TEXT,
+    "transactionId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "deletedAt" TIMESTAMP(3),
@@ -987,6 +988,9 @@ CREATE INDEX "DailyReport_businessId_holat_sana_idx" ON "DailyReport"("businessI
 
 -- CreateIndex
 CREATE UNIQUE INDEX "DailyReport_businessId_sana_key" ON "DailyReport"("businessId", "sana");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "DailyTransaction_transactionId_key" ON "DailyTransaction"("transactionId");
 
 -- CreateIndex
 CREATE INDEX "DailyTransaction_reportId_deletedAt_idx" ON "DailyTransaction"("reportId", "deletedAt");
