@@ -92,6 +92,25 @@ test("computeMobileTabs: maksimal 3 tab", () => {
   assert.equal(tabs[0].href, "/app");
 });
 
+test("KUNLIK yoqilganda sotuvchi va kassir uni ko'radi (nav + mobil tab)", () => {
+  // Sidebar/menyu: SELLER uchun Kunlik hisobot havolasi chiqadi
+  const items = registry.computeNav({ rol: "SELLER", yoqilgan: new Set(["MOLIYA", "KUNLIK", "BOSHQARUV"]), omborli: false });
+  assert.ok(items.some((i: any) => i.href === "/app/kunlik"));
+
+  // Telefon pastki paneli: sotuvchi va kassirda "Kunlik" tab bor, 3 tadan oshmaydi
+  const seller = registry.computeMobileTabs({ rol: "SELLER", yoqilgan: new Set(["MOLIYA", "KUNLIK", "CRM"]), omborli: false });
+  assert.ok(seller.some((t: any) => t.href === "/app/kunlik"));
+  assert.ok(seller.length <= 3);
+
+  const kassir = registry.computeMobileTabs({ rol: "CASHIER", yoqilgan: new Set(["MOLIYA", "KUNLIK", "OMBOR"]), omborli: true });
+  assert.ok(kassir.some((t: any) => t.href === "/app/kunlik"));
+  assert.ok(kassir.length <= 3);
+
+  // KUNLIK yoqilmagan tenantda tab chiqmaydi
+  const yoq = registry.computeMobileTabs({ rol: "SELLER", yoqilgan: new Set(["MOLIYA"]), omborli: false });
+  assert.ok(!yoq.some((t: any) => t.href === "/app/kunlik"));
+});
+
 // ---------- getEnabledModules / requireModule ----------
 test("core modullar yozuvsiz ham yoqilgan; OMBOR yozuvsiz yoqilmagan", async () => {
   const yoqilgan = await runWithTenant(tA.tenant.id, () => guard.getEnabledModules(fakeCtx(tA.tenant, "OWNER")));
