@@ -113,13 +113,16 @@ export async function billingIshi() {
 export async function hisobotIshi() {
   const { checkAndSendMonthlyReport } = await import("@/bot/scheduler");
   const { sendDailyDigest } = await import("@/lib/reports/dailyDigest");
+  const { sendKunlikEslatma } = await import("@/lib/reports/kunlikEslatma");
 
   const bot = await botniOl();
   // Oylik hisobot ichida "bugun 1-sanami" tekshiruvi bor.
   await xavfsiz("Oylik hisobot", () => checkAndSendMonthlyReport(bot), undefined);
   const digest = await xavfsiz("Kunlik xulosa", () => sendDailyDigest(bot.api), 0);
+  // Tasdiqlanmagan kunlik yakunlar — direktorga eslatma (tasdiqlash tugmasi bilan).
+  const kunlikEslatma = await xavfsiz("Kunlik tasdiqlash eslatmasi", () => sendKunlikEslatma(bot.api), 0);
 
-  return { digest };
+  return { digest, kunlikEslatma };
 }
 
 // ---------------------------------------------------------------------------

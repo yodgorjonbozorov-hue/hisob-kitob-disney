@@ -460,6 +460,110 @@ test("tasdiqlangan kunga sinxron tegmaydi, asosiy yozuv esa yoziladi", async () 
   assert.equal(keyin.items.length, oldin.items.length);
 });
 
+// ---------- Direktorga eslatma + ertasi kuni tasdiqlash ----------
+
+test("tasdiqlanmagan o'tgan kun uchun direktorga Telegram eslatma boradi (tugma bilan)", async () => {
+  const { sendKunlikEslatma } = await import("@/lib/reports/kunlikEslatma");
+
+  // Direktor (kassir) Telegram ulagan; egasida ham Telegram bor — lekin
+  // eslatma DIREKTORGA borishi kerak, boshqaruvchiga emas.
+  await rawPrisma.user.update({ where: { id: kassir.id }, data: { telegramChatId: "111222" } });
+  await rawPrisma.user.update({ where: { id: tA.user.id }, data: { telegramChatId: "999888" } });
+
+  // Ikki kun oldingi OCHIQ kun (tushum bilan) — "esidan chiqqan" holat.
+  const ikkiKunOldin = date.utcDateToDateOnlyString(
+    new Date(date.dateOnlyStringToUTCDate(bugun).getTime() - 2 * 24 * 60 * 60 * 1000)
+  );
+  const eskiReport = await rawPrisma.dailyReport.create({
+    data: {
+      businessId: tA.business.id,
+      sana: date.dateOnlyStringToUTCDate(ikkiKunOldin),
+      naqdSumma: 150_000,
+      jamiSumma: 150_000,
+    },
+  });
+  await rawPrisma.dailyTransaction.create({
+    data: {
+      businessId: tA.business.id,
+      reportId: eskiReport.id,
+      summa: 150_000,
+      tolovTuri: "CASH",
+      userId: kassir.id,
+      userIsm: kassir.ism,
+    },
+  });
+
+  const yuborilgan: { chatId: string; text: string; opts: any }[] = [];
+  const fakeApi = {
+    sendMessage: async (chatId: string, text: string, opts?: unknown) => {
+      yuborilgan.push({ chatId, text, opts });
+      return {};
+    },
+  };
+
+  const sent = await sendKunlikEslatma(fakeApi);
+  assert.ok(sent >= 1, "kamida bitta eslatma yuborilishi kerak");
+
+  const eslatma = yuborilgan.find((x) => x.text.includes("tasdiqlanmagan") || x.text.includes("Kunlik yakun"));
+  assert.ok(eslatma, "eslatma matni topilishi kerak");
+  assert.equal(eslatma.chatId, "111222", "eslatma aynan direktorga borishi kerak");
+  assert.ok(!yuborilgan.some((x) => x.chatId === "999888"), "direktor bor — boshqaruvchiga bormasin");
+  const tugma = eslatma.opts?.reply_markup?.inline_keyboard?.[0]?.[0];
+  assert.ok(tugma?.callback_data?.startsWith("kht:ok:"), "bir bosishda tasdiqlash tugmasi bo'lsin");
+
+  // Kuniga bir marta — ikkinchi chaqiruv hech narsa yubormaydi (dedupe).
+  const qayta = await sendKunlikEslatma(fakeApi);
+  assert.equal(qayta, 0);
+});
+
+test("direktor o'tgan (kechagi) kunni ham tasdiqlay oladi — esidan chiqqan bo'lsa", async () => {
+  const ikkiKunOldin = date.utcDateToDateOnlyString(
+    new Date(date.dateOnlyStringToUTCDate(bugun).getTime() - 2 * 24 * 60 * 60 * 1000)
+  );
+  const r = await A(() => kunlikSvc.confirmKunlikReport(tA.business.id, kassirAktor(), ikkiKunOldin));
+  assert.equal(r.holat, "CONFIRMED");
+  assert.equal(r.jamiSumma, 150_000, "jami tushumlardan qayta jamlanadi");
+  assert.equal(r.confirmedByIsm, "Abdulloh Karimov");
+});
+
+test("bildirishnomalar: tasdiqlanmagan kun ogohlantirishi direktorga ko'rinadi", async () => {
+  const { getNotifications } = await import("@/lib/queries/notifications");
+
+  // Yana bitta ochiq o'tgan kun yaratamiz (3 kun oldin, tushumli).
+  const uchKunOldin = date.utcDateToDateOnlyString(
+    new Date(date.dateOnlyStringToUTCDate(bugun).getTime() - 3 * 24 * 60 * 60 * 1000)
+  );
+  await rawPrisma.dailyReport.create({
+    data: {
+      businessId: tA.business.id,
+      sana: date.dateOnlyStringToUTCDate(uchKunOldin),
+      qarzSumma: 90_000,
+      jamiSumma: 90_000,
+    },
+  });
+
+  // Direktor (kassir) ko'radi
+  const direktorniki = await A(() =>
+    getNotifications(tA.business.id, { rol: "CASHIER", omborli: false, userId: kassir.id })
+  );
+  assert.ok(
+    direktorniki.some((n: any) => n.title.includes("Kunlik yakun")),
+    "direktor ogohlantirishni ko'rishi kerak"
+  );
+
+  // Oddiy xodim (direktor emas) ko'rmaydi
+  const xodimniki = await A(() =>
+    getNotifications(tA.business.id, { rol: "SELLER", omborli: false, userId: "boshqa-user" })
+  );
+  assert.ok(!xodimniki.some((n: any) => n.title.includes("Kunlik yakun")));
+
+  // Boshqaruvchi ham ko'radi
+  const eganiki = await A(() =>
+    getNotifications(tA.business.id, { rol: "OWNER", omborli: false, userId: tA.user.id })
+  );
+  assert.ok(eganiki.some((n: any) => n.title.includes("Kunlik yakun")));
+});
+
 test("tushum va tasdiqlash audit jurnaliga tushadi", async () => {
   const loglar = await rawPrisma.auditLog.findMany({
     where: { businessId: tA.business.id, entity: { in: ["dailyTransaction", "dailyReport", "dailyReportSetting"] } },

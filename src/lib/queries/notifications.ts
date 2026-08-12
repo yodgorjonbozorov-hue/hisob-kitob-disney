@@ -1,7 +1,14 @@
 import { isManager } from "@/lib/auth/roles";
 import { prisma } from "@/lib/prisma";
 import { getBudgetsWithSpend } from "@/lib/queries/budget";
-import { currentMonthString } from "@/lib/date";
+import { maybeTenantId } from "@/lib/db/tenantContext";
+import { isModuleOnForTenant } from "@/lib/modules/guard";
+import {
+  currentMonthString,
+  dateOnlyStringToUTCDate,
+  todayTashkentDateOnlyString,
+  utcDateToDateOnlyString,
+} from "@/lib/date";
 
 export interface Notification {
   severity: "danger" | "warning" | "info";
@@ -23,10 +30,43 @@ const LOW_STOCK_DEFAULT = 5;
  */
 export async function getNotifications(
   businessId: string,
-  opts: { rol: string; omborli: boolean }
+  opts: { rol: string; omborli: boolean; userId?: string }
 ): Promise<Notification[]> {
   const out: Notification[] = [];
   const month = currentMonthString();
+
+  // Kunlik hisobot: tasdiqlanmagan O'TGAN kunlar (KUNLIK moduli yoqiq bo'lsa).
+  // Direktor kechagi kunni ham tasdiqlay oladi — bu eslatma unutmaslik uchun.
+  // Ko'radi: tayinlangan direktor (roli muhim emas) va boshqaruvchilar.
+  const tenantId = maybeTenantId();
+  if (tenantId && (await isModuleOnForTenant(tenantId, "KUNLIK"))) {
+    const sozlama = await prisma.dailyReportSetting.findFirst({
+      where: { businessId },
+      select: { direktorId: true },
+    });
+    const direktormi = !!opts.userId && sozlama?.direktorId === opts.userId;
+    if (direktormi || isManager(opts.rol)) {
+      const bugun = dateOnlyStringToUTCDate(todayTashkentDateOnlyString());
+      const ochiqlar = await prisma.dailyReport.findMany({
+        where: { businessId, holat: "OPEN", jamiSumma: { gt: 0 }, sana: { lt: bugun } },
+        orderBy: { sana: "desc" },
+        select: { sana: true, jamiSumma: true },
+        take: 10,
+      });
+      if (ochiqlar.length > 0) {
+        const oxirgi = utcDateToDateOnlyString(ochiqlar[0].sana);
+        out.push({
+          severity: "warning",
+          title: "Kunlik yakun tasdiqlanmagan",
+          message:
+            ochiqlar.length === 1
+              ? `${oxirgi.split("-").reverse().join(".")} kuni (${ochiqlar[0].jamiSumma.toLocaleString("ru-RU")} so'm) tasdiqlanishini kutmoqda`
+              : `${ochiqlar.length} ta kun tasdiqlanishini kutmoqda (oxirgisi ${oxirgi.split("-").reverse().join(".")})`,
+          href: `/app/kunlik?sana=${oxirgi}`,
+        });
+      }
+    }
+  }
 
   // Budjet oshishi (faqat admin)
   if (isManager(opts.rol)) {
@@ -156,7 +196,7 @@ export async function getNotifications(
 /** Bildirishnomalar sonini tez hisoblaydi (nav badge uchun). */
 export async function getNotificationCount(
   businessId: string,
-  opts: { rol: string; omborli: boolean }
+  opts: { rol: string; omborli: boolean; userId?: string }
 ): Promise<number> {
   return (await getNotifications(businessId, opts)).length;
 }

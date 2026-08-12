@@ -2177,3 +2177,37 @@ lib/modules/registry.ts, components/nav/BottomNav.tsx, tests.
 **Tekshirildi:** build ✅ · kunlik 21/21 · modules 14/14 · isolation 22/22 ·
 izolyatsiya-royxati 9/9 · backup 6/6 · migratsiya 10/10 · soft-delete 8/8 ·
 agregat 7/7 · atomik 6/6 · audit 12/12.
+
+---
+
+## 2026-08-12 · Kunlik: direktorga eslatma + Telegramda bir bosishda tasdiqlash
+
+**Branch:** `claude/disney-flowers-daily-report-q272aw` · **Migratsiya YO'Q**
+
+Egasining talabi: tasdiqni direktor qiladi (bor edi), unga BILDIRISHNOMA
+borsin va esidan chiqsa ERTASI KUNI ham tasdiqlay olsin (bu ham bor edi —
+faqat kelajak kun taqiqlangan; endi eslatma unutilganini o'zi aytadi).
+
+- **`lib/reports/kunlikEslatma.ts`** — cron eslatmasi (hisobotIshi, 05:00 UTC
+  = 10:00 Toshkent): KUNLIK yoqilgan tenantlarda o'tgan 7 kun ichidagi OCHIQ,
+  tushumli kunlar uchun direktorga Telegram xabar (naqd/click/qarz/jami) +
+  "✅ Kun yakunini tasdiqlash" inline tugmasi. Direktor Telegramsiz bo'lsa —
+  zaxira yo'l: boshqaruvchilarga. Bo'sh (0 so'm) kunlar eslatilmaydi.
+  Kuniga bir marta (AppSetting `kunlikEslatma:<sana>` dedupe, dailyDigest uslubi).
+- **`bot/kunlikFlow.ts`** — `kht:ok:<reportId>` callback: bir bosishda
+  tasdiqlash. Bot darajasida managerOnly YO'Q (direktor kassir bo'lishi
+  mumkin) — huquq confirmKunlikReport ichida (faqat tayinlangan direktor).
+- **Bildirishnomalar sahifasi + nav badge** (`lib/queries/notifications.ts`):
+  "Kunlik yakun tasdiqlanmagan" ogohlantirishi — direktor (userId bo'yicha,
+  roli muhim emas) va boshqaruvchilarga; bosilsa o'sha kun ochiladi.
+  `getNotifications/getNotificationCount` opts'iga `userId` qo'shildi.
+- Grammy `Api` interfeys mosligi: `EslatmaBotApi.sendMessage` ataylab method
+  sintaksisida (bivariant) — aks holda `Other<...>` parametri bilan to'qnashardi.
+
+**Test:** kunlik 21 → **24**: eslatma direktorga boradi (boshqaruvchiga emas),
+tugmada `kht:ok:` bor, dedupe; direktor 2 kun oldingi kunni tasdiqlaydi
+(jami tushumlardan qayta jamlanadi); bildirishnoma direktor/boshqaruvchiga
+ko'rinadi, oddiy xodimga yo'q.
+
+**Tekshirildi:** build ✅ · tsc toza · kunlik 24/24 · isolation 22/22 ·
+modules 14/14 · cron 10/10 · audit-qoldiq 10/10.
