@@ -48,7 +48,7 @@ export async function getNotifications(
     if (direktormi || isManager(opts.rol)) {
       const bugun = dateOnlyStringToUTCDate(todayTashkentDateOnlyString());
       const ochiqlar = await prisma.dailyReport.findMany({
-        where: { businessId, holat: "OPEN", jamiSumma: { gt: 0 }, sana: { lt: bugun } },
+        where: { businessId, holat: { not: "CONFIRMED" }, jamiSumma: { gt: 0 }, sana: { lt: bugun } },
         orderBy: { sana: "desc" },
         select: { sana: true, jamiSumma: true },
         take: 10,

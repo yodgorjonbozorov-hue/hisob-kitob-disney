@@ -2211,3 +2211,46 @@ ko'rinadi, oddiy xodimga yo'q.
 
 **Tekshirildi:** build ✅ · tsc toza · kunlik 24/24 · isolation 22/22 ·
 modules 14/14 · cron 10/10 · audit-qoldiq 10/10.
+
+---
+
+## 2026-08-12 · Kunlik: KASSA TOPSHIRISH (xodim -> direktor, pul nazorati)
+
+**Branch:** `claude/disney-flowers-daily-report-q272aw` · **Migratsiya: 1 ta (ADD COLUMN x4)**
+
+Egasining talabi: kun yakunida sotuvchilar kassani TOPSHIRSIN ("Direktorga
+yuborish" tugmasi), direktor o'zi tasdiqlasin — maqsad pul yo'qolmasligini,
+xodim pul o'g'irlayaptimi-yo'qligini bilish.
+
+**Yechim — uch bosqichli holat oqimi:** `OPEN → SUBMITTED → CONFIRMED`.
+
+- **Topshirishda xodim kassadagi naqdni SANAB kiritadi** (`sanalganNaqd`).
+  Tizim hisobi (`naqdSumma`) ataylab modal'da KO'RSATILMAYDI — xodim
+  "chiqishi kerak" raqamni ko'chirib qo'ya olmasin. Farq = sanalgan − tizim:
+  manfiy (KAM) — pul yetishmayapti, signal qizil ko'rinadi.
+- SUBMITTED holatda tushum kiritish, tahrirlash va Yozuvlardan avto-sinxron
+  QULFLANADI (raqamlar "muzlaydi") — topshirilgandan keyin hech kim orqadan
+  raqam o'zgartira olmaydi.
+- Direktor OPEN'dan ham (xodim topshirmagan bo'lsa), SUBMITTED'dan ham
+  tasdiqlaydi; `sanalganNaqd` tarixda saqlanadi. Qayta ochish endi SUBMITTED
+  uchun ham ishlaydi va topshiruv maydonlarini tozalaydi — tuzatishdan keyin
+  xodim QAYTA sanab topshiradi.
+- **Topshirilgan zahoti direktorga Telegram xabar** (best-effort, approval
+  uslubi): tizim naqdi vs sanalgan, FARQ qatori, Click/Qarz/Jami + bir
+  bosishda "✅ Tasdiqlash" tugmasi (`kht:ok:` — mavjud callback ishlaydi).
+  Direktor Telegramsiz bo'lsa boshqaruvchilarga boradi. `rawPrisma` — bot
+  xabarnomasi tizim darajasidagi amal (approval.ts pretsedenti).
+- Ertalabki cron eslatma va bildirishnomalar endi SUBMITTED kunlarni ham
+  qamraydi (`holat != CONFIRMED`), eslatmada topshiruv/farq ko'rinadi.
+- UI: YakunCard (yangi komponent, 250 satr limiti uchun ajratildi) — holat
+  belgilari 🟡/📤/🟢, solishtiruv bloki, TopshirishModal; tarixda farq belgisi.
+
+**Sxema:** DailyReport +submittedBy/+submittedByIsm/+submittedAt/+sanalganNaqd
+(`20260812130000_kunlik_topshirish`, faqat ADD COLUMN).
+
+**Test:** kunlik 24 → **26**: topshirish (farq −50 000 bilan), tushum/sinxron
+qulfi, qayta topshirish rad, SUBMITTED'dan tasdiqlash (sanalgan saqlanadi),
+tasdiqlangandan keyin topshirish rad, kelajak kun rad, tarixda farq.
+
+**Tekshirildi:** build ✅ · tsc toza · kunlik 26/26 · isolation 22/22 ·
+izolyatsiya-royxati 9/9 · backup 6/6 · modules 14/14 · migratsiya 10/10 · cron 10/10.

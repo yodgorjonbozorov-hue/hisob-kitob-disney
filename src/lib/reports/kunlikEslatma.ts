@@ -51,9 +51,11 @@ export async function sendKunlikEslatma(botApi: EslatmaBotApi): Promise<number> 
       if (!(await isModuleOnForTenant(tenant.id, "KUNLIK"))) continue;
 
       sent += await runWithTenant(tenant.id, async () => {
+        // OPEN ham, SUBMITTED (xodim topshirgan, direktor hali tasdiqlamagan)
+        // ham eslatiladi — ikkalasi ham direktor qarorini kutmoqda.
         const reports = await prisma.dailyReport.findMany({
           where: {
-            holat: "OPEN",
+            holat: { not: "CONFIRMED" },
             jamiSumma: { gt: 0 },
             sana: { lt: bugunSana, gte: oynaBoshi },
             business: { isActive: true },
@@ -103,14 +105,25 @@ export async function sendKunlikEslatma(botApi: EslatmaBotApi): Promise<number> 
 
           const sanaStr = utcDateToDateOnlyString(r.sana);
           const sanaUz = sanaStr.split("-").reverse().join(".");
+          const topshiruv =
+            r.holat === "SUBMITTED" && r.sanalganNaqd !== null
+              ? `📤 Topshirdi: ${r.submittedByIsm ?? "—"}\n` +
+                `💵 Naqd (sanaldi): ${formatSomLabel(r.sanalganNaqd)}\n` +
+                (r.sanalganNaqd - r.naqdSumma === 0
+                  ? "✅ Farq yo'q\n"
+                  : r.sanalganNaqd - r.naqdSumma < 0
+                    ? `⚠️ KAM: ${formatSomLabel(r.naqdSumma - r.sanalganNaqd)} yetishmayapti!\n`
+                    : `⚠️ Ortiqcha: ${formatSomLabel(r.sanalganNaqd - r.naqdSumma)}\n`)
+              : "";
           const text =
             `🟡 ${BRAND.nomi} · Kunlik yakun tasdiqlanmagan\n\n` +
             `${r.business.nomi} — ${sanaUz}\n` +
             `💵 Naqd: ${formatSomLabel(r.naqdSumma)}\n` +
             `💳 Click: ${formatSomLabel(r.clickSumma)}\n` +
             `📋 Qarz: ${formatSomLabel(r.qarzSumma)}\n` +
-            `💰 Jami: ${formatSomLabel(r.jamiSumma)}\n\n` +
-            `Tasdiqlash uchun tugmani bosing yoki saytda "Kunlik hisobot" bo'limini oching.`;
+            `💰 Jami: ${formatSomLabel(r.jamiSumma)}\n` +
+            topshiruv +
+            `\nTasdiqlash uchun tugmani bosing yoki saytda "Kunlik hisobot" bo'limini oching.`;
           const tugma = {
             reply_markup: {
               inline_keyboard: [[{ text: "✅ Kun yakunini tasdiqlash", callback_data: `kht:ok:${r.id}` }]],

@@ -22,7 +22,7 @@ export const KUNLIK_TOLOV_BELGI: Record<KunlikTolovTuri, string> = {
   DEBT: "\u{1F4CB}",
 };
 
-export const KUNLIK_HOLATLAR = ["OPEN", "CONFIRMED"] as const;
+export const KUNLIK_HOLATLAR = ["OPEN", "SUBMITTED", "CONFIRMED"] as const;
 export type KunlikHolat = (typeof KUNLIK_HOLATLAR)[number];
 
 const sanaSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Sana noto'g'ri formatda");
@@ -56,6 +56,20 @@ export type UpdateKunlikTushumInput = z.infer<typeof updateKunlikTushumSchema>;
 /** Tasdiqlash / qayta ochish so'rovi — qaysi kun. */
 export const kunlikSanaSchema = z.object({ sana: sanaSchema });
 export type KunlikSanaInput = z.infer<typeof kunlikSanaSchema>;
+
+/**
+ * KASSA TOPSHIRISH: xodim kun oxirida kassadagi naqdni SANAB kiritadi.
+ * 0 ham mumkin (naqd tushum bo'lmagan kun).
+ */
+export const kunlikTopshirishSchema = z.object({
+  sana: sanaSchema,
+  sanalganNaqd: z
+    .number({ invalid_type_error: "Sanalgan naqd raqam bo'lishi kerak" })
+    .int("Sanalgan naqd butun son bo'lishi kerak (so'm)")
+    .min(0, "Sanalgan naqd manfiy bo'lmaydi")
+    .max(100_000_000_000, "Summa juda katta"),
+});
+export type KunlikTopshirishInput = z.infer<typeof kunlikTopshirishSchema>;
 
 /** Direktor tayinlash: null — direktorni olib tashlash. */
 export const setKunlikDirektorSchema = z.object({

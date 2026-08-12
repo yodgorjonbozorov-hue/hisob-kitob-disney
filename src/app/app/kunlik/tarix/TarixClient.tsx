@@ -29,7 +29,16 @@ export function TarixClient({ tarix }: { tarix: KunlikTarixDTO[] }) {
                   <p className="text-2xs text-faint">
                     {r.holat === "CONFIRMED"
                       ? `🟢 Tasdiqlangan${r.confirmedByIsm ? ` · ${r.confirmedByIsm}` : ""}`
-                      : "🟡 Tasdiqlanmagan"}
+                      : r.holat === "SUBMITTED"
+                        ? `📤 Topshirilgan${r.submittedByIsm ? ` · ${r.submittedByIsm}` : ""} — tasdiq kutilmoqda`
+                        : "🟡 Tasdiqlanmagan"}
+                    {r.naqdFarq !== null && r.naqdFarq !== 0 && (
+                      <span className="text-expense font-medium">
+                        {" "}
+                        · farq {r.naqdFarq < 0 ? "−" : "+"}
+                        {Math.abs(r.naqdFarq).toLocaleString("uz-UZ")}
+                      </span>
+                    )}
                   </p>
                 </div>
                 <div className="text-right shrink-0">

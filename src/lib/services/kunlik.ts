@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
+import { rawPrisma } from "@/lib/db/rawPrisma";
 import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
-import { isManager, type Rol } from "@/lib/auth/roles";
+import { formatSomLabel } from "@/lib/format";
+import { isManager, MANAGER_ROLLAR, type Rol } from "@/lib/auth/roles";
 import { runBusinessTx, type BusinessTx } from "@/lib/db/businessTx";
 import { currentTenantId } from "@/lib/db/tenantContext";
 import {
@@ -125,8 +127,11 @@ export async function addKunlikTushum(
     const report = await reportTopYokiYaratTx(tx, businessId, sana);
     if (report.holat !== "OPEN") {
       throw new BadRequestError(
-        "Bugungi kun yakuni tasdiqlangan — yangi tushum kiritib bo'lmaydi. " +
-          "O'zgartirish kerak bo'lsa direktor kunni qayta ochishi mumkin."
+        report.holat === "SUBMITTED"
+          ? "Bugungi kassa direktorga topshirilgan — yangi tushum kiritib bo'lmaydi. " +
+            "Kerak bo'lsa direktor kunni qayta ochadi."
+          : "Bugungi kun yakuni tasdiqlangan — yangi tushum kiritib bo'lmaydi. " +
+            "O'zgartirish kerak bo'lsa direktor kunni qayta ochishi mumkin."
       );
     }
     const tushum = await tx.dailyTransaction.create({
@@ -247,11 +252,82 @@ export async function deleteKunlikTushum(businessId: string, aktor: KunlikAktor,
 }
 
 /**
+ * KASSA TOPSHIRISH — xodim kun oxirida kunni direktorga yuboradi.
+ *
+ * Pul nazorati talabi: xodim kassadagi naqdni SANAB (`sanalganNaqd`) kiritadi.
+ * Direktor tizim hisoblagan `naqdSumma` bilan solishtiradi — kam chiqsa pul
+ * yo'qolgani (yoki kiritilmagan tushum) darhol ko'rinadi.
+ *
+ * Topshirilgandan keyin tushum kiritilmaydi (holat OPEN emas) — raqamlar
+ * "muzlaydi". `updateMany` + `holat: "OPEN"` sharti ikki marta topshirish
+ * race'ini bazada yopadi. Har qanday faol xodim topshira oladi.
+ */
+export async function submitKunlikReport(
+  businessId: string,
+  aktor: KunlikAktor,
+  sanaStr: string,
+  sanalganNaqd: number
+) {
+  const bugun = kunlikBugun();
+  if (sanaStr > bugun) throw new BadRequestError("Kelajak kunni topshirib bo'lmaydi");
+  const sana = dateOnlyStringToUTCDate(sanaStr);
+
+  const report = await runBusinessTx(businessId, async (tx) => {
+    const r = await reportTopYokiYaratTx(tx, businessId, sana);
+    await jamlashTx(tx, businessId, r.id);
+    const natija = await tx.dailyReport.updateMany({
+      where: { id: r.id, businessId, holat: "OPEN" },
+      data: {
+        holat: "SUBMITTED",
+        submittedBy: aktor.userId,
+        submittedByIsm: aktor.ism,
+        submittedAt: new Date(),
+        sanalganNaqd,
+      },
+    });
+    if (natija.count === 0) {
+      const joriy = await tx.dailyReport.findFirst({
+        where: { id: r.id, businessId },
+        select: { holat: true },
+      });
+      throw new BadRequestError(
+        joriy?.holat === "CONFIRMED"
+          ? "Bu kun allaqachon tasdiqlangan"
+          : "Bu kun allaqachon direktorga topshirilgan"
+      );
+    }
+    return (await tx.dailyReport.findFirst({ where: { id: r.id, businessId } }))!;
+  });
+
+  await logAudit({
+    businessId,
+    action: "update",
+    entity: "dailyReport",
+    entityId: report.id,
+    before: { holat: "OPEN" },
+    after: {
+      holat: "SUBMITTED",
+      sana: sanaStr,
+      jamiSumma: report.jamiSumma,
+      naqdSumma: report.naqdSumma,
+      sanalganNaqd,
+      farq: sanalganNaqd - report.naqdSumma,
+    },
+  });
+
+  // Direktorga darhol xabar (best-effort — Telegram ishlamasa jarayon buzilmaydi).
+  await kunlikTopshirildiYubor(businessId, report, aktor.ism);
+
+  return report;
+}
+
+/**
  * KUN YAKUNINI TASDIQLASH.
  *
  * Faqat tayinlangan direktor (direktor yo'q bo'lsa — boshqaruvchi).
- * `updateMany` + `holat: "OPEN"` sharti — bir kunni ikki marta tasdiqlash
- * race'ini bazada yopadi: ikkinchi urinishda count 0 bo'ladi.
+ * OPEN (xodim topshirmagan bo'lsa ham direktor yopishi mumkin) va
+ * SUBMITTED holatlardan o'tadi. `updateMany` + holat sharti — bir kunni
+ * ikki marta tasdiqlash race'ini bazada yopadi (ikkinchisida count 0).
  */
 export async function confirmKunlikReport(businessId: string, aktor: KunlikAktor, sanaStr: string) {
   const ruxsat = await getKunlikRuxsat(businessId, aktor);
@@ -262,12 +338,13 @@ export async function confirmKunlikReport(businessId: string, aktor: KunlikAktor
   if (sanaStr > bugun) throw new BadRequestError("Kelajak kunni tasdiqlab bo'lmaydi");
   const sana = dateOnlyStringToUTCDate(sanaStr);
 
-  const report = await runBusinessTx(businessId, async (tx) => {
+  const { report, oldingiHolat } = await runBusinessTx(businessId, async (tx) => {
     // Tushumsiz kun ham yakunlanishi mumkin (0 so'm bilan) — report ochamiz.
     const r = await reportTopYokiYaratTx(tx, businessId, sana);
+    // SUBMITTED kunda summalar "muzlagan" — baribir qayta jamlaymiz (himoya).
     await jamlashTx(tx, businessId, r.id);
     const natija = await tx.dailyReport.updateMany({
-      where: { id: r.id, businessId, holat: "OPEN" },
+      where: { id: r.id, businessId, holat: { in: ["OPEN", "SUBMITTED"] } },
       data: {
         holat: "CONFIRMED",
         confirmedBy: aktor.userId,
@@ -278,51 +355,73 @@ export async function confirmKunlikReport(businessId: string, aktor: KunlikAktor
     if (natija.count === 0) {
       throw new BadRequestError("Bu kun allaqachon tasdiqlangan");
     }
-    return tx.dailyReport.findFirst({ where: { id: r.id, businessId } });
+    return {
+      report: (await tx.dailyReport.findFirst({ where: { id: r.id, businessId } }))!,
+      oldingiHolat: r.holat,
+    };
   });
 
   await logAudit({
     businessId,
     action: "update",
     entity: "dailyReport",
-    entityId: report!.id,
-    before: { holat: "OPEN" },
-    after: { holat: "CONFIRMED", sana: sanaStr, jamiSumma: report!.jamiSumma },
+    entityId: report.id,
+    before: { holat: oldingiHolat },
+    after: {
+      holat: "CONFIRMED",
+      sana: sanaStr,
+      jamiSumma: report.jamiSumma,
+      sanalganNaqd: report.sanalganNaqd,
+      farq: report.sanalganNaqd === null ? null : report.sanalganNaqd - report.naqdSumma,
+    },
   });
-  return report!;
+  return report;
 }
 
 /**
- * Tasdiqlangan kunni QAYTA OCHISH — tuzatish kiritish uchun.
- * Faqat direktor yoki boshqaruvchi. Tuzatishdan keyin kun qayta tasdiqlanadi.
+ * Yakunlangan (topshirilgan yoki tasdiqlangan) kunni QAYTA OCHISH — tuzatish
+ * uchun. Faqat direktor yoki boshqaruvchi. Topshiruv ma'lumotlari ham
+ * tozalanadi: tuzatishdan keyin xodim kassani QAYTA sanab topshiradi.
  */
 export async function reopenKunlikReport(businessId: string, aktor: KunlikAktor, sanaStr: string) {
   const ruxsat = await getKunlikRuxsat(businessId, aktor);
   if (!ruxsat.tahrirlaydi) {
-    throw new ForbiddenError("Tasdiqlangan kunni faqat direktor yoki boshqaruvchi qayta ochadi");
+    throw new ForbiddenError("Yakunlangan kunni faqat direktor yoki boshqaruvchi qayta ochadi");
   }
   const sana = dateOnlyStringToUTCDate(sanaStr);
 
-  const report = await runBusinessTx(businessId, async (tx) => {
+  const { report, oldingiHolat } = await runBusinessTx(businessId, async (tx) => {
     const r = await tx.dailyReport.findFirst({ where: { businessId, sana } });
     if (!r) throw new BadRequestError("Bu kun uchun hisobot yo'q");
     const natija = await tx.dailyReport.updateMany({
-      where: { id: r.id, businessId, holat: "CONFIRMED" },
-      data: { holat: "OPEN", confirmedBy: null, confirmedByIsm: null, confirmedAt: null },
+      where: { id: r.id, businessId, holat: { in: ["SUBMITTED", "CONFIRMED"] } },
+      data: {
+        holat: "OPEN",
+        confirmedBy: null,
+        confirmedByIsm: null,
+        confirmedAt: null,
+        submittedBy: null,
+        submittedByIsm: null,
+        submittedAt: null,
+        sanalganNaqd: null,
+      },
     });
-    if (natija.count === 0) throw new BadRequestError("Bu kun tasdiqlanmagan — ochish shart emas");
-    return tx.dailyReport.findFirst({ where: { id: r.id, businessId } });
+    if (natija.count === 0) throw new BadRequestError("Bu kun yakunlanmagan — ochish shart emas");
+    return {
+      report: (await tx.dailyReport.findFirst({ where: { id: r.id, businessId } }))!,
+      oldingiHolat: r.holat,
+    };
   });
 
   await logAudit({
     businessId,
     action: "update",
     entity: "dailyReport",
-    entityId: report!.id,
-    before: { holat: "CONFIRMED" },
+    entityId: report.id,
+    before: { holat: oldingiHolat },
     after: { holat: "OPEN", sana: sanaStr },
   });
-  return report!;
+  return report;
 }
 
 /**
@@ -523,6 +622,109 @@ export async function kunlikBulkUz(businessId: string, transactionIds: string[])
     });
   } catch (e) {
     console.error("kunlikBulkUz xatosi:", e);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Telegram xabarnomasi: kassa topshirildi — direktor tasdiqlashi kerak.
+// ---------------------------------------------------------------------------
+
+interface TopshirilganReport {
+  id: string;
+  businessId: string;
+  sana: Date;
+  naqdSumma: number;
+  clickSumma: number;
+  qarzSumma: number;
+  jamiSumma: number;
+  sanalganNaqd: number | null;
+}
+
+/**
+ * Xodim kassani topshirganda direktorga darhol Telegram xabar + bir bosishda
+ * tasdiqlash tugmasi (`kht:ok:` — bot/kunlikFlow.ts) yuboradi. Sanalgan naqd
+ * bilan tizim hisobi solishtirilib, FARQ alohida ko'rsatiladi — pul nazorati
+ * aynan shu qator uchun.
+ *
+ * "Best-effort" (approval uslubi): Telegram ishlamasa topshiruv baribir
+ * bazada turadi va saytda ko'rinadi. `rawPrisma` — bot xabarnomalari tizim
+ * darajasidagi amal (CLAUDE.md).
+ */
+async function kunlikTopshirildiYubor(
+  businessId: string,
+  report: TopshirilganReport,
+  topshirganIsm: string | null
+): Promise<void> {
+  try {
+    const biznes = await rawPrisma.business.findUnique({
+      where: { id: businessId },
+      select: { tenantId: true, nomi: true },
+    });
+    if (!biznes) return;
+
+    // Qabul qiluvchi: tayinlangan direktor; Telegramsiz bo'lsa — boshqaruvchilar.
+    const chatlar: string[] = [];
+    const sozlama = await rawPrisma.dailyReportSetting.findUnique({
+      where: { businessId },
+      select: { direktorId: true },
+    });
+    if (sozlama?.direktorId) {
+      const direktor = await rawPrisma.user.findFirst({
+        where: { id: sozlama.direktorId, isActive: true, telegramChatId: { not: null } },
+        select: { telegramChatId: true },
+      });
+      if (direktor?.telegramChatId) chatlar.push(direktor.telegramChatId);
+    }
+    if (chatlar.length === 0) {
+      const managers = await rawPrisma.user.findMany({
+        where: {
+          tenantId: biznes.tenantId,
+          rol: { in: [...MANAGER_ROLLAR] },
+          isActive: true,
+          telegramChatId: { not: null },
+        },
+        select: { telegramChatId: true },
+      });
+      for (const m of managers) if (m.telegramChatId) chatlar.push(m.telegramChatId);
+    }
+    if (chatlar.length === 0) return;
+
+    const sanalgan = report.sanalganNaqd ?? 0;
+    const farq = sanalgan - report.naqdSumma;
+    const farqQator =
+      farq === 0
+        ? "✅ Farq yo'q — kassa tizim bilan mos"
+        : farq < 0
+          ? `⚠️ KAM: ${formatSomLabel(-farq)} yetishmayapti!`
+          : `⚠️ Ortiqcha: ${formatSomLabel(farq)}`;
+
+    const matn =
+      `📤 Kassa topshirildi — tasdiqlash kerak\n\n` +
+      `${biznes.nomi} — ${utcDateToDateOnlyString(report.sana).split("-").reverse().join(".")}\n` +
+      `Topshirdi: ${topshirganIsm ?? "—"}\n\n` +
+      `💵 Naqd (tizim): ${formatSomLabel(report.naqdSumma)}\n` +
+      `💵 Naqd (sanaldi): ${formatSomLabel(sanalgan)}\n` +
+      `${farqQator}\n\n` +
+      `💳 Click: ${formatSomLabel(report.clickSumma)}\n` +
+      `📋 Qarz: ${formatSomLabel(report.qarzSumma)}\n` +
+      `💰 Jami: ${formatSomLabel(report.jamiSumma)}`;
+
+    const { bot } = await import("@/bot/bot");
+    for (const chatId of chatlar) {
+      try {
+        await bot.api.sendMessage(chatId, matn, {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "✅ Kun yakunini tasdiqlash", callback_data: `kht:ok:${report.id}` }],
+            ],
+          },
+        });
+      } catch (error) {
+        console.error("Kunlik topshiruv xabarini yuborishda xatolik:", error);
+      }
+    }
+  } catch (error) {
+    console.error("Kunlik topshiruv xabarnomasi tayyorlanmadi:", error);
   }
 }
 

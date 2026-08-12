@@ -1003,7 +1003,12 @@ model Payroll {
 /// `sana` — Toshkent (Asia/Tashkent, UTC+5) kalendar kuni, UTC yarim tun
 /// sifatida saqlanadi. Kun O'zbekiston yarim tunida almashadi.
 ///
-/// holat: "OPEN" | "CONFIRMED". Tasdiqlangan kunga tushum kiritib/o'zgartirib
+/// holat: "OPEN" | "SUBMITTED" | "CONFIRMED".
+///   OPEN      — kun ochiq, tushum kiritiladi;
+///   SUBMITTED — xodim kassani TOPSHIRDI (sanagan naqdini kiritib), direktor
+///               tasdig'ini kutmoqda. Bu holatda ham tushum kiritilmaydi;
+///   CONFIRMED — direktor tasdiqladi.
+/// Yakunlangan (SUBMITTED/CONFIRMED) kunga tushum kiritib/o'zgartirib
 /// bo'lmaydi — avval direktor/boshqaruvchi uni qayta ochadi.
 model DailyReport {
   id             String             @id @default(cuid())
@@ -1016,6 +1021,14 @@ model DailyReport {
   qarzSumma      Int                @default(0)
   /// naqd + click + qarz (backend formulasi, jamlashTx).
   jamiSumma      Int                @default(0)
+  /// KASSA TOPSHIRISH (pul nazorati): xodim kun oxirida kassadagi naqdni
+  /// SANAB kiritadi. Direktor `sanalganNaqd` ni tizim hisoblagan `naqdSumma`
+  /// bilan solishtiradi — farq pul yo'qolganini (yoki ortiqchasini) darhol
+  /// ko'rsatadi. Ism snapshot — xodim o'chirilsa ham tarix qoladi.
+  submittedBy    String?
+  submittedByIsm String?
+  submittedAt    DateTime?
+  sanalganNaqd   Int?
   /// Tasdiqlagan foydalanuvchi (User.id) va ism snapshot'i — foydalanuvchi
   /// keyin o'chirilsa ham tarixda kim tasdiqlagani ko'rinib turadi.
   confirmedBy    String?

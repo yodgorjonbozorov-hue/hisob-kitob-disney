@@ -19,18 +19,30 @@ export interface KunlikTushumDTO {
   createdAt: string;
 }
 
+export type KunlikHolatDTO = "OPEN" | "SUBMITTED" | "CONFIRMED";
+
 export interface KunlikReportDTO {
   id: string | null;
   /** "YYYY-MM-DD" */
   sana: string;
-  holat: "OPEN" | "CONFIRMED";
+  holat: KunlikHolatDTO;
   naqdSumma: number;
   clickSumma: number;
   qarzSumma: number;
   jamiSumma: number;
+  /** Kassa topshiruvi (pul nazorati). */
+  submittedByIsm: string | null;
+  submittedAt: string | null;
+  sanalganNaqd: number | null;
+  /** sanalganNaqd − naqdSumma; topshirilmagan bo'lsa null. Manfiy = KAM. */
+  naqdFarq: number | null;
   confirmedByIsm: string | null;
   confirmedAt: string | null;
   items: KunlikTushumDTO[];
+}
+
+function holatDTO(holat: string): KunlikHolatDTO {
+  return holat === "CONFIRMED" ? "CONFIRMED" : holat === "SUBMITTED" ? "SUBMITTED" : "OPEN";
 }
 
 /**
@@ -58,6 +70,10 @@ export async function getKunlikReport(businessId: string, sanaStr: string): Prom
       clickSumma: 0,
       qarzSumma: 0,
       jamiSumma: 0,
+      submittedByIsm: null,
+      submittedAt: null,
+      sanalganNaqd: null,
+      naqdFarq: null,
       confirmedByIsm: null,
       confirmedAt: null,
       items: [],
@@ -66,11 +82,15 @@ export async function getKunlikReport(businessId: string, sanaStr: string): Prom
   return {
     id: report.id,
     sana: utcDateToDateOnlyString(report.sana),
-    holat: report.holat === "CONFIRMED" ? "CONFIRMED" : "OPEN",
+    holat: holatDTO(report.holat),
     naqdSumma: report.naqdSumma,
     clickSumma: report.clickSumma,
     qarzSumma: report.qarzSumma,
     jamiSumma: report.jamiSumma,
+    submittedByIsm: report.submittedByIsm,
+    submittedAt: report.submittedAt ? report.submittedAt.toISOString() : null,
+    sanalganNaqd: report.sanalganNaqd,
+    naqdFarq: report.sanalganNaqd === null ? null : report.sanalganNaqd - report.naqdSumma,
     confirmedByIsm: report.confirmedByIsm,
     confirmedAt: report.confirmedAt ? report.confirmedAt.toISOString() : null,
     items: report.items.map((t) => ({
@@ -89,11 +109,14 @@ export async function getKunlikReport(businessId: string, sanaStr: string): Prom
 export interface KunlikTarixDTO {
   id: string;
   sana: string;
-  holat: "OPEN" | "CONFIRMED";
+  holat: KunlikHolatDTO;
   naqdSumma: number;
   clickSumma: number;
   qarzSumma: number;
   jamiSumma: number;
+  /** sanalganNaqd − naqdSumma; topshirilmagan bo'lsa null. */
+  naqdFarq: number | null;
+  submittedByIsm: string | null;
   confirmedByIsm: string | null;
 }
 
@@ -107,11 +130,13 @@ export async function listKunlikTarix(businessId: string, limit = 60): Promise<K
   return rows.map((r) => ({
     id: r.id,
     sana: utcDateToDateOnlyString(r.sana),
-    holat: r.holat === "CONFIRMED" ? "CONFIRMED" : "OPEN",
+    holat: holatDTO(r.holat),
     naqdSumma: r.naqdSumma,
     clickSumma: r.clickSumma,
     qarzSumma: r.qarzSumma,
     jamiSumma: r.jamiSumma,
+    naqdFarq: r.sanalganNaqd === null ? null : r.sanalganNaqd - r.naqdSumma,
+    submittedByIsm: r.submittedByIsm,
     confirmedByIsm: r.confirmedByIsm,
   }));
 }

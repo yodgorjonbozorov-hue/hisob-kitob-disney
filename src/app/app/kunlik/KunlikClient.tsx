@@ -16,7 +16,8 @@ import type { KunlikDirektorDTO, KunlikReportDTO } from "@/lib/queries/kunlik";
 import type { KunlikRuxsat } from "@/lib/services/kunlik";
 import { TushumForm } from "./TushumForm";
 import { DirektorModal } from "./DirektorModal";
-import { sanaSur, sanaUz, soatToshkent, vaqtUzToshkent } from "./vaqt";
+import { YakunCard } from "./YakunCard";
+import { sanaSur, sanaUz, soatToshkent } from "./vaqt";
 
 export function KunlikClient({
   report,
@@ -31,33 +32,10 @@ export function KunlikClient({
 }) {
   const router = useRouter();
   const [direktorModal, setDirektorModal] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [xato, setXato] = useState<string | null>(null);
 
   const bugungi = report.sana === bugun;
   const ochiq = report.holat === "OPEN";
-
-  async function amal(url: string) {
-    setLoading(true);
-    setXato(null);
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sana: report.sana }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setXato(data.error ?? "Xatolik yuz berdi");
-        return;
-      }
-      router.refresh();
-    } catch {
-      setXato("Serverga ulanib bo'lmadi");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function ochir(id: string) {
     if (!confirm("Bu tushum o'chirilsinmi?")) return;
@@ -129,64 +107,15 @@ export function KunlikClient({
         ))}
       </div>
 
-      <Card>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm text-muted">💰 Jami tushum · kunlik yakun</p>
-            <Money value={report.jamiSumma} size="display" tone="brand" />
-          </div>
-          <div className="text-right space-y-2">
-            {ochiq ? (
-              <p className="text-sm">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-2 text-fg border border-line">
-                  🟡 Tasdiqlanmagan
-                </span>
-              </p>
-            ) : (
-              <div className="text-sm space-y-1">
-                <p>
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand-wash text-brand border border-line">
-                    🟢 Tasdiqlangan
-                  </span>
-                </p>
-                <p className="text-2xs text-muted">
-                  Tasdiqlagan: <span className="text-fg">{report.confirmedByIsm ?? "—"}</span>
-                </p>
-                {report.confirmedAt && (
-                  <p className="text-2xs text-faint">{vaqtUzToshkent(report.confirmedAt)}</p>
-                )}
-              </div>
-            )}
-            {ochiq && ruxsat.tasdiqlaydi && (
-              <Button onClick={() => amal("/api/kunlik/tasdiqlash")} loading={loading}>
-                ✅ Kun yakunini tasdiqlash
-              </Button>
-            )}
-            {!ochiq && ruxsat.tahrirlaydi && (
-              <Button
-                variant="secondary"
-                onClick={() => amal("/api/kunlik/qayta-ochish")}
-                loading={loading}
-              >
-                Qayta ochish (tuzatish uchun)
-              </Button>
-            )}
-          </div>
-        </div>
-        {xato && <p className="text-sm text-expense mt-3">{xato}</p>}
-        {ochiq && !ruxsat.tasdiqlaydi && (
-          <p className="text-2xs text-faint mt-3">
-            Kun yakunini faqat tayinlangan direktor tasdiqlaydi.
-          </p>
-        )}
-      </Card>
+      <YakunCard report={report} ruxsat={ruxsat} bugungi={bugungi} />
 
       {bugungi && ochiq && <TushumForm onDone={() => router.refresh()} />}
       {bugungi && !ochiq && (
         <Card>
           <p className="text-sm text-muted">
-            Bugungi kun yakunlangan — yangi tushum kiritilmaydi. Tuzatish kerak bo&apos;lsa
-            direktor kunni qayta ochadi.
+            {report.holat === "SUBMITTED"
+              ? "Bugungi kassa direktorga topshirilgan — yangi tushum kiritilmaydi. Kerak bo'lsa direktor kunni qayta ochadi."
+              : "Bugungi kun yakunlangan — yangi tushum kiritilmaydi. Tuzatish kerak bo'lsa direktor kunni qayta ochadi."}
           </p>
         </Card>
       )}

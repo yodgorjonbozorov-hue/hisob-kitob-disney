@@ -460,6 +460,83 @@ test("tasdiqlangan kunga sinxron tegmaydi, asosiy yozuv esa yoziladi", async () 
   assert.equal(keyin.items.length, oldin.items.length);
 });
 
+// ---------- Kassa topshirish (xodim -> direktor, pul nazorati) ----------
+
+test("xodim kassani topshiradi: sanalgan naqd, farq, tushum qulfi, direktor tasdig'i", async () => {
+  // Holat: bugun CONFIRMED (oldingi testdan) — tekshirish uchun qayta ochamiz.
+  await A(() => kunlikSvc.reopenKunlikReport(tA.business.id, egaAktor(), bugun));
+  const r0 = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  assert.equal(r0.holat, "OPEN");
+  assert.equal(r0.sanalganNaqd, null, "qayta ochilganda topshiruv ham tozalanadi");
+
+  // Xodim (sotuvchi/kassir) kassani topshiradi — tizim naqdidan 50 000 KAM sanadi.
+  const sanalgan = r0.naqdSumma - 50_000;
+  const topshirildi = await A(() =>
+    kunlikSvc.submitKunlikReport(tA.business.id, kassirAktor(), bugun, sanalgan)
+  );
+  assert.equal(topshirildi.holat, "SUBMITTED");
+  assert.equal(topshirildi.sanalganNaqd, sanalgan);
+  assert.equal(topshirildi.submittedByIsm, "Abdulloh Karimov");
+  assert.ok(topshirildi.submittedAt);
+
+  // DTO'da farq ko'rinadi: KAM = manfiy (pul yetishmayapti — nazorat signali)
+  const dto = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  assert.equal(dto.holat, "SUBMITTED");
+  assert.equal(dto.naqdFarq, -50_000);
+
+  // Topshirilgan kunga tushum kiritib bo'lmaydi (raqamlar muzlagan)
+  await assert.rejects(
+    () => A(() => kunlikSvc.addKunlikTushum(tA.business.id, kassirAktor(), { summa: 1_000, tolovTuri: "CASH" })),
+    /topshirilgan/i
+  );
+
+  // Yozuvlardan avto-sinxron ham topshirilgan kunga tegmaydi
+  const { createTransaction } = await import("@/lib/services/transactionService");
+  const kirimCat = await A(() =>
+    prisma.category.findFirst({ where: { businessId: tA.business.id, turi: "kirim" } })
+  );
+  await A(() =>
+    createTransaction(tA.user.id, tA.business.id, {
+      turi: "kirim", categoryId: kirimCat.id, summa: 77_000, sana: bugun,
+    })
+  );
+  const dto2 = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  assert.equal(dto2.jamiSumma, dto.jamiSumma, "topshirilgan kun o'zgarmasin");
+
+  // Qayta topshirish rad etiladi
+  await assert.rejects(
+    () => A(() => kunlikSvc.submitKunlikReport(tA.business.id, kassirAktor(), bugun, sanalgan)),
+    /allaqachon.*topshirilgan/i
+  );
+
+  // Direktor SUBMITTED holatdan tasdiqlaydi; topshiruv ma'lumoti saqlanadi
+  const tasdiq = await A(() => kunlikSvc.confirmKunlikReport(tA.business.id, kassirAktor(), bugun));
+  assert.equal(tasdiq.holat, "CONFIRMED");
+  assert.equal(tasdiq.sanalganNaqd, sanalgan, "sanalgan naqd tarixda qoladi");
+
+  // Tasdiqlangan kunni qayta topshirib bo'lmaydi
+  await assert.rejects(
+    () => A(() => kunlikSvc.submitKunlikReport(tA.business.id, kassirAktor(), bugun, sanalgan)),
+    /tasdiqlangan/i
+  );
+});
+
+test("kelajak kunni topshirib bo'lmaydi; tarixda topshiruv holati ko'rinadi", async () => {
+  const ertaga = date.utcDateToDateOnlyString(
+    new Date(date.dateOnlyStringToUTCDate(bugun).getTime() + 24 * 60 * 60 * 1000)
+  );
+  await assert.rejects(
+    () => A(() => kunlikSvc.submitKunlikReport(tA.business.id, kassirAktor(), ertaga, 0)),
+    /kelajak/i
+  );
+
+  const tarix = await A(() => kunlikQ.listKunlikTarix(tA.business.id));
+  const bugungisi = tarix.find((x: any) => x.sana === bugun);
+  assert.equal(bugungisi.holat, "CONFIRMED");
+  assert.equal(bugungisi.naqdFarq, -50_000, "farq tarix ro'yxatida ham ko'rinadi");
+  assert.equal(bugungisi.submittedByIsm, "Abdulloh Karimov");
+});
+
 // ---------- Direktorga eslatma + ertasi kuni tasdiqlash ----------
 
 test("tasdiqlanmagan o'tgan kun uchun direktorga Telegram eslatma boradi (tugma bilan)", async () => {
