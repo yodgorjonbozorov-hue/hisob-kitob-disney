@@ -44,7 +44,11 @@ export async function createTransaction(userId: string, businessId: string, data
       filial: data.filial ?? undefined,
       userId,
     },
-    include: { category: true, user: { select: { id: true, ism: true } } },
+    include: {
+      category: true,
+      user: { select: { id: true, ism: true } },
+      account: { select: { id: true, nomi: true, turi: true } },
+    },
   });
 
   // BUGUNGI sanali kirim kunlik hisobotga o'zi tushadi (boshqa sana — tushmaydi).

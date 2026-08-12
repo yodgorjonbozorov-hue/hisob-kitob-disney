@@ -22,7 +22,11 @@ export const POST = withTenant<{ params: { id: string } }>(async (request, { par
   const restored = await prisma.transaction.update({
     where: { id: params.id },
     data: { deletedAt: null },
-    include: { category: true, user: { select: { id: true, ism: true } } },
+    include: {
+      category: true,
+      user: { select: { id: true, ism: true } },
+      account: { select: { id: true, nomi: true, turi: true } },
+    },
   });
 
   // Tiklangan yozuv hali ham bugungi kirim bo'lsa — kunlikka qaytadi.

@@ -47,10 +47,14 @@ export async function listTransactions(params: TransactionListParams) {
 
   const where = buildTransactionWhere(params);
 
-  const [items, total, sums] = await Promise.all([
+  const [items, total, sums, kassaSums, kassalar] = await Promise.all([
     prisma.transaction.findMany({
       where,
-      include: { category: true, user: { select: { id: true, ism: true } } },
+      include: {
+        category: true,
+        user: { select: { id: true, ism: true } },
+        account: { select: { id: true, nomi: true, turi: true } },
+      },
       orderBy: [{ sana: "desc" }, { createdAt: "desc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
@@ -62,11 +66,34 @@ export async function listTransactions(params: TransactionListParams) {
       where,
       _sum: { summa: true },
     }),
+    // KIRIMNING kassa bo'yicha taqsimoti — pastdagi "Naqd / Click" qatorlari uchun.
+    prisma.transaction.groupBy({
+      by: ["accountId"],
+      where: { ...where, turi: "kirim" },
+      _sum: { summa: true },
+    }),
+    prisma.account.findMany({
+      where: { businessId: params.businessId },
+      select: { id: true, turi: true },
+    }),
   ]);
 
   const jamiKirim = sums.find((s) => s.turi === "kirim")?._sum.summa ?? 0;
   const jamiChiqim = sums.find((s) => s.turi === "chiqim")?._sum.summa ?? 0;
-  const totals = { jamiKirim, jamiChiqim, sof: jamiKirim - jamiChiqim };
+
+  // Kassa turi -> tushum bo'limi: naqd kassa (va kassasiz eski yozuvlar) — Naqd;
+  // plastik/bank — Click (karta/onlayn tushum). Kunlik hisobot bilan bir xil mantiq.
+  const kassaTuri = new Map(kassalar.map((k) => [k.id, k.turi]));
+  let naqdKirim = 0;
+  let clickKirim = 0;
+  for (const g of kassaSums) {
+    const summa = g._sum.summa ?? 0;
+    const turi = g.accountId ? kassaTuri.get(g.accountId) ?? "naqd" : "naqd";
+    if (turi === "naqd") naqdKirim += summa;
+    else clickKirim += summa;
+  }
+
+  const totals = { jamiKirim, jamiChiqim, sof: jamiKirim - jamiChiqim, naqdKirim, clickKirim };
 
   return { items, total, page, pageSize, totals };
 }

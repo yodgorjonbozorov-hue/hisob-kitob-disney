@@ -2254,3 +2254,29 @@ tasdiqlangandan keyin topshirish rad, kelajak kun rad, tarixda farq.
 
 **Tekshirildi:** build ✅ · tsc toza · kunlik 26/26 · isolation 22/22 ·
 izolyatsiya-royxati 9/9 · backup 6/6 · modules 14/14 · migratsiya 10/10 · cron 10/10.
+
+---
+
+## 2026-08-12 · Yozuvlar sahifasi: to'lov bo'limlari (Naqd/Click/Qarz)
+
+**Branch:** `claude/disney-flowers-daily-report-q272aw` · **Migratsiya YO'Q**
+
+Egasining talabi: Yozuvlarda "faqat so'm turibdi" — har yozuvda Naqd/Click
+farqi ko'rinsin, ro'yxat PASTIDA esa bo'lim-bo'lim jami qatorlar (Naqd,
+Click, Qarz) tursin.
+
+- **Har qatorda "To'lov" belgisi** — kassa turidan: naqd kassa → 💵 Naqd,
+  plastik → 💳 Click, bank → 🏦 Bank; kassasiz eski yozuv naqd sanaladi.
+  Desktop jadvalda alohida ustun, mobil lentada kategoriya yonida.
+- **Sticky footer'da bo'lim qatorlari**: 💵 Naqd (so'm) / 💳 Click — KIRIM
+  ning kassa bo'yicha taqsimoti (filtr qamroviga mos, faqat sahifa emas);
+  📋 Qarz — kunlik hisobotdagi qarz tushumlari jami (KUNLIK yoqiq bo'lsa;
+  qarz Transaction emas, shu bois alohida olinadi; sana oralig'i va xodim
+  ko'rinuvchanligi ro'yxat filtri bilan bir xil). Eski "+kirim −chiqim Sof"
+  qatori pastda saqlanadi.
+- `listTransactions`: items'ga `account` qo'shildi; totals'ga
+  naqdKirim/clickKirim (groupBy accountId). create/PATCH/restore javoblariga
+  ham `account` include qilindi (optimistik qatorlar DTO'ga mos bo'lsin).
+
+**Tekshirildi:** build ✅ · tsc toza · kunlik 26/26 · soft-delete 8/8 ·
+agregat 7/7 · isolation 22/22.
