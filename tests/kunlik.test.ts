@@ -32,10 +32,10 @@ let tB: any;
 let kassir: any;
 let bugun: string;
 
-function A<T>(fn: () => Promise<T>): Promise<T> {
+function A(fn: () => unknown): Promise<any> {
   return runWithTenant(tA.tenant.id, fn, { userId: tA.user.id, ism: "A egasi" });
 }
-function B<T>(fn: () => Promise<T>): Promise<T> {
+function B(fn: () => unknown): Promise<any> {
   return runWithTenant(tB.tenant.id, fn, { userId: tB.user.id, ism: "B egasi" });
 }
 
