@@ -2397,3 +2397,21 @@ to'liq qulf, cron avto qulf) · hr 21/21 (+2: M-13 qarz o'tishi, M-14 eskirgan
 snapshot) · tolov 16/16 (+2: click dublikat, confirmPayment poygasi) ·
 sessiya-tekshiruv 8/8 (+2: impersonatsiya muddati, audit izi) ·
 parol-tiklash 7/7 (yangi fayl).
+
+---
+
+## 2026-08-13 · TASK 2.7 — Direktor tasdig'i qat'iylashtirildi (A variant, M-7)
+
+**Branch:** `claude/balansa-code-audit-kt3eh1` · **Migratsiya YO'Q** · Egasi A variantni tanladi.
+
+- `getKunlikRuxsat.tasdiqlaydi = direktormi` — boshqaruvchi fallback olib
+  tashlandi: direktor tayinlanmagan biznesda kun yakunini HECH KIM
+  tasdiqlay olmaydi.
+- Xato matni va YakunCard boshqaruvchini "Avval direktor tayinlang"
+  (Direktor tugmasi) ga yo'naltiradi; `direktorTayinlangan` ruxsat
+  maydoni qo'shildi.
+- Cron eslatmasi (kunlikEslatma): direktorsiz biznes boshqaruvchilariga
+  tasdiqlash TUGMASIZ, "direktor tayinlang" matni bilan boradi.
+- Testlar yangilandi: eski fallback testi endi RAD kutadi; kelajak-kun va
+  2026-08-01 tasdiqlari direktor tayinlangandan keyingi bosqichga ko'chdi;
+  izolyatsiya testi regex'i yangi rad matnini ham qamraydi. kunlik 34/34.

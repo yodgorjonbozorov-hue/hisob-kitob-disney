@@ -11,9 +11,9 @@ import { formatSomLabel } from "@/lib/format";
  *
  * Cron eslatmasidagi (lib/reports/kunlikEslatma.ts) `kht:ok:<reportId>`
  * tugmasi shu yerga keladi. Huquq xizmat qatlamida tekshiriladi
- * (confirmKunlikReport → getKunlikRuxsat): faqat tayinlangan direktor
- * (direktor tayinlanmagan bo'lsa — boshqaruvchi). Direktor kassir bo'lishi
- * ham mumkin, shuning uchun bot darajasida managerOnly QO'YILMAYDI.
+ * (confirmKunlikReport → getKunlikRuxsat): FAQAT tayinlangan direktor
+ * (M-7, A variant). Direktor kassir bo'lishi ham mumkin, shuning uchun
+ * bot darajasida managerOnly QO'YILMAYDI.
  */
 export async function handleKunlikTasdiqCallback(ctx: Context, user: User) {
   const reportId = (ctx.callbackQuery?.data ?? "").slice("kht:ok:".length);

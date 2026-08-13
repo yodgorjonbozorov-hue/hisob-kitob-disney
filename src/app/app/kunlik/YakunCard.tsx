@@ -147,6 +147,13 @@ export function YakunCard({
       </div>
 
       {xato && <p className="text-sm text-expense mt-3">{xato}</p>}
+      {(ochiq || topshirilgan) && ruxsat.boshqaruvchimi && !ruxsat.direktorTayinlangan && (
+        // M-7 (A variant): direktor tayinlanmaguncha tasdiqlash yopiq.
+        <p className="text-sm text-muted mt-3">
+          ⚠️ Kun yakunini tasdiqlash uchun avval direktor tayinlang — yuqoridagi
+          &quot;Direktor&quot; tugmasidan tayinlanadi.
+        </p>
+      )}
       {ochiq && report.qaytaOchishSabab && (
         <p className="text-2xs text-faint mt-3">
           Qayta ochilgan. Sabab: <span className="text-muted">{report.qaytaOchishSabab}</span>

@@ -66,11 +66,17 @@ export async function sendKunlikEslatma(botApi: EslatmaBotApi): Promise<number> 
         if (reports.length === 0) return 0;
 
         // Har biznes uchun qabul qiluvchilar bir marta aniqlanadi.
-        const qabulKesh = new Map<string, { chatId: string; ism: string }[]>();
-        async function qabulQiluvchilar(businessId: string) {
+        interface Qabul {
+          royxat: { chatId: string; ism: string }[];
+          /** Tayinlangan direktorga ketyaptimi (tasdiqlash tugmasi faqat unga ma'noli — M-7). */
+          direktorga: boolean;
+        }
+        const qabulKesh = new Map<string, Qabul>();
+        async function qabulQiluvchilar(businessId: string): Promise<Qabul> {
           const bor = qabulKesh.get(businessId);
           if (bor) return bor;
           const royxat: { chatId: string; ism: string }[] = [];
+          let direktorga = false;
           const sozlama = await prisma.dailyReportSetting.findFirst({
             where: { businessId },
             select: { direktorId: true },
@@ -82,10 +88,13 @@ export async function sendKunlikEslatma(botApi: EslatmaBotApi): Promise<number> 
             });
             if (direktor?.telegramChatId) {
               royxat.push({ chatId: direktor.telegramChatId, ism: direktor.ism });
+              direktorga = true;
             }
           }
           if (royxat.length === 0) {
             // Zaxira yo'l: direktor yo'q/Telegramsiz — boshqaruvchilar xabardor bo'lsin.
+            // Tasdiqlash tugmasi ularga yuborilmaydi: A variantda (M-7) faqat
+            // tayinlangan direktor tasdiqlaydi — xabar direktor tayinlashga undaydi.
             const managers = await prisma.user.findMany({
               where: { rol: { in: MANAGER_ROLLAR }, isActive: true, telegramChatId: { not: null } },
               select: { telegramChatId: true, ism: true },
@@ -94,13 +103,14 @@ export async function sendKunlikEslatma(botApi: EslatmaBotApi): Promise<number> 
               if (m.telegramChatId) royxat.push({ chatId: m.telegramChatId, ism: m.ism });
             }
           }
-          qabulKesh.set(businessId, royxat);
-          return royxat;
+          const natija = { royxat, direktorga };
+          qabulKesh.set(businessId, natija);
+          return natija;
         }
 
         let yuborildi = 0;
         for (const r of reports) {
-          const kimlarga = await qabulQiluvchilar(r.businessId);
+          const { royxat: kimlarga, direktorga } = await qabulQiluvchilar(r.businessId);
           if (kimlarga.length === 0) continue;
 
           const sanaStr = utcDateToDateOnlyString(r.sana);
@@ -123,12 +133,18 @@ export async function sendKunlikEslatma(botApi: EslatmaBotApi): Promise<number> 
             `📋 Qarz: ${formatSomLabel(r.qarzSumma)}\n` +
             `💰 Jami: ${formatSomLabel(r.jamiSumma)}\n` +
             topshiruv +
-            `\nTasdiqlash uchun tugmani bosing yoki saytda "Kunlik hisobot" bo'limini oching.`;
-          const tugma = {
-            reply_markup: {
-              inline_keyboard: [[{ text: "✅ Kun yakunini tasdiqlash", callback_data: `kht:ok:${r.id}` }]],
-            },
-          };
+            (direktorga
+              ? `\nTasdiqlash uchun tugmani bosing yoki saytda "Kunlik hisobot" bo'limini oching.`
+              : `\nKun yakunini faqat tayinlangan direktor tasdiqlaydi — saytda "Kunlik hisobot" ` +
+                `bo'limidan direktor tayinlang.`);
+          // Tasdiqlash tugmasi faqat direktorga — boshqaruvchida u ishlamaydi (M-7).
+          const tugma = direktorga
+            ? {
+                reply_markup: {
+                  inline_keyboard: [[{ text: "✅ Kun yakunini tasdiqlash", callback_data: `kht:ok:${r.id}` }]],
+                },
+              }
+            : undefined;
 
           for (const kishi of kimlarga) {
             try {

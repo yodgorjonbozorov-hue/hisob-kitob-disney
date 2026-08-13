@@ -46,6 +46,8 @@ export interface KunlikRuxsat {
   direktormi: boolean;
   /** OWNER/ADMIN. */
   boshqaruvchimi: boolean;
+  /** Biznes uchun direktor tayinlanganmi (tasdiqlash faqat u orqali — M-7). */
+  direktorTayinlangan: boolean;
   /** Kun yakunini tasdiqlay oladimi. */
   tasdiqlaydi: boolean;
   /** Tasdiqlangan kunni qayta ocha oladimi / istalgan tushumni tahrirlay oladimi. */
@@ -64,10 +66,12 @@ export async function getKunlikRuxsat(businessId: string, aktor: KunlikAktor): P
   return {
     direktormi,
     boshqaruvchimi,
-    // Tasdiqlash — belgilangan direktorning huquqi. Direktor hali
-    // tayinlanmagan bo'lsa, ish to'xtab qolmasligi uchun boshqaruvchi
-    // vaqtincha tasdiqlay oladi (UI direktor tayinlashni taklif qiladi).
-    tasdiqlaydi: direktormi || (!sozlama?.direktorId && boshqaruvchimi),
+    direktorTayinlangan: !!sozlama?.direktorId,
+    // Tasdiqlash — FAQAT belgilangan direktorning huquqi (M-7, A variant).
+    // Ilgari direktor tayinlanmagan bo'lsa har qanday OWNER/ADMIN tasdiqlay
+    // olardi — nazorat bo'shligi edi. Endi direktor tayinlanmaguncha
+    // tasdiqlash yopiq; UI boshqaruvchini direktor tayinlashga yo'naltiradi.
+    tasdiqlaydi: direktormi,
     tahrirlaydi: direktormi || boshqaruvchimi,
     tarixniKoradi: direktormi || boshqaruvchimi,
   };
@@ -363,7 +367,8 @@ export async function submitKunlikReport(
 /**
  * KUN YAKUNINI TASDIQLASH.
  *
- * Faqat tayinlangan direktor (direktor yo'q bo'lsa — boshqaruvchi).
+ * FAQAT tayinlangan direktor (M-7, A variant): direktor tayinlanmagan
+ * bo'lsa tasdiqlash yopiq — avval direktor tayinlanadi.
  * OPEN (xodim topshirmagan bo'lsa ham direktor yopishi mumkin) va
  * SUBMITTED holatlardan o'tadi. `updateMany` + holat sharti — bir kunni
  * ikki marta tasdiqlash race'ini bazada yopadi (ikkinchisida count 0).
@@ -371,7 +376,12 @@ export async function submitKunlikReport(
 export async function confirmKunlikReport(businessId: string, aktor: KunlikAktor, sanaStr: string) {
   const ruxsat = await getKunlikRuxsat(businessId, aktor);
   if (!ruxsat.tasdiqlaydi) {
-    throw new ForbiddenError("Kun yakunini faqat tayinlangan direktor tasdiqlaydi");
+    throw new ForbiddenError(
+      !ruxsat.direktorTayinlangan
+        ? "Avval direktor tayinlang — kun yakunini faqat tayinlangan direktor tasdiqlaydi " +
+            "(Kunlik hisobot sahifasidagi \"Direktor\" tugmasi)"
+        : "Kun yakunini faqat tayinlangan direktor tasdiqlaydi"
+    );
   }
   const bugun = kunlikBugun();
   if (sanaStr > bugun) throw new BadRequestError("Kelajak kunni tasdiqlab bo'lmaydi");

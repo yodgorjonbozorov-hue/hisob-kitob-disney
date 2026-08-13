@@ -158,29 +158,19 @@ test("parallel kiritish dublikat hisobot ochmaydi (race)", async () => {
   assert.equal(r.jamiSumma, kutilgan);
 });
 
-// ---------- Direktor tayinlanmaganda: boshqaruvchi fallback ----------
+// ---------- Direktor tayinlanmaganda: tasdiqlash yopiq (M-7, A variant) ----------
 
-test("direktor yo'q bo'lsa boshqaruvchi tasdiqlaydi (bo'sh kun 0 bilan)", async () => {
-  const r = await A(() => kunlikSvc.confirmKunlikReport(tA.business.id, egaAktor(), "2026-08-01"));
-  assert.equal(r.holat, "CONFIRMED");
-  assert.equal(r.jamiSumma, 0);
-  assert.equal(r.confirmedByIsm, "A egasi");
+test("direktor tayinlanmagan bo'lsa boshqaruvchi HAM tasdiqlay olmaydi", async () => {
+  await assert.rejects(
+    () => A(() => kunlikSvc.confirmKunlikReport(tA.business.id, egaAktor(), "2026-08-01")),
+    /avval direktor tayinlang/i
+  );
 });
 
 test("oddiy xodim tasdiqlay olmaydi", async () => {
   await assert.rejects(
     () => A(() => kunlikSvc.confirmKunlikReport(tA.business.id, kassirAktor(), bugun)),
     /direktor/i
-  );
-});
-
-test("kelajak kunni tasdiqlab bo'lmaydi", async () => {
-  const ertaga = date.utcDateToDateOnlyString(
-    new Date(date.dateOnlyStringToUTCDate(bugun).getTime() + 24 * 60 * 60 * 1000)
-  );
-  await assert.rejects(
-    () => A(() => kunlikSvc.confirmKunlikReport(tA.business.id, egaAktor(), ertaga)),
-    /kelajak/i
   );
 });
 
@@ -206,11 +196,26 @@ test("direktor tayinlangach boshqaruvchi tasdiqlay olmaydi, direktor tasdiqlaydi
     /direktor/i
   );
 
+  // Kelajak kun — direktor uchun ham yopiq (ruxsatdan keyingi tekshiruv).
+  const ertaga = date.utcDateToDateOnlyString(
+    new Date(date.dateOnlyStringToUTCDate(bugun).getTime() + 24 * 60 * 60 * 1000)
+  );
+  await assert.rejects(
+    () => A(() => kunlikSvc.confirmKunlikReport(tA.business.id, kassirAktor(), ertaga)),
+    /kelajak/i
+  );
+
   const r = await A(() => kunlikSvc.confirmKunlikReport(tA.business.id, kassirAktor(), bugun));
   assert.equal(r.holat, "CONFIRMED");
   assert.equal(r.confirmedBy, kassir.id);
   assert.equal(r.confirmedByIsm, "Abdulloh Karimov");
   assert.ok(r.confirmedAt);
+
+  // Yuqoridagi "direktor tayinlanmaganda rad" testida yopilmagan 2026-08-01
+  // endi direktor tomonidan yopiladi (0 so'm bilan) — tarix testlari uchun.
+  const eski = await A(() => kunlikSvc.confirmKunlikReport(tA.business.id, kassirAktor(), "2026-08-01"));
+  assert.equal(eski.holat, "CONFIRMED");
+  assert.equal(eski.jamiSumma, 0);
 });
 
 // ---------- Tasdiqlangan kun qulflanadi ----------
@@ -336,7 +341,10 @@ test("begona tenant kunlik hisobotni ko'rmaydi va yoza olmaydi", async () => {
 
   await assert.rejects(
     () => B(() => kunlikSvc.confirmKunlikReport(tA.business.id, { userId: tB.user.id, ism: "B egasi", rol: "OWNER" }, bugun)),
-    /tegishli emas|topilmadi/i
+    // B konteksti A biznes sozlamasini KO'RA OLMAYDI — shuning uchun rad
+    // "direktor tayinlanmagan" ko'rinishida keladi (A variantdan keyin).
+    // Muhimi — rad etilgani; hech qanday A ma'lumoti oshkor bo'lmaydi.
+    /tegishli emas|topilmadi|direktor tayinlang/i
   );
 });
 

@@ -32,14 +32,12 @@ Noaniqliklarda tanlangan qarorlar. Egasi qaytganda ko'rib, kerak bo'lsa tuzatadi
 
 ## Audit BOSQICH 2 (2026-08-13)
 
-- **[TASK 2.7 — direktor tasdig'i] BAJARILMADI, mijoz qarori kutilmoqda.**
-  Tuzatish prompti ikki variant beradi: (A) direktor tayinlanmagan bo'lsa
-  tasdiqlash tugmasi ishlamasin, UI "Avval direktor tayinlang" desin;
-  (B) hozirgi fallback qolsin, lekin bunday tasdiq auditda
-  `direktorTayinlanmagan: true` bayrog'i bilan yozilsin. Prompt qoidasiga
-  ko'ra ("mijoz qarori kerak bo'lsa taxmin qilma — savol ber va taskni
-  o'tkazib yubor") hozirgi xatti-harakat O'ZGARTIRILMADI: direktor
-  tayinlanmagan bo'lsa OWNER/ADMIN tasdiqlayveradi (`getKunlikRuxsat`).
+- **[TASK 2.7 — direktor tasdig'i] A VARIANT TANLANDI (egasi, 2026-08-13).**
+  Direktor tayinlanmagan bo'lsa kun yakunini HECH KIM tasdiqlay olmaydi —
+  boshqaruvchi fallback olib tashlandi (`getKunlikRuxsat.tasdiqlaydi =
+  direktormi`). UI va xato matni "Avval direktor tayinlang" deb
+  yo'naltiradi; cron eslatmasi direktorsiz biznes boshqaruvchilariga
+  tasdiqlash tugmasisiz, "direktor tayinlang" matni bilan boradi.
 - **[LOCKED muddat] `qulflashKun` standarti 7 kun** (0 = avto qulflash
   o'chirilgan). Sozlama UI'si hali yo'q — qiymat hozircha bazadan
   o'zgartiriladi; kerak bo'lsa keyingi bosqichda sozlamalar sahifasiga chiqadi.
