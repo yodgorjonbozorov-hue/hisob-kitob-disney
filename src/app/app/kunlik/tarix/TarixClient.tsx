@@ -42,11 +42,13 @@ export function TarixClient({ tarix }: { tarix: KunlikTarixDTO[] }) {
                   </p>
                 </div>
                 <div className="text-right shrink-0">
-                  <Money value={r.jamiSumma} size="md" tone="neutral" />
+                  {/* Bosh raqam — kunning SOF natijasi (kirim − chiqim). */}
+                  <Money value={r.sofSumma} size="md" tone="neutral" signed={r.sofSumma < 0} />
                   <p className="text-2xs text-faint tnum">
                     💵 {r.naqdSumma.toLocaleString("uz-UZ")} · 💳{" "}
                     {r.clickSumma.toLocaleString("uz-UZ")} · 📋{" "}
-                    {r.qarzSumma.toLocaleString("uz-UZ")}
+                    {r.qarzSumma.toLocaleString("uz-UZ")} · 📉{" "}
+                    {r.chiqimSumma.toLocaleString("uz-UZ")}
                   </p>
                 </div>
               </Link>

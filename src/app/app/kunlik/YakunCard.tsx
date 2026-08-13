@@ -71,8 +71,17 @@ export function YakunCard({
     <Card>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-sm text-muted">💰 Jami tushum · kunlik yakun</p>
-          <Money value={report.jamiSumma} size="display" tone="brand" />
+          <p className="text-sm text-muted">💰 Sof natija · kunlik yakun</p>
+          <Money
+            value={report.sofSumma}
+            size="display"
+            tone={report.sofSumma >= 0 ? "brand" : "expense"}
+            signed={report.sofSumma < 0}
+          />
+          <p className="text-sm text-muted mt-1 tnum">
+            📈 Kirim: <span className="text-fg">{report.jamiSumma.toLocaleString("uz-UZ")}</span> · 📉
+            Chiqim: <span className="text-fg">{report.chiqimSumma.toLocaleString("uz-UZ")}</span>
+          </p>
         </div>
         <div className="text-right space-y-2">
           <p className="text-sm">{badge}</p>

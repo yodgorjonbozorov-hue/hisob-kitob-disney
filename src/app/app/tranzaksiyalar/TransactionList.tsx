@@ -7,6 +7,7 @@ import { formatSom, formatSomLabel, parseSomInput, formatDateUZ } from "@/lib/fo
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { TOLOV_TURLARI, TOLOV_NOMI, TOLOV_BELGI, type TolovTuri } from "@/lib/validation/transaction";
 import type { TransactionDTO } from "@/lib/queries/transactions";
 import type { Rol } from "@/lib/auth/session";
 import { ReceiptList } from "@/components/ui/ReceiptList";
@@ -54,8 +55,12 @@ export function TransactionList({
     return isManager(currentUserRol) || t.userId === currentUserId;
   }
 
-  // Kassa turi -> to'lov bo'limi belgisi (kassasiz eski yozuv — naqd).
+  // Yozuvdagi ANIQ to'lov turi ustun; null (eski yozuvlar) — kassa turidan
+  // (kassasiz eski yozuv — naqd).
   function tolovBelgi(t: TransactionDTO): string {
+    if (t.tolovTuri === "naqd") return "💵 Naqd";
+    if (t.tolovTuri === "click") return "💳 Click";
+    if (t.tolovTuri === "qarz") return "📋 Qarz";
     const turi = t.account?.turi ?? "naqd";
     return turi === "naqd" ? "💵 Naqd" : turi === "plastik" ? "💳 Click" : "🏦 Bank";
   }
@@ -234,6 +239,13 @@ function EditModal({
   onDelete: () => void;
 }) {
   const [turi, setTuri] = useState<"kirim" | "chiqim">(transaction.turi as "kirim" | "chiqim");
+  // Eski yozuvda tolovTuri null — kassa turidan boshlang'ich qiymat chiqariladi.
+  const [tolovTuri, setTolovTuri] = useState<TolovTuri>(
+    (transaction.tolovTuri as TolovTuri | null) ??
+      (transaction.account?.turi === "plastik" || transaction.account?.turi === "bank"
+        ? "click"
+        : "naqd")
+  );
   const [categoryId, setCategoryId] = useState(transaction.categoryId);
   const [summaText, setSummaText] = useState(formatSom(transaction.summa));
   const [sana, setSana] = useState(new Date(transaction.sana).toISOString().slice(0, 10));
@@ -255,7 +267,7 @@ function EditModal({
       const res = await fetch(`/api/transactions/${transaction.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ turi, categoryId, summa, sana, izoh: izoh || undefined }),
+        body: JSON.stringify({ turi, tolovTuri, categoryId, summa, sana, izoh: izoh || undefined }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -287,11 +299,29 @@ function EditModal({
             onClick={() => {
               setTuri("chiqim");
               setCategoryId("");
+              // Qarz faqat kirim uchun — chiqimga o'tilganda naqdga qaytariladi.
+              if (tolovTuri === "qarz") setTolovTuri("naqd");
             }}
             className={`flex-1 py-1.5 rounded-lg text-sm ${turi === "chiqim" ? "bg-expense text-white" : "bg-expense-soft text-expense-fg"}`}
           >
             Chiqim
           </button>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {TOLOV_TURLARI.filter((t) => t !== "qarz" || turi === "kirim").map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTolovTuri(t)}
+              className={`px-3 py-1.5 rounded-lg border text-sm transition ${
+                tolovTuri === t
+                  ? "border-brand bg-brand-wash text-brand font-medium"
+                  : "border-line bg-surface-2 text-fg hover:border-brand"
+              }`}
+            >
+              {TOLOV_BELGI[t]} {TOLOV_NOMI[t]}
+            </button>
+          ))}
         </div>
         <select
           value={categoryId}

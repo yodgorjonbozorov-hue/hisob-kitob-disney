@@ -4,6 +4,7 @@ import { useState, useMemo, FormEvent } from "react";
 import { formatSom, parseSomInput } from "@/lib/format";
 import { todayDateOnlyString } from "@/lib/date";
 import { Button } from "@/components/ui/Button";
+import { TOLOV_TURLARI, TOLOV_NOMI, TOLOV_BELGI, type TolovTuri } from "@/lib/validation/transaction";
 import type { TransactionDTO } from "@/lib/queries/transactions";
 
 interface CategoryOption {
@@ -28,6 +29,7 @@ export function TransactionForm({
   onCreated: (t: TransactionDTO) => void;
 }) {
   const [turi, setTuri] = useState<"kirim" | "chiqim">("kirim");
+  const [tolovTuri, setTolovTuri] = useState<TolovTuri>("naqd");
   const [categoryId, setCategoryId] = useState("");
   const [summaText, setSummaText] = useState("");
   const [sana, setSana] = useState(todayDateOnlyString());
@@ -68,6 +70,7 @@ export function TransactionForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           turi,
+          tolovTuri,
           categoryId: catId,
           summa,
           sana,
@@ -114,6 +117,8 @@ export function TransactionForm({
           onClick={() => {
             setTuri("chiqim");
             setCategoryId("");
+            // Qarz faqat kirim uchun — chiqimga o'tilganda naqdga qaytariladi.
+            if (tolovTuri === "qarz") setTolovTuri("naqd");
           }}
           className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
             turi === "chiqim" ? "bg-expense text-white" : "bg-expense-soft text-expense-fg"
@@ -121,6 +126,26 @@ export function TransactionForm({
         >
           Chiqim
         </button>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-muted mb-1">To&apos;lov turi</label>
+        <div className="grid grid-cols-3 gap-2">
+          {TOLOV_TURLARI.filter((t) => t !== "qarz" || turi === "kirim").map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTolovTuri(t)}
+              className={`px-3 py-2 rounded-lg border text-sm transition ${
+                tolovTuri === t
+                  ? "border-brand bg-brand-wash text-brand font-medium"
+                  : "border-line bg-surface-2 text-fg hover:border-brand"
+              }`}
+            >
+              {TOLOV_BELGI[t]} {TOLOV_NOMI[t]}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

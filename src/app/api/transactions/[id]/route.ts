@@ -6,6 +6,7 @@ import { isManager } from "@/lib/auth/roles";
 import { updateTransactionSchema } from "@/lib/validation/transaction";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { resolveActiveBusinessId } from "@/lib/business";
+import { resolveAccountId } from "@/lib/services/accounts";
 import { dashboardYangilandi } from "@/lib/cache";
 import { kunlikSinxron } from "@/lib/services/kunlik";
 
@@ -44,6 +45,27 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
     }
   }
 
+  // To'lov turi qoidasi yakuniy holatda tekshiriladi (turi va tolovTuri
+  // birga yoki alohida o'zgarishi mumkin): qarz faqat kirim uchun.
+  const yakuniyTuri = data.turi ?? existing.turi;
+  const yakuniyTolov = data.tolovTuri !== undefined ? data.tolovTuri : existing.tolovTuri;
+  if (yakuniyTolov === "qarz" && yakuniyTuri === "chiqim") {
+    return NextResponse.json({ error: "Qarz to'lov turi faqat kirim uchun" }, { status: 400 });
+  }
+
+  // Kassa bog'lanishi to'lov turiga ergashadi: qarz — kassasiz; qarzdan
+  // naqd/click'ka qaytsa — mos faol kassa qayta bog'lanadi.
+  let accountYangilash: { accountId: string | null } | Record<string, never> = {};
+  if (data.tolovTuri !== undefined) {
+    if (yakuniyTolov === "qarz") {
+      accountYangilash = { accountId: null };
+    } else if (existing.accountId === null || data.accountId !== undefined) {
+      accountYangilash = {
+        accountId: await resolveAccountId(businessId!, data.accountId, yakuniyTolov),
+      };
+    }
+  }
+
   const updated = await prisma.transaction.update({
     where: { id: params.id },
     data: {
@@ -51,6 +73,8 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
       ...(data.categoryId !== undefined ? { categoryId: data.categoryId } : {}),
       ...(data.summa !== undefined ? { summa: data.summa } : {}),
       ...(data.sana !== undefined ? { sana: dateOnlyStringToUTCDate(data.sana) } : {}),
+      ...(data.tolovTuri !== undefined ? { tolovTuri: data.tolovTuri } : {}),
+      ...accountYangilash,
       ...(data.izoh !== undefined ? { izoh: data.izoh } : {}),
       ...(data.filial !== undefined ? { filial: data.filial } : {}),
     },

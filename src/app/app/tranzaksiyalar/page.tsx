@@ -66,14 +66,16 @@ export default async function TranzaksiyalarPage({
     listAccounts(businessId, true),
   ]);
 
-  // QARZ bo'limi jami — kunlik hisobotdagi qarz tushumlari (KUNLIK moduli
-  // yoqiq bo'lsa). Qarz oddiy tranzaksiya emas, shuning uchun alohida olinadi;
-  // sana oralig'i va ko'rinuvchanlik ro'yxat filtri bilan bir xil.
+  // QARZ bo'limi jami — yozuvlardagi qarz tranzaksiyalari (totals.qarzKirim)
+  // USTIGA kunlik hisobotda qo'lda kiritilgan qarz tushumlari qo'shiladi
+  // (KUNLIK moduli yoqiq bo'lsa). Yozuvlardan avto-ulangan tushumlar
+  // (transactionId bor) sanalmaydi — ular totals.qarzKirim'da allaqachon bor.
   let qarzSumma: number | null = null;
   if (await isModuleOnForTenant(tenantId, "KUNLIK")) {
     const qarzWhere: Prisma.DailyTransactionWhereInput = {
       businessId,
       tolovTuri: "DEBT",
+      transactionId: null,
       deletedAt: null,
     };
     const scopeUserId = transactionScopeUserId(session);
@@ -113,7 +115,11 @@ export default async function TranzaksiyalarPage({
         hideProfit={hideProfit}
         moveTargets={moveTargets}
         totals={result.totals}
-        qarzSumma={qarzSumma}
+        qarzSumma={
+          qarzSumma === null && result.totals.qarzKirim === 0
+            ? null
+            : (qarzSumma ?? 0) + result.totals.qarzKirim
+        }
         filters={{
           from: searchParams.from ?? "",
           to: searchParams.to ?? "",

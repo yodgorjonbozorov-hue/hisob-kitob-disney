@@ -42,7 +42,14 @@ export function TransactionsClient({
   currentUserRol: Rol;
   hideProfit?: boolean;
   moveTargets?: { id: string; nomi: string }[];
-  totals: { jamiKirim: number; jamiChiqim: number; sof: number; naqdKirim: number; clickKirim: number };
+  totals: {
+    jamiKirim: number;
+    jamiChiqim: number;
+    sof: number;
+    naqdKirim: number;
+    clickKirim: number;
+    qarzKirim: number;
+  };
   /** Kunlik hisobotdagi qarz tushumlari jami (KUNLIK moduli o'chiq bo'lsa null). */
   qarzSumma?: number | null;
   filters: { from: string; to: string; turi: string; categoryId: string; q: string; minSumma: string; maxSumma: string };
