@@ -66,9 +66,10 @@ export async function listTransactions(params: TransactionListParams) {
       where,
       _sum: { summa: true },
     }),
-    // KIRIMNING kassa bo'yicha taqsimoti — pastdagi "Naqd / Click" qatorlari uchun.
+    // KIRIMNING to'lov bo'limlari taqsimoti — pastdagi "Naqd / Click / Qarz"
+    // qatorlari uchun. Aniq tolovTuri ustun; null (eski yozuvlar) — kassa turidan.
     prisma.transaction.groupBy({
-      by: ["accountId"],
+      by: ["tolovTuri", "accountId"],
       where: { ...where, turi: "kirim" },
       _sum: { summa: true },
     }),
@@ -81,19 +82,33 @@ export async function listTransactions(params: TransactionListParams) {
   const jamiKirim = sums.find((s) => s.turi === "kirim")?._sum.summa ?? 0;
   const jamiChiqim = sums.find((s) => s.turi === "chiqim")?._sum.summa ?? 0;
 
-  // Kassa turi -> tushum bo'limi: naqd kassa (va kassasiz eski yozuvlar) — Naqd;
-  // plastik/bank — Click (karta/onlayn tushum). Kunlik hisobot bilan bir xil mantiq.
+  // Tushum bo'limi: yozuvdagi ANIQ tolovTuri ustun; null (eski yozuvlar) —
+  // kassa turidan: naqd kassa (va kassasiz) — Naqd, plastik/bank — Click.
+  // Kunlik hisobot bilan bir xil mantiq.
   const kassaTuri = new Map(kassalar.map((k) => [k.id, k.turi]));
   let naqdKirim = 0;
   let clickKirim = 0;
+  let qarzKirim = 0;
   for (const g of kassaSums) {
     const summa = g._sum.summa ?? 0;
-    const turi = g.accountId ? kassaTuri.get(g.accountId) ?? "naqd" : "naqd";
-    if (turi === "naqd") naqdKirim += summa;
-    else clickKirim += summa;
+    if (g.tolovTuri === "naqd") naqdKirim += summa;
+    else if (g.tolovTuri === "click") clickKirim += summa;
+    else if (g.tolovTuri === "qarz") qarzKirim += summa;
+    else {
+      const turi = g.accountId ? kassaTuri.get(g.accountId) ?? "naqd" : "naqd";
+      if (turi === "naqd") naqdKirim += summa;
+      else clickKirim += summa;
+    }
   }
 
-  const totals = { jamiKirim, jamiChiqim, sof: jamiKirim - jamiChiqim, naqdKirim, clickKirim };
+  const totals = {
+    jamiKirim,
+    jamiChiqim,
+    sof: jamiKirim - jamiChiqim,
+    naqdKirim,
+    clickKirim,
+    qarzKirim,
+  };
 
   return { items, total, page, pageSize, totals };
 }

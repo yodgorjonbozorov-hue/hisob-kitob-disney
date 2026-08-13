@@ -67,7 +67,7 @@ test("AVTO tarifi 200 000 so'm va MOLIYA+OMBOR modullari bilan mavjud", () => {
   const plan = plans.planByCode("AVTO");
   assert.ok(plan, "AVTO tarifi topilmadi");
   assert.equal(plan.oylikNarx, 200_000);
-  assert.deepEqual(plan.modullar, ["MOLIYA", "OMBOR"]);
+  assert.deepEqual(plan.modullar, ["MOLIYA", "OMBOR", "KUNLIK"]);
 });
 
 test("avto biznes omborli, avto rejimda va avto kategoriyalari bilan ochiladi", async () => {

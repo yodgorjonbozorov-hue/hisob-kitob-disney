@@ -480,6 +480,13 @@ const KASSA_TOLOV_XARITASI: Record<string, KunlikTolovTuri> = {
   bank: "CLICK",
 };
 
+/** Tranzaksiyadagi ANIQ to'lov turi -> kunlik to'lov turi. */
+const ANIQ_TOLOV_XARITASI: Record<string, KunlikTolovTuri> = {
+  naqd: "CASH",
+  click: "CLICK",
+  qarz: "DEBT",
+};
+
 export interface KunlikSinxronYozuv {
   id: string;
   businessId: string;
@@ -489,14 +496,19 @@ export interface KunlikSinxronYozuv {
   izoh: string | null;
   userId: string;
   accountId: string | null;
+  /** "naqd" | "click" | "qarz" — berilgan bo'lsa kassa turidan ustun turadi. */
+  tolovTuri?: string | null;
   deletedAt: Date | null;
 }
 
 async function tolovTuriniAniqlaTx(
   tx: BusinessTx,
   businessId: string,
-  accountId: string | null
+  accountId: string | null,
+  aniqTuri?: string | null
 ): Promise<KunlikTolovTuri> {
+  // Yozuvda to'lov turi aniq ko'rsatilgan bo'lsa — kassa turiga qaralmaydi.
+  if (aniqTuri && ANIQ_TOLOV_XARITASI[aniqTuri]) return ANIQ_TOLOV_XARITASI[aniqTuri];
   if (!accountId) return "CASH";
   const acc = await tx.account.findFirst({
     where: { id: accountId, businessId },
@@ -535,7 +547,7 @@ export async function kunlikSinxron(t: KunlikSinxronYozuv, userIsm: string | nul
             businessId: t.businessId,
             reportId: report.id,
             summa: t.summa,
-            tolovTuri: await tolovTuriniAniqlaTx(tx, t.businessId, t.accountId),
+            tolovTuri: await tolovTuriniAniqlaTx(tx, t.businessId, t.accountId, t.tolovTuri),
             izoh: t.izoh ?? undefined,
             userId: t.userId,
             userIsm,
@@ -568,7 +580,7 @@ export async function kunlikSinxron(t: KunlikSinxronYozuv, userIsm: string | nul
             reportId: target.id,
             summa: t.summa,
             izoh: t.izoh,
-            tolovTuri: await tolovTuriniAniqlaTx(tx, t.businessId, t.accountId),
+            tolovTuri: await tolovTuriniAniqlaTx(tx, t.businessId, t.accountId, t.tolovTuri),
             deletedAt: null,
           },
         });
@@ -698,6 +710,16 @@ async function kunlikTopshirildiYubor(
           ? `⚠️ KAM: ${formatSomLabel(-farq)} yetishmayapti!`
           : `⚠️ Ortiqcha: ${formatSomLabel(farq)}`;
 
+    // Direktorga SOF natija yuboriladi (kirim − chiqim), tushum detali emas.
+    // Chiqim — shu kunning Yozuvlardagi chiqimlari. `rawPrisma` — bot
+    // xabarnomasi tizim darajasidagi amal (CLAUDE.md).
+    const chiqimAgg = await rawPrisma.transaction.aggregate({
+      _sum: { summa: true },
+      where: { businessId, turi: "chiqim", deletedAt: null, sana: report.sana },
+    });
+    const chiqim = chiqimAgg._sum.summa ?? 0;
+    const sof = report.jamiSumma - chiqim;
+
     const matn =
       `📤 Kassa topshirildi — tasdiqlash kerak\n\n` +
       `${biznes.nomi} — ${utcDateToDateOnlyString(report.sana).split("-").reverse().join(".")}\n` +
@@ -705,9 +727,9 @@ async function kunlikTopshirildiYubor(
       `💵 Naqd (tizim): ${formatSomLabel(report.naqdSumma)}\n` +
       `💵 Naqd (sanaldi): ${formatSomLabel(sanalgan)}\n` +
       `${farqQator}\n\n` +
-      `💳 Click: ${formatSomLabel(report.clickSumma)}\n` +
-      `📋 Qarz: ${formatSomLabel(report.qarzSumma)}\n` +
-      `💰 Jami: ${formatSomLabel(report.jamiSumma)}`;
+      `📈 Kirim: ${formatSomLabel(report.jamiSumma)}\n` +
+      `📉 Chiqim: ${formatSomLabel(chiqim)}\n` +
+      `💰 Sof natija: ${formatSomLabel(sof)}`;
 
     const { bot } = await import("@/bot/bot");
     for (const chatId of chatlar) {

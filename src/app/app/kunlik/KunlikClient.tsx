@@ -94,7 +94,7 @@ export function KunlikClient({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kartalar.map((k) => (
           <Card key={k.turi}>
             <p className="text-sm text-muted">
@@ -105,6 +105,12 @@ export function KunlikClient({
             </div>
           </Card>
         ))}
+        <Card>
+          <p className="text-sm text-muted">📉 Chiqim</p>
+          <div className="mt-2">
+            <Money value={report.chiqimSumma} size="xl" tone="neutral" />
+          </div>
+        </Card>
       </div>
 
       <YakunCard report={report} ruxsat={ruxsat} bugungi={bugungi} />

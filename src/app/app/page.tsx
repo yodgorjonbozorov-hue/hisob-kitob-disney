@@ -22,7 +22,6 @@ import {
   getDailyDynamicsKesh,
 } from "@/lib/queries/dashboardCached";
 import { getDebtTotals } from "@/lib/queries/inventory";
-import { getJamiKassaQoldiq } from "@/lib/queries/accounts";
 import { getTodayTotals } from "@/lib/queries/shift";
 import { listTransactions } from "@/lib/queries/transactions";
 import { KassaHome } from "./KassaHome";
@@ -87,7 +86,7 @@ export default async function DashboardPage({
   }
 
   const business = await getActiveBusiness(session);
-  const [summary, kirimBreakdown, chiqimBreakdown, trend, daily, qarzTotal, categoryCount, kassaQoldiq] = await Promise.all([
+  const [summary, kirimBreakdown, chiqimBreakdown, trend, daily, qarzTotal, categoryCount] = await Promise.all([
     getMonthSummaryKesh(businessId, month),
     getCategoryBreakdownKesh(businessId, month, "kirim"),
     getCategoryBreakdownKesh(businessId, month, "chiqim"),
@@ -95,7 +94,6 @@ export default async function DashboardPage({
     getDailyDynamicsKesh(businessId, month),
     business?.omborli ? getDebtTotals(businessId) : Promise.resolve({ olinadigan: 0, beriladigan: 0, sof: 0 }),
     prisma.category.count({ where: { businessId } }),
-    getJamiKassaQoldiq(businessId),
   ]);
 
   return (
@@ -129,16 +127,10 @@ export default async function DashboardPage({
         </Card>
       )}
 
+      {/* Barcha kartalar TANLANGAN OY ko'rsatkichlari — umumiy (butun davr)
+          kassa qoldig'i ataylab ko'rsatilmaydi: oy raqamlari bilan yonma-yon
+          turganda chalg'itardi. Kassalar bo'yicha qoldiq /app/kassa sahifasida. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard
-          label="Kassa qoldig'i"
-          value={formatMoneyCompact(kassaQoldiq)}
-          accent={kassaQoldiq >= 0 ? "brand" : "expense"}
-        >
-          <Link href="/app/kassa" className="text-2xs text-brand hover:underline mt-1 inline-block">
-            Kassalar bo&apos;yicha &rarr;
-          </Link>
-        </StatCard>
         <StatCard
           label="Jami kirim"
           value={formatMoneyCompact(summary.jamiKirim)}

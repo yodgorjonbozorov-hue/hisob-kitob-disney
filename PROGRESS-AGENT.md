@@ -2280,3 +2280,46 @@ Click, Qarz) tursin.
 
 **Tekshirildi:** build ✅ · tsc toza · kunlik 26/26 · soft-delete 8/8 ·
 agregat 7/7 · isolation 22/22.
+
+---
+
+## 2026-08-13 · Oy fokusidagi dashboard, yozuvda to'lov turi, kunlikda SOF natija
+
+**Branch:** `claude/kassa-kategoriya-setup-fap55c` · **Migratsiya BOR** (past xavf)
+
+Egasining 3 talabi (Disney Navoiy tajribasidan):
+
+1. **Dashboarddan "Kassa qoldig'i" olib tashlandi** — umumiy (butun davr)
+   qoldiq oy raqamlari yonida turib chalg'itardi. Endi barcha kartalar
+   tanlangan OY ko'rsatkichlari; kassalar bo'yicha qoldiq /app/kassa
+   sahifasida qolgan.
+2. **Yozuvlar formasida to'lov turi**: Naqd / Click / Qarz tugmalari
+   (Qarz — faqat kirim; zod refine + PATCH'da yakuniy holat tekshiruvi).
+   - `Transaction.tolovTuri` ustuni (`20260813120000_tranzaksiya_tolov_turi`,
+     faqat ADD COLUMN; null = eski yozuvlar → kassa turidan chiqariladi).
+   - QARZ yozuvi kassaga BOG'LANMAYDI (`accountId null`) — pul kassaga
+     tushmagan, kassa qoldig'i buzilmaydi.
+   - `resolveAccountId` to'lov turiga mos kassani afzal ko'radi (naqd →
+     naqd kassa, click → plastik/bank); mosi yo'q bo'lsa birinchi faol.
+   - Kunlik sinxron endi yozuvdagi ANIQ turdan yuradi (naqd→CASH,
+     click→CLICK, qarz→DEBT), kassa turi faqat eski yozuvlar uchun zaxira.
+   - Ro'yxat belgisi va pastki Naqd/Click/Qarz jamlari ham aniq turni
+     ustun qo'yadi; Qarz jami = yozuvlardagi qarz + kunlikda qo'lda
+     kiritilgan qarz (transactionId null — ikki marta sanalmaydi).
+3. **Kunlikda SOF natija va direktorga faqat sof**: kunlik hisobot endi
+   kunning Yozuvlardagi chiqimini jonli jamlaydi (`chiqimSumma`,
+   `sofSumma = tushum − chiqim`). YakunCard bosh raqami — SOF (1 500 000
+   kirim, 200 000 chiqim → 1 300 000); kartalar qatoriga 📉 Chiqim kartasi;
+   tarixda ham sof. Direktor Telegram xabarlari (topshirish, ertalabki
+   eslatma, tasdiq javobi) endi Click/Qarz/Jami o'rniga Kirim/Chiqim/SOF
+   ko'rsatadi — naqd nazorati (tizim vs sanalgan, farq) saqlangan.
+
+Yo'l-yo'lakay: main'da sinayotgan 2 eski test yangilandi (visibility —
+totals'dagi naqdKirim/clickKirim; avto — AVTO tarifiga KUNLIK qo'shilgani).
+
+**Tekshirildi:** build ✅ · kunlik 27/27 (yangi test: aniq tur sinxroni,
+qarz kassasiz, sof formula) · isolation 22/22 · izolyatsiya-royxati 9/9 ·
+kassa 11/11 · agregat 7/7 · soft-delete 8/8 · visibility 10/10 ·
+migratsiya 10/10 · atomik 6/6 · csv-import 13/13 · tasdiqlash 20/20 ·
+crm 7/7 · avto 25/25 · sotuv-bekor 11/11 · xarid 13/13 · hr 19/19 ·
+backup 6/6 · cron 10/10.

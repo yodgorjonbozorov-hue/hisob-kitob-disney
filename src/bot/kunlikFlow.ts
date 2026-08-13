@@ -41,9 +41,15 @@ export async function handleKunlikTasdiqCallback(ctx: Context, user: User) {
   }
 
   await ctx.answerCallbackQuery({ text: "Tasdiqlandi" });
+  // Direktorga SOF natija (kirim − shu kun chiqimi) ko'rsatiladi.
+  const chiqimAgg = await prisma.transaction.aggregate({
+    _sum: { summa: true },
+    where: { businessId: report.businessId, turi: "chiqim", deletedAt: null, sana: report.sana },
+  });
+  const chiqim = chiqimAgg._sum.summa ?? 0;
   await ctx.editMessageText(
     `🟢 ${report.business.nomi} — ${sanaStr.split("-").reverse().join(".")} kun yakuni tasdiqlandi.\n` +
-      `💰 Jami: ${formatSomLabel(yangi.jamiSumma)}\n` +
+      `💰 Sof natija: ${formatSomLabel(yangi.jamiSumma - chiqim)}\n` +
       `Tasdiqladi: ${user.ism}`
   );
 }

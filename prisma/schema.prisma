@@ -308,6 +308,10 @@ model Transaction {
   /// skripti (scripts/kassa-migratsiya.ts) ularni default kassaga bog'laydi.
   accountId       String?
   account         Account?         @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  /// To'lov turi: "naqd" | "click" | "qarz". Null — eski yozuvlar, ularda tur
+  /// kassa (account.turi) dan chiqariladi. "qarz"da pul kassaga tushmagan,
+  /// shuning uchun accountId null bo'ladi va kassa qoldig'iga kirmaydi.
+  tolovTuri       String?
   summa           Int
   sana            DateTime
   izoh            String?

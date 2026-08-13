@@ -98,6 +98,21 @@ export async function sendKunlikEslatma(botApi: EslatmaBotApi): Promise<number> 
           return royxat;
         }
 
+        // Har kunning chiqimi (Yozuvlardan) — direktorga SOF natija ko'rsatiladi.
+        const chiqimlar = await prisma.transaction.groupBy({
+          by: ["businessId", "sana"],
+          where: {
+            businessId: { in: [...new Set(reports.map((r) => r.businessId))] },
+            turi: "chiqim",
+            deletedAt: null,
+            sana: { in: [...new Set(reports.map((r) => r.sana.getTime()))].map((t) => new Date(t)) },
+          },
+          _sum: { summa: true },
+        });
+        const chiqimMap = new Map(
+          chiqimlar.map((c) => [`${c.businessId}:${c.sana.getTime()}`, c._sum.summa ?? 0])
+        );
+
         let yuborildi = 0;
         for (const r of reports) {
           const kimlarga = await qabulQiluvchilar(r.businessId);
@@ -105,9 +120,11 @@ export async function sendKunlikEslatma(botApi: EslatmaBotApi): Promise<number> 
 
           const sanaStr = utcDateToDateOnlyString(r.sana);
           const sanaUz = sanaStr.split("-").reverse().join(".");
+          const chiqim = chiqimMap.get(`${r.businessId}:${r.sana.getTime()}`) ?? 0;
           const topshiruv =
             r.holat === "SUBMITTED" && r.sanalganNaqd !== null
               ? `📤 Topshirdi: ${r.submittedByIsm ?? "—"}\n` +
+                `💵 Naqd (tizim): ${formatSomLabel(r.naqdSumma)}\n` +
                 `💵 Naqd (sanaldi): ${formatSomLabel(r.sanalganNaqd)}\n` +
                 (r.sanalganNaqd - r.naqdSumma === 0
                   ? "✅ Farq yo'q\n"
@@ -118,10 +135,9 @@ export async function sendKunlikEslatma(botApi: EslatmaBotApi): Promise<number> 
           const text =
             `🟡 ${BRAND.nomi} · Kunlik yakun tasdiqlanmagan\n\n` +
             `${r.business.nomi} — ${sanaUz}\n` +
-            `💵 Naqd: ${formatSomLabel(r.naqdSumma)}\n` +
-            `💳 Click: ${formatSomLabel(r.clickSumma)}\n` +
-            `📋 Qarz: ${formatSomLabel(r.qarzSumma)}\n` +
-            `💰 Jami: ${formatSomLabel(r.jamiSumma)}\n` +
+            `📈 Kirim: ${formatSomLabel(r.jamiSumma)}\n` +
+            `📉 Chiqim: ${formatSomLabel(chiqim)}\n` +
+            `💰 Sof natija: ${formatSomLabel(r.jamiSumma - chiqim)}\n` +
             topshiruv +
             `\nTasdiqlash uchun tugmani bosing yoki saytda "Kunlik hisobot" bo'limini oching.`;
           const tugma = {

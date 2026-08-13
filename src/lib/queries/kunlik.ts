@@ -30,6 +30,10 @@ export interface KunlikReportDTO {
   clickSumma: number;
   qarzSumma: number;
   jamiSumma: number;
+  /** Shu kunning Yozuvlardagi chiqimlari jami (jonli hisoblanadi). */
+  chiqimSumma: number;
+  /** jamiSumma − chiqimSumma — kun yakunida ko'rsatiladigan SOF natija. */
+  sofSumma: number;
   /** Kassa topshiruvi (pul nazorati). */
   submittedByIsm: string | null;
   submittedAt: string | null;
@@ -52,15 +56,24 @@ function holatDTO(holat: string): KunlikHolatDTO {
  */
 export async function getKunlikReport(businessId: string, sanaStr: string): Promise<KunlikReportDTO> {
   const sana = dateOnlyStringToUTCDate(sanaStr);
-  const report = await prisma.dailyReport.findFirst({
-    where: { businessId, sana },
-    include: {
-      items: {
-        where: { deletedAt: null },
-        orderBy: { createdAt: "desc" },
+  // Chiqim kunlikda saqlanmaydi — Yozuvlardan (Transaction) jonli jamlanadi,
+  // shuning uchun har doim haqiqiy holatni ko'rsatadi.
+  const [report, chiqimAgg] = await Promise.all([
+    prisma.dailyReport.findFirst({
+      where: { businessId, sana },
+      include: {
+        items: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: "desc" },
+        },
       },
-    },
-  });
+    }),
+    prisma.transaction.aggregate({
+      _sum: { summa: true },
+      where: { businessId, turi: "chiqim", deletedAt: null, sana },
+    }),
+  ]);
+  const chiqimSumma = chiqimAgg._sum.summa ?? 0;
   if (!report) {
     return {
       id: null,
@@ -70,6 +83,8 @@ export async function getKunlikReport(businessId: string, sanaStr: string): Prom
       clickSumma: 0,
       qarzSumma: 0,
       jamiSumma: 0,
+      chiqimSumma,
+      sofSumma: -chiqimSumma,
       submittedByIsm: null,
       submittedAt: null,
       sanalganNaqd: null,
@@ -87,6 +102,8 @@ export async function getKunlikReport(businessId: string, sanaStr: string): Prom
     clickSumma: report.clickSumma,
     qarzSumma: report.qarzSumma,
     jamiSumma: report.jamiSumma,
+    chiqimSumma,
+    sofSumma: report.jamiSumma - chiqimSumma,
     submittedByIsm: report.submittedByIsm,
     submittedAt: report.submittedAt ? report.submittedAt.toISOString() : null,
     sanalganNaqd: report.sanalganNaqd,
@@ -114,6 +131,10 @@ export interface KunlikTarixDTO {
   clickSumma: number;
   qarzSumma: number;
   jamiSumma: number;
+  /** Shu kunning Yozuvlardagi chiqimlari jami. */
+  chiqimSumma: number;
+  /** jamiSumma − chiqimSumma — kun sof natijasi. */
+  sofSumma: number;
   /** sanalganNaqd − naqdSumma; topshirilmagan bo'lsa null. */
   naqdFarq: number | null;
   submittedByIsm: string | null;
@@ -127,18 +148,40 @@ export async function listKunlikTarix(businessId: string, limit = 60): Promise<K
     orderBy: { sana: "desc" },
     take: limit,
   });
-  return rows.map((r) => ({
-    id: r.id,
-    sana: utcDateToDateOnlyString(r.sana),
-    holat: holatDTO(r.holat),
-    naqdSumma: r.naqdSumma,
-    clickSumma: r.clickSumma,
-    qarzSumma: r.qarzSumma,
-    jamiSumma: r.jamiSumma,
-    naqdFarq: r.sanalganNaqd === null ? null : r.sanalganNaqd - r.naqdSumma,
-    submittedByIsm: r.submittedByIsm,
-    confirmedByIsm: r.confirmedByIsm,
-  }));
+  // Har kunning chiqimi Yozuvlardan BITTA groupBy bilan jamlanadi.
+  const chiqimlar = rows.length
+    ? await prisma.transaction.groupBy({
+        by: ["sana"],
+        where: {
+          businessId,
+          turi: "chiqim",
+          deletedAt: null,
+          sana: { in: rows.map((r) => r.sana) },
+        },
+        _sum: { summa: true },
+      })
+    : [];
+  const chiqimMap = new Map(
+    chiqimlar.map((c) => [utcDateToDateOnlyString(c.sana), c._sum.summa ?? 0])
+  );
+  return rows.map((r) => {
+    const sana = utcDateToDateOnlyString(r.sana);
+    const chiqimSumma = chiqimMap.get(sana) ?? 0;
+    return {
+      id: r.id,
+      sana,
+      holat: holatDTO(r.holat),
+      naqdSumma: r.naqdSumma,
+      clickSumma: r.clickSumma,
+      qarzSumma: r.qarzSumma,
+      jamiSumma: r.jamiSumma,
+      chiqimSumma,
+      sofSumma: r.jamiSumma - chiqimSumma,
+      naqdFarq: r.sanalganNaqd === null ? null : r.sanalganNaqd - r.naqdSumma,
+      submittedByIsm: r.submittedByIsm,
+      confirmedByIsm: r.confirmedByIsm,
+    };
+  });
 }
 
 export interface KunlikDirektorDTO {

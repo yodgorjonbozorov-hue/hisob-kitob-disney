@@ -426,6 +426,70 @@ test("Yozuvlardan bugungi kirim kunlikka o'zi tushadi; boshqa sana va chiqim tus
   assert.equal(r.naqdSumma, bosh.naqdSumma, "sanasi o'zgargan yozuv kunlikdan chiqishi kerak");
 });
 
+test("yozuvdagi ANIQ to'lov turi kunlikka to'g'ri tushadi; qarz kassasiz; sof = kirim − chiqim", async () => {
+  const { createTransaction } = await import("@/lib/services/transactionService");
+  const bosh = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+
+  const kirimCat = await A(() =>
+    prisma.category.findFirst({ where: { businessId: tA.business.id, turi: "kirim" } })
+  );
+  const chiqimCat = await A(() =>
+    prisma.category.findFirst({ where: { businessId: tA.business.id, turi: "chiqim" } })
+  );
+
+  // 1) tolovTuri "click" — kassa turidan qat'i nazar kunlikda CLICK.
+  await A(() =>
+    createTransaction(tA.user.id, tA.business.id, {
+      turi: "kirim", categoryId: kirimCat.id, summa: 120_000, sana: bugun, tolovTuri: "click",
+    })
+  );
+  // 2) tolovTuri "qarz" — kunlikda DEBT, kassaga BOG'LANMAYDI.
+  const qarzTx = await A(() =>
+    createTransaction(tA.user.id, tA.business.id, {
+      turi: "kirim", categoryId: kirimCat.id, summa: 80_000, sana: bugun, tolovTuri: "qarz",
+    })
+  );
+  assert.equal(qarzTx.accountId, null, "qarz yozuvi kassaga bog'lanmasin");
+  // 3) tolovTuri "naqd" — CASH.
+  await A(() =>
+    createTransaction(tA.user.id, tA.business.id, {
+      turi: "kirim", categoryId: kirimCat.id, summa: 60_000, sana: bugun, tolovTuri: "naqd",
+    })
+  );
+
+  let r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  assert.equal(r.clickSumma, bosh.clickSumma + 120_000);
+  assert.equal(r.qarzSumma, bosh.qarzSumma + 80_000);
+  assert.equal(r.naqdSumma, bosh.naqdSumma + 60_000);
+
+  // 4) Chiqim kunlik jamiga kirmaydi, lekin SOF natijadan ayiriladi.
+  await A(() =>
+    createTransaction(tA.user.id, tA.business.id, {
+      turi: "chiqim", categoryId: chiqimCat.id, summa: 40_000, sana: bugun, tolovTuri: "naqd",
+    })
+  );
+  r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  assert.equal(r.jamiSumma, bosh.jamiSumma + 260_000);
+  assert.equal(r.chiqimSumma, bosh.chiqimSumma + 40_000);
+  assert.equal(r.sofSumma, r.jamiSumma - r.chiqimSumma, "sof = tushum − chiqim");
+
+  // 5) Qarz chiqim uchun taqiqlangan (zod darajasida).
+  const { createTransactionSchema } = await import("@/lib/validation/transaction");
+  assert.equal(
+    createTransactionSchema.safeParse({
+      turi: "chiqim", categoryId: "x", summa: 10, sana: bugun, tolovTuri: "qarz",
+    }).success,
+    false
+  );
+
+  // 6) Tarixda ham chiqim/sof ko'rinadi.
+  const tarix = await A(() => kunlikQ.listKunlikTarix(tA.business.id));
+  const bugungiQator = tarix.find((t: any) => t.sana === bugun);
+  assert.ok(bugungiQator);
+  assert.equal(bugungiQator.chiqimSumma, r.chiqimSumma);
+  assert.equal(bugungiQator.sofSumma, r.sofSumma);
+});
+
 test("modul yoqilmagan tenantda sinxron ishlamaydi", async () => {
   const { createTransaction } = await import("@/lib/services/transactionService");
   const kirimCatB = await B(() =>
