@@ -1,0 +1,41 @@
+{
+  "packageId": "uz.balansa.app",
+  "host": "balansa.uz",
+  "name": "Balansa",
+  "launcherName": "Balansa",
+  "display": "standalone",
+  "themeColor": "#0F766E",
+  "themeColorDark": "#061413",
+  "navigationColor": "#0F766E",
+  "navigationColorDark": "#061413",
+  "navigationDividerColor": "#0F766E",
+  "navigationDividerColorDark": "#061413",
+  "backgroundColor": "#FFFFFF",
+  "enableNotifications": false,
+  "startUrl": "/app",
+  "iconUrl": "https://balansa.uz/logo-icon-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./balansa-upload.keystore",
+    "alias": "balansa"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://balansa.uz/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://balansa.uz/",
+  "minSdkVersion": 21,
+  "orientation": "portrait",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": []
+}

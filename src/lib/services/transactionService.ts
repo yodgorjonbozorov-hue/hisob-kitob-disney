@@ -3,6 +3,7 @@ import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { ForbiddenError } from "@/lib/auth/guard";
 import type { BusinessTx } from "@/lib/db/businessTx";
 import { resolveAccountId } from "@/lib/services/accounts";
+import { kunlikSinxron } from "@/lib/services/kunlik";
 
 export interface CreateTransactionData {
   turi: "kirim" | "chiqim";
@@ -31,7 +32,7 @@ export async function createTransaction(userId: string, businessId: string, data
   // Kassa: tanlangani tekshiriladi, tanlanmagani — birinchi faol kassa.
   const accountId = await resolveAccountId(businessId, data.accountId);
 
-  return prisma.transaction.create({
+  const created = await prisma.transaction.create({
     data: {
       turi: data.turi,
       categoryId: data.categoryId,
@@ -43,8 +44,18 @@ export async function createTransaction(userId: string, businessId: string, data
       filial: data.filial ?? undefined,
       userId,
     },
-    include: { category: true, user: { select: { id: true, ism: true } } },
+    include: {
+      category: true,
+      user: { select: { id: true, ism: true } },
+      account: { select: { id: true, nomi: true, turi: true } },
+    },
   });
+
+  // BUGUNGI sanali kirim kunlik hisobotga o'zi tushadi (boshqa sana — tushmaydi).
+  // Sinxron xatosi asosiy yozuvni buzmaydi (kunlikSinxron ichida ushlanadi).
+  await kunlikSinxron(created, created.user.ism);
+
+  return created;
 }
 
 /**

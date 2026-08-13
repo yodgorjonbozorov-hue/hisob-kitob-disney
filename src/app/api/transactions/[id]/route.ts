@@ -7,6 +7,7 @@ import { updateTransactionSchema } from "@/lib/validation/transaction";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { dashboardYangilandi } from "@/lib/cache";
+import { kunlikSinxron } from "@/lib/services/kunlik";
 
 export const PATCH = withTenant<{ params: { id: string } }>(async (request, { params }, { session: user }) => {
   const businessId = await resolveActiveBusinessId(user);
@@ -53,8 +54,16 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
       ...(data.izoh !== undefined ? { izoh: data.izoh } : {}),
       ...(data.filial !== undefined ? { filial: data.filial } : {}),
     },
-    include: { category: true, user: { select: { id: true, ism: true } } },
+    include: {
+      category: true,
+      user: { select: { id: true, ism: true } },
+      account: { select: { id: true, nomi: true, turi: true } },
+    },
   });
+
+  // Kunlik hisobot bilan sinxron: sana bugungidan boshqasiga o'zgarsa kunlikdan
+  // chiqadi, bugunga o'zgarsa tushadi, summa o'zgarsa qayta jamlanadi.
+  await kunlikSinxron(updated, updated.user.ism);
 
   dashboardYangilandi(existing.businessId);
   return NextResponse.json(updated);
@@ -75,15 +84,17 @@ export const DELETE = withTenant<{ params: { id: string } }>(async (request, { p
   const permanent = new URL(request.url).searchParams.get("permanent") === "true";
 
   if (permanent) {
-    // Butunlay o'chirish — faqat admin.
+    // Butunlay o'chirish — faqat admin. Avval kunlikdagi ulangan tushum olib tashlanadi.
     if (!isManager(user.rol)) throw new ForbiddenError("Butunlay o'chirish faqat direktor uchun");
+    await kunlikSinxron({ ...existing, deletedAt: new Date() }, null);
     await prisma.transaction.delete({ where: { id: params.id } });
     dashboardYangilandi(existing.businessId);
     return NextResponse.json({ ok: true, permanent: true });
   }
 
-  // Soft delete — belgilanadi (undo/savat uchun).
+  // Soft delete — belgilanadi (undo/savat uchun). Kunlikdagi ulangan tushum ham chiqadi.
   await prisma.transaction.update({ where: { id: params.id }, data: { deletedAt: new Date() } });
+  await kunlikSinxron({ ...existing, deletedAt: new Date() }, null);
   dashboardYangilandi(existing.businessId);
   return NextResponse.json({ ok: true });
 });

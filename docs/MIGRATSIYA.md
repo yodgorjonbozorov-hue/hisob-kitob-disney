@@ -70,6 +70,15 @@ Bu aynan quyidagi ko'chirish stsenariysining o'zi, shuning uchun ko'chirishdan o
 
 ## 2. Tezlik: Frankfurtga ko'chirish (tekin, ~1–2 soat)
 
+> ✅ **BAJARILDI (2026-08-11), lekin Frankfurt EMAS — Irlandiya.** Turso yangi
+> platformasida `fra` yo'q (faqat AWS regionlari). Foydalanuvchi tarmog'idan
+> o'lchab tanlandi: Irlandiya 118 ms (Mumbai 203 ms — routing yomon, Tokio 154 ms).
+> Yangi baza: `balansa` (guruh `balansa-eu`, aws-eu-west-1,
+> `libsql://balansa-yodgorjonbozorov-hue.aws-eu-west-1.turso.io`), 1715 yozuv
+> tiklandi, Vercel funksiya regioni `dub1` (Dublin). Eski Tokio bazasi
+> (`disney-navoiy`) rollback uchun SAQLANGAN — kamida 2 hafta o'chirilmaydi.
+> Natija: DB'li so'rov ~2.5–3.8 s → ~0.5–1 s; SSR sahifa ~150–600 ms.
+
 Toshkent → Frankfurt ≈ 100 ms, Toshkent → Washington ≈ 280 ms. Baza va funksiya bir regionda bo'lsa,
 ular orasidagi 160 ms butunlay yo'qoladi.
 

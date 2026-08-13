@@ -16,6 +16,19 @@ export function todayDateOnlyString(): string {
   return utcDateToDateOnlyString(new Date());
 }
 
+/**
+ * Toshkent (Asia/Tashkent, UTC+5, DSTsiz) bo'yicha bugungi sana "YYYY-MM-DD".
+ *
+ * Kunlik hisobotda kun chegarasi O'ZBEKISTON yarim tunida o'tishi kerak —
+ * server esa UTC'da ishlaydi (Vercel). Shuning uchun vaqt 5 soatga siljitilib,
+ * natijaning UTC-komponenti Toshkent kalendar kunini beradi.
+ */
+export const TOSHKENT_OFFSET_MS = 5 * 60 * 60 * 1000;
+
+export function todayTashkentDateOnlyString(now: Date = new Date()): string {
+  return utcDateToDateOnlyString(new Date(now.getTime() + TOSHKENT_OFFSET_MS));
+}
+
 /** "YYYY-MM" -> { from, to } UTC-midnight chegaralari (to — keyingi oyning 1-kuni, exclusive). */
 export function monthRangeUTC(monthStr: string): { from: Date; to: Date } {
   const [yearStr, monthStr2] = monthStr.split("-");

@@ -45,7 +45,10 @@ export type AuditEntity =
   | "payroll"
   | "payrollAdvance"
   | "contract"
-  | "attachment";
+  | "attachment"
+  | "dailyReport"
+  | "dailyTransaction"
+  | "dailyReportSetting";
 
 interface AuditInput {
   businessId?: string | null;

@@ -1888,3 +1888,395 @@ notif-count — 200. Linux CI'da to'liq yurishi kutiladi.
 **Qolgan operatsion ish (kod emas, egasi bajaradi):** Turso'ni fra
 (Frankfurt) ga ko'chirish → Vercel funksiya regionini fra1 → balansa.uz
 domenini ulash. Tartib muhim: avval baza, keyin region (docs/MIGRATSIYA.md).
+
+---
+
+## 2026-08-11 · Holat tekshiruvi va ishga tushirish yo'riqnomasi
+
+**Branch:** `claude/balansa-progress-check-l8m4ha` · **Kod o'zgarishi YO'Q**
+
+Loyiha egasi "qaysi qismga keldik, full ishga tushiraylik" deb so'radi.
+Tekshiruv natijasi: `main` bilan farq yo'q, Faza 0–6 to'liq merge qilingan,
+qolgan ish faqat operatsion (egasi bajaradi).
+
+**Aniqlangan:** GitHub Actions "Migratsiya qo'llash" workflow'i 2026-08-06 da
+bir marta ishga tushirilgan va yiqilgan (sekretlar qo'yilmagani uchun) —
+endi kritik emas, deploy zanjiri o'zi zaxira + migratsiya qiladi.
+
+**Yangi fayl:** `ISHGA-TUSHIRISH.md` — barcha operatsion qadamlar bitta
+tartibli ro'yxatda: holat tekshiruv SQL'lari, zaxira, Turso→Frankfurt,
+Vercel region fra1, balansa.uz domeni, jonli tekshiruv ro'yxati, Postgres
+(keyinroq). Manbalar: `docs/MIGRATSIYA.md`, fazalarning "Sizdan kutiladi"
+bo'limlari.
+
+---
+
+## 2026-08-11 · Frankfurtga ko'chirish BITTA TUGMA bo'ldi
+
+**Branch:** `claude/balansa-progress-check-l8m4ha` · **Migratsiya YO'Q**
+
+Loyiha egasi launch qadamlarini o'zi bajarishga qo'shilmadi — "o'zing
+qilib ber" dedi. Turso/Vercel hisoblariga kirish faqat egasida, shuning
+uchun qilinishi mumkin bo'lgan eng katta ish qilindi: **ko'chirishning
+o'zi avtomatlashtirildi** — egasiga faqat sekretlarni bir marta qo'yish
+va bitta tugma qoladi.
+
+**Yangi: `scripts/kochirish.mjs`** (`npm run kochirish`) — eski bazadan
+yangi (Frankfurt) bazaga to'liq ko'chirish orkestri:
+
+1. Fail-closed tekshiruvlar: `YANGI_DATABASE_URL` ataylab alohida nom
+   (yozish qaysi bazaga borishi hech qachon taxminga qolmaydi); eski va
+   yangi URL bir xil bo'lsa to'xtaydi; eski baza to'liq migratsiya
+   qilinmagan yoki kassasiz tranzaksiyasi bo'lsa to'xtaydi (xato yangi
+   bazaga ko'chib o'tmasin); yangi baza BO'SH bo'lmasa to'xtaydi (bu ham
+   noto'g'ri nishon himoyasi, ham takror urinish idempotentligi).
+2. Oqim: zaxira → yangi bazaga migratsiyalar → tiklash → **mustaqil
+   verifikatsiya**. Verifikatsiya restore skriptining o'z solishtiruviga
+   ishonmaydi: ikkala JONLI bazani jadval-bajadval sonlar va pul
+   summalari (Transaction.summa, Sale.jamiSumma, Debt.jamiSumma)
+   bo'yicha to'g'ridan-to'g'ri solishtiradi, FK yaxlitligini tekshiradi.
+3. **Eski bazaga faqat o'qish bilan tegiladi** — jarayonning istalgan
+   nuqtasida orqaga yo'l ochiq.
+
+**Yangi: `.github/workflows/kochirish.yml`** — "Bazani ko'chirish",
+telefondan: Actions → Run workflow → `HA`. Sekretlar: eski
+`DATABASE_URL`/`DATABASE_AUTH_TOKEN` + yangi `YANGI_DATABASE_URL`/
+`YANGI_DATABASE_AUTH_TOKEN`. Zaxira artefakt sifatida 30 kun (har doim,
+yiqilganda ham). `concurrency: migratsiya` — migratsiya workflow'i bilan
+bir vaqtda ishlamaydi. Yakuniy summary'da Vercel qadamlar yozilgan.
+
+**Test: `tests/kochirish.test.ts` (8)** — `npm run test:kochirish`.
+Har himoya alohida sinaladi + to'liq oqim haqiqiy ma'lumot bilan (20
+tranzaksiya, sotuv, qarz, kassa) va "eski baza o'zgarmagan" tekshiruvi.
+
+**Aniqlangan:** GitHub Actions'dagi "Migratsiya qo'llash" 2026-08-06 da
+sekretsiz ishga tushirilib yiqilgan ekan — 1-qadam sekretlari qo'yilgach
+u ham ishlaydigan bo'ladi (lekin endi shart emas, deploy o'zi qiladi).
+
+**`ISHGA-TUSHIRISH.md` yangilandi:** egasining qismi 3 qadamga tushdi —
+(1) Turso'da fra baza + 4 sekret, (2) workflow tugmasi, (3) Vercel'da
+env + region + redeploy. Domen va jonli tekshiruv ro'yxati o'z joyida.
+
+**Tekshirildi:** `npm run build` exit 0 · `test:kochirish` 8/8 ·
+`test:apply-oqimi` 9/9 · `test:backup` 6/6.
+
+---
+
+## 2026-08-11 · TO'LIQ launch bitta tugma: Turso + Vercel ham avtomatik
+
+**Branch:** `claude/balansa-progress-check-l8m4ha` · **Migratsiya YO'Q**
+
+Loyiha egasi qolgan 3 qadamga ham qo'shilmadi — "o'zing qilib ber".
+Turso/Vercel'dagi QOLGAN qo'lda qadamlar ham API orqali avtomatlashtirildi.
+Egasiga qoladigan jismoniy minimum: 2 ta token yaratish (hisoblar unda) +
+4 sekret + bitta tugma. Bundan kam bo'lishi mumkin emas.
+
+**Yangi: `scripts/toliq-ishga-tushirish.mjs`** (`npm run launch`):
+
+1. Turso API: Frankfurt guruhida baza yaratadi (bor bo'lsa qayta
+   ishlatadi — bo'shligini baribir kochirish.mjs tekshiradi), token oladi.
+   Tashkilot bitta bo'lsa o'zi topadi.
+2. `scripts/kochirish.mjs` ni chaqiradi — barcha himoyalari bilan
+   (eski bazaga faqat o'qish, mustaqil son/summa solishtiruvi).
+3. Vercel API: env upsert (`DATABASE_URL`, `DATABASE_AUTH_TOKEN`),
+   region `fra1` (PATCH; xato bo'lsa oqim to'xtamaydi — tezlik masalasi,
+   to'g'rilik emas), git'dan production redeploy, READY holatini kutadi.
+4. Health-check: sayt `/login` 200 qaytarishi, `x-vercel-id` regionni
+   ko'rsatishi. **Yiqilsa — env eski qiymatlarga avtomatik qaytariladi
+   va qayta deploy qilinadi (rollback), skript xato bilan tugaydi.**
+   Vercel loyihasi ko'chirishdan OLDIN topiladi — "ko'chirilgan lekin
+   ulanmagan" oraliq holat bo'lmasligi uchun.
+
+**Yangi: `.github/workflows/toliq-launch.yml`** — "To'liq ishga tushirish".
+Sekretlar: eski `DATABASE_URL`/`DATABASE_AUTH_TOKEN` + `TURSO_API_TOKEN` +
+`VERCEL_TOKEN` (+ixtiyoriy `TURSO_ORG`, `VERCEL_PROJECT_NAME`, `SAYT_URL`).
+`concurrency: migratsiya` — boshqa baza workflow'lari bilan to'qnashmaydi.
+
+**Test: `tests/toliq-ishga-tushirish.test.ts` (6)** — `npm run test:launch`.
+Turso/Vercel/sayt SOXTA HTTP server bilan (deploy-zaxira'dagi Telegram
+uslubi), har so'rov yozib boriladi: fail-closed (API umuman chaqirilmaydi),
+Turso yo'li (guruh+baza+token, env'ga AYNAN yangi URL), **ko'chirish
+yiqilsa Vercel'ga umuman tegilmasligi**, to'liq oqim haqiqiy ma'lumot
+bilan (file: bazalar, asl kochirish.mjs), **rollback** (sayt 500 → env
+ikkinchi marta ESKI qiymatlar bilan yozilishi + ikkinchi redeploy).
+Soxta server test jarayonida turgani uchun launch `spawn` (async) bilan —
+`spawnSync` deadlock tuzog'i takrorlanmadi. Test seam:
+`LAUNCH_KOCHIRISH_SKRIPT` — soxta ko'chirish skripti qo'yish uchun.
+
+**`ISHGA-TUSHIRISH.md`:** asosiy yo'l endi 2 qadam (sekretlar + tugma),
+eski ikki bosqichli yo'l "zaxira yo'l" sifatida saqlandi.
+
+**Tekshirildi:** `npm run build` exit 0 · `test:launch` 6/6 ·
+`test:kochirish` 8/8 · `test:apply-oqimi` 9/9.
+
+**Eslatma:** Turso/Vercel API'lariga bu muhitdan token yo'qligi uchun
+JONLI so'rov yuborilmadi — API sxemalari hujjat bo'yicha yozildi va soxta
+server bilan sinaldi. Birinchi haqiqiy yurishda API javobi kutilgandan
+farq qilsa, skript aniq xato matni bilan to'xtaydi (jimgina davom etmaydi)
+va hech narsani buzmaydi — shunga mo'ljallab qurilgan.
+
+**Qo'shimcha (o'sha kun):** egasi main'ga eski *.vercel.app → balansa.uz
+host-redirect qo'shgani aniqlandi. Bu health-check'ni buzardi: domen hali
+DNS'da bo'lmasa alias tekshiruvi yiqilib, BEKORGA rollback bo'lardi.
+`saytniTekshir` endi bir nechta nomzod bilan ishlaydi — alias yiqilsa
+deployment'ning o'z URL'i tekshiriladi (unga host-redirect tegmaydi);
+u ishlayotgan bo'lsa muvaffaqiyat (ogohlantirish bilan): baza sog',
+alias/domen masalasi rollback bilan tuzalmaydi. Yangi test qo'shildi —
+`test:launch` endi 7/7.
+
+**Jonli urinish (2026-08-11):** "To'liq ishga tushirish" workflow'i agent
+tomonidan GitHub API orqali ishga tushirildi (run 31485427924). Sekretlar
+tekshiruvida xavfsiz to'xtadi: `DATABASE_URL`, `TURSO_API_TOKEN`,
+`VERCEL_TOKEN` — repo'da BITTASI ham qo'yilmagan. Hech narsaga tegilmadi.
+Bu jismoniy chegara: token/parollar faqat egasida. Egasi sekretlarni
+qo'yishi bilan agent workflow'ni qayta ishga tushiradi.
+
+---
+
+## 2026-08-11 — balansa.uz jonli + baza Irlandiyaga ko'chirildi
+
+**Domen:** balansa.uz Vercel'ga ulandi (A 216.198.79.1 / 64.29.17.1, CNAME www),
+SSL avtomatik chiqdi, www→apex 308, eski *.vercel.app hostlardan sahifalar
+balansa.uz'ga 308 (`/api/*` ataylab chetlab o'tilgan — bot webhooki va cron
+eski hostda ishlayveradi). Yo'lda: registrator (domains.uz) NS'ni alohida
+biriktirish kerak ekan (`not.defined` edi).
+
+**Baza ko'chirish (docs/MIGRATSIYA.md runbook'i):** Turso'da `fra` yo'q ekan —
+foydalanuvchi tarmog'idan o'lchab Irlandiya tanlandi (118 ms; Mumbai 203,
+Tokio 154). Zaxira → yangi `balansa` bazasi (aws-eu-west-1) → 30 migratsiya →
+restore (1715 yozuv, sonlar mos) → Vercel env almashtirildi → redeploy →
+funksiya regioni `dub1` → redeploy. Eski Tokio bazasi rollback uchun turibdi.
+
+**O'lchov (keyin):** login POST (DB bilan) 0.5–1 s (oldin 2.5–3.8 s edi),
+SSR sahifa 150–600 ms, `x-vercel-id: hkg1::dub1`.
+
+---
+
+## 2026-08-11 · KUNLIK HISOBOT moduli (Disney Flowers so'rovi)
+
+**Branch:** `claude/disney-flowers-daily-report-q272aw` · **Migratsiya: 1 ta (faqat CREATE TABLE)**
+
+Loyiha egasi Disney Flowers biznesi uchun oylik hisobotdan ALOHIDA kunlik
+moliyaviy hisobot so'radi: naqd / Click / qarz tushumlari, kun yakunini
+tayinlangan direktor tasdiqlashi, ertasi kuni 0 dan boshlanishi, tarix.
+
+**Asosiy qaror — oylik tizimga tegilmadi.** Kunlik tushumlar `Transaction`
+jadvaliga YOZILMAYDI: alohida `DailyReport` + `DailyTransaction` jadvallari.
+Shuning uchun oylik hisobot, kassa qoldig'i, budjet va dashboard raqamlari
+o'zgarmaydi. (Modul istalgan biznesda ishlaydi — "Disney Flowers" alohida
+kod emas, biznes tanlagichdagi oddiy biznes.)
+
+**Sxema (3 yangi model):**
+- `DailyReport` — `@@unique([businessId, sana])`: bir biznes + bir sana =
+  bitta hisobot. Bazadagi unique kalit parallel kiritish race'ini yopadi.
+  Summalar (naqd/click/qarz/jami) har mutatsiyada `jamlashTx` bilan bazadan
+  qayta hisoblanadi — frontend yuborgan songa ishonilmaydi.
+- `DailyTransaction` — summa (Int, musbat), tolovTuri CASH|CLICK|DEBT, izoh,
+  userId + userIsm snapshot (kim kiritgani), soft-delete.
+- `DailyReportSetting` — biznes uchun tayinlangan direktor (`direktorId`).
+  Tekshiruv xizmat qatlamida: faqat shu tenantning faol foydalanuvchisi,
+  kassir bo'lsa aynan shu biznesniki.
+
+Uchalasi `BUSINESS_SCOPED` (tenantDb) va `ZAXIRA_JADVALLARI` (dump, FK
+tartibida oxirida) ro'yxatlarida. Migratsiya: `20260811120000_kunlik_hisobot`
+(faqat CREATE TABLE — xavf past); `migrations-postgres` qayta generatsiya
+qilindi (43 jadval).
+
+**Kun chegarasi — Toshkent.** `todayTashkentDateOnlyString()` (`lib/date.ts`,
+UTC+5, DSTsiz): server UTC'da bo'lsa ham kun O'zbekiston yarim tunida
+almashadi. Tushum HAR DOIM bugungi (Toshkent) hisobotga yoziladi — hisobot
+yo'q bo'lsa tranzaksiya ichida `upsert` bilan ochiladi. UI'dagi soatlar ham
+Toshkent bo'yicha (`app/kunlik/vaqt.ts`, brauzer timezone'iga tayanmaydi).
+
+**Holat oqimi:** OPEN → (faqat direktor) → CONFIRMED. Qayta tasdiqlash
+`updateMany + holat: "OPEN"` sharti bilan bazada rad etiladi. CONFIRMED
+kunga tushum kiritish/tahrirlash/o'chirish taqiqlanadi; tuzatish uchun
+direktor/boshqaruvchi kunni "qayta ochadi", tuzatadi, qayta tasdiqlaydi.
+Tasdiqlagan kim va qachon — `confirmedBy/confirmedByIsm/confirmedAt`.
+
+**Ruxsatlar (`getKunlikRuxsat` — yagona manba):**
+- Xodim (kassir/sotuvchi): bugungi hisobotni ko'radi, tushum kiritadi,
+  faqat O'Z tushumini (kun ochiq bo'lsa) o'zgartira oladi. Tarix yopiq.
+- Direktor (tayinlangan foydalanuvchi, roli muhim emas): tasdiqlash, tarix,
+  istalgan tushumni tahrirlash, qayta ochish.
+- Boshqaruvchi (OWNER/ADMIN): tarix, tahrirlash, qayta ochish, direktorni
+  tayinlash/almashtirish. Direktor tayinlanmagan bo'lsa tasdiqlash ham
+  (ish to'xtab qolmasin); tayinlangach tasdiqlash FAQAT direktorda.
+
+**Atomiklik:** barcha yozish amallari `runBusinessTx` ichida (har so'rovda
+businessId qo'lda), audit `logAudit` bilan qo'lda (kirit/tahrir/o'chir/
+tasdiqlash/qayta ochish/direktor almashishi).
+
+**Fayllar:**
+- `prisma/schema.prisma` + `prisma/migrations/20260811120000_kunlik_hisobot/`
+- `src/lib/validation/kunlik.ts`, `src/lib/services/kunlik.ts`, `src/lib/queries/kunlik.ts`
+- `src/app/api/kunlik/{hisobot,tushum,tushum/[id],tasdiqlash,qayta-ochish,tarix,direktor}/route.ts`
+- `src/app/app/kunlik/{page,loading,error}.tsx`, `KunlikClient.tsx`,
+  `TushumForm.tsx`, `DirektorModal.tsx`, `vaqt.ts`, `tarix/{page,loading}.tsx`, `tarix/TarixClient.tsx`
+- `src/lib/modules/registry.ts` (KUNLIK, rollar HAMMA), `src/lib/billing/plans.ts`
+  (barcha tariflarga), `src/components/nav/Sidebar.tsx` (daily ikon),
+  `src/lib/db/tenantDb.ts`, `src/lib/backup/dump.ts`, `src/lib/services/audit.ts`,
+  `src/lib/date.ts`, `package.json` (test:kunlik)
+
+**Test: `tests/kunlik.test.ts` (18)** — Toshkent kun chegarasi, zod (0/manfiy/
+kasr summa rad), jamlash, parallel kiritishda bitta report, direktor
+tayinlash (begona tenant rad), tasdiqlash huquqlari, qayta tasdiqlash rad,
+tasdiqlangan kun qulfi, qayta ochish + tuzatish + qayta tasdiqlash, tarix
+va 0 dan boshlanadigan yangi kun, ruxsat matritsasi, tenant izolyatsiyasi, audit.
+
+**Tekshirildi:** `npm run build` ✅ · `tsc --noEmit` toza (bitta MAVJUD xato
+`tests/toliq-ishga-tushirish.test.ts:158` — bu muhitdagi @libsql tip versiyasi,
+main'da ham bor, tegilmadi) · test:kunlik 18/18 · regressiya: isolation 22/22,
+izolyatsiya-royxati 9/9, backup 6/6, modules 13/13, dialect 11/11,
+migratsiya 10/10, audit 12/12, soft-delete 8/8, agregat 7/7, audit-qoldiq 10/10 ·
+smoke (brauzer) 7/7 — yangi /app/kunlik sahifasi ham ochiladi.
+
+**Eslatma (deploy):** modul barcha tariflarda bor, lekin core emas —
+Sozlamalar → Modullar'da "Kunlik hisobot" yoqiladi, keyin boshqaruvchi
+sahifadagi "Direktor" tugmasi bilan direktorni tayinlaydi.
+
+---
+
+## 2026-08-12 · Kunlik hisobot: Yozuvlar bilan avto-sinxron
+
+**Branch:** `claude/disney-flowers-daily-report-q272aw` · **Migratsiya: 1 ta (ADD COLUMN)**
+
+Egasining talabi: xodim kirimni Yozuvlar (tranzaksiya) formasidan kiritsa ham
+u kunlik hisobotga O'ZI tushsin; boshqa (eski) sana tanlansa — tushmasin.
+
+**Yechim — `kunlikSinxron` (lib/services/kunlik.ts):** har yaratish/tahrir/
+o'chirish/tiklashdan keyin bitta qoida tekshiriladi: *bugungi (Toshkent)
+sanali, o'chirilmagan KIRIM kunlikda bo'lishi kerak; qolgan har qanday holat —
+bo'lmasligi kerak*. `DailyTransaction.transactionId @unique` bilan ulanadi.
+
+- Ulanish nuqtasi — `createTransaction` xizmatining o'zi (API, bot va CRM
+  "yutildi" oqimi hammasi shu yerdan o'tadi). Chiqim hech qachon sinxronlanmaydi.
+- Kassa turi -> to'lov turi: naqd->CASH, plastik/bank->CLICK.
+- Sinxron XATOSI asosiy pul yozuvini buzmaydi (try/catch, console.error).
+- KUNLIK moduli yoqilmagan tenantda umuman ishlamaydi.
+- Tasdiqlangan (CONFIRMED) kunga tegilmaydi: yozuv baribir yoziladi, kunlik
+  o'zgarmaydi (kun yopilgan — tuzatish qayta ochish orqali).
+- Ulangan tushum kunlik sahifasida tahrirlanmaydi/o'chirilmaydi ("Yozuvlardan"
+  belgisi) — manba Transaction, aks holda ikkala tomon ajralib ketardi.
+- Yumshoq o'chirilgan ulangan yozuv tiklashda QAYTA OCHILADI (unique
+  transactionId yangi create'ga yo'l bermaydi — shu bug testda ushlandi).
+- Sana boshqa kunga o'zgartirilsa kunlikdan chiqadi; keyin bugunga qaytarilsa
+  bugungi hisobotga KO'CHADI (ikkala kun ochiq bo'lsa).
+- Bulk soft-delete va bulk-move: `kunlikBulkUz` ulangan tushumlarni ochiq
+  kunlardan chiqarib, jamini qayta hisoblaydi.
+
+**Yo'l-yo'lakay (oldingi so'rov):** KUNLIK yoqilgan bo'lsa kassir/sotuvchi
+telefonining pastki panelida "Kunlik" tab chiqadigan bo'ldi (computeMobileTabs).
+
+**Fayllar:** prisma/schema.prisma + `20260812090000_kunlik_transaction_link/`,
+lib/services/kunlik.ts, lib/services/transactionService.ts,
+api/transactions/{[id],[id]/restore,bulk,bulk-move}/route.ts,
+lib/queries/kunlik.ts (yozuvdan bayrog'i), app/kunlik/KunlikClient.tsx,
+lib/modules/registry.ts, components/nav/BottomNav.tsx, tests.
+
+**Tekshirildi:** build ✅ · kunlik 21/21 · modules 14/14 · isolation 22/22 ·
+izolyatsiya-royxati 9/9 · backup 6/6 · migratsiya 10/10 · soft-delete 8/8 ·
+agregat 7/7 · atomik 6/6 · audit 12/12.
+
+---
+
+## 2026-08-12 · Kunlik: direktorga eslatma + Telegramda bir bosishda tasdiqlash
+
+**Branch:** `claude/disney-flowers-daily-report-q272aw` · **Migratsiya YO'Q**
+
+Egasining talabi: tasdiqni direktor qiladi (bor edi), unga BILDIRISHNOMA
+borsin va esidan chiqsa ERTASI KUNI ham tasdiqlay olsin (bu ham bor edi —
+faqat kelajak kun taqiqlangan; endi eslatma unutilganini o'zi aytadi).
+
+- **`lib/reports/kunlikEslatma.ts`** — cron eslatmasi (hisobotIshi, 05:00 UTC
+  = 10:00 Toshkent): KUNLIK yoqilgan tenantlarda o'tgan 7 kun ichidagi OCHIQ,
+  tushumli kunlar uchun direktorga Telegram xabar (naqd/click/qarz/jami) +
+  "✅ Kun yakunini tasdiqlash" inline tugmasi. Direktor Telegramsiz bo'lsa —
+  zaxira yo'l: boshqaruvchilarga. Bo'sh (0 so'm) kunlar eslatilmaydi.
+  Kuniga bir marta (AppSetting `kunlikEslatma:<sana>` dedupe, dailyDigest uslubi).
+- **`bot/kunlikFlow.ts`** — `kht:ok:<reportId>` callback: bir bosishda
+  tasdiqlash. Bot darajasida managerOnly YO'Q (direktor kassir bo'lishi
+  mumkin) — huquq confirmKunlikReport ichida (faqat tayinlangan direktor).
+- **Bildirishnomalar sahifasi + nav badge** (`lib/queries/notifications.ts`):
+  "Kunlik yakun tasdiqlanmagan" ogohlantirishi — direktor (userId bo'yicha,
+  roli muhim emas) va boshqaruvchilarga; bosilsa o'sha kun ochiladi.
+  `getNotifications/getNotificationCount` opts'iga `userId` qo'shildi.
+- Grammy `Api` interfeys mosligi: `EslatmaBotApi.sendMessage` ataylab method
+  sintaksisida (bivariant) — aks holda `Other<...>` parametri bilan to'qnashardi.
+
+**Test:** kunlik 21 → **24**: eslatma direktorga boradi (boshqaruvchiga emas),
+tugmada `kht:ok:` bor, dedupe; direktor 2 kun oldingi kunni tasdiqlaydi
+(jami tushumlardan qayta jamlanadi); bildirishnoma direktor/boshqaruvchiga
+ko'rinadi, oddiy xodimga yo'q.
+
+**Tekshirildi:** build ✅ · tsc toza · kunlik 24/24 · isolation 22/22 ·
+modules 14/14 · cron 10/10 · audit-qoldiq 10/10.
+
+---
+
+## 2026-08-12 · Kunlik: KASSA TOPSHIRISH (xodim -> direktor, pul nazorati)
+
+**Branch:** `claude/disney-flowers-daily-report-q272aw` · **Migratsiya: 1 ta (ADD COLUMN x4)**
+
+Egasining talabi: kun yakunida sotuvchilar kassani TOPSHIRSIN ("Direktorga
+yuborish" tugmasi), direktor o'zi tasdiqlasin — maqsad pul yo'qolmasligini,
+xodim pul o'g'irlayaptimi-yo'qligini bilish.
+
+**Yechim — uch bosqichli holat oqimi:** `OPEN → SUBMITTED → CONFIRMED`.
+
+- **Topshirishda xodim kassadagi naqdni SANAB kiritadi** (`sanalganNaqd`).
+  Tizim hisobi (`naqdSumma`) ataylab modal'da KO'RSATILMAYDI — xodim
+  "chiqishi kerak" raqamni ko'chirib qo'ya olmasin. Farq = sanalgan − tizim:
+  manfiy (KAM) — pul yetishmayapti, signal qizil ko'rinadi.
+- SUBMITTED holatda tushum kiritish, tahrirlash va Yozuvlardan avto-sinxron
+  QULFLANADI (raqamlar "muzlaydi") — topshirilgandan keyin hech kim orqadan
+  raqam o'zgartira olmaydi.
+- Direktor OPEN'dan ham (xodim topshirmagan bo'lsa), SUBMITTED'dan ham
+  tasdiqlaydi; `sanalganNaqd` tarixda saqlanadi. Qayta ochish endi SUBMITTED
+  uchun ham ishlaydi va topshiruv maydonlarini tozalaydi — tuzatishdan keyin
+  xodim QAYTA sanab topshiradi.
+- **Topshirilgan zahoti direktorga Telegram xabar** (best-effort, approval
+  uslubi): tizim naqdi vs sanalgan, FARQ qatori, Click/Qarz/Jami + bir
+  bosishda "✅ Tasdiqlash" tugmasi (`kht:ok:` — mavjud callback ishlaydi).
+  Direktor Telegramsiz bo'lsa boshqaruvchilarga boradi. `rawPrisma` — bot
+  xabarnomasi tizim darajasidagi amal (approval.ts pretsedenti).
+- Ertalabki cron eslatma va bildirishnomalar endi SUBMITTED kunlarni ham
+  qamraydi (`holat != CONFIRMED`), eslatmada topshiruv/farq ko'rinadi.
+- UI: YakunCard (yangi komponent, 250 satr limiti uchun ajratildi) — holat
+  belgilari 🟡/📤/🟢, solishtiruv bloki, TopshirishModal; tarixda farq belgisi.
+
+**Sxema:** DailyReport +submittedBy/+submittedByIsm/+submittedAt/+sanalganNaqd
+(`20260812130000_kunlik_topshirish`, faqat ADD COLUMN).
+
+**Test:** kunlik 24 → **26**: topshirish (farq −50 000 bilan), tushum/sinxron
+qulfi, qayta topshirish rad, SUBMITTED'dan tasdiqlash (sanalgan saqlanadi),
+tasdiqlangandan keyin topshirish rad, kelajak kun rad, tarixda farq.
+
+**Tekshirildi:** build ✅ · tsc toza · kunlik 26/26 · isolation 22/22 ·
+izolyatsiya-royxati 9/9 · backup 6/6 · modules 14/14 · migratsiya 10/10 · cron 10/10.
+
+---
+
+## 2026-08-12 · Yozuvlar sahifasi: to'lov bo'limlari (Naqd/Click/Qarz)
+
+**Branch:** `claude/disney-flowers-daily-report-q272aw` · **Migratsiya YO'Q**
+
+Egasining talabi: Yozuvlarda "faqat so'm turibdi" — har yozuvda Naqd/Click
+farqi ko'rinsin, ro'yxat PASTIDA esa bo'lim-bo'lim jami qatorlar (Naqd,
+Click, Qarz) tursin.
+
+- **Har qatorda "To'lov" belgisi** — kassa turidan: naqd kassa → 💵 Naqd,
+  plastik → 💳 Click, bank → 🏦 Bank; kassasiz eski yozuv naqd sanaladi.
+  Desktop jadvalda alohida ustun, mobil lentada kategoriya yonida.
+- **Sticky footer'da bo'lim qatorlari**: 💵 Naqd (so'm) / 💳 Click — KIRIM
+  ning kassa bo'yicha taqsimoti (filtr qamroviga mos, faqat sahifa emas);
+  📋 Qarz — kunlik hisobotdagi qarz tushumlari jami (KUNLIK yoqiq bo'lsa;
+  qarz Transaction emas, shu bois alohida olinadi; sana oralig'i va xodim
+  ko'rinuvchanligi ro'yxat filtri bilan bir xil). Eski "+kirim −chiqim Sof"
+  qatori pastda saqlanadi.
+- `listTransactions`: items'ga `account` qo'shildi; totals'ga
+  naqdKirim/clickKirim (groupBy accountId). create/PATCH/restore javoblariga
+  ham `account` include qilindi (optimistik qatorlar DTO'ga mos bo'lsin).
+
+**Tekshirildi:** build ✅ · tsc toza · kunlik 26/26 · soft-delete 8/8 ·
+agregat 7/7 · isolation 22/22.

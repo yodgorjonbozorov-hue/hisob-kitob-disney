@@ -71,6 +71,10 @@ export const ZAXIRA_JADVALLARI = [
   "payrollAdvance",
   "contract",
   "attachment",
+  // dailyReport business/user'dan keyin; dailyTransaction dailyReport'ga FK bilan bog'liq.
+  "dailyReport",
+  "dailyTransaction",
+  "dailyReportSetting",
 ] as const;
 
 export type ZaxiraJadval = (typeof ZAXIRA_JADVALLARI)[number];

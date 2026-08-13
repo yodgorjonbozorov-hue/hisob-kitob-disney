@@ -54,6 +54,12 @@ export function TransactionList({
     return isManager(currentUserRol) || t.userId === currentUserId;
   }
 
+  // Kassa turi -> to'lov bo'limi belgisi (kassasiz eski yozuv — naqd).
+  function tolovBelgi(t: TransactionDTO): string {
+    const turi = t.account?.turi ?? "naqd";
+    return turi === "naqd" ? "💵 Naqd" : turi === "plastik" ? "💳 Click" : "🏦 Bank";
+  }
+
   return (
     <div className="bg-surface rounded-2xl shadow-sm border border-line overflow-hidden">
       {/* Desktop: jadval */}
@@ -66,6 +72,7 @@ export function TransactionList({
               </th>
               <th className="text-left px-4 py-3">Sana</th>
               <th className="text-left px-4 py-3">Turi</th>
+              <th className="text-left px-4 py-3">To&apos;lov</th>
               <th className="text-left px-4 py-3">Kategoriya</th>
               <th className="text-right px-4 py-3">Summa</th>
               <th className="text-left px-4 py-3">Izoh</th>
@@ -76,7 +83,7 @@ export function TransactionList({
           <tbody className="divide-y divide-line">
             {items.length === 0 && (
               <tr>
-                <td colSpan={8} className="text-center text-faint py-8">
+                <td colSpan={9} className="text-center text-faint py-8">
                   Tranzaksiyalar topilmadi
                 </td>
               </tr>
@@ -92,6 +99,7 @@ export function TransactionList({
                     {t.turi === "kirim" ? "Kirim" : "Chiqim"}
                   </Badge>
                 </td>
+                <td className="px-4 py-3 whitespace-nowrap text-muted">{tolovBelgi(t)}</td>
                 <td className="px-4 py-3">{t.category.nomi}</td>
                 <td
                   className={`px-4 py-3 text-right font-medium whitespace-nowrap ${
@@ -137,7 +145,8 @@ export function TransactionList({
               sana: typeof t.sana === "string" ? t.sana : new Date(t.sana).toISOString(),
               turi: t.turi,
               summa: t.summa,
-              categoryNomi: t.category.nomi,
+              // Mobil lentada to'lov bo'limi kategoriya yonida ko'rinadi.
+              categoryNomi: `${tolovBelgi(t)} · ${t.category.nomi}`,
               izoh: t.izoh,
               userIsm: t.user.ism,
             }))}

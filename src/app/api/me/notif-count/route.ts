@@ -16,6 +16,7 @@ export const GET = withTenant(async (_request, _ctx, { session }) => {
   const count = await getNotificationCount(business.id, {
     rol: session.rol,
     omborli: business.omborli,
+    userId: session.userId,
   }).catch(() => 0);
   return NextResponse.json({ count });
 });
