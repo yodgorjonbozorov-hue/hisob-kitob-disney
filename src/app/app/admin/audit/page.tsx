@@ -99,6 +99,10 @@ export default async function AuditPage({
                     <Badge tone={ACTION_TONE[log.action] ?? "neutral"}>{ACTION_LABEL[log.action] ?? log.action}</Badge>
                     <span className="text-sm font-medium text-fg">{ENTITY_LABEL[log.entity] ?? log.entity}</span>
                     <span className="text-sm text-muted tnum">{summarize(log.before, log.after)}</span>
+                    {log.impersonatedBy && (
+                      // H-3: amal mijoz nomidan, lekin aslida superadmin tomonidan bajarilgan.
+                      <Badge tone="warning">🛡 Superadmin nomidan</Badge>
+                    )}
                   </div>
                   <p className="text-xs text-muted mt-1">
                     {log.userIsm ?? "—"} · {new Date(log.createdAt).toLocaleString("ru-RU")}

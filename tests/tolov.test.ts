@@ -361,3 +361,46 @@ test("Click: Prepare o'tmagan to'lovni Complete qilib bo'lmaydi", async () => {
   const r = await click.handleClickComplete(complete);
   assert.equal(r.error, click.CLICK_ERROR.TRANZAKSIYA_TOPILMADI);
 });
+
+// ---------- M-11: takroriy click_trans_id 500 emas, protokol xatosi ----------
+
+test("Click Prepare: boshqa to'lovga biriktirilgan click_trans_id rad etiladi (500 emas)", async () => {
+  const birinchi = await yangiTolov("CLICK");
+  const ikkinchi = await yangiTolov("CLICK");
+
+  const req1: Record<string, unknown> = {
+    click_trans_id: "dublikat-777",
+    service_id: "12345",
+    merchant_trans_id: birinchi.id,
+    amount: "199000.00",
+    action: "0",
+    sign_time: "2026-08-13 12:00:00",
+  };
+  req1.sign_string = clickImzo(req1, false);
+  const r1 = await click.handleClickPrepare(req1);
+  assert.equal(r1.error, 0, "birinchi prepare o'tishi kerak");
+
+  // Xuddi shu click_trans_id BOSHQA to'lovga — externalId @unique buziladi,
+  // ilgari 500 chiqardi, endi protokol xatosi qaytadi.
+  const req2: Record<string, unknown> = { ...req1, merchant_trans_id: ikkinchi.id };
+  req2.sign_string = clickImzo(req2, false);
+  const r2 = await click.handleClickPrepare(req2);
+  assert.notEqual(r2.error, 0, "takroriy click_trans_id xato qaytarishi kerak");
+});
+
+// ---------- H-8: confirmPayment poygasi ----------
+
+test("bitta to'lovni ikki marta (parallel) tasdiqlash bitta obuna yaratadi", async () => {
+  const { confirmPayment } = await import("@/lib/billing/subscribe");
+  // Alohida summa — oldingi testlarda yaratilgan obunalar bilan aralashmasin.
+  const p = await yangiTolov("PAYME", 123_456);
+
+  const natijalar = await Promise.allSettled([confirmPayment(p.id), confirmPayment(p.id)]);
+  const muvaffaqiyat = natijalar.filter((n) => n.status === "fulfilled").length;
+  assert.equal(muvaffaqiyat, 1, "faqat bittasi o'tishi kerak — ikkinchisi holat shartiga iladi");
+
+  const obunalar = await rawPrisma.subscription.count({
+    where: { tenantId: tenant.tenant.id, amount: p.amount },
+  });
+  assert.equal(obunalar, 1, "ikkita Subscription yaratilmasin");
+});

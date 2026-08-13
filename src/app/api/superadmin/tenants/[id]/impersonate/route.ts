@@ -40,6 +40,8 @@ export const POST = withSuperadmin<{ params: { id: string } }>(async (_request, 
   s.businessId = target.businessId ?? null;
   s.mustChangePassword = false; // impersonatsiyada parol almashtirish so'ralmaydi
   s.impersonatedBy = session.userId;
+  // H-3: impersonatsiya muddatli — 60 daqiqadan keyin kontekst yopiladi.
+  s.impersonateExpiresAt = Date.now() + 60 * 60 * 1000;
   await s.save();
 
   return NextResponse.json({ ok: true, tenantName: tenant.name });

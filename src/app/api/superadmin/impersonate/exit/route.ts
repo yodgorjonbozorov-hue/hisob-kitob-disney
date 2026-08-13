@@ -37,6 +37,7 @@ export async function POST() {
   session.businessId = null;
   session.mustChangePassword = false;
   session.impersonatedBy = null;
+  session.impersonateExpiresAt = null;
   await session.save();
 
   return NextResponse.json({ ok: true });

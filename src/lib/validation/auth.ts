@@ -26,3 +26,17 @@ export const signupSchema = z.object({
 });
 
 export type SignupInput = z.infer<typeof signupSchema>;
+
+/** PAROLNI TIKLASH (H-7): 1-qadam — kod so'rash. */
+export const parolTiklashSchema = z.object({
+  login: z.string().trim().min(1, "Login kiritilishi shart").max(50),
+});
+export type ParolTiklashInput = z.infer<typeof parolTiklashSchema>;
+
+/** PAROLNI TIKLASH: 2-qadam — kod + yangi parol. */
+export const parolTiklashTasdiqSchema = z.object({
+  login: z.string().trim().min(1, "Login kiritilishi shart").max(50),
+  kod: z.string().trim().regex(/^\d{6}$/, "Kod 6 raqamdan iborat"),
+  parol: z.string().min(8, "Parol kamida 8 belgi bo'lishi kerak").max(100),
+});
+export type ParolTiklashTasdiqInput = z.infer<typeof parolTiklashTasdiqSchema>;

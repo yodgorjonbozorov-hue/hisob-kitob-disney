@@ -19,7 +19,14 @@ import { currentAktor } from "./tenantContext";
 export type AuditAmal = "create" | "update" | "delete" | "restore";
 
 /** Audit yozuviga tushmaydigan maydonlar (sir yoki shovqin). */
-const YASHIRIN_MAYDONLAR = new Set(["parolHash", "parol", "linkCode", "linkCodeExpiresAt"]);
+const YASHIRIN_MAYDONLAR = new Set([
+  "parolHash",
+  "parol",
+  "linkCode",
+  "linkCodeExpiresAt",
+  "resetCodeHash",
+  "resetCodeExpiresAt",
+]);
 
 /** Yozuvdan audit uchun xavfsiz nusxa oladi: parol hash va shu kabilar chiqarib tashlanadi. */
 export function auditUchunTozala(value: unknown): unknown {
@@ -70,6 +77,7 @@ export async function auditYoz(yozuv: AuditYozuv): Promise<void> {
         businessId: yozuv.businessId ?? null,
         userId: aktor?.userId ?? null,
         userIsm: aktor?.ism ?? null,
+        impersonatedBy: aktor?.impersonatedBy ?? null,
         action: yozuv.amal,
         entity: yozuv.entity,
         entityId: yozuv.entityId,

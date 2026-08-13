@@ -28,6 +28,7 @@
     "test": "node scripts/run-tests.mjs",
     "typecheck": "tsc --noEmit",
     "test:sessiya": "node -r ts-node/register tests/sessiya-tekshiruv.test.ts",
+    "test:parol-tiklash": "node -r ts-node/register tests/parol-tiklash.test.ts",
     "test:permissions": "node -r ts-node/register tests/permissions.test.ts",
     "test:vaqt": "node -r ts-node/register tests/vaqt.test.ts",
     "test:isolation": "node -r ts-node/register tests/isolation.test.ts",

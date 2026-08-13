@@ -247,11 +247,11 @@ test("tasdiqlangan kun tushumini o'zgartirish/o'chirish rad etiladi", async () =
 test("qayta ochish: xodimga taqiq, direktor/boshqaruvchiga ruxsat; keyin tuzatiladi", async () => {
   const oddiyXodim = { userId: "yoq-user", ism: "Xodim", rol: "SELLER" as const };
   await assert.rejects(
-    () => A(() => kunlikSvc.reopenKunlikReport(tA.business.id, oddiyXodim, bugun)),
+    () => A(() => kunlikSvc.reopenKunlikReport(tA.business.id, oddiyXodim, bugun, "Test uchun qayta ochish")),
     /direktor|boshqaruvchi/i
   );
 
-  const ochildi = await A(() => kunlikSvc.reopenKunlikReport(tA.business.id, egaAktor(), bugun));
+  const ochildi = await A(() => kunlikSvc.reopenKunlikReport(tA.business.id, egaAktor(), bugun, "Test uchun qayta ochish"));
   assert.equal(ochildi.holat, "OPEN");
   assert.equal(ochildi.confirmedBy, null);
 
@@ -350,7 +350,7 @@ test("Yozuvlardan bugungi kirim kunlikka o'zi tushadi; boshqa sana va chiqim tus
   // KUNLIK modulini tenant A uchun yoqamiz (sinxron modul yoqiqligini tekshiradi)
   await A(() => prisma.tenantModule.create({ data: { code: "KUNLIK", isActive: true } }));
   // Oldingi testlarda bugun tasdiqlangan edi — qayta ochamiz
-  await A(() => kunlikSvc.reopenKunlikReport(tA.business.id, egaAktor(), bugun));
+  await A(() => kunlikSvc.reopenKunlikReport(tA.business.id, egaAktor(), bugun, "Test uchun qayta ochish"));
   const bosh = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
 
   const kirimCat = await A(() =>
@@ -471,7 +471,7 @@ test("tasdiqlangan kunga sinxron tegmaydi, asosiy yozuv esa yoziladi", async () 
 
 test("xodim kassani topshiradi: sanalgan naqd, farq, tushum qulfi, direktor tasdig'i", async () => {
   // Holat: bugun CONFIRMED (oldingi testdan) — tekshirish uchun qayta ochamiz.
-  await A(() => kunlikSvc.reopenKunlikReport(tA.business.id, egaAktor(), bugun));
+  await A(() => kunlikSvc.reopenKunlikReport(tA.business.id, egaAktor(), bugun, "Test uchun qayta ochish"));
   const r0 = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
   assert.equal(r0.holat, "OPEN");
   assert.equal(r0.sanalganNaqd, null, "qayta ochilganda topshiruv ham tozalanadi");
@@ -698,7 +698,7 @@ test("naqd sotuv kunlik naqdiga tushadi; bekor qilinsa chiqadi", async () => {
   const inventory = await import("@/lib/services/inventory");
 
   // Bugun oldingi testlarda CONFIRMED bo'lgan — qayta ochamiz.
-  await A(() => kunlikSvc.reopenKunlikReport(tA.business.id, egaAktor(), bugun));
+  await A(() => kunlikSvc.reopenKunlikReport(tA.business.id, egaAktor(), bugun, "Test uchun qayta ochish"));
   const r0 = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
 
   const product = await rawPrisma.product.create({
@@ -815,4 +815,117 @@ test("yopiq kunda sotuv baribir yoziladi, kunlikka tegilmaydi", async () => {
   const r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
   assert.equal(r.jamiSumma, r0.jamiSumma, "yopilgan kun o'zgarmasin");
   assert.equal(r.items.length, r0.items.length);
+});
+
+// ---------- LOCKED: davr yopish (M-10) va majburiy sabab (M-9) ----------
+
+test("qayta ochish sababsiz rad etiladi, sabab bilan saqlanadi", async () => {
+  // Holat: bugun oldingi testda CONFIRMED.
+  await assert.rejects(
+    () => A(() => kunlikSvc.reopenKunlikReport(tA.business.id, egaAktor(), bugun, "  ")),
+    /sabab/i
+  );
+
+  const ochildi = await A(() =>
+    kunlikSvc.reopenKunlikReport(tA.business.id, egaAktor(), bugun, "Kassir tushumni xato kiritgan")
+  );
+  assert.equal(ochildi.holat, "OPEN");
+  assert.equal(ochildi.qaytaOchishSabab, "Kassir tushumni xato kiritgan");
+
+  // Sabab auditda ham qoladi.
+  const log = await rawPrisma.auditLog.findFirst({
+    where: { businessId: tA.business.id, entity: "dailyReport", entityId: ochildi.id },
+    orderBy: { createdAt: "desc" },
+  });
+  assert.match(log.after ?? "", /Kassir tushumni xato kiritgan/);
+
+  // Qayta yopamiz (keyingi testlar uchun).
+  await A(() => kunlikSvc.confirmKunlikReport(tA.business.id, kassirAktor(), bugun));
+});
+
+test("oyni yopish: CONFIRMED kunlar LOCKED bo'ladi va hech narsa o'zgartirilmaydi", async () => {
+  const oy = bugun.slice(0, 7);
+  const natija = await A(() => kunlikSvc.oyniYop(tA.business.id, egaAktor(), oy));
+  assert.ok(natija.qulflandi >= 1, "kamida bugungi kun qulflanishi kerak");
+
+  const r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  assert.equal(r.holat, "LOCKED");
+
+  // LOCKED kunga: tushum, tahrir, o'chirish, qayta ochish, topshirish — hammasi rad.
+  await assert.rejects(
+    () => A(() => kunlikSvc.addKunlikTushum(tA.business.id, egaAktor(), { summa: 1_000, tolovTuri: "CASH" })),
+    /yopilgan/i
+  );
+  await assert.rejects(
+    () => A(() => kunlikSvc.reopenKunlikReport(tA.business.id, egaAktor(), bugun, "Ochib ko'raylik")),
+    /yopilgan/i
+  );
+  await assert.rejects(
+    () => A(() => kunlikSvc.submitKunlikReport(tA.business.id, egaAktor(), bugun, 0)),
+    /yopilgan/i
+  );
+  await assert.rejects(
+    () => A(() => kunlikSvc.confirmKunlikReport(tA.business.id, kassirAktor(), bugun)),
+    /yopilgan/i
+  );
+  if (r.items.length > 0) {
+    await assert.rejects(
+      () => A(() => kunlikSvc.updateKunlikTushum(tA.business.id, egaAktor(), r.items[0].id, { summa: 1 })),
+      /yopilgan|Yozuvlar/i
+    );
+  }
+
+  // Sotuv sinxroni ham LOCKED kunga tegmaydi, sotuv esa yoziladi.
+  const inventory = await import("@/lib/services/inventory");
+  const product = await rawPrisma.product.create({
+    data: { businessId: tA.business.id, nomi: "Qulf guli", kelganNarx: 5_000, sotuvNarx: 20_000, miqdor: 3 },
+  });
+  const sotuv = await A(() =>
+    inventory.createSale({
+      businessId: tA.business.id, productId: product.id, miqdor: 1, tolovTuri: "naqd", userId: kassir.id,
+    })
+  );
+  assert.ok(sotuv.transactionId);
+  const r2 = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  assert.equal(r2.jamiSumma, r.jamiSumma, "LOCKED kun o'zgarmasin");
+});
+
+test("cron avto qulflash: qulflashKun dan eski CONFIRMED kunlar LOCKED bo'ladi", async () => {
+  // 40 kun oldingi kun, 10 kun oldin tasdiqlangan — qulflashKun (7) dan eski.
+  const eskiSana = date.utcDateToDateOnlyString(
+    new Date(date.dateOnlyStringToUTCDate(bugun).getTime() - 40 * 24 * 60 * 60 * 1000)
+  );
+  const eski = await rawPrisma.dailyReport.create({
+    data: {
+      businessId: tA.business.id,
+      sana: date.dateOnlyStringToUTCDate(eskiSana),
+      holat: "CONFIRMED",
+      confirmedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  const soni = await A(() => kunlikSvc.kunlikAvtoQulfla());
+  assert.ok(soni >= 1, "kamida bitta kun qulflanishi kerak");
+  const keyin = await rawPrisma.dailyReport.findUnique({ where: { id: eski.id } });
+  assert.equal(keyin.holat, "LOCKED");
+
+  // qulflashKun = 0 — avto qulflash o'chirilgan.
+  await rawPrisma.dailyReport.create({
+    data: {
+      businessId: tA.business.id,
+      sana: date.dateOnlyStringToUTCDate(
+        date.utcDateToDateOnlyString(
+          new Date(date.dateOnlyStringToUTCDate(bugun).getTime() - 41 * 24 * 60 * 60 * 1000)
+        )
+      ),
+      holat: "CONFIRMED",
+      confirmedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+    },
+  });
+  await rawPrisma.dailyReportSetting.updateMany({
+    where: { businessId: tA.business.id },
+    data: { qulflashKun: 0 },
+  });
+  const nol = await A(() => kunlikSvc.kunlikAvtoQulfla());
+  assert.equal(nol, 0, "qulflashKun=0 da hech narsa qulflanmasin");
 });

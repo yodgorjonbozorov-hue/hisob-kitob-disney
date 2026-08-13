@@ -178,14 +178,20 @@ export async function handleClickPrepare(req: ClickRequest, now: Date = new Date
   if (payment.status === "CONFIRMED") return javob(req, CLICK_ERROR.ALLAQACHON_TOLANGAN);
   if (payment.status !== "PENDING") return javob(req, CLICK_ERROR.BEKOR_QILINGAN);
 
-  await rawPrisma.payment.update({
-    where: { id: payment.id },
-    data: {
-      externalId: String(req.click_trans_id),
-      providerState: CLICK_STATE.TAYYOR,
-      providerCreatedAt: payment.providerCreatedAt ?? now,
-    },
-  });
+  try {
+    await rawPrisma.payment.update({
+      where: { id: payment.id },
+      data: {
+        externalId: String(req.click_trans_id),
+        providerState: CLICK_STATE.TAYYOR,
+        providerCreatedAt: payment.providerCreatedAt ?? now,
+      },
+    });
+  } catch {
+    // `externalId` @unique — bir xil click_trans_id boshqa to'lovga allaqachon
+    // biriktirilgan bo'lsa, 500 o'rniga protokol xatosi qaytadi (M-11).
+    return javob(req, CLICK_ERROR.TRANZAKSIYA_TOPILMADI);
+  }
 
   return javob(req, CLICK_ERROR.OK, { merchant_prepare_id: payment.id });
 }

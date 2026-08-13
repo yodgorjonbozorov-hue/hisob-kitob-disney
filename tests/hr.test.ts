@@ -350,3 +350,60 @@ test("begona tenant xodim va vedomostlarni ko'rmaydi", async () => {
   );
   assert.equal(oyliklar.length, 0);
 });
+
+// ---------- M-13/M-14: avans ortiqchasi va eskirgan snapshot ----------
+
+test("avans ortiqchasi yo'qolmaydi — keyingi oyga qarz bo'lib o'tadi (M-13)", async () => {
+  // Yangi xodim: oylik 1 mln, avans 1.5 mln — 500 ming ortiqcha.
+  const xodim = await T(async () =>
+    hr.createEmployee(t.business.id, { ism: "Avansxo'r", stavka: 1_000_000, stavkaTuri: "oylik" })
+  );
+  await T(async () =>
+    hr.avansBer(t.business.id, t.user.id, { employeeId: xodim.id, oy: OY, summa: 1_500_000 })
+  );
+
+  const p = await T(async () => hr.oylikHisobla(t.business.id, t.user.id, { employeeId: xodim.id, oy: OY }));
+  assert.equal(p.tolanadigan, 0, "manfiy oylik yozilmaydi");
+  assert.equal(p.keyingiOygaQarz, 500_000, "ortiqcha avans qarz sifatida saqlanadi");
+
+  // Keyingi oy: qarz hisobdan chegiriladi (1 mln - 500 ming = 500 ming).
+  const keyingiOy = "2026-08";
+  const p2 = await T(async () =>
+    hr.oylikHisobla(t.business.id, t.user.id, { employeeId: xodim.id, oy: keyingiOy })
+  );
+  assert.equal(p2.tolanadigan, 500_000, "o'tgan oy qarzi chegirilishi kerak");
+  assert.equal(p2.keyingiOygaQarz, 0);
+});
+
+test("oylikTola eskirgan snapshotni to'lamaydi — qayta hisoblash talab qilinadi (M-14)", async () => {
+  // Kunlik stavkali xodim: 2 kun davomat -> hisob, keyin davomat O'ZGARADI.
+  const xodim = await T(async () =>
+    hr.createEmployee(t.business.id, { ism: "Smenachi", stavka: 100_000, stavkaTuri: "kunlik" })
+  );
+  await T(async () =>
+    hr.davomatBelgila(t.business.id, { employeeId: xodim.id, sana: "2026-07-10", holat: "keldi" })
+  );
+  await T(async () =>
+    hr.davomatBelgila(t.business.id, { employeeId: xodim.id, sana: "2026-07-11", holat: "keldi" })
+  );
+  const p = await T(async () => hr.oylikHisobla(t.business.id, t.user.id, { employeeId: xodim.id, oy: OY }));
+  assert.equal(p.tolanadigan, 200_000);
+
+  // Hisoblashdan KEYIN yana bir kun davomat qo'shiladi — snapshot eskirdi.
+  await T(async () =>
+    hr.davomatBelgila(t.business.id, { employeeId: xodim.id, sana: "2026-07-12", holat: "keldi" })
+  );
+
+  await assert.rejects(
+    () => T(async () => hr.oylikTola({ businessId: t.business.id, payrollId: p.id, userId: t.user.id })),
+    /qayta hisoblang/i
+  );
+
+  // Qayta hisoblangach to'lash ishlaydi.
+  const p2 = await T(async () => hr.oylikHisobla(t.business.id, t.user.id, { employeeId: xodim.id, oy: OY }));
+  assert.equal(p2.tolanadigan, 300_000);
+  const tolangan = await T(async () =>
+    hr.oylikTola({ businessId: t.business.id, payrollId: p2.id, userId: t.user.id })
+  );
+  assert.equal(tolangan.holat, "tolangan");
+});

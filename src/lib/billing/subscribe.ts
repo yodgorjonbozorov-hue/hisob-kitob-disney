@@ -35,10 +35,18 @@ export async function confirmPayment(paymentId: string, now: Date = new Date()) 
   const periodEnd = new Date(base.getTime() + OBUNA_DAVRI_KUN * KUN_MS);
 
   return rawPrisma.$transaction(async (tx) => {
-    const updatedPayment = await tx.payment.update({
-      where: { id: paymentId },
+    // Poyga himoyasi (H-8): holat sharti TRANZAKSIYA ICHIDA. Ilgari tekshiruv
+    // tashqarida edi — ikki marta bosilgan qo'lda tasdiq (yoki takroriy webhook)
+    // ikkita Subscription va ikki barobar muddat berishi mumkin edi. Endi
+    // birinchisi CONFIRMED qiladi, ikkinchisi shu shartga ilinib xato oladi.
+    const band = await tx.payment.updateMany({
+      where: { id: paymentId, status: { not: "CONFIRMED" } },
       data: { status: "CONFIRMED", paidAt: now },
     });
+    if (band.count === 0) {
+      throw new BadRequestError("Bu to'lov allaqachon tasdiqlangan");
+    }
+    const updatedPayment = await tx.payment.findUniqueOrThrow({ where: { id: paymentId } });
     const subscription = await tx.subscription.create({
       data: {
         tenantId: tenant.id,

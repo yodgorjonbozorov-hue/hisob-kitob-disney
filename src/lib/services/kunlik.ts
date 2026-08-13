@@ -7,6 +7,7 @@ import { runBusinessTx, type BusinessTx } from "@/lib/db/businessTx";
 import { currentTenantId } from "@/lib/db/tenantContext";
 import {
   dateOnlyStringToUTCDate,
+  monthRangeUTC,
   todayTashkentDateOnlyString,
   utcDateToDateOnlyString,
 } from "@/lib/date";
@@ -148,8 +149,10 @@ export async function addKunlikTushum(
         report.holat === "SUBMITTED"
           ? "Bugungi kassa direktorga topshirilgan — yangi tushum kiritib bo'lmaydi. " +
             "Kerak bo'lsa direktor kunni qayta ochadi."
-          : "Bugungi kun yakuni tasdiqlangan — yangi tushum kiritib bo'lmaydi. " +
-            "O'zgartirish kerak bo'lsa direktor kunni qayta ochishi mumkin."
+          : report.holat === "LOCKED"
+            ? "Bu kun yopilgan (davr qulflangan) — endi o'zgartirib bo'lmaydi."
+            : "Bugungi kun yakuni tasdiqlangan — yangi tushum kiritib bo'lmaydi. " +
+              "O'zgartirish kerak bo'lsa direktor kunni qayta ochishi mumkin."
       );
     }
     const tushum = await tx.dailyTransaction.create({
@@ -198,7 +201,11 @@ export async function updateKunlikTushum(
       throw new ForbiddenError("Tushum topilmadi");
     }
     if (mavjud.report.holat !== "OPEN") {
-      throw new BadRequestError("Tasdiqlangan kun tushumini o'zgartirib bo'lmaydi — avval kunni qayta oching");
+      throw new BadRequestError(
+        mavjud.report.holat === "LOCKED"
+          ? "Bu kun yopilgan (davr qulflangan) — endi o'zgartirib bo'lmaydi"
+          : "Tasdiqlangan kun tushumini o'zgartirib bo'lmaydi — avval kunni qayta oching"
+      );
     }
     if (mavjud.transactionId) {
       // Yozuvlardan ulangan tushum kunlikda tahrirlanmaydi — aks holda ikkala
@@ -243,7 +250,11 @@ export async function deleteKunlikTushum(businessId: string, aktor: KunlikAktor,
     });
     if (!mavjud) throw new ForbiddenError("Tushum topilmadi");
     if (mavjud.report.holat !== "OPEN") {
-      throw new BadRequestError("Tasdiqlangan kun tushumini o'chirib bo'lmaydi — avval kunni qayta oching");
+      throw new BadRequestError(
+        mavjud.report.holat === "LOCKED"
+          ? "Bu kun yopilgan (davr qulflangan) — endi o'zgartirib bo'lmaydi"
+          : "Tasdiqlangan kun tushumini o'chirib bo'lmaydi — avval kunni qayta oching"
+      );
     }
     if (mavjud.transactionId) {
       throw new BadRequestError("Bu tushum Yozuvlardan avtomatik ulangan — uni Yozuvlar bo'limida o'chiring");
@@ -317,9 +328,11 @@ export async function submitKunlikReport(
         select: { holat: true },
       });
       throw new BadRequestError(
-        joriy?.holat === "CONFIRMED"
-          ? "Bu kun allaqachon tasdiqlangan"
-          : "Bu kun allaqachon direktorga topshirilgan"
+        joriy?.holat === "LOCKED"
+          ? "Bu kun yopilgan (davr qulflangan)"
+          : joriy?.holat === "CONFIRMED"
+            ? "Bu kun allaqachon tasdiqlangan"
+            : "Bu kun allaqachon direktorga topshirilgan"
       );
     }
     return (await tx.dailyReport.findFirst({ where: { id: r.id, businessId } }))!;
@@ -381,7 +394,11 @@ export async function confirmKunlikReport(businessId: string, aktor: KunlikAktor
       },
     });
     if (natija.count === 0) {
-      throw new BadRequestError("Bu kun allaqachon tasdiqlangan");
+      throw new BadRequestError(
+        r.holat === "LOCKED"
+          ? "Bu kun yopilgan (davr qulflangan)"
+          : "Bu kun allaqachon tasdiqlangan"
+      );
     }
     return {
       report: (await tx.dailyReport.findFirst({ where: { id: r.id, businessId } }))!,
@@ -408,19 +425,32 @@ export async function confirmKunlikReport(businessId: string, aktor: KunlikAktor
 
 /**
  * Yakunlangan (topshirilgan yoki tasdiqlangan) kunni QAYTA OCHISH — tuzatish
- * uchun. Faqat direktor yoki boshqaruvchi. Topshiruv ma'lumotlari ham
- * tozalanadi: tuzatishdan keyin xodim kassani QAYTA sanab topshiradi.
+ * uchun. Faqat direktor yoki boshqaruvchi, MAJBURIY sabab bilan (M-9).
+ * Topshiruv ma'lumotlari ham tozalanadi: tuzatishdan keyin xodim kassani
+ * QAYTA sanab topshiradi. LOCKED kun ochilmaydi — yopilgan davr qaytmaydi (M-10).
  */
-export async function reopenKunlikReport(businessId: string, aktor: KunlikAktor, sanaStr: string) {
+export async function reopenKunlikReport(
+  businessId: string,
+  aktor: KunlikAktor,
+  sanaStr: string,
+  sabab: string
+) {
   const ruxsat = await getKunlikRuxsat(businessId, aktor);
   if (!ruxsat.tahrirlaydi) {
     throw new ForbiddenError("Yakunlangan kunni faqat direktor yoki boshqaruvchi qayta ochadi");
+  }
+  const tozaSabab = sabab.trim();
+  if (tozaSabab.length < 5) {
+    throw new BadRequestError("Qayta ochish sababi yozilishi shart (kamida 5 belgi)");
   }
   const sana = dateOnlyStringToUTCDate(sanaStr);
 
   const { report, oldingiHolat } = await runBusinessTx(businessId, async (tx) => {
     const r = await tx.dailyReport.findFirst({ where: { businessId, sana } });
     if (!r) throw new BadRequestError("Bu kun uchun hisobot yo'q");
+    if (r.holat === "LOCKED") {
+      throw new BadRequestError("Bu kun yopilgan (davr qulflangan) — qayta ochib bo'lmaydi");
+    }
     const natija = await tx.dailyReport.updateMany({
       where: { id: r.id, businessId, holat: { in: ["SUBMITTED", "CONFIRMED"] } },
       data: {
@@ -432,6 +462,7 @@ export async function reopenKunlikReport(businessId: string, aktor: KunlikAktor,
         submittedByIsm: null,
         submittedAt: null,
         sanalganNaqd: null,
+        qaytaOchishSabab: tozaSabab,
       },
     });
     if (natija.count === 0) throw new BadRequestError("Bu kun yakunlanmagan — ochish shart emas");
@@ -447,9 +478,64 @@ export async function reopenKunlikReport(businessId: string, aktor: KunlikAktor,
     entity: "dailyReport",
     entityId: report.id,
     before: { holat: oldingiHolat },
-    after: { holat: "OPEN", sana: sanaStr },
+    after: { holat: "OPEN", sana: sanaStr, sabab: tozaSabab },
   });
   return report;
+}
+
+/**
+ * OYNI YOPISH (M-10) — oy ichidagi barcha CONFIRMED kunlar LOCKED bo'ladi.
+ * Qaytarib bo'lmaydi: LOCKED kun qayta ochilmaydi ham, o'zgartirilmaydi ham.
+ * OPEN/SUBMITTED kunlarga tegilmaydi — ular avval tasdiqlanishi kerak.
+ */
+export async function oyniYop(businessId: string, aktor: KunlikAktor, oy: string) {
+  const ruxsat = await getKunlikRuxsat(businessId, aktor);
+  if (!ruxsat.tahrirlaydi) {
+    throw new ForbiddenError("Oyni faqat direktor yoki boshqaruvchi yopadi");
+  }
+  const { from, to } = monthRangeUTC(oy);
+
+  const natija = await runBusinessTx(businessId, (tx) =>
+    tx.dailyReport.updateMany({
+      where: { businessId, holat: "CONFIRMED", sana: { gte: from, lt: to } },
+      data: { holat: "LOCKED" },
+    })
+  );
+
+  await logAudit({
+    businessId,
+    action: "update",
+    entity: "dailyReport",
+    entityId: `oy:${oy}`,
+    after: { holat: "LOCKED", oy, qulflandi: natija.count },
+  });
+  return { qulflandi: natija.count };
+}
+
+/**
+ * AVTO QULFLASH (cron, M-10): CONFIRMED bo'lganidan `qulflashKun` kun o'tgan
+ * hisobotlar LOCKED bo'ladi. Tenant kontekstida chaqiriladi (tenantlarBoylab).
+ * qulflashKun = 0 — biznes uchun avto qulflash o'chirilgan.
+ */
+export async function kunlikAvtoQulfla(now: Date = new Date()): Promise<number> {
+  const bizneslar = await prisma.business.findMany({ select: { id: true } });
+  const sozlamalar = await prisma.dailyReportSetting.findMany({
+    select: { businessId: true, qulflashKun: true },
+  });
+  const kunMap = new Map(sozlamalar.map((s) => [s.businessId, s.qulflashKun]));
+
+  let jami = 0;
+  for (const b of bizneslar) {
+    const kun = kunMap.get(b.id) ?? 7;
+    if (kun <= 0) continue;
+    const chegara = new Date(now.getTime() - kun * 24 * 60 * 60 * 1000);
+    const res = await prisma.dailyReport.updateMany({
+      where: { businessId: b.id, holat: "CONFIRMED", confirmedAt: { lt: chegara } },
+      data: { holat: "LOCKED" },
+    });
+    jami += res.count;
+  }
+  return jami;
 }
 
 /**

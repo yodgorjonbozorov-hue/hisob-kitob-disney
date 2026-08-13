@@ -45,6 +45,8 @@ export interface OylikDTO {
   ushlab: number;
   avans: number;
   tolanadigan: number;
+  /** Avans hisoblangandan ko'p bo'lsa keyingi oyga o'tadigan qarz (M-13). */
+  keyingiOygaQarz: number;
   holat: string;
   tolanganSana: string | null;
   transactionId: string | null;
@@ -89,6 +91,7 @@ export async function listOyliklar(businessId: string, oy: string): Promise<Oyli
       // Vedomost yo'q bo'lsa ham berilgan avans ko'rinib tursin.
       avans: p?.avans ?? avansMap.get(x.id) ?? 0,
       tolanadigan: p?.tolanadigan ?? 0,
+      keyingiOygaQarz: p?.keyingiOygaQarz ?? 0,
       holat: p?.holat ?? "hisoblanmagan",
       tolanganSana: p?.tolanganSana ? p.tolanganSana.toISOString() : null,
       transactionId: p?.transactionId ?? null,

@@ -29,3 +29,23 @@ Noaniqliklarda tanlangan qarorlar. Egasi qaytganda ko'rib, kerak bo'lsa tuzatadi
 - **[Screenshotlar] Playwright** bilan 390px/1440px suratlar rejalashtirilgan. Agar
   `npx playwright install chromium` tarmoq/muhit sabab ishlamasa, bu yerga yoziladi va
   vizual tekshirish qo'lda (dev server + brauzer) davom etadi.
+
+## Audit BOSQICH 2 (2026-08-13)
+
+- **[TASK 2.7 — direktor tasdig'i] BAJARILMADI, mijoz qarori kutilmoqda.**
+  Tuzatish prompti ikki variant beradi: (A) direktor tayinlanmagan bo'lsa
+  tasdiqlash tugmasi ishlamasin, UI "Avval direktor tayinlang" desin;
+  (B) hozirgi fallback qolsin, lekin bunday tasdiq auditda
+  `direktorTayinlanmagan: true` bayrog'i bilan yozilsin. Prompt qoidasiga
+  ko'ra ("mijoz qarori kerak bo'lsa taxmin qilma — savol ber va taskni
+  o'tkazib yubor") hozirgi xatti-harakat O'ZGARTIRILMADI: direktor
+  tayinlanmagan bo'lsa OWNER/ADMIN tasdiqlayveradi (`getKunlikRuxsat`).
+- **[LOCKED muddat] `qulflashKun` standarti 7 kun** (0 = avto qulflash
+  o'chirilgan). Sozlama UI'si hali yo'q — qiymat hozircha bazadan
+  o'zgartiriladi; kerak bo'lsa keyingi bosqichda sozlamalar sahifasiga chiqadi.
+- **[Impersonatsiya muddati] 60 daqiqa.** Muddat o'tsa kontekst yopiladi va
+  superadmin /login orqali o'z hisobiga qaytadi (sessiya avtomatik
+  superadminga qaytarilmaydi — cookie'ni render paytida qayta yozib bo'lmaydi).
+- **[Parol tiklash] faqat Telegram orqali** (SMS provayder yo'q). Telegram
+  ulanmagan foydalanuvchiga kod bormaydi; UI "direktoringizga murojaat
+  qiling" deb yo'naltiradi (direktor H-1 chegaralari bilan parol almashtiradi).

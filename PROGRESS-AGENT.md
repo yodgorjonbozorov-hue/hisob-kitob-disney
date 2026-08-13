@@ -2345,3 +2345,55 @@ BOSQICH 2 da); `bulk-move` summa o'zgartirmaydi — tegilmadi.
 **Tekshirildi:** build ✅ · tsc toza · `npm test` (43 fayl) ✅ — jumladan
 sessiya-tekshiruv 6/6 · permissions 7/7 · vaqt 6/6 · kunlik 32/32 ·
 tasdiqlash 22/22 · isolation · visibility 10/10 · avto 25/25.
+
+---
+
+## 2026-08-13 · AUDIT BOSQICH 2 — CORE (biznes mantiq va nazorat)
+
+**Branch:** `claude/balansa-code-audit-kt3eh1` · **Migratsiya BOR (4 ta):**
+`20260813120000_kunlik_qulflash`, `20260813121000_audit_impersonatsiya`,
+`20260813122000_parol_tiklash`, `20260813123000_oylik_qarz` — hammasi
+`ALTER TABLE ADD COLUMN`, ma'lumot o'chirmaydi. `migrations-postgres/init`
+qayta generatsiya qilindi (`npm run pg:migratsiya`).
+
+- **2.1 · LOCKED + period-close (M-10).** `DailyReport.holat` ga `LOCKED`
+  qo'shildi: cron (`hisobotIshi` → `kunlikAvtoQulfla`) CONFIRMED bo'lganidan
+  `DailyReportSetting.qulflashKun` (standart 7, 0 = o'chirilgan) kun o'tgach
+  qulflaydi; boshqaruvchi tarix sahifasida "Oyni yopish" bilan qo'lda
+  qulflaydi (`oyniYop`). LOCKED kunga hech qanday mutatsiya yo'q — qayta
+  ochish ham. UI: 🔒 badge, tugmalar yashiringan.
+- **2.2 · Qayta ochishda majburiy sabab (M-9).** `reopenKunlikReport` endi
+  `sabab` (5–300) talab qiladi; sabab auditga va `DailyReport.qaytaOchishSabab`
+  snapshot'iga yoziladi, tarixda ko'rinadi. UI: native confirm o'rniga
+  `QaytaOchishModal` (Modal.tsx, sabab textarea).
+- **2.3 · Impersonatsiya izi (H-3).** `Aktor.impersonatedBy` +
+  `AuditLog.impersonatedBy`: superadmin mijoz nomidan qilgan har bir amal
+  auditda "🛡 Superadmin nomidan" belgisi bilan ajraladi. Impersonatsiya
+  60 daqiqa bilan cheklandi (`impersonateExpiresAt`) — muddat o'tsa kontekst
+  yopiladi (fail-closed).
+- **2.4 · Parolni tiklash (H-7).** Telegram bot orqali:
+  `POST /api/auth/parol-tiklash` (kod so'rash; javob har doim bir xil —
+  enumeration yopiq; login 3/soat, IP 10/soat) va `/tasdiq` (kod + yangi
+  parol; IP 10/soat, login 5/15min). Kod 6 raqam, 10 daqiqa, bazada faqat
+  SHA-256 hash, bir martalik, timing-safe taqqoslash. UI: /parol-tiklash
+  sahifasi + login sahifasida havola. Audit tozalagichiga resetCodeHash
+  qo'shildi.
+- **2.5 · To'lov poygasi va refund.** `confirmPayment` holat sharti
+  tranzaksiya ICHIGA ko'chdi (H-8 — parallel tasdiq bitta Subscription);
+  Payme route kutilmagan xatoda ham HTTP 200 + JSON-RPC error (-32400)
+  qaytaradi (M-12); bajarilgan to'lov bekor qilinsa (refund) superadminlarga
+  Telegram xabar (`refundOgohlantir`, H-10); Click Prepare'da takroriy
+  `click_trans_id` 500 emas, protokol xatosi (M-11).
+- **2.6 · Oylik (M-13/M-14).** Yagona formula `oylikniHisoblaTx`:
+  avans ortiqchasi `Payroll.keyingiOygaQarz` ga yoziladi va KEYINGI oy
+  hisobida chegiriladi (UI'da "Keyingi oyga qarz" qatori); `oylikTola`
+  to'lashdan oldin tranzaksiya ichida QAYTA hisoblab, snapshot eskirgan
+  bo'lsa "qayta hisoblang" xatosi beradi; `avansBer` ham shu formula bilan
+  yangilaydi.
+- **2.7 · O'TKAZIB YUBORILDI** — A/B varianti mijoz qarori (ASSUMPTIONS.md).
+
+**Yangi/yangilangan testlar:** kunlik 35/35 (+3: sabab, oyni yopish/LOCKED
+to'liq qulf, cron avto qulf) · hr 21/21 (+2: M-13 qarz o'tishi, M-14 eskirgan
+snapshot) · tolov 16/16 (+2: click dublikat, confirmPayment poygasi) ·
+sessiya-tekshiruv 8/8 (+2: impersonatsiya muddati, audit izi) ·
+parol-tiklash 7/7 (yangi fayl).

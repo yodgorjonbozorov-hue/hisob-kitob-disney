@@ -115,7 +115,9 @@ export function KunlikClient({
           <p className="text-sm text-muted">
             {report.holat === "SUBMITTED"
               ? "Bugungi kassa direktorga topshirilgan — yangi tushum kiritilmaydi. Kerak bo'lsa direktor kunni qayta ochadi."
-              : "Bugungi kun yakunlangan — yangi tushum kiritilmaydi. Tuzatish kerak bo'lsa direktor kunni qayta ochadi."}
+              : report.holat === "LOCKED"
+                ? "Bu kun yopilgan (davr qulflangan) — endi o'zgartirib bo'lmaydi."
+                : "Bugungi kun yakunlangan — yangi tushum kiritilmaydi. Tuzatish kerak bo'lsa direktor kunni qayta ochadi."}
           </p>
         </Card>
       )}

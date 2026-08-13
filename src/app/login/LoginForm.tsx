@@ -81,6 +81,11 @@ export default function LoginForm() {
       >
         {loading ? "Kirilmoqda..." : "Kirish"}
       </button>
+      <p className="text-center text-sm">
+        <a href="/parol-tiklash" className="text-muted hover:text-fg hover:underline transition">
+          Parolni unutdingizmi?
+        </a>
+      </p>
     </form>
   );
 }

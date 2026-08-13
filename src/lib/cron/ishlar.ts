@@ -114,6 +114,7 @@ export async function hisobotIshi() {
   const { checkAndSendMonthlyReport } = await import("@/bot/scheduler");
   const { sendDailyDigest } = await import("@/lib/reports/dailyDigest");
   const { sendKunlikEslatma } = await import("@/lib/reports/kunlikEslatma");
+  const { kunlikAvtoQulfla } = await import("@/lib/services/kunlik");
 
   const bot = await botniOl();
   // Oylik hisobot ichida "bugun 1-sanami" tekshiruvi bor.
@@ -121,8 +122,10 @@ export async function hisobotIshi() {
   const digest = await xavfsiz("Kunlik xulosa", () => sendDailyDigest(bot.api), 0);
   // Tasdiqlanmagan kunlik yakunlar — direktorga eslatma (tasdiqlash tugmasi bilan).
   const kunlikEslatma = await xavfsiz("Kunlik tasdiqlash eslatmasi", () => sendKunlikEslatma(bot.api), 0);
+  // Davr yopish (M-10): CONFIRMED bo'lganidan qulflashKun o'tgan kunlar LOCKED.
+  const qulf = await tenantlarBoylab(() => kunlikAvtoQulfla(), "Kunlik avto qulflash");
 
-  return { digest, kunlikEslatma };
+  return { digest, kunlikEslatma, qulflandi: qulf.jami, qulfXato: qulf.xato };
 }
 
 // ---------------------------------------------------------------------------

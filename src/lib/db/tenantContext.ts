@@ -15,6 +15,8 @@ export interface Aktor {
   userId: string;
   ism: string | null;
   ip?: string | null;
+  /** Impersonatsiya (H-3): amal aslida shu SUPERADMIN tomonidan bajarilgan. */
+  impersonatedBy?: string | null;
 }
 
 interface TenantStore {

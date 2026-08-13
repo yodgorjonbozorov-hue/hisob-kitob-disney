@@ -19,7 +19,7 @@ export interface KunlikTushumDTO {
   createdAt: string;
 }
 
-export type KunlikHolatDTO = "OPEN" | "SUBMITTED" | "CONFIRMED";
+export type KunlikHolatDTO = "OPEN" | "SUBMITTED" | "CONFIRMED" | "LOCKED";
 
 export interface KunlikReportDTO {
   id: string | null;
@@ -38,11 +38,19 @@ export interface KunlikReportDTO {
   naqdFarq: number | null;
   confirmedByIsm: string | null;
   confirmedAt: string | null;
+  /** Oxirgi qayta ochish sababi (M-9) — bo'lsa UI'da ko'rinadi. */
+  qaytaOchishSabab: string | null;
   items: KunlikTushumDTO[];
 }
 
 function holatDTO(holat: string): KunlikHolatDTO {
-  return holat === "CONFIRMED" ? "CONFIRMED" : holat === "SUBMITTED" ? "SUBMITTED" : "OPEN";
+  return holat === "LOCKED"
+    ? "LOCKED"
+    : holat === "CONFIRMED"
+      ? "CONFIRMED"
+      : holat === "SUBMITTED"
+        ? "SUBMITTED"
+        : "OPEN";
 }
 
 /**
@@ -76,6 +84,7 @@ export async function getKunlikReport(businessId: string, sanaStr: string): Prom
       naqdFarq: null,
       confirmedByIsm: null,
       confirmedAt: null,
+      qaytaOchishSabab: null,
       items: [],
     };
   }
@@ -93,6 +102,7 @@ export async function getKunlikReport(businessId: string, sanaStr: string): Prom
     naqdFarq: report.sanalganNaqd === null ? null : report.sanalganNaqd - report.naqdSumma,
     confirmedByIsm: report.confirmedByIsm,
     confirmedAt: report.confirmedAt ? report.confirmedAt.toISOString() : null,
+    qaytaOchishSabab: report.qaytaOchishSabab,
     items: report.items.map((t) => ({
       id: t.id,
       summa: t.summa,
@@ -118,6 +128,8 @@ export interface KunlikTarixDTO {
   naqdFarq: number | null;
   submittedByIsm: string | null;
   confirmedByIsm: string | null;
+  /** Oxirgi qayta ochish sababi (M-9) — qayta ochilgan kunlarda ko'rinadi. */
+  qaytaOchishSabab: string | null;
 }
 
 /** Oxirgi kunlar tarixi (yangi kun birinchi). */
@@ -138,6 +150,7 @@ export async function listKunlikTarix(businessId: string, limit = 60): Promise<K
     naqdFarq: r.sanalganNaqd === null ? null : r.sanalganNaqd - r.naqdSumma,
     submittedByIsm: r.submittedByIsm,
     confirmedByIsm: r.confirmedByIsm,
+    qaytaOchishSabab: r.qaytaOchishSabab,
   }));
 }
 

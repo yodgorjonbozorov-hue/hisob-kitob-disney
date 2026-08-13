@@ -17,6 +17,23 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const javob = await handlePaymeRequest(body as never, request.headers.get("authorization"));
-  return NextResponse.json(javob, { status: 200 });
+  try {
+    const javob = await handlePaymeRequest(body as never, request.headers.get("authorization"));
+    return NextResponse.json(javob, { status: 200 });
+  } catch (error) {
+    // Payme protokoli HTTP 500 ni qabul qilmaydi — kutilmagan xato ham
+    // HTTP 200 + JSON-RPC error bo'lib qaytishi shart (-32400: tizim xatosi).
+    console.error("Payme so'rovida kutilmagan xato:", error);
+    const id = (body as { id?: number | string | null } | null)?.id ?? null;
+    return NextResponse.json(
+      {
+        id,
+        error: {
+          code: -32400,
+          message: { uz: "Tizim xatosi", ru: "Системная ошибка", en: "System error" },
+        },
+      },
+      { status: 200 }
+    );
+  }
 }

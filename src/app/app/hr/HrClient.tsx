@@ -164,6 +164,11 @@ export function HrClient({
                       </td>
                       <td className="py-2.5 text-right">
                         <Money value={o.tolanadigan} size="sm" tone={o.tolanadigan > 0 ? "expense" : "neutral"} />
+                        {o.keyingiOygaQarz > 0 && (
+                          <span className="block text-2xs text-expense">
+                            Keyingi oyga qarz: {o.keyingiOygaQarz.toLocaleString("uz-UZ")}
+                          </span>
+                        )}
                       </td>
                       <td className="py-2.5">
                         <Badge tone={HOLAT_TONE[o.holat] ?? "neutral"}>

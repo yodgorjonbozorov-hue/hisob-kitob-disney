@@ -74,6 +74,15 @@ const userByIdCached = requestCache(async (userId: string) =>
  * yozilgan (userId = tenant direktori), `impersonatedBy` esa saqlanadi.
  */
 export async function buildContext(session: Required<SessionData>): Promise<TenantContext | null> {
+  // H-3: impersonatsiya muddatli. Muddat o'tgach kontekst yopiladi (fail-closed) —
+  // superadmin /login orqali o'z hisobiga qaytadi.
+  if (
+    session.impersonatedBy &&
+    session.impersonateExpiresAt &&
+    session.impersonateExpiresAt < Date.now()
+  ) {
+    return null;
+  }
   const user = await userByIdCached(session.userId);
   if (!user || !user.isActive) return null;
   const rol = normalizeRol(user.rol);
@@ -190,7 +199,14 @@ export function withTenant<Ctx = unknown>(handler: RouteHandler<Ctx>, opts: With
           }
           return handler(request, routeCtx, ctx);
         },
-        { userId: ctx.session.userId, ism: ctx.session.ism, ip: clientIp(request) }
+        {
+          userId: ctx.session.userId,
+          ism: ctx.session.ism,
+          ip: clientIp(request),
+          // H-3: impersonatsiyada amalni aslida superadmin bajaradi — audit
+          // jurnalida mijoz direktoridan farqlanishi shart.
+          impersonatedBy: ctx.session.impersonatedBy ?? null,
+        }
       );
     } catch (error) {
       return handleApiError(error);

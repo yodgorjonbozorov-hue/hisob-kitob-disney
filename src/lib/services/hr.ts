@@ -3,7 +3,12 @@ import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { runBusinessTx, type BusinessTx } from "@/lib/db/businessTx";
 import { createTransactionTx } from "@/lib/services/transactionService";
 import { ensureCategoryTx } from "@/lib/services/inventory";
-import { dateOnlyStringToUTCDate, monthRangeUTC, todayTashkentDateOnlyString } from "@/lib/date";
+import {
+  dateOnlyStringToUTCDate,
+  monthRangeUTC,
+  shiftMonthString,
+  todayTashkentDateOnlyString,
+} from "@/lib/date";
 import { logAudit } from "@/lib/services/audit";
 import { DAVOMAT_ULUSH, type DavomatHolat } from "@/lib/validation/hr";
 import type {
@@ -145,6 +150,63 @@ async function yarimKunlarniSana(
   return yozuvlar.reduce((a, y) => a + (DAVOMAT_ULUSH[y.holat as DavomatHolat] ?? 0), 0);
 }
 
+interface OylikHisob {
+  yarimKunlar: number;
+  hisoblangan: number;
+  avans: number;
+  /** O'tgan oy vedomostidan o'tgan qarz (M-13). */
+  otganOyQarzi: number;
+  tolanadigan: number;
+  keyingiOygaQarz: number;
+}
+
+/**
+ * Oylik hisob-kitobining YAGONA formulasi (tranzaksiya ichida).
+ *
+ * `oylikHisobla` ham, `oylikTola` dagi qayta tekshiruv ham (M-14) shu
+ * funksiyani chaqiradi — ikki joyda ikki xil formula bo'lmasin.
+ *
+ * farq = hisoblangan + qoshimcha - ushlab - avans - o'tgan oy qarzi;
+ * farq manfiy bo'lsa `tolanadigan = 0`, ortiqchasi `keyingiOygaQarz` ga
+ * yoziladi (M-13 — ilgari Math.max(0,...) bilan izsiz yo'qolardi).
+ */
+async function oylikniHisoblaTx(
+  tx: BusinessTx,
+  businessId: string,
+  xodim: { id: string; stavka: number; stavkaTuri: string },
+  oy: string,
+  qoshimcha: number,
+  ushlab: number
+): Promise<OylikHisob> {
+  const yarimKunlar = await yarimKunlarniSana(tx, businessId, xodim.id, oy);
+  const hisoblangan =
+    xodim.stavkaTuri === "kunlik" ? Math.round((xodim.stavka * yarimKunlar) / 2) : xodim.stavka;
+
+  const avansAgg = await tx.payrollAdvance.aggregate({
+    where: { businessId, employeeId: xodim.id, oy },
+    _sum: { summa: true },
+  });
+  const avans = avansAgg._sum.summa ?? 0;
+
+  // O'tgan oydan o'tgan qarz — har hisoblashda yangidan o'qiladi (o'tgan oy
+  // qayta hisoblansa bu yerda ham darhol aks etadi).
+  const otgan = await tx.payroll.findFirst({
+    where: { businessId, employeeId: xodim.id, oy: shiftMonthString(oy, -1) },
+    select: { keyingiOygaQarz: true },
+  });
+  const otganOyQarzi = otgan?.keyingiOygaQarz ?? 0;
+
+  const farq = hisoblangan + qoshimcha - ushlab - avans - otganOyQarzi;
+  return {
+    yarimKunlar,
+    hisoblangan,
+    avans,
+    otganOyQarzi,
+    tolanadigan: Math.max(0, farq),
+    keyingiOygaQarz: Math.max(0, -farq),
+  };
+}
+
 /**
  * OYLIKNI HISOBLASH — qoralama vedomost yaratadi yoki qayta hisoblaydi.
  *
@@ -174,31 +236,18 @@ export async function oylikHisobla(
       throw new BadRequestError("Bu oy uchun oylik allaqachon to'langan — qayta hisoblab bo'lmaydi");
     }
 
-    const yarimKunlar = await yarimKunlarniSana(tx, businessId, data.employeeId, data.oy);
-    const hisoblangan =
-      xodim.stavkaTuri === "kunlik"
-        ? Math.round((xodim.stavka * yarimKunlar) / 2)
-        : xodim.stavka;
-
-    const avansAgg = await tx.payrollAdvance.aggregate({
-      where: { businessId, employeeId: data.employeeId, oy: data.oy },
-      _sum: { summa: true },
-    });
-    const avans = avansAgg._sum.summa ?? 0;
-
     const qoshimcha = data.qoshimcha ?? mavjud?.qoshimcha ?? 0;
     const ushlab = data.ushlab ?? mavjud?.ushlab ?? 0;
-    // Manfiy oylik yozilmaydi: avans hisoblangandan ko'p bo'lsa qarz keyingi
-    // oyga o'tadi (bu yerda 0 bilan cheklanadi, farq izohda ko'rinadi).
-    const tolanadigan = Math.max(0, hisoblangan + qoshimcha - ushlab - avans);
+    const hisob = await oylikniHisoblaTx(tx, businessId, xodim, data.oy, qoshimcha, ushlab);
 
     const qiymatlar = {
-      yarimKunlar,
-      hisoblangan,
+      yarimKunlar: hisob.yarimKunlar,
+      hisoblangan: hisob.hisoblangan,
       qoshimcha,
       ushlab,
-      avans,
-      tolanadigan,
+      avans: hisob.avans,
+      tolanadigan: hisob.tolanadigan,
+      keyingiOygaQarz: hisob.keyingiOygaQarz,
       ...(data.izoh !== undefined ? { izoh: data.izoh?.trim() || null } : {}),
     };
 
@@ -240,8 +289,26 @@ export async function oylikTola(params: {
 
     const xodim = await tx.employee.findFirst({
       where: { id: payroll.employeeId, businessId: params.businessId },
-      select: { ism: true },
+      select: { id: true, ism: true, stavka: true, stavkaTuri: true },
     });
+    if (!xodim) throw new ForbiddenError("Xodim topilmadi");
+
+    // M-14: vedomostdagi `tolanadigan` — snapshot. Hisoblashdan keyin davomat
+    // yoki avans o'zgargan bo'lishi mumkin; eskirgan summani to'lab yubormaslik
+    // uchun tranzaksiya ichida QAYTA hisoblab solishtiramiz.
+    const hisob = await oylikniHisoblaTx(
+      tx,
+      params.businessId,
+      xodim,
+      payroll.oy,
+      payroll.qoshimcha,
+      payroll.ushlab
+    );
+    if (hisob.tolanadigan !== payroll.tolanadigan) {
+      throw new BadRequestError(
+        "Hisob-kitob o'zgargan (davomat yoki avanslar yangilangan) — avval qayta hisoblang"
+      );
+    }
 
     const categoryId = await ensureCategoryTx(tx, params.businessId, OYLIK_KATEGORIYA, "chiqim");
     const txn = await createTransactionTx(tx, params.userId, params.businessId, {
@@ -318,19 +385,31 @@ export async function avansBer(businessId: string, userId: string, data: AvansIn
       },
     });
 
-    // Qoralama vedomost bo'lsa — avans va to'lanadigan darhol yangilanadi.
+    // Qoralama vedomost bo'lsa — avans va to'lanadigan darhol yangilanadi
+    // (yagona formula: yangi avans aggregate'ga allaqachon kirgan).
     if (payroll) {
-      const yangiAvans = payroll.avans + data.summa;
-      await tx.payroll.update({
-        where: { id: payroll.id },
-        data: {
-          avans: yangiAvans,
-          tolanadigan: Math.max(
-            0,
-            payroll.hisoblangan + payroll.qoshimcha - payroll.ushlab - yangiAvans
-          ),
-        },
+      const xodimTola = await tx.employee.findFirst({
+        where: { id: data.employeeId, businessId },
+        select: { id: true, stavka: true, stavkaTuri: true },
       });
+      if (xodimTola) {
+        const hisob = await oylikniHisoblaTx(
+          tx,
+          businessId,
+          xodimTola,
+          data.oy,
+          payroll.qoshimcha,
+          payroll.ushlab
+        );
+        await tx.payroll.update({
+          where: { id: payroll.id },
+          data: {
+            avans: hisob.avans,
+            tolanadigan: hisob.tolanadigan,
+            keyingiOygaQarz: hisob.keyingiOygaQarz,
+          },
+        });
+      }
     }
 
     return avans;

@@ -22,7 +22,7 @@ export const KUNLIK_TOLOV_BELGI: Record<KunlikTolovTuri, string> = {
   DEBT: "\u{1F4CB}",
 };
 
-export const KUNLIK_HOLATLAR = ["OPEN", "SUBMITTED", "CONFIRMED"] as const;
+export const KUNLIK_HOLATLAR = ["OPEN", "SUBMITTED", "CONFIRMED", "LOCKED"] as const;
 export type KunlikHolat = (typeof KUNLIK_HOLATLAR)[number];
 
 const sanaSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Sana noto'g'ri formatda");
@@ -53,9 +53,29 @@ export const updateKunlikTushumSchema = z.object({
 });
 export type UpdateKunlikTushumInput = z.infer<typeof updateKunlikTushumSchema>;
 
-/** Tasdiqlash / qayta ochish so'rovi — qaysi kun. */
+/** Tasdiqlash so'rovi — qaysi kun. */
 export const kunlikSanaSchema = z.object({ sana: sanaSchema });
 export type KunlikSanaInput = z.infer<typeof kunlikSanaSchema>;
+
+/**
+ * QAYTA OCHISH — sabab MAJBURIY (M-9): tasdiqlangan moliyaviy kun sababsiz
+ * ochilmasin, sabab auditda va tarixda ko'rinadi.
+ */
+export const kunlikQaytaOchishSchema = z.object({
+  sana: sanaSchema,
+  sabab: z
+    .string({ required_error: "Qayta ochish sababi yozilishi shart" })
+    .trim()
+    .min(5, "Sabab kamida 5 belgi bo'lsin")
+    .max(300, "Sabab 300 belgidan oshmasin"),
+});
+export type KunlikQaytaOchishInput = z.infer<typeof kunlikQaytaOchishSchema>;
+
+/** OYNI YOPISH (M-10): oy ichidagi barcha CONFIRMED kunlar LOCKED bo'ladi. */
+export const kunlikOyniYopishSchema = z.object({
+  oy: z.string().regex(/^\d{4}-\d{2}$/, "Oy YYYY-MM formatida bo'lishi kerak"),
+});
+export type KunlikOyniYopishInput = z.infer<typeof kunlikOyniYopishSchema>;
 
 /**
  * KASSA TOPSHIRISH: xodim kun oxirida kassadagi naqdni SANAB kiritadi.

@@ -8,6 +8,7 @@ import { Money } from "@/components/ui/Money";
 import type { KunlikReportDTO } from "@/lib/queries/kunlik";
 import type { KunlikRuxsat } from "@/lib/services/kunlik";
 import { TopshirishModal } from "./TopshirishModal";
+import { QaytaOchishModal } from "./QaytaOchishModal";
 import { vaqtUzToshkent } from "./vaqt";
 
 /**
@@ -25,11 +26,13 @@ export function YakunCard({
 }) {
   const router = useRouter();
   const [topshirishModal, setTopshirishModal] = useState(false);
+  const [qaytaOchishModal, setQaytaOchishModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [xato, setXato] = useState<string | null>(null);
 
   const ochiq = report.holat === "OPEN";
   const topshirilgan = report.holat === "SUBMITTED";
+  const qulflangan = report.holat === "LOCKED";
 
   async function amal(url: string) {
     setLoading(true);
@@ -61,6 +64,10 @@ export function YakunCard({
     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-2 text-fg border border-line">
       📤 Topshirilgan — direktor tasdig&apos;ini kutmoqda
     </span>
+  ) : qulflangan ? (
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-2 text-muted border border-line">
+      🔒 Yopilgan — davr qulflangan
+    </span>
   ) : (
     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand-wash text-brand border border-line">
       🟢 Tasdiqlangan
@@ -84,7 +91,7 @@ export function YakunCard({
               )}
             </p>
           )}
-          {report.holat === "CONFIRMED" && (
+          {(report.holat === "CONFIRMED" || qulflangan) && (
             <div className="text-2xs text-muted space-y-0.5">
               <p>
                 Tasdiqlagan: <span className="text-fg">{report.confirmedByIsm ?? "—"}</span>
@@ -132,14 +139,24 @@ export function YakunCard({
             ✅ Kun yakunini tasdiqlash
           </Button>
         )}
-        {!ochiq && ruxsat.tahrirlaydi && (
-          <Button variant="secondary" onClick={() => amal("/api/kunlik/qayta-ochish")} loading={loading}>
+        {!ochiq && !qulflangan && ruxsat.tahrirlaydi && (
+          <Button variant="secondary" onClick={() => setQaytaOchishModal(true)}>
             Qayta ochish (tuzatish uchun)
           </Button>
         )}
       </div>
 
       {xato && <p className="text-sm text-expense mt-3">{xato}</p>}
+      {ochiq && report.qaytaOchishSabab && (
+        <p className="text-2xs text-faint mt-3">
+          Qayta ochilgan. Sabab: <span className="text-muted">{report.qaytaOchishSabab}</span>
+        </p>
+      )}
+      {qulflangan && (
+        <p className="text-2xs text-faint mt-3">
+          Davr yopilgan — bu kunni endi o&apos;zgartirib ham, qayta ochib ham bo&apos;lmaydi.
+        </p>
+      )}
       {ochiq && !ruxsat.tasdiqlaydi && (
         <p className="text-2xs text-faint mt-3">
           Kun oxirida kassani sanab &quot;Direktorga topshirish&quot;ni bosing — kun yakunini
@@ -153,6 +170,16 @@ export function YakunCard({
           onClose={() => setTopshirishModal(false)}
           onDone={() => {
             setTopshirishModal(false);
+            router.refresh();
+          }}
+        />
+      )}
+      {qaytaOchishModal && (
+        <QaytaOchishModal
+          sana={report.sana}
+          onClose={() => setQaytaOchishModal(false)}
+          onDone={() => {
+            setQaytaOchishModal(false);
             router.refresh();
           }}
         />

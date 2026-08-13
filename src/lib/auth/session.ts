@@ -18,6 +18,9 @@ export interface SessionData {
   mustChangePassword?: boolean;
   // Impersonatsiya: SUPERADMIN tenant nomidan kirganda uning userId'si shu yerda saqlanadi.
   impersonatedBy?: string | null;
+  // Impersonatsiya muddati (ms epoch). O'tgach kontekst yopiladi (H-3) —
+  // superadmin sessiyasi mijoz hisobida cheksiz qolib ketmasin.
+  impersonateExpiresAt?: number | null;
 }
 
 /**

@@ -89,6 +89,8 @@ CREATE TABLE "User" (
     "telegramChatId" TEXT,
     "linkCode" TEXT,
     "linkCodeExpiresAt" TIMESTAMP(3),
+    "resetCodeHash" TEXT,
+    "resetCodeExpiresAt" TIMESTAMP(3),
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
@@ -190,6 +192,7 @@ CREATE TABLE "AuditLog" (
     "businessId" TEXT,
     "userId" TEXT,
     "userIsm" TEXT,
+    "impersonatedBy" TEXT,
     "action" TEXT NOT NULL,
     "entity" TEXT NOT NULL,
     "entityId" TEXT NOT NULL,
@@ -593,6 +596,7 @@ CREATE TABLE "Payroll" (
     "ushlab" INTEGER NOT NULL DEFAULT 0,
     "avans" INTEGER NOT NULL DEFAULT 0,
     "tolanadigan" INTEGER NOT NULL DEFAULT 0,
+    "keyingiOygaQarz" INTEGER NOT NULL DEFAULT 0,
     "holat" TEXT NOT NULL DEFAULT 'qoralama',
     "tolanganSana" TIMESTAMP(3),
     "transactionId" TEXT,
@@ -620,6 +624,7 @@ CREATE TABLE "DailyReport" (
     "confirmedBy" TEXT,
     "confirmedByIsm" TEXT,
     "confirmedAt" TIMESTAMP(3),
+    "qaytaOchishSabab" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -649,6 +654,7 @@ CREATE TABLE "DailyReportSetting" (
     "id" TEXT NOT NULL,
     "businessId" TEXT NOT NULL,
     "direktorId" TEXT,
+    "qulflashKun" INTEGER NOT NULL DEFAULT 7,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 

@@ -68,6 +68,60 @@ export function eslatmaMatni(nuqta: EslatmaNuqta, ctx: XabarKonteksti): string {
   return [sarlavha[nuqta], izoh[nuqta], narxQatori, "", tolov].filter(Boolean).join("\n");
 }
 
+/**
+ * REFUND OGOHLANTIRISHI (H-10) — bajarilgan to'lov provayder tomonidan bekor
+ * qilinganda (pul qaytarilganda) superadminlarga darhol Telegram xabar.
+ *
+ * Ilgari faqat `Payment.izoh` ga yozilardi va hech kim bilmasdi — pul
+ * qaytarilgan mijoz obunada ishlashda davom etardi. Obuna avtomatik
+ * qisqartirilmaydi (ataylab): qaror superadminda, lekin endi u XABARDOR.
+ *
+ * Best-effort: Telegram ishlamasa webhook javobi buzilmaydi.
+ */
+export async function refundOgohlantir(params: {
+  paymentId: string;
+  tenantId: string;
+  amount: number;
+  provider: string;
+}): Promise<void> {
+  try {
+    const tenant = await rawPrisma.tenant.findUnique({
+      where: { id: params.tenantId },
+      select: { name: true },
+    });
+    const superadminlar = await rawPrisma.user.findMany({
+      where: { rol: "SUPERADMIN", isActive: true, telegramChatId: { not: null } },
+      select: { telegramChatId: true },
+    });
+    if (superadminlar.length === 0) {
+      console.error(
+        `REFUND (${params.provider}): ${tenant?.name ?? params.tenantId} — ` +
+          "Telegram ulangan superadmin yo'q, xabar yetkazilmadi!"
+      );
+      return;
+    }
+
+    const matn =
+      `🔴 PUL QAYTARILDI (${params.provider})\n\n` +
+      `Mijoz: ${tenant?.name ?? params.tenantId}\n` +
+      `Summa: ${formatMoney(params.amount)}\n` +
+      `Payment: ${params.paymentId}\n\n` +
+      `Obuna avtomatik qisqartirilmadi — superadmin panelida ko'rib chiqing:\n` +
+      `${process.env.NEXT_PUBLIC_APP_URL ?? BRAND.url}/superadmin`;
+
+    const { bot } = await import("@/bot/bot");
+    for (const s of superadminlar) {
+      try {
+        await bot.api.sendMessage(s.telegramChatId!, matn);
+      } catch (error) {
+        console.error("Refund ogohlantirishini yuborishda xatolik:", error);
+      }
+    }
+  } catch (error) {
+    console.error("Refund ogohlantirishi tayyorlanmadi:", error);
+  }
+}
+
 export interface EslatmaNatija {
   /** Yuborilgan xabarlar soni. */
   yuborilgan: number;

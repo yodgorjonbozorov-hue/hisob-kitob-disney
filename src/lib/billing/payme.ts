@@ -307,6 +307,17 @@ export async function handlePaymeRequest(
             : "Payme: to'lov bekor qilindi",
         },
       });
+      if (bajarilgan) {
+        // H-10: izoh yozish yetarli emas — hech kim o'qimasdi. Superadminlarga
+        // darhol Telegram xabar ketadi (best-effort, javobni buzmaydi).
+        const { refundOgohlantir } = await import("./notify");
+        await refundOgohlantir({
+          paymentId: payment.id,
+          tenantId: payment.tenantId,
+          amount: payment.amount,
+          provider: "PAYME",
+        });
+      }
       return natija(body.id, {
         transaction: payment.id,
         cancel_time: now.getTime(),

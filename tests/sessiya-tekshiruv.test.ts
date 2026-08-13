@@ -135,3 +135,42 @@ test("impersonatsiya smoke: maqsad foydalanuvchi konteksti quriladi, impersonate
   assert.equal(ctx.session.userId, t.user.id);
   assert.equal(ctx.session.impersonatedBy, "superadmin-id", "impersonatsiya belgisi yo'qolmasin");
 });
+
+test("impersonatsiya muddati o'tgach kontekst yopiladi (H-3)", async () => {
+  const asos = { ...sessiya(t.user), rol: "OWNER", impersonatedBy: "superadmin-id" };
+
+  // Muddati bor — ishlaydi.
+  const faol = await buildContext({ ...asos, impersonateExpiresAt: Date.now() + 60_000 });
+  assert.ok(faol, "muddat ichida kontekst ishlashi kerak");
+
+  // Muddat o'tgan — fail-closed.
+  const eskirgan = await buildContext({ ...asos, impersonateExpiresAt: Date.now() - 1_000 });
+  assert.equal(eskirgan, null, "muddati o'tgan impersonatsiya yopilishi kerak");
+
+  // Oddiy (impersonatsiyasiz) sessiyaga muddat maydoni ta'sir qilmaydi.
+  const oddiy = await buildContext({ ...sessiya(t.user), rol: "OWNER" });
+  assert.ok(oddiy);
+});
+
+test("impersonatsiya aktori audit yozuvida ajratiladi (H-3)", async () => {
+  const { runWithTenant } = await import("@/lib/db/tenantContext");
+  const { prisma } = await import("@/lib/prisma");
+
+  await runWithTenant(
+    t.tenant.id,
+    async () => {
+      await prisma.category.create({
+        data: { businessId: t.business.id, nomi: "Impersonatsiya kategoriyasi", turi: "kirim" },
+      });
+    },
+    { userId: t.user.id, ism: "Egasi", impersonatedBy: "superadmin-777" }
+  );
+
+  const log = await rawPrisma.auditLog.findFirst({
+    where: { tenantId: t.tenant.id, entity: "category", action: "create" },
+    orderBy: { createdAt: "desc" },
+  });
+  assert.ok(log, "audit yozuvi bo'lishi kerak");
+  assert.equal(log.impersonatedBy, "superadmin-777", "haqiqiy aktor auditda ko'rinadi");
+  assert.equal(log.userId, t.user.id, "amal mijoz nomidan qilinganicha qoladi");
+});

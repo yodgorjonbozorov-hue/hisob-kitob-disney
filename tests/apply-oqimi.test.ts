@@ -213,7 +213,9 @@ test("xom surat sxemaga bog'liq emas — eski bazada ham ishlaydi", async () => 
 
   const prisma = ishga(["-r", "ts-node/register", "scripts/backup.ts"]);
   assert.notEqual(prisma.status, 0, "Prisma zaxirasi eski bazada yiqilishi KUTILADI");
-  assert.match(prisma.stdout + prisma.stderr, /no such table|does not exist/i);
+  // Eski bazada yetishmayotgan narsa jadval ham, ustun ham bo'lishi mumkin
+  // (sxema qaysi migratsiyada oldinlab ketganiga qarab).
+  assert.match(prisma.stdout + prisma.stderr, /no such (table|column)|does not exist/i);
 
   const xom = ishga(["scripts/xom-zaxira.mjs", SURAT]);
   assert.equal(xom.status, 0, `xom surat eski bazada ham ishlashi kerak:\n${xom.stderr}`);

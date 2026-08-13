@@ -180,6 +180,11 @@ model User {
   linkCode          String?
   linkCodeExpiresAt DateTime?
 
+  /// PAROLNI TIKLASH (H-7): Telegram botga yuborilgan 6 raqamli kodning
+  /// SHA-256 hash'i (ochiq matnda saqlanmaydi) va amal qilish muddati (10 daqiqa).
+  resetCodeHash      String?
+  resetCodeExpiresAt DateTime?
+
   @@index([businessId])
   @@index([tenantId])
 }
@@ -348,6 +353,9 @@ model AuditLog {
   business   Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
   userId     String?
   userIsm    String?
+  /// Impersonatsiya (H-3): amal aslida SUPERADMIN tomonidan mijoz nomidan
+  /// bajarilgan bo'lsa — superadmin User.id shu yerda. Oddiy amallarda null.
+  impersonatedBy String?
   action     String // "create" | "update" | "delete" | "restore"
   entity     String // "transaction" | "user" | "category" | "sale" | "debt"
   entityId   String
@@ -973,8 +981,11 @@ model Payroll {
   ushlab        Int          @default(0)
   /// Shu oyda berilgan avanslar yig'indisi (snapshot).
   avans         Int          @default(0)
-  /// hisoblangan + qoshimcha - ushlab - avans (manfiy bo'lmaydi).
+  /// hisoblangan + qoshimcha - ushlab - avans - o'tgan oy qarzi (manfiy bo'lmaydi).
   tolanadigan   Int          @default(0)
+  /// Avans (va ushlab) hisoblangandan KO'P bo'lsa — ortiqcha qism yo'qolmaydi,
+  /// keyingi oy hisob-kitobida chegiriladi (M-13). 0 — qarz yo'q.
+  keyingiOygaQarz Int        @default(0)
   /// "qoralama" | "tolangan"
   holat         String       @default("qoralama")
   tolanganSana  DateTime?
@@ -1003,11 +1014,14 @@ model Payroll {
 /// `sana` — Toshkent (Asia/Tashkent, UTC+5) kalendar kuni, UTC yarim tun
 /// sifatida saqlanadi. Kun O'zbekiston yarim tunida almashadi.
 ///
-/// holat: "OPEN" | "SUBMITTED" | "CONFIRMED".
+/// holat: "OPEN" | "SUBMITTED" | "CONFIRMED" | "LOCKED".
 ///   OPEN      — kun ochiq, tushum kiritiladi;
 ///   SUBMITTED — xodim kassani TOPSHIRDI (sanagan naqdini kiritib), direktor
 ///               tasdig'ini kutmoqda. Bu holatda ham tushum kiritilmaydi;
-///   CONFIRMED — direktor tasdiqladi.
+///   CONFIRMED — direktor tasdiqladi;
+///   LOCKED    — davr yopildi (M-10): CONFIRMED bo'lganidan `qulflashKun`
+///               kun o'tgach cron qulflaydi yoki boshqaruvchi "Oyni yopish"
+///               bilan qulflaydi. QAYTARIB BO'LMAYDI — qayta ochish ham yo'q.
 /// Yakunlangan (SUBMITTED/CONFIRMED) kunga tushum kiritib/o'zgartirib
 /// bo'lmaydi — avval direktor/boshqaruvchi uni qayta ochadi.
 model DailyReport {
@@ -1034,6 +1048,9 @@ model DailyReport {
   confirmedBy    String?
   confirmedByIsm String?
   confirmedAt    DateTime?
+  /// Oxirgi qayta ochish sababi (M-9) — tarixda "nega ochilgan?" ko'rinadi.
+  /// To'liq iz AuditLog'da; bu ustun tez ko'rsatish uchun snapshot.
+  qaytaOchishSabab String?
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
   items          DailyTransaction[]
@@ -1082,6 +1099,9 @@ model DailyReportSetting {
   businessId String   @unique
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   direktorId String?
+  /// CONFIRMED kunlar necha kundan keyin avtomatik LOCKED bo'ladi (M-10).
+  /// 0 — avtomatik qulflash o'chirilgan (faqat qo'lda "Oyni yopish").
+  qulflashKun Int     @default(7)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
