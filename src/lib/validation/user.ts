@@ -13,6 +13,7 @@ export const createUserSchema = z.object({
 export const updateUserSchema = z.object({
   isActive: z.boolean().optional(),
   parol: z.string().min(8, "Parol kamida 8 belgi bo'lishi kerak").max(100).optional(),
+  login: z.string().min(3, "Login kamida 3 belgi bo'lishi kerak").max(50).optional(),
   ism: z.string().min(1).max(100).optional(),
   rol: z.enum(["OWNER", "CASHIER", "SELLER"]).optional(),
   businessId: z.string().optional().nullable(),

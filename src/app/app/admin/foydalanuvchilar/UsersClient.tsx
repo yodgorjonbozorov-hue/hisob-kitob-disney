@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { formatDateUZ } from "@/lib/format";
+import { ParolTiklashModal, LoginTiklashModal } from "./TiklashModal";
 
 interface BusinessOption {
   id: string;
@@ -41,6 +42,8 @@ export function UsersClient({
 }) {
   const [users, setUsers] = useState(initialUsers);
   const [modalOpen, setModalOpen] = useState(false);
+  const [parolUser, setParolUser] = useState<UserDTO | null>(null);
+  const [loginUser, setLoginUser] = useState<UserDTO | null>(null);
 
   async function toggleActive(u: UserDTO) {
     const res = await fetch(`/api/users/${u.id}`, {
@@ -174,6 +177,18 @@ export function UsersClient({
                 </td>
                 <td className="py-2.5 text-muted">{formatDateUZ(new Date(u.createdAt))}</td>
                 <td className="py-2.5 text-right whitespace-nowrap">
+                  <button
+                    onClick={() => setParolUser(u)}
+                    className="text-xs font-medium text-muted hover:text-brand mr-3"
+                  >
+                    Parol tiklash
+                  </button>
+                  <button
+                    onClick={() => setLoginUser(u)}
+                    className="text-xs font-medium text-muted hover:text-brand mr-3"
+                  >
+                    Login tiklash
+                  </button>
                   {u.id !== currentUserId && (
                     <>
                       <button
@@ -199,6 +214,21 @@ export function UsersClient({
 
       {modalOpen && (
         <NewUserModal businesses={businesses} onClose={() => setModalOpen(false)} onCreated={handleCreated} />
+      )}
+
+      {parolUser && <ParolTiklashModal user={parolUser} onClose={() => setParolUser(null)} />}
+
+      {loginUser && (
+        <LoginTiklashModal
+          user={loginUser}
+          onClose={() => setLoginUser(null)}
+          onSaved={(yangiLogin) => {
+            setUsers((prev) =>
+              prev.map((x) => (x.id === loginUser.id ? { ...x, login: yangiLogin } : x))
+            );
+            setLoginUser(null);
+          }}
+        />
       )}
     </div>
   );

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { rawPrisma } from "@/lib/db/rawPrisma";
 import { requireManager } from "@/lib/auth/guard";
 import { withTenant } from "@/lib/auth/tenant";
 import { updateUserSchema } from "@/lib/validation/user";
@@ -27,13 +28,21 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
 
   const existing = await prisma.user.findUnique({
     where: { id: params.id },
-    select: { rol: true, businessId: true },
+    select: { rol: true, businessId: true, login: true },
   });
   if (!existing) {
     return NextResponse.json({ error: "Foydalanuvchi topilmadi" }, { status: 404 });
   }
 
-  const { parol, businessId, rol, ...rest } = parsed.data;
+  const { parol, businessId, rol, login, ...rest } = parsed.data;
+
+  // Login BUTUN tizim bo'ylab unique — shuning uchun rawPrisma (tenantlar aro tekshiruv).
+  if (login !== undefined && login !== existing.login) {
+    const band = await rawPrisma.user.findUnique({ where: { login }, select: { id: true } });
+    if (band) {
+      return NextResponse.json({ error: "Bu login band" }, { status: 409 });
+    }
+  }
   const effectiveRol = rol ?? existing.rol;
 
   // Biznesni rol asosida hal qilamiz:
@@ -64,6 +73,7 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
     data: {
       ...rest,
       ...(rol !== undefined ? { rol } : {}),
+      ...(login !== undefined && login !== existing.login ? { login } : {}),
       ...businessIdData,
       ...(parol ? { parolHash: await hashPassword(parol) } : {}),
     },
