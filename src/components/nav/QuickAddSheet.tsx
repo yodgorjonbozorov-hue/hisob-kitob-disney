@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatSom } from "@/lib/format";
-import { todayDateOnlyString } from "@/lib/date";
+import { todayTashkentDateOnlyString } from "@/lib/date";
 import { Button } from "@/components/ui/Button";
 import { NumberPad } from "@/components/ui/NumberPad";
 import { CategoryPicker } from "@/components/ui/CategoryPicker";
@@ -68,7 +68,7 @@ export function QuickAddSheet({
     try {
       const sana = kecha
         ? new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)
-        : todayDateOnlyString();
+        : todayTashkentDateOnlyString();
       const res = await fetch("/api/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

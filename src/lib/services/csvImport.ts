@@ -1,6 +1,8 @@
+import { prisma } from "@/lib/prisma";
 import { runBusinessTx } from "@/lib/db/businessTx";
-import { dateOnlyStringToUTCDate } from "@/lib/date";
+import { dateOnlyStringToUTCDate, todayTashkentDateOnlyString } from "@/lib/date";
 import { logAudit } from "@/lib/services/audit";
+import { kunlikSinxron, type KunlikSinxronYozuv } from "@/lib/services/kunlik";
 import { z } from "zod";
 
 /**
@@ -161,7 +163,7 @@ export async function csvniYoz(params: {
 }): Promise<number> {
   if (params.qatorlar.length === 0) return 0;
 
-  const yozildi = await runBusinessTx(params.businessId, async (tx) => {
+  const { yozildi, yozuvlar } = await runBusinessTx(params.businessId, async (tx) => {
     // Kassa: birinchi faol kassa (import odatda tarixiy ma'lumot).
     const kassa = await tx.account.findFirst({
       where: { businessId: params.businessId, isActive: true },
@@ -186,9 +188,10 @@ export async function csvniYoz(params: {
     }
 
     let n = 0;
+    const yozuvlar: KunlikSinxronYozuv[] = [];
     for (const q of params.qatorlar) {
       const categoryId = await kategoriyaId(q.kategoriya, q.turi);
-      await tx.transaction.create({
+      const yozuv = await tx.transaction.create({
         data: {
           turi: q.turi,
           categoryId,
@@ -200,10 +203,29 @@ export async function csvniYoz(params: {
           userId: params.userId,
         },
       });
+      yozuvlar.push(yozuv);
       n++;
     }
-    return n;
+    return { yozildi: n, yozuvlar };
   });
+
+  // BUGUNGI sanali import qilingan kirimlar kunlik hisobotga tushadi (C-3).
+  // Tranzaksiya TASHQARISIDA: kunlikSinxron o'zi runBusinessTx ochadi, ichma-ich
+  // tranzaksiya deadlock beradi. Filtr — 500 qatorlik tarixiy import uchun
+  // behuda sinxron chaqiruv ketmasin (kunlikSinxron o'zi ham sanani tekshiradi).
+  const bugun = todayTashkentDateOnlyString();
+  const bugungiKirimlar = yozuvlar.filter(
+    (y) => y.turi === "kirim" && y.sana.toISOString().slice(0, 10) === bugun
+  );
+  if (bugungiKirimlar.length > 0) {
+    const user = await prisma.user.findFirst({
+      where: { id: params.userId },
+      select: { ism: true },
+    });
+    for (const y of bugungiKirimlar) {
+      await kunlikSinxron(y, user?.ism ?? null);
+    }
+  }
 
   await logAudit({
     businessId: params.businessId,

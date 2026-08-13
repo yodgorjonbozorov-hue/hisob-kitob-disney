@@ -34,7 +34,7 @@ export const createEmployeeSchema = z.object({
   ism: z.string().trim().min(1, "Xodim ismi kiritilishi shart").max(120),
   lavozim: z.string().trim().max(100).optional().nullable(),
   tel: z.string().trim().max(50).optional().nullable(),
-  stavka: z.number().int().min(0).max(100_000_000_000).default(0),
+  stavka: z.number().int().min(0).max(2_000_000_000).default(0),
   stavkaTuri: z.enum(STAVKA_TURLARI).default("oylik"),
   ishBoshlagan: sanaSchema.optional().nullable(),
   izoh: z.string().trim().max(500).optional().nullable(),
@@ -56,7 +56,7 @@ export const davomatSchema = z.object({
 export const avansSchema = z.object({
   employeeId: z.string().min(1),
   oy: oySchema,
-  summa: z.number().int().positive("Avans musbat bo'lishi kerak").max(100_000_000_000),
+  summa: z.number().int().positive("Avans musbat bo'lishi kerak").max(2_000_000_000),
   sana: sanaSchema.optional().nullable(),
   izoh: z.string().trim().max(300).optional().nullable(),
 });
@@ -64,8 +64,8 @@ export const avansSchema = z.object({
 export const oylikHisoblaSchema = z.object({
   employeeId: z.string().min(1),
   oy: oySchema,
-  qoshimcha: z.number().int().min(0).max(100_000_000_000).optional(),
-  ushlab: z.number().int().min(0).max(100_000_000_000).optional(),
+  qoshimcha: z.number().int().min(0).max(2_000_000_000).optional(),
+  ushlab: z.number().int().min(0).max(2_000_000_000).optional(),
   izoh: z.string().trim().max(300).optional().nullable(),
 });
 

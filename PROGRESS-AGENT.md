@@ -2280,3 +2280,68 @@ Click, Qarz) tursin.
 
 **Tekshirildi:** build ✅ · tsc toza · kunlik 26/26 · soft-delete 8/8 ·
 agregat 7/7 · isolation 22/22.
+
+---
+
+## 2026-08-13 · AUDIT BOSQICH 1 — kritik tuzatishlar (C-1…C-4, H-1, H-2, H-11)
+
+**Branch:** `claude/balansa-code-audit-kt3eh1` · **Migratsiya YO'Q**
+
+2026-08-13 auditining CRITICAL bosqichi to'liq bajarildi
+(`docs/CLAUDE-CODE-PROMPTLAR.md` uslubidagi tuzatish prompti, BOSQICH 1):
+
+- **C-1 · Sessiya har so'rovda bazadan tekshiriladi.** `buildContext`
+  (`lib/auth/tenant.ts`) endi foydalanuvchini har so'rovda `rawPrisma`dan
+  qayta o'qiydi: `isActive`, `rol`, `tenantId`, `businessId` — hammasi
+  BAZADAN, cookie'dan emas (fail-closed). Nofaollashtirilgan xodim keyingi
+  so'rovdayoq yopiladi; rol/biznes o'zgarishi qayta loginsiz amal qiladi.
+  Impersonatsiya saqlanadi. `telegram-link-code` ham faollikni tekshiradi.
+- **C-2 · Tasdiqlash qoidasi PATCH da ham.** Yangi
+  `tahrirTasdiqniTekshir` (`lib/services/approval.ts`):
+  (1) rahbar tasdig'i bilan yozilgan yozuvning summa/kategoriya/turi/sana
+  maydonlari umuman tahrirlanmaydi; (2) moliyaviy maydon o'zgarishida
+  `mosQoidaniTop` qayta tekshiriladi — kassir 50 000 ni PATCH bilan
+  5 000 000 qila olmaydi (403).
+- **C-3 · Sotuv/qarz to'lovi kunlikka tushadi.** `createSale` (naqd),
+  `recordDebtPayment` (olinadigan kirim), sotuv bekor qilish va CSV import
+  endi `runBusinessTx` TUGAGACH `kunlikSinxron` chaqiradi (tranzaksiya
+  ichida emas — deadlock). Yopiq kunga tegilmaydi, sotuv baribir yoziladi.
+- **C-4 · Topshirish sana guard'i.** `submitKunlikReport`: o'tgan kunni
+  faqat `ruxsat.tahrirlaydi` (direktor/boshqaruvchi) topshiradi; submit va
+  confirm'da sana biznes `createdAt` idan oldin bo'lsa rad (soxta tarix yo'q).
+- **H-1 · Rol/parol chegaralari.** Yangi `lib/auth/userPolicy.ts` (sof
+  funksiyalar): OWNER hisobini faqat OWNER tahrirlaydi/o'chiradi; OWNER
+  rolini faqat OWNER beradi (POST ham); o'z rolini o'zgartirish va o'zini
+  nofaollashtirish taqiq; oxirgi faol direktor himoyasi. Boshqa foydalanuvchi
+  paroli almashtirilsa `mustChangePassword: true` majburiy + auditda
+  `password_reset` izi.
+- **H-2 · Hamma joyda Toshkent kuni.** `todayDateOnlyString` (UTC) BUTUNLAY
+  olib tashlandi — 16 chaqiruv joyi `todayTashkentDateOnlyString`ga o'tdi
+  (formalar, bot, servislar, sahifalar). `tests/vaqt.test.ts` grep bilan
+  regressiyani ushlaydi.
+- **Int chegara (5.1.4 dan oldinga olindi).** Barcha pul validatsiyalari
+  `max(100 mlrd)` → `max(2 mlrd)` (Prisma `Int` maks ~2.147 mlrd; SQLite'da
+  yashirin, Postgres'da yiqiladigan xato). `createTransactionSchema.summa`
+  ga ham max qo'shildi.
+- **H-11 · CI.** `.github/workflows/ci.yml`: push/PR da `npm ci` →
+  `prisma generate` → `tsc --noEmit` → `npm test`. `npm test` =
+  `scripts/run-tests.mjs` (barcha `tests/*.test.ts` ketma-ket; faqat
+  `smoke-brauzer` chiqarilgan — brauzer talab qiladi).
+
+**Yangi testlar:** `sessiya-tekshiruv` (6) · `permissions` (7) · `vaqt` (6) ·
+kunlik +6 (sotuv/qarz/CSV/yopiq kun/sana guard) · tasdiqlash +2 (PATCH bypass).
+Kunlik testlarida biznes `createdAt` 2020 ga qadimiylashtirildi (yangi sana
+chegarasi guard'i o'tgan sanali stsenariylarga xalaqit bermasin).
+
+**Eskirgan testlar yangilandi** (bazaviy holatda ham yiqilardi — kod emas,
+kutilma eski edi): `avto.test.ts` AVTO tarif modullariga KUNLIK qo'shildi;
+`visibility.test.ts` totals'ga naqdKirim/clickKirim qo'shildi;
+`toliq-ishga-tushirish.test.ts` da tsc xatosi (`unknown[]` → `InArgs`).
+
+**Bilib turib qilinmagan:** CSV import chiqimlariga tasdiqlash qoidasi
+qo'llanmadi (import manager-only va yaratish oqimi alohida — kerak bo'lsa
+BOSQICH 2 da); `bulk-move` summa o'zgartirmaydi — tegilmadi.
+
+**Tekshirildi:** build ✅ · tsc toza · `npm test` (43 fayl) ✅ — jumladan
+sessiya-tekshiruv 6/6 · permissions 7/7 · vaqt 6/6 · kunlik 32/32 ·
+tasdiqlash 22/22 · isolation · visibility 10/10 · avto 25/25.

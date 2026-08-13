@@ -4,7 +4,7 @@ import { runWithTenant } from "@/lib/db/tenantContext";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { getExpectedCash, listShiftCloses } from "@/lib/queries/shift";
-import { todayDateOnlyString } from "@/lib/date";
+import { todayTashkentDateOnlyString } from "@/lib/date";
 import { SmenaClient } from "./SmenaClient";
 
 export default async function SmenaPage() {
@@ -17,7 +17,7 @@ export default async function SmenaPage() {
   }
   const businessId = await resolveActiveBusinessId(session);
   const business = await getActiveBusiness(session);
-  const today = todayDateOnlyString();
+  const today = todayTashkentDateOnlyString();
 
   // Kassir o'z smenasini yakunlaydi — kutilgan naqd ham faqat uning kirimlaridan.
   const [kutilgan, recent] = businessId

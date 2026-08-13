@@ -25,7 +25,7 @@ export const updateSupplierSchema = createSupplierSchema.partial().extend({
 const satrSchema = z.object({
   productId: z.string().min(1),
   miqdor: z.number().int().positive("Miqdor musbat bo'lishi kerak"),
-  birlikNarx: z.number().int().min(0, "Narx manfiy bo'lmasligi kerak"),
+  birlikNarx: z.number().int().min(0, "Narx manfiy bo'lmasligi kerak").max(2_000_000_000, "Summa juda katta"),
 });
 
 export const createOrderSchema = z.object({

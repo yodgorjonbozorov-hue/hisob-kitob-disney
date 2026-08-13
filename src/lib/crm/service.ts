@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { ensureCategory } from "@/lib/services/inventory";
 import { createTransaction } from "@/lib/services/transactionService";
-import { todayDateOnlyString } from "@/lib/date";
+import { todayTashkentDateOnlyString } from "@/lib/date";
 
 /**
  * CRM xizmat qatlami. Barcha funksiyalar tenant kontekstida chaqiriladi —
@@ -133,7 +133,7 @@ export async function moveDeal(params: {
       turi: "kirim",
       categoryId,
       summa: deal.summa,
-      sana: todayDateOnlyString(),
+      sana: todayTashkentDateOnlyString(),
       izoh: `CRM bitim: ${deal.nomi}${deal.contact ? ` (${deal.contact.ism})` : ""}`,
     });
     transactionId = txn.id;

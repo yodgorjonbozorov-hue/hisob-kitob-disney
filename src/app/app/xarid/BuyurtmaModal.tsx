@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Money } from "@/components/ui/Money";
-import { todayDateOnlyString } from "@/lib/date";
+import { todayTashkentDateOnlyString } from "@/lib/date";
 import type { SupplierDTO } from "@/lib/queries/xarid";
 import type { ProductAdminDTO } from "@/lib/queries/inventory";
 
@@ -38,7 +38,7 @@ export function BuyurtmaModal({
 }) {
   const faolMahsulotlar = products.filter((p) => p.isActive);
   const [supplierId, setSupplierId] = useState(suppliers[0]?.id ?? "");
-  const [sana, setSana] = useState(todayDateOnlyString());
+  const [sana, setSana] = useState(todayTashkentDateOnlyString());
   const [tolovTuri, setTolovTuri] = useState<"naqd" | "qarz">("naqd");
   const [izoh, setIzoh] = useState("");
   const [satrlar, setSatrlar] = useState<Satr[]>([bosqSatr(faolMahsulotlar)]);

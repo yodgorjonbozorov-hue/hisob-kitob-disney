@@ -27,7 +27,7 @@ export const transferSchema = z
   .object({
     fromAccountId: z.string().min(1, "Qaysi kassadan olinishini tanlang"),
     toAccountId: z.string().min(1, "Qaysi kassaga o'tkazilishini tanlang"),
-    summa: z.number().int().positive("Summa musbat bo'lishi kerak"),
+    summa: z.number().int().positive("Summa musbat bo'lishi kerak").max(2_000_000_000, "Summa juda katta"),
     sana: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Sana noto'g'ri formatda"),
     izoh: z.string().max(300).optional().nullable(),
   })

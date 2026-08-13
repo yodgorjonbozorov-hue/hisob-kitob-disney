@@ -143,12 +143,14 @@ test("jami kirim/chiqim ham xodim ko'rgan yozuvlar bo'yicha hisoblanadi", async 
   const kassir = await runWithTenant(TENANT, () =>
     listTransactions({ businessId: BIZ, userId: transactionScopeUserId(KASSIR) })
   );
-  assert.deepEqual(kassir.totals, { jamiKirim: 200, jamiChiqim: 50, sof: 150 });
+  // naqdKirim/clickKirim — 2026-08-12 dagi "to'lov bo'limlari" bilan qo'shilgan;
+  // testdagi yozuvlar kassasiz, shu bois hammasi naqd sanaladi.
+  assert.deepEqual(kassir.totals, { jamiKirim: 200, jamiChiqim: 50, sof: 150, naqdKirim: 200, clickKirim: 0 });
 
   const owner = await runWithTenant(TENANT, () =>
     listTransactions({ businessId: BIZ, userId: transactionScopeUserId(OWNER) })
   );
-  assert.deepEqual(owner.totals, { jamiKirim: 1500, jamiChiqim: 50, sof: 1450 });
+  assert.deepEqual(owner.totals, { jamiKirim: 1500, jamiChiqim: 50, sof: 1450, naqdKirim: 1500, clickKirim: 0 });
 });
 
 test("filtrlar ko'rinuvchanlik chegarasi bilan birga ishlaydi", async () => {

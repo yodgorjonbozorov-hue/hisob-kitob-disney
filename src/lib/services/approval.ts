@@ -302,6 +302,57 @@ export async function radEt(params: {
 }
 
 /**
+ * TAHRIRNI TEKSHIRISH (C-2) — `PATCH /api/transactions/[id]` uchun.
+ *
+ * Tasdiqlash qoidasi faqat yaratishda tekshirilsa, kassir chegaradan PAST
+ * chiqim yozib, keyin PATCH bilan istalgan summaga oshira olardi — modul
+ * butunlay aylanib o'tilardi. Shuning uchun moliyaviy maydon (summa,
+ * kategoriya, turi, sana) o'zgarayotganda shu tekshiruv qo'llanadi.
+ *
+ * Xato tashlaydi (ForbiddenError):
+ *  1) yozuv rahbar tasdig'i bilan yozilgan bo'lsa — tasdiqlangan raqam
+ *     keyin o'zgartirilmaydi (faqat izoh/filial tahriri ruxsat);
+ *  2) yangi qiymatlar bo'yicha tasdiqlash qoidasi topilsa — o'zgartirish
+ *     rad etiladi, foydalanuvchi yangi chiqim sifatida yuboradi.
+ */
+export async function tahrirTasdiqniTekshir(params: {
+  modulYoqilgan: boolean;
+  businessId: string;
+  transactionId: string;
+  /** O'zgarishdan KEYINGI qiymatlar (berilmagani mavjudidan olinadi). */
+  turi: string;
+  categoryId: string;
+  summa: number;
+  sorovchiRol: string;
+}): Promise<void> {
+  const tasdiqIzi = await prisma.approvalRequest.findFirst({
+    where: { transactionId: params.transactionId },
+    select: { id: true },
+  });
+  if (tasdiqIzi) {
+    throw new ForbiddenError(
+      "Bu yozuv rahbar tasdig'i bilan yozilgan — summasi, kategoriyasi, turi va sanasini " +
+        "o'zgartirib bo'lmaydi. Kerak bo'lsa yangi chiqim yuboring, rahbar tasdiqlaydi."
+    );
+  }
+
+  if (!params.modulYoqilgan || params.turi !== "chiqim") return;
+
+  const qoida = await mosQoidaniTop({
+    businessId: params.businessId,
+    categoryId: params.categoryId,
+    summa: params.summa,
+    sorovchiRol: params.sorovchiRol,
+  });
+  if (qoida) {
+    throw new ForbiddenError(
+      "Bu summa tasdiqlash chegarasidan oshadi — yozuvni o'zgartirib bo'lmaydi. " +
+        "Yangi chiqim sifatida yuboring, rahbar tasdiqlaydi."
+    );
+  }
+}
+
+/**
  * CHIQIM KIRITISHNING YAGONA KIRISH NUQTASI (veb va bot ikkalasi uchun).
  *
  * Tasdiq kerak bo'lsa — tranzaksiya YOZILMAYDI, so'rov yaratiladi va

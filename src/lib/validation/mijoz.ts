@@ -6,7 +6,7 @@ export const createMijozSchema = z.object({
   telegram: z.string().trim().max(80).optional().nullable(),
   izoh: z.string().trim().max(500).optional().nullable(),
   /** null — chegara yo'q. 0 — umuman qarzga sotilmaydi. */
-  qarzLimit: z.number().int().min(0).max(100_000_000_000).optional().nullable(),
+  qarzLimit: z.number().int().min(0).max(2_000_000_000).optional().nullable(),
 });
 
 export const updateMijozSchema = createMijozSchema.partial();

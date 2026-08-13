@@ -8,8 +8,11 @@ import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { dashboardYangilandi } from "@/lib/cache";
 import { kunlikSinxron } from "@/lib/services/kunlik";
+import { tahrirTasdiqniTekshir } from "@/lib/services/approval";
+import { getEnabledModules } from "@/lib/modules/guard";
 
-export const PATCH = withTenant<{ params: { id: string } }>(async (request, { params }, { session: user }) => {
+export const PATCH = withTenant<{ params: { id: string } }>(async (request, { params }, tenantCtx) => {
+  const { session: user } = tenantCtx;
   const businessId = await resolveActiveBusinessId(user);
 
   const existing = await prisma.transaction.findUnique({ where: { id: params.id } });
@@ -32,6 +35,27 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
   }
 
   const data = parsed.data;
+
+  // Moliyaviy maydon (summa/kategoriya/turi/sana) o'zgarsa tasdiqlash qoidasi
+  // aylanib o'tilmasin (C-2). Izoh/filial tahriri bunga kirmaydi.
+  const moliyaviyOzgarish =
+    data.summa !== undefined ||
+    data.categoryId !== undefined ||
+    data.turi !== undefined ||
+    data.sana !== undefined;
+
+  if (moliyaviyOzgarish) {
+    const modullar = await getEnabledModules(tenantCtx);
+    await tahrirTasdiqniTekshir({
+      modulYoqilgan: modullar.has("TASDIQLASH"),
+      businessId,
+      transactionId: params.id,
+      turi: data.turi ?? existing.turi,
+      categoryId: data.categoryId ?? existing.categoryId,
+      summa: data.summa ?? existing.summa,
+      sorovchiRol: user.rol,
+    });
+  }
 
   // Kategoriya o'zgartirilsa, u ham shu biznesga tegishli bo'lishi kerak.
   if (data.categoryId !== undefined) {

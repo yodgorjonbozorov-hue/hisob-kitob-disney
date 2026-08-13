@@ -78,6 +78,24 @@ export function kunlikBugun(): string {
 }
 
 /**
+ * Sana mantiqiy chegarada ekanini tekshiradi (C-4): biznes yaratilishidan
+ * OLDINGI kunga hisobot ochib bo'lmaydi — aks holda tarixga soxta kun kiradi.
+ * Tranzaksiya ichida chaqiriladi (report yaratilishidan oldin).
+ */
+async function sanaChegarasiniTekshirTx(tx: BusinessTx, businessId: string, sanaStr: string): Promise<void> {
+  const biznes = await tx.business.findFirst({
+    where: { id: businessId },
+    select: { createdAt: true },
+  });
+  if (!biznes) throw new ForbiddenError("Biznes topilmadi");
+  // createdAt — vaqt belgisi; Toshkent kalendariga o'girib date-only solishtiramiz.
+  const boshlanish = todayTashkentDateOnlyString(biznes.createdAt);
+  if (sanaStr < boshlanish) {
+    throw new BadRequestError("Bu sana biznes ochilishidan oldin — hisobot ochib bo'lmaydi");
+  }
+}
+
+/**
  * Hisobot summalarini bazadagi tushumlardan qayta jamlaydi.
  * Tranzaksiya ICHIDA chaqiriladi — tushum yozish bilan jamlash atomik.
  */
@@ -270,9 +288,17 @@ export async function submitKunlikReport(
 ) {
   const bugun = kunlikBugun();
   if (sanaStr > bugun) throw new BadRequestError("Kelajak kunni topshirib bo'lmaydi");
+  // O'tgan kunni faqat direktor/boshqaruvchi topshiradi (C-4): oddiy xodim
+  // istalgan eski sanani yuborib tarixga soxta kun kiritishi va uni
+  // muzlatishi mumkin edi (`reportTopYokiYaratTx` yo'q kunni YARATADI).
+  const ruxsat = await getKunlikRuxsat(businessId, aktor);
+  if (sanaStr !== bugun && !ruxsat.tahrirlaydi) {
+    throw new ForbiddenError("Faqat bugungi kunni topshirish mumkin");
+  }
   const sana = dateOnlyStringToUTCDate(sanaStr);
 
   const report = await runBusinessTx(businessId, async (tx) => {
+    await sanaChegarasiniTekshirTx(tx, businessId, sanaStr);
     const r = await reportTopYokiYaratTx(tx, businessId, sana);
     await jamlashTx(tx, businessId, r.id);
     const natija = await tx.dailyReport.updateMany({
@@ -339,7 +365,9 @@ export async function confirmKunlikReport(businessId: string, aktor: KunlikAktor
   const sana = dateOnlyStringToUTCDate(sanaStr);
 
   const { report, oldingiHolat } = await runBusinessTx(businessId, async (tx) => {
-    // Tushumsiz kun ham yakunlanishi mumkin (0 so'm bilan) — report ochamiz.
+    // Tushumsiz kun ham yakunlanishi mumkin (0 so'm bilan) — report ochamiz,
+    // lekin sana biznes ochilishidan oldin bo'lmasin (soxta tarix — C-4).
+    await sanaChegarasiniTekshirTx(tx, businessId, sanaStr);
     const r = await reportTopYokiYaratTx(tx, businessId, sana);
     // SUBMITTED kunda summalar "muzlagan" — baribir qayta jamlaymiz (himoya).
     await jamlashTx(tx, businessId, r.id);

@@ -1,3 +1,10 @@
+/**
+ * Ilova kalendari — Asia/Tashkent (UTC+5, DSTsiz). Server UTC'da ishlaydi
+ * (Vercel), shuning uchun "bugun" HAR DOIM `todayTashkentDateOnlyString`
+ * orqali olinadi. UTC bo'yicha "bugun" olinsa, Toshkent vaqti 00:00–05:00
+ * oralig'ida kechagi sana chiqadi va yozuv noto'g'ri kunga tushadi (H-2).
+ */
+
 /** "YYYY-MM-DD" -> UTC-midnight Date. Server/klient timezone farqidan himoyalangan. */
 export function dateOnlyStringToUTCDate(dateStr: string): Date {
   return new Date(`${dateStr}T00:00:00.000Z`);
@@ -9,11 +16,6 @@ export function utcDateToDateOnlyString(date: Date): string {
   const m = (date.getUTCMonth() + 1).toString().padStart(2, "0");
   const d = date.getUTCDate().toString().padStart(2, "0");
   return `${y}-${m}-${d}`;
-}
-
-/** Bugungi sanani UTC-midnight "YYYY-MM-DD" ko'rinishida qaytaradi (server vaqti asosida, faqat default qiymat sifatida ishlatiladi). */
-export function todayDateOnlyString(): string {
-  return utcDateToDateOnlyString(new Date());
 }
 
 /**

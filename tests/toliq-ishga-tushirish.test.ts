@@ -155,7 +155,7 @@ async function eskiBazaniQur() {
     await c.execute({ sql: "INSERT INTO _applied_migrations (name) VALUES (?)", args: [d] });
   }
   const iso = (s: string) => new Date(s).toISOString();
-  const q = (sql: string, args: unknown[] = []) => c.execute({ sql, args });
+  const q = (sql: string, args: (string | number | null)[] = []) => c.execute({ sql, args });
   await q(
     `INSERT INTO "Tenant" ("id","name","slug","status","plan","createdAt","updatedAt")
      VALUES ('T1','Alfa','alfa','ACTIVE','PRO',?,?)`,

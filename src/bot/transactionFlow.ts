@@ -2,7 +2,7 @@ import { InlineKeyboard, type Context } from "grammy";
 import type { User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { formatSomLabel, parseSomInput, formatDateUZ } from "@/lib/format";
-import { todayDateOnlyString } from "@/lib/date";
+import { todayTashkentDateOnlyString } from "@/lib/date";
 import { chiqimYubor } from "@/lib/services/approval";
 import { isModuleOnForTenant } from "@/lib/modules/guard";
 import { getFlow, setFlow, clearFlow, type TransactionFlowState } from "./state";
@@ -139,7 +139,7 @@ export async function handleDateCallback(ctx: Context) {
   await ctx.answerCallbackQuery();
 
   if (data === "sana:bugun") {
-    await sanadanKeyin(ctx, chatId, { ...flow, sana: todayDateOnlyString() }, true);
+    await sanadanKeyin(ctx, chatId, { ...flow, sana: todayTashkentDateOnlyString() }, true);
   } else if (data === "sana:custom") {
     await setFlow(chatId, { ...flow, step: "sana_custom" });
     await ctx.editMessageText("Sanani KUN.OY.YIL formatida yozing (masalan: 15.06.2026):");

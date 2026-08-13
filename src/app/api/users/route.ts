@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { requireManager } from "@/lib/auth/guard";
 import { withTenant } from "@/lib/auth/tenant";
+import { userYaratishniTekshir } from "@/lib/auth/userPolicy";
 import { createUserSchema } from "@/lib/validation/user";
 import { hashPassword } from "@/lib/auth/password";
 
@@ -35,6 +36,12 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
   const parsed = createUserSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
+  }
+
+  // OWNER rolini faqat OWNER beradi (H-1) — qoidalar lib/auth/userPolicy.ts da.
+  const xato = userYaratishniTekshir({ aktorRol: user.rol, yangiRol: parsed.data.rol });
+  if (xato) {
+    return NextResponse.json({ error: xato.xato }, { status: xato.status });
   }
 
   // Kassir uchun biznes MAJBURIY; sotuvchi uchun IXTIYORIY (biriktirilsa — yozuvlari

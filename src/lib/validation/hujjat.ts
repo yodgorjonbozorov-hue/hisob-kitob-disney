@@ -31,7 +31,7 @@ export const createContractSchema = z.object({
   contactId: z.string().min(1).optional().nullable(),
   supplierId: z.string().min(1).optional().nullable(),
   kontragent: z.string().trim().max(150).optional().nullable(),
-  summa: z.number().int().min(0).max(100_000_000_000).default(0),
+  summa: z.number().int().min(0).max(2_000_000_000).default(0),
   boshlanish: sanaSchema,
   tugash: sanaSchema.optional().nullable(),
   eslatmaKun: z.number().int().min(0).max(365).default(30),

@@ -20,14 +20,14 @@ export const createRuleSchema = z.object({
     .number()
     .int("Chegara butun son bo'lishi kerak")
     .positive("Chegara musbat bo'lishi kerak")
-    .max(100_000_000_000),
+    .max(2_000_000_000),
   tasdiqlovchiRol: z.enum(TASDIQLOVCHI_ROLLAR).default("OWNER"),
   izoh: z.string().trim().max(300).optional().nullable(),
 });
 
 export const updateRuleSchema = z.object({
   categoryId: z.string().min(1).optional().nullable(),
-  chegara: z.number().int().positive().max(100_000_000_000).optional(),
+  chegara: z.number().int().positive().max(2_000_000_000).optional(),
   tasdiqlovchiRol: z.enum(TASDIQLOVCHI_ROLLAR).optional(),
   isActive: z.boolean().optional(),
   izoh: z.string().trim().max(300).optional().nullable(),

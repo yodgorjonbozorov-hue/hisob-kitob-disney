@@ -2,8 +2,8 @@ import { z } from "zod";
 
 export const createProductSchema = z.object({
   nomi: z.string().min(1, "Nomi kiritilishi shart").max(100),
-  kelganNarx: z.number().int().min(0).optional(),
-  sotuvNarx: z.number().int().min(0).optional(),
+  kelganNarx: z.number().int().min(0).max(2_000_000_000, "Summa juda katta").optional(),
+  sotuvNarx: z.number().int().min(0).max(2_000_000_000, "Summa juda katta").optional(),
   sku: z.string().trim().max(40).optional().nullable(),
   birlik: z.string().max(20).optional(),
   minQoldiq: z.number().int().min(0).max(1_000_000).optional(),
@@ -11,8 +11,8 @@ export const createProductSchema = z.object({
 
 export const updateProductSchema = z.object({
   nomi: z.string().min(1).max(100).optional(),
-  kelganNarx: z.number().int().min(0).optional(),
-  sotuvNarx: z.number().int().min(0).optional(),
+  kelganNarx: z.number().int().min(0).max(2_000_000_000, "Summa juda katta").optional(),
+  sotuvNarx: z.number().int().min(0).max(2_000_000_000, "Summa juda katta").optional(),
   isActive: z.boolean().optional(),
   izoh: z.string().max(500).optional().nullable(),
   avtoYil: z.number().int().min(1900).max(2100).optional().nullable(),
@@ -27,8 +27,8 @@ export const updateProductSchema = z.object({
 export const createAvtoSchema = z
   .object({
     nomi: z.string().min(1, "Model kiritilishi shart").max(100),
-    olinganNarx: z.number().int().positive("Olingan narx kiritilishi shart"),
-    sotuvNarx: z.number().int().min(0).optional(),
+    olinganNarx: z.number().int().positive("Olingan narx kiritilishi shart").max(2_000_000_000, "Summa juda katta"),
+    sotuvNarx: z.number().int().min(0).max(2_000_000_000, "Summa juda katta").optional(),
     avtoYil: z.number().int().min(1900, "Yil noto'g'ri").max(2100, "Yil noto'g'ri").optional().nullable(),
     avtoRaqam: z.string().max(20).optional().nullable(),
     avtoRang: z.string().max(30).optional().nullable(),
@@ -46,7 +46,7 @@ export const createAvtoSchema = z
 export const createProductExpenseSchema = z.object({
   productId: z.string().min(1),
   turi: z.enum(["tamirlash", "boyoq", "yuvish", "rasmiylashtirish", "ehtiyot_qism", "boshqa"]),
-  summa: z.number().int().positive("Summa musbat bo'lishi kerak"),
+  summa: z.number().int().positive("Summa musbat bo'lishi kerak").max(2_000_000_000, "Summa juda katta"),
   izoh: z.string().max(500).optional().nullable(),
   // "naqd" — darhol chiqim tranzaksiya; "qarz" — keyin to'lanadi (beriladigan qarz).
   tolovTuri: z.enum(["naqd", "qarz"]).default("naqd"),
@@ -64,7 +64,7 @@ export const bulkProductsSchema = z.object({
 export const stockEntrySchema = z.object({
   productId: z.string().min(1),
   miqdor: z.number().int().positive("Miqdor musbat bo'lishi kerak"),
-  birlikNarx: z.number().int().min(0).optional(),
+  birlikNarx: z.number().int().min(0).max(2_000_000_000, "Summa juda katta").optional(),
   izoh: z.string().max(500).optional().nullable(),
 });
 
@@ -77,7 +77,7 @@ export const createSaleSchema = z.object({
   mijozNomi: z.string().max(100).optional().nullable(),
   mijozTel: z.string().max(50).optional().nullable(),
   // Kelishilgan narx (birlik) — savdolashib belgilangan haqiqiy sotuv narxi.
-  narx: z.number().int().positive().optional().nullable(),
+  narx: z.number().int().positive().max(2_000_000_000, "Summa juda katta").optional().nullable(),
   /** Naqd sotuvda pul tushadigan kassa (naqd/Click/terminal). Berilmasa — standart kassa. */
   accountId: z.string().min(1).optional().nullable(),
   /** Sotuv sanasi. Berilmasa bugun — kechagi sotuvni ham kiritish mumkin. */
@@ -90,7 +90,7 @@ export const cancelSaleSchema = z.object({
 });
 
 export const debtPaymentSchema = z.object({
-  summa: z.number().int().positive("Summa musbat bo'lishi kerak"),
+  summa: z.number().int().positive("Summa musbat bo'lishi kerak").max(2_000_000_000, "Summa juda katta"),
 });
 
 /** Qo'lda qarzdorlik qo'shish (ikki yo'nalish). */
@@ -98,8 +98,8 @@ export const createDebtSchema = z.object({
   turi: z.enum(["olinadigan", "beriladigan"]),
   mijozNomi: z.string().min(1, "Ism kiritilishi shart").max(100),
   mijozTel: z.string().max(50).optional().nullable(),
-  jamiSumma: z.number().int().positive("Summa musbat bo'lishi kerak"),
-  tolangan: z.number().int().min(0).optional(),
+  jamiSumma: z.number().int().positive("Summa musbat bo'lishi kerak").max(2_000_000_000, "Summa juda katta"),
+  tolangan: z.number().int().min(0).max(2_000_000_000, "Summa juda katta").optional(),
   productId: z.string().optional().nullable(),
   // "YYYY-MM-DD" ko'rinishidagi muddat.
   muddat: z

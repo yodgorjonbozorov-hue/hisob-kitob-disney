@@ -3,7 +3,7 @@ import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { runBusinessTx, type BusinessTx } from "@/lib/db/businessTx";
 import { createTransactionTx } from "@/lib/services/transactionService";
 import { ensureCategoryTx } from "@/lib/services/inventory";
-import { dateOnlyStringToUTCDate, monthRangeUTC, todayDateOnlyString } from "@/lib/date";
+import { dateOnlyStringToUTCDate, monthRangeUTC, todayTashkentDateOnlyString } from "@/lib/date";
 import { logAudit } from "@/lib/services/audit";
 import { DAVOMAT_ULUSH, type DavomatHolat } from "@/lib/validation/hr";
 import type {
@@ -224,7 +224,7 @@ export async function oylikTola(params: {
   userId: string;
   sana?: string | null;
 }) {
-  const sana = params.sana ?? todayDateOnlyString();
+  const sana = params.sana ?? todayTashkentDateOnlyString();
 
   const natija = await runBusinessTx(params.businessId, async (tx) => {
     const payroll = await tx.payroll.findFirst({
@@ -280,7 +280,7 @@ export async function oylikTola(params: {
  * "to'lanadigan" raqami eskirib qolmasligi kerak.
  */
 export async function avansBer(businessId: string, userId: string, data: AvansInput) {
-  const sana = data.sana ?? todayDateOnlyString();
+  const sana = data.sana ?? todayTashkentDateOnlyString();
 
   const natija = await runBusinessTx(businessId, async (tx) => {
     const xodim = await tx.employee.findFirst({

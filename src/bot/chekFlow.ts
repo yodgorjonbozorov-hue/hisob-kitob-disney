@@ -8,7 +8,7 @@ import { aiLimitTekshir } from "@/lib/ai/limit";
 import { chiqimYubor } from "@/lib/services/approval";
 import { isModuleOnForTenant } from "@/lib/modules/guard";
 import { formatSomLabel, formatDateUZ } from "@/lib/format";
-import { todayDateOnlyString, dateOnlyStringToUTCDate } from "@/lib/date";
+import { todayTashkentDateOnlyString, dateOnlyStringToUTCDate } from "@/lib/date";
 
 /**
  * CHEK RASMI OQIMI (Faza 6.5).
@@ -158,7 +158,7 @@ export async function handleChekPhoto(ctx: Context, user: User) {
     return;
   }
 
-  const sana = natija.sana ?? todayDateOnlyString();
+  const sana = natija.sana ?? todayTashkentDateOnlyString();
   const izoh = [natija.savdoNomi, ctx.message?.caption?.trim()].filter(Boolean).join(" · ").slice(0, 300);
 
   await chekFlow.set(String(ctx.chat!.id), {

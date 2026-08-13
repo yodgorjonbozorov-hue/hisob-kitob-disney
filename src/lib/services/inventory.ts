@@ -2,10 +2,28 @@ import { prisma } from "@/lib/prisma";
 import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { createTransactionTx } from "@/lib/services/transactionService";
 import { runBusinessTx, type BusinessTx } from "@/lib/db/businessTx";
-import { todayDateOnlyString, dateOnlyStringToUTCDate } from "@/lib/date";
+import { todayTashkentDateOnlyString, dateOnlyStringToUTCDate } from "@/lib/date";
 import { isAvto } from "@/lib/biznesTuri";
 import { logAudit } from "@/lib/services/audit";
 import { qarzLimitTekshirTx } from "@/lib/services/mijoz";
+import { kunlikSinxron, type KunlikSinxronYozuv } from "@/lib/services/kunlik";
+
+/**
+ * Tranzaksiya ichida yozilgan KIRIMNI kunlik hisobotga ulaydi (C-3).
+ *
+ * MUHIM: bu funksiya `runBusinessTx` TUGAGANDAN KEYIN chaqiriladi —
+ * `kunlikSinxron` o'zi alohida `runBusinessTx` ochadi, ichma-ich tranzaksiya
+ * SQLite'da deadlock beradi. Sinxron xatosi asosiy pul yozuvini buzmaydi
+ * (`kunlikSinxron` ichida ushlanadi).
+ */
+async function kunlikkaUla(txn: KunlikSinxronYozuv | null): Promise<void> {
+  if (!txn) return;
+  const user = await prisma.user.findFirst({
+    where: { id: txn.userId },
+    select: { ism: true },
+  });
+  await kunlikSinxron(txn, user?.ism ?? null);
+}
 
 // Sotuv va qarz to'lovi uchun avtomatik ishlatiladigan kategoriyalar.
 const SOTUV_KATEGORIYA = "Sotuv";
@@ -137,8 +155,8 @@ export async function createSale(params: {
   sana?: string | null;
   userId: string;
 }) {
-  const sana = params.sana ?? todayDateOnlyString();
-  const sotuv = await runBusinessTx(params.businessId, async (tx) => {
+  const sana = params.sana ?? todayTashkentDateOnlyString();
+  const { sotuv, kirimTxn } = await runBusinessTx(params.businessId, async (tx) => {
     const product = await tx.product.findFirst({
       where: { id: params.productId, businessId: params.businessId, isActive: true },
     });
@@ -208,6 +226,7 @@ export async function createSale(params: {
       },
     });
 
+    let kirimTxn: KunlikSinxronYozuv | null = null;
     if (params.tolovTuri === "naqd") {
       // Naqd sotuv — darhol kirim tranzaksiya (kassa usuli).
       const categoryId = await ensureCategoryTx(tx, params.businessId, SOTUV_KATEGORIYA);
@@ -220,6 +239,7 @@ export async function createSale(params: {
         izoh: `${product.nomi} × ${params.miqdor}`,
       });
       await tx.sale.update({ where: { id: sale.id }, data: { transactionId: txn.id } });
+      kirimTxn = txn;
     } else {
       // Qarz — daromad yozilmaydi, qarzdorlik yaratiladi (bizga qarzdor).
       await tx.debt.create({
@@ -237,11 +257,17 @@ export async function createSale(params: {
       });
     }
 
-    return tx.sale.findUnique({
-      where: { id: sale.id },
-      include: { product: { select: { nomi: true } } },
-    });
+    return {
+      sotuv: await tx.sale.findUnique({
+        where: { id: sale.id },
+        include: { product: { select: { nomi: true } } },
+      }),
+      kirimTxn,
+    };
   });
+
+  // Naqd sotuv kunlik hisobotga tushadi (C-3) — tranzaksiya TASHQARISIDA.
+  await kunlikkaUla(kirimTxn);
 
   await logAudit({
     businessId: params.businessId,
@@ -280,7 +306,7 @@ export async function cancelSale(params: {
   const sabab = params.sabab.trim();
   if (!sabab) throw new BadRequestError("Bekor qilish sababi yozilishi shart");
 
-  const natija = await runBusinessTx(params.businessId, async (tx) => {
+  const { natija, ochirilganTxn } = await runBusinessTx(params.businessId, async (tx) => {
     const sale = await tx.sale.findFirst({
       where: { id: params.saleId, businessId: params.businessId },
     });
@@ -302,10 +328,15 @@ export async function cancelSale(params: {
     }
 
     // Naqd sotuvning kirim tranzaksiyasi — soft delete (kassadagi pul qaytadi).
+    let ochirilganTxn: KunlikSinxronYozuv | null = null;
     if (sale.transactionId) {
       await tx.transaction.updateMany({
         where: { id: sale.transactionId, businessId: params.businessId, deletedAt: null },
         data: { deletedAt: new Date() },
+      });
+      // O'chirilgandan KEYINGI holat — kunlik sinxron shu bo'yicha yozuvni chiqaradi.
+      ochirilganTxn = await tx.transaction.findFirst({
+        where: { id: sale.transactionId, businessId: params.businessId },
       });
     }
 
@@ -320,8 +351,14 @@ export async function cancelSale(params: {
       data: { deletedAt: new Date(), cancelledBy: params.userId, cancelReason: sabab },
     });
 
-    return { productId: sale.productId, miqdor: sale.miqdor, jamiSumma: sale.jamiSumma };
+    return {
+      natija: { productId: sale.productId, miqdor: sale.miqdor, jamiSumma: sale.jamiSumma },
+      ochirilganTxn,
+    };
   });
+
+  // Bekor qilingan sotuvning kirimi kunlikdan ham chiqadi (C-3) — tranzaksiya tashqarisida.
+  await kunlikkaUla(ochirilganTxn);
 
   await logAudit({
     businessId: params.businessId,
@@ -345,7 +382,7 @@ export async function recordDebtPayment(params: {
   summa: number;
   userId: string;
 }) {
-  const qarz = await runBusinessTx(params.businessId, async (tx) => {
+  const { qarz, kirimTxn } = await runBusinessTx(params.businessId, async (tx) => {
     const debt = await tx.debt.findFirst({
       where: { id: params.debtId, businessId: params.businessId },
     });
@@ -368,7 +405,7 @@ export async function recordDebtPayment(params: {
       turi: beriladigan ? "chiqim" : "kirim",
       categoryId,
       summa: params.summa,
-      sana: todayDateOnlyString(),
+      sana: todayTashkentDateOnlyString(),
       izoh: `${beriladigan ? "Qarz to'lash" : "Qarz to'lovi"}: ${debt.mijozNomi}`,
     });
 
@@ -401,8 +438,15 @@ export async function recordDebtPayment(params: {
       throw new BadRequestError("Qarz holati o'zgardi — sahifani yangilab qayta urinib ko'ring");
     }
 
-    return tx.debt.findUniqueOrThrow({ where: { id: debt.id } });
+    return {
+      qarz: await tx.debt.findUniqueOrThrow({ where: { id: debt.id } }),
+      // Faqat KIRIM (olinadigan qarz to'lovi) kunlikka tushadi — chiqim kuzatilmaydi.
+      kirimTxn: beriladigan ? null : txn,
+    };
   });
+
+  // Qarz to'lovi (kirim) kunlik hisobotga tushadi (C-3) — tranzaksiya tashqarisida.
+  await kunlikkaUla(kirimTxn);
 
   await logAudit({
     businessId: params.businessId,
@@ -548,7 +592,7 @@ export async function createAvtoMashina(params: {
         turi: "chiqim",
         categoryId,
         summa: params.olinganNarx,
-        sana: todayDateOnlyString(),
+        sana: todayTashkentDateOnlyString(),
         izoh: `Mashina xaridi: ${belgi}`,
       });
     } else {
@@ -636,7 +680,7 @@ export async function addProductExpense(params: {
         turi: "chiqim",
         categoryId,
         summa: params.summa,
-        sana: todayDateOnlyString(),
+        sana: todayTashkentDateOnlyString(),
         izoh: `${turiNomi}: ${belgi}${izoh ? ` — ${izoh}` : ""}`,
       });
       transactionId = txn.id;

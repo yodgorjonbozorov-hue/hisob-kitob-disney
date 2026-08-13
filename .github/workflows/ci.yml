@@ -1,0 +1,37 @@
+# CI (H-11): har push/PR da typecheck + barcha testlar.
+# Ilgari 4 workflow ham faqat qo'lda (workflow_dispatch) ishga tushardi —
+# 42 test fayli hech qachon avtomatik ishlamas va regressiyani ushlamas edi.
+#
+# Sekret kerak emas: har test fayli o'z DATABASE_URL'ini
+# (file:./prisma/test-*.db) o'zi belgilaydi.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # postinstall ham `prisma generate` chaqiradi, lekin bosqich aniq
+      # ko'rinib turishi uchun alohida qadam qilib qo'yilgan.
+      - name: O'rnatish
+        run: npm ci
+
+      - name: Prisma client
+        run: npx prisma generate
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Testlar
+        run: npm test

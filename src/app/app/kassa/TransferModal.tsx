@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { parseSomInput, formatMoney } from "@/lib/format";
-import { todayDateOnlyString } from "@/lib/date";
+import { todayTashkentDateOnlyString } from "@/lib/date";
 import type { AccountQoldiq } from "@/lib/queries/accounts";
 
 /**
@@ -23,7 +23,7 @@ export function TransferModal({
   const [fromAccountId, setFrom] = useState(kassalar[0]?.id ?? "");
   const [toAccountId, setTo] = useState(kassalar[1]?.id ?? "");
   const [summaMatn, setSummaMatn] = useState("");
-  const [sana, setSana] = useState(todayDateOnlyString());
+  const [sana, setSana] = useState(todayTashkentDateOnlyString());
   const [izoh, setIzoh] = useState("");
   const [loading, setLoading] = useState(false);
   const [xato, setXato] = useState<string | null>(null);

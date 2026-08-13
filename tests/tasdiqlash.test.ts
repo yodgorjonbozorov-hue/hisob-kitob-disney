@@ -366,3 +366,78 @@ test("begona tenant so'rov va qoidalarni ko'rmaydi", async () => {
   const qoidalar = await runWithTenant(t2.tenant.id, async () => queries.listRules(t2.business.id));
   assert.equal(qoidalar.length, 0);
 });
+
+// ---------- PATCH orqali aylanib o'tish yopilgan (C-2) ----------
+
+test("PATCH: chegaradan past chiqim keyin katta summaga oshirilmaydi", async () => {
+  // Kassir 50 000 yozadi (ijara qoidasi chegarasi 100 000 — tasdiqsiz o'tadi).
+  const natija = await chiqim(kassir, 50_000, katIjara.id);
+  assert.equal(natija.tasdiqKerak, false);
+  const txnId = natija.transaction.id;
+
+  // Endi PATCH bilan 5 000 000 ga oshirmoqchi — rad etilishi shart.
+  await assert.rejects(
+    () => T(async () =>
+      approval.tahrirTasdiqniTekshir({
+        modulYoqilgan: true,
+        businessId: t.business.id,
+        transactionId: txnId,
+        turi: "chiqim",
+        categoryId: katIjara.id,
+        summa: 5_000_000,
+        sorovchiRol: "CASHIER",
+      })
+    ),
+    /chegarasidan oshadi/
+  );
+
+  // Boshqaruvchi (OWNER — qoida darajasidan past emas) uchun oldingidek ishlaydi.
+  await T(async () =>
+    approval.tahrirTasdiqniTekshir({
+      modulYoqilgan: true,
+      businessId: t.business.id,
+      transactionId: txnId,
+      turi: "chiqim",
+      categoryId: katIjara.id,
+      summa: 5_000_000,
+      sorovchiRol: "OWNER",
+    })
+  );
+
+  // Modul yoqilmagan bo'lsa qoida tekshirilmaydi (yaratishdagi bilan izchil).
+  await T(async () =>
+    approval.tahrirTasdiqniTekshir({
+      modulYoqilgan: false,
+      businessId: t.business.id,
+      transactionId: txnId,
+      turi: "chiqim",
+      categoryId: katIjara.id,
+      summa: 5_000_000,
+      sorovchiRol: "CASHIER",
+    })
+  );
+});
+
+test("PATCH: tasdiqdan o'tgan yozuvning summasi umuman o'zgartirilmaydi", async () => {
+  // Oldingi testlarda tasdiqlangan so'rov bor (2 000 000, transactionId bog'langan).
+  const tasdiqlangan = await rawPrisma.approvalRequest.findFirst({
+    where: { businessId: t.business.id, holat: "tasdiqlangan", transactionId: { not: null } },
+  });
+  assert.ok(tasdiqlangan, "tasdiqlangan so'rov bo'lishi kerak");
+
+  // Hatto OWNER ham, hatto KICHIK summaga ham — tasdiqlangan raqam qotgan.
+  await assert.rejects(
+    () => T(async () =>
+      approval.tahrirTasdiqniTekshir({
+        modulYoqilgan: true,
+        businessId: t.business.id,
+        transactionId: tasdiqlangan.transactionId,
+        turi: "chiqim",
+        categoryId: katChiqim.id,
+        summa: 1_000,
+        sorovchiRol: "OWNER",
+      })
+    ),
+    /rahbar tasdig'i bilan yozilgan/
+  );
+});

@@ -7,7 +7,7 @@ import { CategoryBars } from "@/components/charts/CategoryBars";
 import { TrendChart } from "@/components/charts/TrendChart";
 import { DailyDynamicsChart } from "@/components/charts/DailyDynamicsChart";
 import { formatMoneyCompact } from "@/lib/format";
-import { currentMonthString, todayDateOnlyString } from "@/lib/date";
+import { currentMonthString, todayTashkentDateOnlyString } from "@/lib/date";
 import { requireTenantPage } from "@/lib/auth/tenant";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { isManager } from "@/lib/auth/roles";
@@ -47,7 +47,7 @@ export default async function DashboardPage({
         </div>
       );
     }
-    const today = todayDateOnlyString();
+    const today = todayTashkentDateOnlyString();
     // Kassir/sotuvchi ekrani — bugungi jami ham, lenta ham faqat o'z yozuvlaridan.
     const scopeUserId = transactionScopeUserId(session);
     const [bugun, recentRes] = await Promise.all([

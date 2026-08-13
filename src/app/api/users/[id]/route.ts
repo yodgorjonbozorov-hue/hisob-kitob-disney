@@ -2,8 +2,11 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireManager } from "@/lib/auth/guard";
 import { withTenant } from "@/lib/auth/tenant";
+import { normalizeRol } from "@/lib/auth/roles";
+import { userTahririniTekshir, userOchirishniTekshir } from "@/lib/auth/userPolicy";
 import { updateUserSchema } from "@/lib/validation/user";
 import { hashPassword } from "@/lib/auth/password";
+import { logAudit } from "@/lib/services/audit";
 
 const USER_SELECT = {
   id: true,
@@ -27,13 +30,26 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
 
   const existing = await prisma.user.findUnique({
     where: { id: params.id },
-    select: { rol: true, businessId: true },
+    select: { rol: true, businessId: true, isActive: true },
   });
   if (!existing) {
     return NextResponse.json({ error: "Foydalanuvchi topilmadi" }, { status: 404 });
   }
 
   const { parol, businessId, rol, ...rest } = parsed.data;
+  const ozini = params.id === user.userId;
+
+  // Rol/parol chegaralari (H-1) — qoidalar lib/auth/userPolicy.ts da.
+  const xato = userTahririniTekshir({
+    aktor: { userId: user.userId, rol: user.rol },
+    target: { id: params.id, rol: normalizeRol(existing.rol), isActive: existing.isActive },
+    ozgarish: { rol, isActive: rest.isActive },
+    faolOwnerSoni: await prisma.user.count({ where: { rol: "OWNER", isActive: true } }),
+  });
+  if (xato) {
+    return NextResponse.json({ error: xato.xato }, { status: xato.status });
+  }
+
   const effectiveRol = rol ?? existing.rol;
 
   // Biznesni rol asosida hal qilamiz:
@@ -65,10 +81,25 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
       ...rest,
       ...(rol !== undefined ? { rol } : {}),
       ...businessIdData,
-      ...(parol ? { parolHash: await hashPassword(parol) } : {}),
+      // Boshqa foydalanuvchi parolini almashtirish — haqiqiy ehtiyoj (xodim
+      // parolni unutdi), LEKIN egasi keyingi kirishda O'ZI yangisini qo'yadi:
+      // rahbar bilgan parol doimiy parol bo'lib qolmasin.
+      ...(parol
+        ? { parolHash: await hashPassword(parol), ...(ozini ? {} : { mustChangePassword: true }) }
+        : {}),
     },
     select: USER_SELECT,
   });
+
+  if (parol && !ozini) {
+    // Parol tiklangani auditda aniq iz qoldiradi (qiymatsiz — parol yozilmaydi).
+    await logAudit({
+      action: "update",
+      entity: "user",
+      entityId: params.id,
+      after: { action: "password_reset" },
+    });
+  }
 
   return NextResponse.json(updated);
 });
@@ -82,12 +113,21 @@ export const DELETE = withTenant<{ params: { id: string } }>(async (request, { p
   requireManager(user.rol);
   const id = params.id;
 
-  if (id === user.userId) {
-    return NextResponse.json({ error: "O'zingizni o'chira olmaysiz" }, { status: 400 });
-  }
-
-  const target = await prisma.user.findUnique({ where: { id }, select: { id: true, ism: true, login: true } });
+  const target = await prisma.user.findUnique({
+    where: { id },
+    select: { id: true, ism: true, login: true, rol: true, isActive: true },
+  });
   if (!target) return NextResponse.json({ error: "Foydalanuvchi topilmadi" }, { status: 404 });
+
+  // PATCH dagi bilan bir xil qoidalar (H-1) — lib/auth/userPolicy.ts.
+  const xato = userOchirishniTekshir({
+    aktor: { userId: user.userId, rol: user.rol },
+    target: { id: target.id, rol: normalizeRol(target.rol), isActive: target.isActive },
+    faolOwnerSoni: await prisma.user.count({ where: { rol: "OWNER", isActive: true } }),
+  });
+  if (xato) {
+    return NextResponse.json({ error: xato.xato }, { status: xato.status });
+  }
 
   const txCount = await prisma.transaction.count({ where: { userId: id } });
   if (txCount > 0) {

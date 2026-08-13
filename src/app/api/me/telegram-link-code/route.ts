@@ -26,6 +26,14 @@ export async function POST() {
     const user = await getCurrentUser();
     if (!user) throw new UnauthorizedError();
 
+    // Sessiya cookie'si 7 kun yashaydi — nofaollashtirilgan xodim bog'lash
+    // kodi olmasligi uchun faollik bazadan tekshiriladi (C-1 bilan bir qoidada).
+    const joriy = await prisma.user.findUnique({
+      where: { id: user.userId },
+      select: { isActive: true },
+    });
+    if (!joriy?.isActive) throw new UnauthorizedError();
+
     // Kod so'rashni cheklaymiz — cheksiz yangi kod olish urinishlar oynasini
     // qayta-qayta tiklab, taxmin qilish imkoniyatini oshirardi.
     const rl = await rateLimit(`tglink:${user.userId}`, KOD_LIMIT, KOD_OYNA_MS);

@@ -31,7 +31,7 @@ const summaSchema = z
   .number({ invalid_type_error: "Summa raqam bo'lishi kerak" })
   .int("Summa butun son bo'lishi kerak (so'm)")
   .positive("Summa 0 dan katta bo'lishi kerak")
-  .max(100_000_000_000, "Summa juda katta");
+  .max(2_000_000_000, "Summa juda katta");
 
 export const createKunlikTushumSchema = z.object({
   summa: summaSchema,
@@ -67,7 +67,7 @@ export const kunlikTopshirishSchema = z.object({
     .number({ invalid_type_error: "Sanalgan naqd raqam bo'lishi kerak" })
     .int("Sanalgan naqd butun son bo'lishi kerak (so'm)")
     .min(0, "Sanalgan naqd manfiy bo'lmaydi")
-    .max(100_000_000_000, "Summa juda katta"),
+    .max(2_000_000_000, "Summa juda katta"),
 });
 export type KunlikTopshirishInput = z.infer<typeof kunlikTopshirishSchema>;
 

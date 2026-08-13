@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { redirect } from "next/navigation";
 import { getCurrentUser, requireUser, type SessionData } from "./session";
 import { handleApiError, UnauthorizedError, ForbiddenError } from "./guard";
+import { normalizeRol } from "./roles";
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { computeAccess, type Access } from "@/lib/billing/access";
@@ -53,32 +54,42 @@ const tenantByIdCached = requestCache(async (tenantId: string): Promise<TenantIn
   })
 );
 
-const userTenantIdCached = requestCache(async (userId: string) =>
+const userByIdCached = requestCache(async (userId: string) =>
   rawPrisma.user.findUnique({
     where: { id: userId },
-    select: { tenantId: true, isActive: true },
+    select: { ism: true, rol: true, tenantId: true, businessId: true, isActive: true },
   })
 );
 
 /**
- * Sessiyadan tenantni yuklaydi. Eski (migratsiyagacha ochilgan) sessiyalarda
- * tenantId bo'lmaydi — bazadan o'qiladi (fail-closed: topilmasa null).
+ * Kontekst HAR so'rovda foydalanuvchini BAZADAN qayta o'qib quriladi (C-1).
+ *
+ * Sessiya cookie'si 7 kun yashaydi — undagi `rol`, `businessId`, `isActive`
+ * eskirgan bo'lishi mumkin (xodim bo'shatilgan, rol tushirilgan, biznesga
+ * biriktirilgan). Shuning uchun cookie faqat KIMLIGINI aytadi (userId);
+ * huquqlar esa bazadagi joriy holatdan olinadi. Fail-closed: foydalanuvchi
+ * topilmasa yoki nofaol bo'lsa — kontekst yo'q (401/403 yoki /login).
+ *
+ * Impersonatsiya buzilmaydi: sessiya allaqachon maqsad foydalanuvchiga
+ * yozilgan (userId = tenant direktori), `impersonatedBy` esa saqlanadi.
  */
-async function loadTenant(session: Required<SessionData>): Promise<TenantInfo | null> {
-  let tenantId = session.tenantId ?? null;
-  if (!tenantId) {
-    const user = await userTenantIdCached(session.userId);
-    if (!user || !user.isActive) return null;
-    tenantId = user.tenantId;
-  }
-  if (!tenantId) return null;
-  return tenantByIdCached(tenantId);
-}
-
-async function buildContext(session: Required<SessionData>): Promise<TenantContext | null> {
-  const tenant = await loadTenant(session);
+export async function buildContext(session: Required<SessionData>): Promise<TenantContext | null> {
+  const user = await userByIdCached(session.userId);
+  if (!user || !user.isActive) return null;
+  const rol = normalizeRol(user.rol);
+  // SUPERADMIN (tenantsiz) oddiy tenant kontekstiga ega emas — unga alohida panel.
+  if (rol === "SUPERADMIN" || !user.tenantId) return null;
+  const tenant = await tenantByIdCached(user.tenantId);
   if (!tenant) return null;
-  return { session, tenantId: tenant.id, tenant, access: computeAccess(tenant) };
+  // Sessiyadagi eskirgan qiymatlar BAZADAGI qiymatlar bilan almashtiriladi.
+  const yangiSession: Required<SessionData> = {
+    ...session,
+    ism: user.ism,
+    rol,
+    tenantId: user.tenantId,
+    businessId: user.businessId ?? null,
+  };
+  return { session: yangiSession, tenantId: tenant.id, tenant, access: computeAccess(tenant) };
 }
 
 /** API route'lar uchun: sessiya + tenant bo'lishi shart, aks holda 401/403 xato. STATUS TEKSHIRMAYDI. */

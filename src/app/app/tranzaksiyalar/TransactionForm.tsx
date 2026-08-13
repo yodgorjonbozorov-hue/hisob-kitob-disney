@@ -2,7 +2,7 @@
 
 import { useState, useMemo, FormEvent } from "react";
 import { formatSom, parseSomInput } from "@/lib/format";
-import { todayDateOnlyString } from "@/lib/date";
+import { todayTashkentDateOnlyString } from "@/lib/date";
 import { Button } from "@/components/ui/Button";
 import type { TransactionDTO } from "@/lib/queries/transactions";
 
@@ -30,7 +30,7 @@ export function TransactionForm({
   const [turi, setTuri] = useState<"kirim" | "chiqim">("kirim");
   const [categoryId, setCategoryId] = useState("");
   const [summaText, setSummaText] = useState("");
-  const [sana, setSana] = useState(todayDateOnlyString());
+  const [sana, setSana] = useState(todayTashkentDateOnlyString());
   const [izoh, setIzoh] = useState("");
   const [accountId, setAccountId] = useState("");
   const [loading, setLoading] = useState(false);

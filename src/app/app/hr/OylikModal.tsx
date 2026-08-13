@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Money } from "@/components/ui/Money";
-import { todayDateOnlyString } from "@/lib/date";
+import { todayTashkentDateOnlyString } from "@/lib/date";
 import type { OylikDTO } from "@/lib/queries/hr";
 
 /** Oylikni hisoblash (ustama va ushlab qolish bilan) — pul yozuvi yozilmaydi. */
@@ -162,7 +162,7 @@ export function AvansModal({
   onDone: () => void;
 }) {
   const [summa, setSumma] = useState("");
-  const [sana, setSana] = useState(todayDateOnlyString());
+  const [sana, setSana] = useState(todayTashkentDateOnlyString());
   const [izoh, setIzoh] = useState("");
   const [loading, setLoading] = useState(false);
   const [xato, setXato] = useState<string | null>(null);

@@ -8,7 +8,7 @@ import { isAvto, omborMatn } from "@/lib/biznesTuri";
 import type { ProductKassirDTO, SaleDTO } from "@/lib/queries/inventory";
 import type { MijozDTO } from "@/lib/queries/mijoz";
 import type { AccountDTO } from "@/lib/queries/accounts";
-import { todayDateOnlyString } from "@/lib/date";
+import { todayTashkentDateOnlyString } from "@/lib/date";
 
 /**
  * Yangi sotuv formasi. Narx siyosati:
@@ -51,7 +51,7 @@ export function SotuvForm({
   const [ok, setOk] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   // Orqaga sana bilan sotuv kiritish (B-5): kechagi sotuv kechagi hisobotga tushsin.
-  const [sana, setSana] = useState(todayDateOnlyString());
+  const [sana, setSana] = useState(todayTashkentDateOnlyString());
 
   const selected = useMemo(() => products.find((p) => p.id === productId), [products, productId]);
   const qty = avto ? 1 : parseSomInput(miqdor);

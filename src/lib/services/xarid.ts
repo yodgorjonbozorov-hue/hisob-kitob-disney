@@ -3,7 +3,7 @@ import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { runBusinessTx, type BusinessTx } from "@/lib/db/businessTx";
 import { createTransactionTx } from "@/lib/services/transactionService";
 import { ensureCategoryTx } from "@/lib/services/inventory";
-import { dateOnlyStringToUTCDate, todayDateOnlyString } from "@/lib/date";
+import { dateOnlyStringToUTCDate, todayTashkentDateOnlyString } from "@/lib/date";
 import { logAudit } from "@/lib/services/audit";
 import type {
   CreateOrderInput,
@@ -189,7 +189,7 @@ export async function qabulQilish(params: {
   userId: string;
   qabulSana?: string | null;
 }) {
-  const sana = params.qabulSana ?? todayDateOnlyString();
+  const sana = params.qabulSana ?? todayTashkentDateOnlyString();
 
   const natija = await runBusinessTx(params.businessId, async (tx) => {
     const order = await tx.purchaseOrder.findFirst({

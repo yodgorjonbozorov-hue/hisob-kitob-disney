@@ -72,6 +72,13 @@ before(async () => {
     parol: "parol12345",
   });
 
+  // Sana chegarasi guard'i (C-4) biznes yaratilishidan oldingi kunni rad etadi.
+  // Testlar esa o'tgan sanalar bilan ishlaydi — biznes "eski" qilib belgilanadi.
+  await rawPrisma.business.updateMany({
+    where: { id: { in: [tA.business.id, tB.business.id] } },
+    data: { createdAt: new Date("2020-01-01T00:00:00.000Z") },
+  });
+
   // Kassir — keyinchalik direktor etib tayinlanadi (rol emas, tayinlov muhim).
   kassir = await rawPrisma.user.create({
     data: {
@@ -649,4 +656,163 @@ test("tushum va tasdiqlash audit jurnaliga tushadi", async () => {
   assert.ok(loglar.some((l: any) => l.entity === "dailyTransaction" && l.action === "delete"));
   assert.ok(loglar.some((l: any) => l.entity === "dailyReport" && l.action === "update"));
   assert.ok(loglar.some((l: any) => l.entity === "dailyReportSetting"));
+});
+
+// ---------- Topshirish sana guard'i (C-4) ----------
+
+test("oddiy xodim o'tgan kunni topshira olmaydi — faqat bugunni", async () => {
+  const kecha = date.utcDateToDateOnlyString(
+    new Date(date.dateOnlyStringToUTCDate(bugun).getTime() - 24 * 60 * 60 * 1000)
+  );
+  // Direktor etib tayinlanmagan oddiy xodim (SELLER).
+  const xodim = { userId: "oddiy-xodim", ism: "Xodim", rol: "SELLER" as const };
+  await assert.rejects(
+    () => A(() => kunlikSvc.submitKunlikReport(tA.business.id, xodim, kecha, 0)),
+    /bugungi kunni topshirish/i
+  );
+
+  // Direktor (tayinlangan) uchun o'tgan kunni topshirish ishlaydi —
+  // 3 kun oldingi OPEN hisobot (oldingi testda yaratilgan) topshiriladi.
+  const uchKunOldin = date.utcDateToDateOnlyString(
+    new Date(date.dateOnlyStringToUTCDate(bugun).getTime() - 3 * 24 * 60 * 60 * 1000)
+  );
+  const r = await A(() => kunlikSvc.submitKunlikReport(tA.business.id, kassirAktor(), uchKunOldin, 0));
+  assert.equal(r.holat, "SUBMITTED");
+});
+
+test("biznes ochilishidan oldingi kunga hisobot ochilmaydi (soxta tarix)", async () => {
+  // Biznes createdAt testda 2020-01-01 — undan oldingi sana rad etiladi.
+  await assert.rejects(
+    () => A(() => kunlikSvc.submitKunlikReport(tA.business.id, egaAktor(), "2019-12-31", 0)),
+    /biznes ochilishidan oldin/i
+  );
+  await assert.rejects(
+    () => A(() => kunlikSvc.confirmKunlikReport(tA.business.id, kassirAktor(), "2019-12-31")),
+    /biznes ochilishidan oldin/i
+  );
+});
+
+// ---------- Sotuv va qarz to'lovi kunlikka tushadi (C-3) ----------
+
+test("naqd sotuv kunlik naqdiga tushadi; bekor qilinsa chiqadi", async () => {
+  const inventory = await import("@/lib/services/inventory");
+
+  // Bugun oldingi testlarda CONFIRMED bo'lgan — qayta ochamiz.
+  await A(() => kunlikSvc.reopenKunlikReport(tA.business.id, egaAktor(), bugun));
+  const r0 = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+
+  const product = await rawPrisma.product.create({
+    data: {
+      businessId: tA.business.id,
+      nomi: "Guldasta",
+      kelganNarx: 50_000,
+      sotuvNarx: 100_000,
+      miqdor: 10,
+    },
+  });
+
+  const sotuv = await A(() =>
+    inventory.createSale({
+      businessId: tA.business.id,
+      productId: product.id,
+      miqdor: 2,
+      tolovTuri: "naqd",
+      userId: kassir.id,
+    })
+  );
+  assert.ok(sotuv.transactionId, "naqd sotuv kirim tranzaksiya yozadi");
+
+  let r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  assert.equal(r.naqdSumma, r0.naqdSumma + 200_000, "sotuv kunlik naqdiga tushishi kerak");
+  const ulangan = r.items.find((i: any) => i.yozuvdan && i.summa === 200_000);
+  assert.ok(ulangan, "tushum 'Yozuvlardan' belgisi bilan ko'rinadi");
+
+  // Sotuv bekor qilinsa — kunlikdan ham chiqadi va jami qayta hisoblanadi.
+  await A(() =>
+    inventory.cancelSale({
+      businessId: tA.business.id,
+      saleId: sotuv.id,
+      sabab: "Xato kiritildi",
+      userId: tA.user.id,
+    })
+  );
+  r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  assert.equal(r.naqdSumma, r0.naqdSumma, "bekor qilingan sotuv kunlikdan chiqishi kerak");
+  assert.equal(r.jamiSumma, r0.jamiSumma);
+});
+
+test("qarz to'lovi (olinadigan, naqd kirim) kunlik naqdiga tushadi", async () => {
+  const inventory = await import("@/lib/services/inventory");
+  const r0 = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+
+  const qarz = await A(() =>
+    inventory.createDebt({
+      businessId: tA.business.id,
+      turi: "olinadigan",
+      mijozNomi: "Qarzdor mijoz",
+      jamiSumma: 300_000,
+      userId: kassir.id,
+    })
+  );
+  await A(() =>
+    inventory.recordDebtPayment({
+      businessId: tA.business.id,
+      debtId: qarz.id,
+      summa: 120_000,
+      userId: kassir.id,
+    })
+  );
+
+  const r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  assert.equal(r.naqdSumma, r0.naqdSumma + 120_000, "qarz to'lovi kunlik naqdiga tushishi kerak");
+});
+
+test("CSV import: bugungi kirim kunlikka tushadi, tarixiy qator tushmaydi", async () => {
+  const csv = await import("@/lib/services/csvImport");
+  const r0 = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+
+  const yozildi = await A(() =>
+    csv.csvniYoz({
+      businessId: tA.business.id,
+      userId: tA.user.id,
+      qatorlar: [
+        { qator: 1, sana: bugun, turi: "kirim", kategoriya: "CSV kirim", summa: 55_000, izoh: null },
+        { qator: 2, sana: "2026-01-05", turi: "kirim", kategoriya: "CSV kirim", summa: 44_000, izoh: null },
+      ],
+    })
+  );
+  assert.equal(yozildi, 2);
+
+  const r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  assert.equal(r.naqdSumma, r0.naqdSumma + 55_000, "faqat bugungi qator kunlikka tushadi");
+});
+
+test("yopiq kunda sotuv baribir yoziladi, kunlikka tegilmaydi", async () => {
+  const inventory = await import("@/lib/services/inventory");
+  await A(() => kunlikSvc.confirmKunlikReport(tA.business.id, kassirAktor(), bugun));
+  const r0 = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+
+  const product = await rawPrisma.product.create({
+    data: {
+      businessId: tA.business.id,
+      nomi: "Yopiq kun guli",
+      kelganNarx: 10_000,
+      sotuvNarx: 30_000,
+      miqdor: 5,
+    },
+  });
+  const sotuv = await A(() =>
+    inventory.createSale({
+      businessId: tA.business.id,
+      productId: product.id,
+      miqdor: 1,
+      tolovTuri: "naqd",
+      userId: kassir.id,
+    })
+  );
+  assert.ok(sotuv.transactionId, "sotuv va kirim baribir yoziladi");
+
+  const r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  assert.equal(r.jamiSumma, r0.jamiSumma, "yopilgan kun o'zgarmasin");
+  assert.equal(r.items.length, r0.items.length);
 });

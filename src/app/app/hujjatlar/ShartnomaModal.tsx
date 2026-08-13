@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { todayDateOnlyString } from "@/lib/date";
+import { todayTashkentDateOnlyString } from "@/lib/date";
 import {
   SHARTNOMA_TURLARI,
   SHARTNOMA_TURI_NOMI,
@@ -35,7 +35,7 @@ export function ShartnomaModal({
   const [kontragent, setKontragent] = useState(tahrir ? shartnoma!.kontragentNomi ?? "" : "");
   const [summa, setSumma] = useState(shartnoma ? String(shartnoma.summa) : "");
   const [boshlanish, setBoshlanish] = useState(
-    shartnoma ? shartnoma.boshlanish.slice(0, 10) : todayDateOnlyString()
+    shartnoma ? shartnoma.boshlanish.slice(0, 10) : todayTashkentDateOnlyString()
   );
   const [tugash, setTugash] = useState(shartnoma?.tugash ? shartnoma.tugash.slice(0, 10) : "");
   const [eslatmaKun, setEslatmaKun] = useState(String(shartnoma?.eslatmaKun ?? 30));
