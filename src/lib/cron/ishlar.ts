@@ -41,8 +41,12 @@ export async function tenantlarBoylab(
     } catch (error) {
       xato++;
       console.error(`${nom} xatosi (tenant: ${tenant.name}):`, error);
+      const { xatoniYubor } = await import("@/lib/monitoring/xabar");
+      await xatoniYubor(error, `cron:${nom}`, { tenant: tenant.name });
     }
   }
+  // Tuzilgan (structured) natija — log agregatorlarida qidiriladi (TASK 3.3).
+  console.log(JSON.stringify({ cron: nom, tenantlar: tenants.length, jami, xato }));
   return { jami, xato };
 }
 
@@ -51,7 +55,11 @@ async function xavfsiz<T>(nom: string, fn: () => Promise<T>, zaxira: T): Promise
   try {
     return await fn();
   } catch (error) {
+    // Cron xatolari foydalanuvchi ko'zidan yiroqda — monitoring'siz ular
+    // production'da butunlay yo'qolardi (TASK 3.3).
     console.error(`${nom} xatosi:`, error);
+    const { xatoniYubor } = await import("@/lib/monitoring/xabar");
+    await xatoniYubor(error, `cron:${nom}`);
     return zaxira;
   }
 }
@@ -73,11 +81,14 @@ export async function zaxiraIshi(opts: { faqatZaxira?: boolean } = {}) {
 
   const { cleanupOldConversations } = await import("@/bot/conversationStore");
   const { cleanupRateLimits } = await import("@/lib/rateLimit");
+  const { auditArxivla } = await import("@/lib/cron/auditArxiv");
 
   const suhbat = await xavfsiz("Bot suhbatlarini tozalash", () => cleanupOldConversations(), 0);
   const rateLimit = await xavfsiz("Rate limit tozalash", () => cleanupRateLimits(), 0);
+  // M-6: 12 oydan eski audit yozuvlari arxiv jadvalga ko'chadi (o'chirilmaydi).
+  const auditArxiv = await xavfsiz("Audit arxivlash", () => auditArxivla(), 0);
 
-  return { zaxira: zaxira.holat, suhbat, rateLimit };
+  return { zaxira: zaxira.holat, suhbat, rateLimit, auditArxiv };
 }
 
 // ---------------------------------------------------------------------------

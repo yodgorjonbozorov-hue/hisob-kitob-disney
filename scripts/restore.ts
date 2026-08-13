@@ -14,8 +14,10 @@
  */
 import "dotenv/config";
 import { readFileSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { restoreDump, jamiYozuvlar, type Zaxira } from "@/lib/backup/dump";
+import { deshifrla, shifrlanganmi } from "@/lib/backup/shifr";
 
 async function main() {
   const args = process.argv.slice(2);
@@ -32,7 +34,20 @@ async function main() {
     process.exit(1);
   }
 
-  const zaxira: Zaxira = JSON.parse(readFileSync(yol, "utf8"));
+  // Fayl formati avtomatik aniqlanadi: .enc (AES-256-GCM, BACKUP_ENCRYPTION_KEY
+  // kerak) -> .gz -> ochiq JSON. Shifrlangan faylga kalit bo'lmasa aniq xato.
+  let mazmun: Buffer = readFileSync(yol);
+  if (shifrlanganmi(mazmun)) {
+    if (!process.env.BACKUP_ENCRYPTION_KEY) {
+      console.error("XATO: fayl shifrlangan — BACKUP_ENCRYPTION_KEY env kerak.");
+      process.exit(1);
+    }
+    mazmun = deshifrla(mazmun);
+  }
+  if (mazmun[0] === 0x1f && mazmun[1] === 0x8b) {
+    mazmun = gunzipSync(mazmun);
+  }
+  const zaxira: Zaxira = JSON.parse(mazmun.toString("utf8"));
   const maqsad = process.env.DATABASE_URL ?? "(DATABASE_URL yo'q)";
 
   console.log(`Fayl:   ${yol} (${zaxira.createdAt}, ${jamiYozuvlar(zaxira)} yozuv)`);

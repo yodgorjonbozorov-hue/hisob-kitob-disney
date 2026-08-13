@@ -33,5 +33,10 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      # Hozircha ogohlantirishlar cheklanmagan (--max-warnings yo'q) —
+      # xatolar esa (masalan, unutilgan await) build'ni qizil qiladi.
+      - name: Lint
+        run: npm run lint
+
       - name: Testlar
         run: npm test

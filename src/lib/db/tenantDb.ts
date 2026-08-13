@@ -48,6 +48,9 @@ export const TIZIM_MODELLAR: Record<string, string> = {
   // (businessId + userId) bilan o'qiladi; businessId egaligi withTenant'da
   // yuqorida tekshiriladi. Scoped client orqali umuman ishlatilmaydi.
   AiConversation: "faqat rawPrisma va (businessId, userId) kompozit kaliti bilan o'qiladi",
+  // 12 oydan eski audit yozuvlari (M-6). Faqat cron rawPrisma bilan yozadi;
+  // tenant kodidan umuman o'qilmaydi (kerak bo'lsa eksport orqali).
+  AuditLogArxiv: "audit arxivi — faqat cron (rawPrisma) yozadi, tenant kodi ishlatmaydi",
 };
 
 const BUSINESS_SCOPED = new Set([

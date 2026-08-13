@@ -370,6 +370,29 @@ model AuditLog {
   @@index([createdAt])
 }
 
+/// AUDIT ARXIVI (M-6): `AuditLog` cheksiz o'sardi. Cron 12 oydan eski
+/// yozuvlarni shu jadvalga KO'CHIRADI (o'chirmaydi — moliyaviy audit uchun
+/// tarix saqlanadi, odatda 5 yil). Ustunlar AuditLog bilan bir xil; FK yo'q —
+/// arxiv mustaqil yashaydi (biznes o'chsa ham yozuv qoladi).
+model AuditLogArxiv {
+  id             String   @id
+  tenantId       String?
+  businessId     String?
+  userId         String?
+  userIsm        String?
+  impersonatedBy String?
+  action         String
+  entity         String
+  entityId       String
+  before         String?
+  after          String?
+  ip             String?
+  createdAt      DateTime
+  arxivlanganAt  DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+}
+
 /// Kassir kun yakuni — kutilgan naqd (kirim) vs sanalgan naqd, farq.
 model ShiftClose {
   id           String   @id @default(cuid())

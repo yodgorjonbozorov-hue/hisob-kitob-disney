@@ -243,3 +243,126 @@ test("restoreDump: versiya mos kelmasa rad etadi", async () => {
     /versiyasi mos emas/
   );
 });
+
+// ---------- Shifrlash (H-6) ----------
+
+test("zaxira shifrlanadi va faqat to'g'ri kalit bilan ochiladi", async () => {
+  const shifr = await import("@/lib/backup/shifr");
+  const eski = process.env.BACKUP_ENCRYPTION_KEY;
+  try {
+    process.env.BACKUP_ENCRYPTION_KEY = "juda-maxfiy-parol-ibora";
+    const asl = Buffer.from(JSON.stringify({ maxfiy: "moliyaviy ma'lumot", summa: 123 }));
+
+    const shifrlangan = shifr.shifrla(asl);
+    assert.equal(shifr.shifrlanganmi(shifrlangan), true);
+    assert.ok(!shifrlangan.includes(Buffer.from("moliyaviy")), "mazmun ochiq ko'rinmasin");
+    assert.deepEqual(shifr.deshifrla(shifrlangan), asl, "aylanish yo'qotishsiz");
+
+    // Noto'g'ri kalit — aniq xato (GCM auth tag ushlaydi).
+    process.env.BACKUP_ENCRYPTION_KEY = "boshqa-kalit";
+    assert.throws(() => shifr.deshifrla(shifrlangan), /kalit noto'g'ri|buzilgan/);
+
+    // Oddiy fayl shifrlangan deb tanilmaydi.
+    assert.equal(shifr.shifrlanganmi(asl), false);
+  } finally {
+    if (eski === undefined) delete process.env.BACKUP_ENCRYPTION_KEY;
+    else process.env.BACKUP_ENCRYPTION_KEY = eski;
+  }
+});
+
+// ---------- Oqimli dump (H-6) ----------
+
+test("oqimli dump createDump bilan BIR XIL ma'lumotni chiqaradi", async () => {
+  const bolaklar: string[] = [];
+  const natija = await backup.dumpNiOqimgaYoz((s: string) => {
+    bolaklar.push(s);
+  });
+
+  const oqimdan = JSON.parse(bolaklar.join(""));
+  const oddiy = await backup.createDump();
+
+  assert.equal(oqimdan.version, oddiy.version);
+  assert.deepEqual(oqimdan.counts, oddiy.counts, "counts mos kelishi kerak");
+  assert.equal(natija.jami, backup.jamiYozuvlar(oddiy));
+  // Ma'lumot ham mos (JSON orqali — Date'lar ISO string bo'lib tenglashadi).
+  assert.deepEqual(oqimdan.data, JSON.parse(JSON.stringify(oddiy.data)));
+});
+
+// ---------- Retention (sof funksiya) ----------
+
+test("retention: 30 kunlik va oy boshi nusxalari qoladi, qolgani o'chadi", async () => {
+  const { retentionOchiriladiganlar } = await import("@/lib/backup/send");
+  const bugun = new Date("2026-08-13T03:00:00.000Z");
+
+  const kalitlar = [
+    "zaxira/balansa-zaxira-2026-08-12.json.gz.enc", // 1 kun — qoladi
+    "zaxira/balansa-zaxira-2026-07-20.json.gz.enc", // 24 kun — qoladi
+    "zaxira/balansa-zaxira-2026-07-01.json.gz.enc", // 43 kun, lekin oy boshi — qoladi
+    "zaxira/balansa-zaxira-2026-06-15.json.gz.enc", // 59 kun — O'CHADI
+    "zaxira/balansa-zaxira-2026-01-01.json.gz.enc", // oy boshi, 224 kun — qoladi
+    "zaxira/balansa-zaxira-2025-05-01.json.gz.enc", // oy boshi, lekin 1 yildan eski — O'CHADI
+    "zaxira/qolda-qoyilgan-fayl.bin", // sanasiz — tegilmaydi
+  ];
+
+  assert.deepEqual(retentionOchiriladiganlar(kalitlar, bugun).sort(), [
+    "zaxira/balansa-zaxira-2025-05-01.json.gz.enc",
+    "zaxira/balansa-zaxira-2026-06-15.json.gz.enc",
+  ]);
+});
+
+// ---------- Tiklash mashqi: shifrlangan fayl + restore skripti ----------
+
+test("shifrlangan gzip zaxira restore skripti bilan bo'sh bazaga tiklanadi", async () => {
+  const { gzipSync } = await import("node:zlib");
+  const { writeFileSync } = await import("node:fs");
+  const shifr = await import("@/lib/backup/shifr");
+
+  const RESTORE_DB = "prisma/test-backup-restore.db";
+  rmSync(RESTORE_DB, { force: true });
+  migratsiya(`file:./${RESTORE_DB}`);
+
+  const eski = process.env.BACKUP_ENCRYPTION_KEY;
+  const fayl = "prisma/test-backup-shifrlangan.enc";
+  try {
+    process.env.BACKUP_ENCRYPTION_KEY = "tiklash-mashqi-kaliti";
+
+    const dump = await backup.createDump();
+    writeFileSync(fayl, shifr.shifrla(gzipSync(Buffer.from(JSON.stringify(dump)))));
+
+    const res = spawnSync(
+      process.execPath,
+      ["-r", "ts-node/register", "scripts/restore.ts", fayl, "--confirm"],
+      {
+        env: {
+          ...process.env,
+          DATABASE_URL: `file:./${RESTORE_DB}`,
+          BACKUP_ENCRYPTION_KEY: "tiklash-mashqi-kaliti",
+        },
+        encoding: "utf8",
+      }
+    );
+    assert.equal(res.status, 0, `restore yiqildi:\n${res.stdout}\n${res.stderr}`);
+    assert.match(res.stdout, /Tiklandi/, "yaxlitlik hisoboti chiqishi kerak");
+
+    // Noto'g'ri kalit bilan tiklash aniq xato bilan yiqiladi.
+    const notogri = spawnSync(
+      process.execPath,
+      ["-r", "ts-node/register", "scripts/restore.ts", fayl, "--confirm"],
+      {
+        env: {
+          ...process.env,
+          DATABASE_URL: `file:./${RESTORE_DB}`,
+          BACKUP_ENCRYPTION_KEY: "boshqa-kalit",
+        },
+        encoding: "utf8",
+      }
+    );
+    assert.notEqual(notogri.status, 0);
+    assert.match(notogri.stdout + notogri.stderr, /kalit noto'g'ri|buzilgan/);
+  } finally {
+    if (eski === undefined) delete process.env.BACKUP_ENCRYPTION_KEY;
+    else process.env.BACKUP_ENCRYPTION_KEY = eski;
+    rmSync(fayl, { force: true });
+    rmSync(RESTORE_DB, { force: true });
+  }
+});

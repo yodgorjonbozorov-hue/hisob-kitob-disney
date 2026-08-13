@@ -52,7 +52,7 @@ export function requireOwnerOrAdmin(rol: Rol, userId: string, ownerId: string): 
 }
 
 /** Route handlerlarda try/catch orqali xatolarni HTTP javobga aylantiradi. */
-export function handleApiError(error: unknown): NextResponse {
+export async function handleApiError(error: unknown): Promise<NextResponse> {
   if (error instanceof ForbiddenError) {
     return NextResponse.json({ error: error.message }, { status: 403 });
   }
@@ -63,5 +63,9 @@ export function handleApiError(error: unknown): NextResponse {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
   console.error(error);
+  // Kutilmagan 500 monitoring'ga ketadi (TASK 3.3); foydalanuvchiga esa
+  // baribir umumiy xabar — texnik tafsilot hech qachon chiqmaydi.
+  const { xatoniYubor } = await import("@/lib/monitoring/xabar");
+  await xatoniYubor(error, "api:500");
   return NextResponse.json({ error: "Server xatosi yuz berdi" }, { status: 500 });
 }

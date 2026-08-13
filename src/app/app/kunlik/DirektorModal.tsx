@@ -18,7 +18,8 @@ export function DirektorModal({ onClose, onDone }: { onClose: () => void; onDone
 
   useEffect(() => {
     let bekor = false;
-    (async () => {
+    // Xatolar ichkarida ushlanadi — promise ataylab kuzatilmaydi.
+    void (async () => {
       try {
         const res = await fetch("/api/kunlik/direktor");
         const data = await res.json();

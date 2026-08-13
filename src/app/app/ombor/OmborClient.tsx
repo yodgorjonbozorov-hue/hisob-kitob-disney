@@ -907,7 +907,8 @@ function XarajatModal({
   }
 
   useEffect(() => {
-    yukla();
+    // Tarmoq xatosi unhandled rejection bo'lib qolmasin — ro'yxat bo'sh ko'rinadi.
+    yukla().catch(() => setXarajatlar([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product.id]);
 

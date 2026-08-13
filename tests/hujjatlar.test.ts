@@ -333,7 +333,8 @@ test("fayl nomidagi yo'l belgilari tozalanadi", async () => {
     const natija = await driver.faylYukla({
       nomi: "../../etc/passwd.pdf",
       mimeType: "application/pdf",
-      mazmun: Buffer.from("x"),
+      // Magic-bayt tekshiruvi (H-9) uchun mazmun haqiqiy PDF bilan boshlanadi.
+      mazmun: Buffer.from("%PDF-1.4 test"),
       fetchImpl,
     });
     assert.equal(natija.saqlagich, "blob");
@@ -369,4 +370,82 @@ test("o'chirilgan shartnoma ro'yxatdan chiqadi, ilovasi qoladi", async () => {
     where: { entity: "contract", entityId: shartnoma.id, deletedAt: null },
   });
   assert.equal(ilovalar, 1, "shartnoma tiklansa hujjatlari joyida bo'lsin");
+});
+
+// ---------- Magic-bayt tekshiruvi (H-9) ----------
+
+test("mazmun e'lon qilingan MIME turiga mos kelmasa yuklash rad etiladi", async () => {
+  process.env.BLOB_READ_WRITE_TOKEN = "test-token";
+  try {
+    // .exe mazmuni (MZ) "PDF" niqobi ostida — rad.
+    await assert.rejects(
+      () => driver.faylYukla({
+        nomi: "hisobot.pdf", mimeType: "application/pdf",
+        mazmun: Buffer.from([0x4d, 0x5a, 0x90, 0x00]),
+      }),
+      /mos emas/
+    );
+    // NUL baytli "matn" — aslida binar, rad.
+    await assert.rejects(
+      () => driver.faylYukla({
+        nomi: "royxat.csv", mimeType: "text/csv",
+        mazmun: Buffer.from([0x61, 0x00, 0x62]),
+      }),
+      /mos emas/
+    );
+  } finally {
+    delete process.env.BLOB_READ_WRITE_TOKEN;
+  }
+});
+
+test("magicBaytMos: to'g'ri imzolar qabul, yotlari rad", () => {
+  assert.equal(driver.magicBaytMos("application/pdf", Buffer.from("%PDF-1.7")), true);
+  assert.equal(driver.magicBaytMos("image/png", Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d])), true);
+  assert.equal(driver.magicBaytMos("image/jpeg", Buffer.from([0xff, 0xd8, 0xff, 0xe0])), true);
+  assert.equal(
+    driver.magicBaytMos(
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      Buffer.from([0x50, 0x4b, 0x03, 0x04])
+    ),
+    true
+  );
+  assert.equal(driver.magicBaytMos("text/plain", Buffer.from("oddiy matn")), true);
+
+  assert.equal(driver.magicBaytMos("application/pdf", Buffer.from("PDF emas")), false);
+  assert.equal(driver.magicBaytMos("image/png", Buffer.from("%PDF-1.7")), false);
+});
+
+// ---------- Blob URL yashirilgan (H-9) ----------
+
+test("ro'yxatda blob ilova proksi manzili bilan, havola o'z manzilida chiqadi", async () => {
+  // Blob ilova to'g'ridan-to'g'ri bazaga yoziladi (yuklashni chetlab) —
+  // bizni DTO qatlami qiziqtiradi.
+  const blobIlova = await runWithTenant(t.tenant.id, async () => {
+    const { prisma } = await import("@/lib/prisma");
+    return prisma.attachment.create({
+      data: {
+        businessId: t.business.id,
+        entity: "contract",
+        entityId: shartnoma.id,
+        nomi: "maxfiy-shartnoma.pdf",
+        url: "https://blob.vercel-storage.com/maxfiy-xyz.pdf",
+        saqlagich: "blob",
+        mimeType: "application/pdf",
+        userId: t.user.id,
+      },
+    });
+  });
+
+  const royxat = await runWithTenant(t.tenant.id, async () =>
+    queries.listIlovalar(t.business.id, "contract", shartnoma.id)
+  );
+  const blob = royxat.find((i: any) => i.id === blobIlova.id);
+  assert.ok(blob);
+  assert.equal(blob.url, `/api/hujjatlar/ilova/${blobIlova.id}/fayl`, "ochiq blob URL chiqmasin");
+  assert.ok(!JSON.stringify(royxat).includes("blob.vercel-storage.com"), "blob manzili DTO'da yo'q");
+
+  const havola = royxat.find((i: any) => i.saqlagich === "havola");
+  if (havola) {
+    assert.ok(havola.url.startsWith("http"), "tashqi havola o'z manzilida qoladi");
+  }
 });

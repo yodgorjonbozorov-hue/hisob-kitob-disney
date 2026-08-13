@@ -357,19 +357,22 @@ test("butunlay bo'sh bazada zaxira talab qilinmaydi", async () => {
   assert.equal(telegram.qabullar.length, oldin);
 });
 
-test("build zanjirida zaxira migratsiyadan OLDIN turadi", () => {
+test("build bazaga TEGMAYDI; migratsiya yo'lida zaxira majburiy (TASK 3.1)", () => {
   const pkg = JSON.parse(readFileSync("package.json", "utf8"));
   const build: string = pkg.scripts.build;
 
-  const zaxira = build.indexOf("deploy-zaxira.mjs");
-  const migratsiya = build.indexOf("db-migrate.mjs");
+  // H-5: ilgari preview build ham production bazasiga migratsiya qo'llardi.
+  // Endi build = faqat next build; migratsiya alohida yo'l bilan qo'llanadi
+  // (npm run apply:hammasi / migratsiya.yml) va o'sha yo'l zaxira oladi.
+  assert.equal(build, "next build", "build bazaga tegmasligi kerak (faqat next build)");
+  assert.ok(pkg.scripts["db:apply"], "migratsiya uchun alohida skript bo'lishi kerak");
 
-  assert.ok(zaxira >= 0, "build zanjirida deploy-zaxira bo'lishi shart");
+  // apply:hammasi zanjirida zaxira migratsiyadan OLDIN bajariladi
+  // (izohlar emas, aynan `bajar(...)` chaqiruvlari solishtiriladi).
+  const apply = readFileSync("scripts/apply-hammasi.mjs", "utf8");
+  const zaxira = apply.indexOf('bajar("Xom surat"');
+  const migratsiya = apply.indexOf('bajar("Migratsiya"');
+  assert.ok(zaxira >= 0, "apply zanjirida xom zaxira bo'lishi shart");
   assert.ok(migratsiya >= 0);
   assert.ok(zaxira < migratsiya, "zaxira migratsiyadan oldin bajarilishi shart");
-  assert.match(
-    build.slice(zaxira, migratsiya),
-    /&&/,
-    "zaxira yiqilsa migratsiya ishga tushmasligi uchun && bilan bog'lanadi"
-  );
 });

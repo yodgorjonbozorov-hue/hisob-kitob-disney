@@ -2415,3 +2415,42 @@ parol-tiklash 7/7 (yangi fayl).
 - Testlar yangilandi: eski fallback testi endi RAD kutadi; kelajak-kun va
   2026-08-01 tasdiqlari direktor tayinlangandan keyingi bosqichga ko'chdi;
   izolyatsiya testi regex'i yangi rad matnini ham qamraydi. kunlik 34/34.
+
+---
+
+## 2026-08-13 · AUDIT BOSQICH 3 — DEVOPS, ma'lumot va xavfsizlik infratuzilmasi
+
+**Branch:** `claude/balansa-code-audit-kt3eh1` · **Migratsiya BOR (1 ta):**
+`20260813124000_audit_arxiv` (yangi `AuditLogArxiv` jadvali). pg init qayta
+generatsiya qilindi.
+
+- **3.1 · Migratsiya build'dan ajratildi (H-5).** `build` = faqat
+  `next build`; `db-migrate.mjs` ga SHA-256 checksum (qo'llangan fayl
+  o'zgargan bo'lsa TO'XTAYDI), har migratsiya + bookkeeping bitta libsql
+  tranzaksiyasida (yarim qo'llanish yo'q), yiqilganda fayl + statement
+  aniq yoziladi. Superadmin bootstrap alohida workflow
+  (`superadmin-bootstrap.yml`). CLAUDE.md/ISHGA-TUSHIRISH.md yangilandi.
+- **3.2 · Zaxira (H-6).** Oqimli dump (`dumpNiOqimgaYoz` — RAMda faqat
+  gzip natija), AES-256-GCM shifrlash (`lib/backup/shifr.ts`,
+  `BACKUP_ENCRYPTION_KEY`), S3-mos saqlagich SDK'siz SigV4 bilan
+  (`lib/backup/s3.ts`, `BACKUP_S3_*`), retention (30 kun + oy boshi 12 oy),
+  Telegram endi faqat bildirishnoma (S3 yo'lida). `restore.ts` .enc/.gz ni
+  avtomatik ochadi; tiklash mashqi testda.
+- **3.3 · Monitoring.** `lib/monitoring/xabar.ts` — Sentry'ga SDK'siz
+  (`SENTRY_DSN`). Ulangan: handleApiError (500), kunlikSinxron, auditYoz,
+  cron (xavfsiz/tenantlarBoylab + structured JSON log), client error
+  boundary (`/api/xato-hisobot`, sessiya + rate limit).
+- **3.4 · Fayl xavfsizligi (H-9).** Magic-bayt tekshiruvi (PDF/PNG/JPEG/
+  WEBP/ZIP/OLE/matn) — mijoz MIME'siga ishonilmaydi; blob fayllar faqat
+  `GET /api/hujjatlar/ilova/[id]/fayl` proksisi orqali (withTenant + egalik,
+  Content-Disposition: attachment, soft-delete → 404); blob URL DTO'larga
+  chiqmaydi; yuklash 30/soat rate limit.
+- **3.5 · ESLint + retention.** `.eslintrc.json` (next/core-web-vitals,
+  no-floating-promises=error — 3 ta haqiqiy xato tuzatildi,
+  no-explicit-any/no-unused-vars=warn); CI'ga `npm run lint` qo'shildi.
+  AuditLog: cron 12 oydan eski yozuvlarni `AuditLogArxiv` ga ko'chiradi.
+
+**Yangi/yangilangan testlar:** migratsiya-zanjiri 11/11 (+checksum) ·
+deploy-zaxira 10/10 (build endi bazaga tegmasligi) · hujjatlar 23/23
+(+magic-bayt, +blob URL yashirish) · backup 10/10 (+shifr, +oqimli dump,
++retention, +tiklash mashqi) · monitoring 3/3 (yangi) · cron 11/11 (+arxiv).

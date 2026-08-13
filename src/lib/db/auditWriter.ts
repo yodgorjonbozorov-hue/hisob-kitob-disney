@@ -87,7 +87,11 @@ export async function auditYoz(yozuv: AuditYozuv): Promise<void> {
       },
     });
   } catch (error) {
+    // Audit yozilmagani foydalanuvchi amalini buzmaydi, lekin bu ERP uchun
+    // jiddiy signal — monitoring'ga tushadi (TASK 3.3).
     console.error("Audit yozib bo'lmadi:", error);
+    const { xatoniYubor } = await import("@/lib/monitoring/xabar");
+    await xatoniYubor(error, "auditYoz", { entity: yozuv.entity, amal: yozuv.amal });
   }
 }
 

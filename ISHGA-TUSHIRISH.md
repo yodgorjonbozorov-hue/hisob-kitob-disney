@@ -16,12 +16,11 @@ Batafsil manbalar: `docs/MIGRATSIYA.md` (ko'chirish), `TELEFONDAN-APPLY.md`
 |---|---|
 | Kod (Faza 0–6, ERP modullari) | ✅ `main` da, build va testlar toza |
 | 27 migratsiya (14 eski + 13 yangi) | ✅ deploy orqali qo'llangan |
-| `kassa:migratsiya` | ✅ build zanjirida, avtomatik ishlaydi |
-| Deploy oldidan avtomatik zaxira | ✅ `deploy-zaxira.mjs` build zanjirida |
+| **Migratsiya yo'li (2026-08-13 dan, TASK 3.1)** | ⚠️ **O'ZGARDI:** build endi bazaga TEGMAYDI (`build` = faqat `next build`). Migratsiya qo'llash — "Migratsiya qo'llash" workflow (`npm run apply:hammasi`: zaxira → migratsiya → kassa → tekshiruv) yoki lokalda `npm run db:apply`. Superadmin bootstrap ham alohida "Superadmin bootstrap" workflow'ga ko'chdi. |
 | Turso region | ⏳ Tokio — **Frankfurtga ko'chirilishi kerak** |
 | Vercel funksiya regioni | ⏳ iad1 (AQSh) — **fra1 qilinishi kerak** |
 | balansa.uz domeni | ⏳ ulanmagan |
-| GitHub Actions "Migratsiya qo'llash" | ⚠️ 2026-08-06 da yiqilgan — sekretlar qo'yilmagan edi. Endi **shart emas** (deploy o'zi zaxira + migratsiya qiladi). 1-qadamda sekretlar qo'yilgach bu ham ishlaydigan bo'ladi. |
+| GitHub Actions "Migratsiya qo'llash" | ⚠️ **ENDI ASOSIY YO'L** (2026-08-13, TASK 3.1): deploy migratsiya qo'llamaydi. Sekretlar (DATABASE_URL, DATABASE_AUTH_TOKEN) qo'yilishi SHART — 1-qadam. |
 | GitHub Actions "To'liq ishga tushirish" | ✅ tayyor — baza + ko'chirish + Vercel + tekshiruv, **bitta tugma** (2-qadam) |
 | GitHub Actions "Bazani ko'chirish" | ✅ tayyor — faqat ma'lumot ko'chirish (3-qadam, zaxira yo'l) |
 

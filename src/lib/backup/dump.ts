@@ -41,6 +41,8 @@ export const ZAXIRA_JADVALLARI = [
   "category",
   "transaction",
   "auditLog",
+  // Arxiv FK'siz — tartibda auditLog yonida turgani qulay, xolos.
+  "auditLogArxiv",
   "shiftClose",
   "recurringTransaction",
   "budget",
@@ -130,6 +132,60 @@ export async function createDump(client: unknown = rawPrisma): Promise<Zaxira> {
 /** Zaxiradagi jami yozuvlar soni. */
 export function jamiYozuvlar(zaxira: Zaxira): number {
   return Object.values(zaxira.counts).reduce((a, b) => a + b, 0);
+}
+
+/** Sahifalab o'qish hajmi — bitta so'rov RAMga eng ko'p shuncha yozuv oladi. */
+const SAHIFA = 1000;
+
+/** Jadvalning barqaror tartiblash kaliti (hammasida `id`, AppSetting'da `key`). */
+function tartibKaliti(jadval: string): string {
+  return jadval === "appSetting" ? "key" : "id";
+}
+
+/**
+ * OQIMLI DUMP (H-6): `createDump` bilan BIR XIL JSON formatni chiqaradi,
+ * lekin butun bazani RAMga yig'maydi — har jadval SAHIFA'lab o'qiladi va
+ * `yoz` orqali bo'lak-bo'lak chiqariladi (odatda to'g'ri gzip oqimiga).
+ * `restoreDump` bu faylni o'zgarishsiz tushunadi.
+ */
+export async function dumpNiOqimgaYoz(
+  yoz: (bolak: string) => void | Promise<void>,
+  client: unknown = rawPrisma
+): Promise<{ counts: Zaxira["counts"]; jami: number }> {
+  const counts: Zaxira["counts"] = {};
+  for (const jadval of ZAXIRA_JADVALLARI) {
+    counts[jadval] = await delegate(client, jadval).count();
+  }
+
+  await yoz(
+    `{"version":${BACKUP_VERSION},"createdAt":${JSON.stringify(new Date().toISOString())},` +
+      `"counts":${JSON.stringify(counts)},"data":{`
+  );
+
+  for (let j = 0; j < ZAXIRA_JADVALLARI.length; j++) {
+    const jadval = ZAXIRA_JADVALLARI[j];
+    await yoz(`${j > 0 ? "," : ""}${JSON.stringify(jadval)}:[`);
+    let skip = 0;
+    let birinchi = true;
+    for (;;) {
+      const rows = await delegate(client, jadval).findMany({
+        orderBy: { [tartibKaliti(jadval)]: "asc" },
+        skip,
+        take: SAHIFA,
+      });
+      if (rows.length === 0) break;
+      for (const row of rows) {
+        await yoz(`${birinchi ? "" : ","}${JSON.stringify(row)}`);
+        birinchi = false;
+      }
+      skip += rows.length;
+      if (rows.length < SAHIFA) break;
+    }
+    await yoz("]");
+  }
+
+  await yoz("}}");
+  return { counts, jami: Object.values(counts).reduce((a, b) => a + b, 0) };
 }
 
 /**

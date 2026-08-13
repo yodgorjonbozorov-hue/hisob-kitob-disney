@@ -47,3 +47,22 @@ Noaniqliklarda tanlangan qarorlar. Egasi qaytganda ko'rib, kerak bo'lsa tuzatadi
 - **[Parol tiklash] faqat Telegram orqali** (SMS provayder yo'q). Telegram
   ulanmagan foydalanuvchiga kod bormaydi; UI "direktoringizga murojaat
   qiling" deb yo'naltiradi (direktor H-1 chegaralari bilan parol almashtiradi).
+
+## Audit BOSQICH 3 (2026-08-13)
+
+- **[Deploy oqimi O'ZGARDI, TASK 3.1]** `npm run build` endi bazaga tegmaydi
+  (faqat `next build`). Production migratsiyasi FAQAT "Migratsiya qo'llash"
+  workflow orqali (zaxira bilan); superadmin bootstrap alohida workflow.
+  Vercel'da qo'shimcha sozlash kerak emas — build o'z-o'zidan toza.
+- **[Monitoring — Sentry SDK'siz.]** "Yangi paket qo'shma" qoidasi sabab
+  Sentry store endpoint'iga to'g'ridan-to'g'ri HTTP POST ishlatiladi
+  (`lib/monitoring/xabar.ts`, `SENTRY_DSN` env). Breadcrumb/tracing yo'q —
+  faqat xato hodisalari. DSN sozlanmagan bo'lsa monitoring jim o'chiq.
+- **[ESLint]** `react/no-unescaped-entities` O'CHIRILGAN — o'zbek lotin
+  matni apostrofga to'la, qoida 136 ta soxta xato berardi. Ogohlantirishlar
+  hozircha cheklanmagan (--max-warnings yo'q), xatolar CI'ni qizil qiladi.
+- **[Zaxira]** S3 (`BACKUP_S3_*`) sozlanmagan bo'lsa eski Telegram-hujjat
+  yo'li ishlashda davom etadi (shifrlash kaliti bo'lsa shifrlangan holda) —
+  mavjud deploy sozlamasi buzilmasin. S3 + `BACKUP_ENCRYPTION_KEY` tavsiya.
+- **[AuditLog retention]** O'chirish EMAS — 12 oydan eski yozuvlar
+  `AuditLogArxiv` jadvaliga ko'chadi (moliyaviy audit odati: 5 yil tarix).

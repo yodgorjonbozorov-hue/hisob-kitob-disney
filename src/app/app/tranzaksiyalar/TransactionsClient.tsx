@@ -189,7 +189,7 @@ export function TransactionsClient({
           {selected.size > 0 && moveTargets.length > 0 && (
             <select
               value=""
-              onChange={(e) => { if (e.target.value) bulkMove(e.target.value); e.target.value = ""; }}
+              onChange={(e) => { if (e.target.value) void bulkMove(e.target.value); e.target.value = ""; }}
               className="text-sm rounded-lg border border-line bg-surface px-2 py-1 text-brand font-medium"
               aria-label="Boshqa biznesga ko'chirish"
             >

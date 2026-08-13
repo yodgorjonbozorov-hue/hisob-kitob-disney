@@ -716,8 +716,12 @@ export async function kunlikSinxron(t: KunlikSinxronYozuv, userIsm: string | nul
       });
     }
   } catch (e) {
-    // Kunlik sinxron xatosi asosiy yozuvni BUZMAYDI.
+    // Kunlik sinxron xatosi asosiy yozuvni BUZMAYDI — lekin jimgina ham
+    // yo'qolmaydi: monitoring'ga tushadi (TASK 3.3), aks holda kunlik va
+    // yozuvlar sezdirilmasdan ajralib ketardi.
     console.error("kunlikSinxron xatosi:", e);
+    const { xatoniYubor } = await import("@/lib/monitoring/xabar");
+    await xatoniYubor(e, "kunlikSinxron", { transactionId: t.id, businessId: t.businessId });
   }
 }
 

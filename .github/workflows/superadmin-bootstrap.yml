@@ -1,0 +1,54 @@
+# SUPERADMIN yaratish/parolini tiklash — qo'lda (TASK 3.1).
+#
+# Ilgari `scripts/bootstrap-superadmin.mjs` har build'da ishlab, SUPERADMIN_PAROL
+# build env'ida ochiq turardi. Endi build bazaga tegmaydi — bootstrap faqat
+# shu workflow orqali, kerak bo'lgandagina ishga tushiriladi.
+#
+# Sekretlar: DATABASE_URL, DATABASE_AUTH_TOKEN, SUPERADMIN_LOGIN, SUPERADMIN_PAROL.
+name: Superadmin bootstrap
+
+on:
+  workflow_dispatch:
+    inputs:
+      tasdiq:
+        description: 'Bazaga yoziladi. Davom etish uchun "HA" deb yozing'
+        required: true
+        default: ""
+      reset:
+        description: "Mavjud superadmin parolini ALMASHTIRISH"
+        type: boolean
+        default: false
+
+concurrency:
+  group: superadmin-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Tasdiqni tekshirish
+        if: inputs.tasdiq != 'HA'
+        run: |
+          echo "::error::Tasdiq berilmadi — 'HA' deb yozish shart."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Bog'liqliklar
+        run: npm ci
+
+      - name: Bootstrap
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          SUPERADMIN_LOGIN: ${{ secrets.SUPERADMIN_LOGIN }}
+          SUPERADMIN_PAROL: ${{ secrets.SUPERADMIN_PAROL }}
+          SUPERADMIN_RESET: ${{ inputs.reset && '1' || '' }}
+        run: npm run superadmin:bootstrap

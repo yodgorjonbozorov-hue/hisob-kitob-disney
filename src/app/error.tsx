@@ -19,7 +19,19 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
 
   useEffect(() => {
     console.error("Sahifa xatosi:", error);
-    if (!yangilanish) return;
+    if (!yangilanish) {
+      // Monitoring'ga hisobot (TASK 3.3) — best-effort, xato bo'lsa jim.
+      void fetch("/api/xato-hisobot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          xabar: `${error.name}: ${error.message}`.slice(0, 500),
+          digest: error.digest ?? null,
+          url: window.location.pathname,
+        }),
+      }).catch(() => {});
+      return;
+    }
     // Bir martalik avtomatik yangilash — cheksiz aylanishning oldini olamiz.
     const kalit = "balansa:chunk-reload";
     if (sessionStorage.getItem(kalit)) return;

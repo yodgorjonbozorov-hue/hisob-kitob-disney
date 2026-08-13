@@ -5,6 +5,7 @@ import { listIlovalar } from "@/lib/queries/hujjat";
 import { havolaBiriktir, faylBiriktir } from "@/lib/services/hujjat";
 import { havolaIlovaSchema, ILOVA_ENTITYLARI, type IlovaEntity } from "@/lib/validation/hujjat";
 import { MAX_FAYL_BAYT, saqlagichBor } from "@/lib/storage/driver";
+import { rateLimit } from "@/lib/rateLimit";
 
 export const GET = withTenant(
   async (request, _ctx, { session: user }) => {
@@ -37,6 +38,16 @@ export const POST = withTenant(
     const contentType = request.headers.get("content-type") ?? "";
 
     if (contentType.includes("multipart/form-data")) {
+      // H-9: yuklash cheklangan — bitta foydalanuvchi saqlagichni to'ldirib
+      // tashlamasin (30 fayl/soat mo''tadil ish uchun yetarli).
+      const rl = await rateLimit(`ilova:${user.userId}`, 30, 60 * 60 * 1000);
+      if (!rl.ok) {
+        return NextResponse.json(
+          { error: `Juda ko'p fayl yuklandi. ${rl.retryAfter} soniyadan keyin qayta urining.` },
+          { status: 429 }
+        );
+      }
+
       const form = await request.formData();
       const entity = String(form.get("entity") ?? "");
       const entityId = String(form.get("entityId") ?? "");
@@ -61,7 +72,11 @@ export const POST = withTenant(
         mimeType: fayl.type,
         mazmun: Buffer.from(await fayl.arrayBuffer()),
       });
-      return NextResponse.json(natija, { status: 201 });
+      // H-9: ochiq blob URL javobga chiqmaydi — faqat proksi manzili.
+      return NextResponse.json(
+        { ...natija, url: `/api/hujjatlar/ilova/${natija.id}/fayl` },
+        { status: 201 }
+      );
     }
 
     const parsed = havolaIlovaSchema.safeParse(await request.json());

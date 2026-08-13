@@ -205,6 +205,26 @@ CREATE TABLE "AuditLog" (
 );
 
 -- CreateTable
+CREATE TABLE "AuditLogArxiv" (
+    "id" TEXT NOT NULL,
+    "tenantId" TEXT,
+    "businessId" TEXT,
+    "userId" TEXT,
+    "userIsm" TEXT,
+    "impersonatedBy" TEXT,
+    "action" TEXT NOT NULL,
+    "entity" TEXT NOT NULL,
+    "entityId" TEXT NOT NULL,
+    "before" TEXT,
+    "after" TEXT,
+    "ip" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL,
+    "arxivlanganAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AuditLogArxiv_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "ShiftClose" (
     "id" TEXT NOT NULL,
     "businessId" TEXT NOT NULL,
@@ -803,6 +823,9 @@ CREATE INDEX "AuditLog_entity_idx" ON "AuditLog"("entity");
 
 -- CreateIndex
 CREATE INDEX "AuditLog_createdAt_idx" ON "AuditLog"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "AuditLogArxiv_tenantId_createdAt_idx" ON "AuditLogArxiv"("tenantId", "createdAt");
 
 -- CreateIndex
 CREATE INDEX "ShiftClose_businessId_sana_idx" ON "ShiftClose"("businessId", "sana");

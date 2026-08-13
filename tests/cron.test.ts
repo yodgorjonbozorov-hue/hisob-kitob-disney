@@ -171,3 +171,45 @@ test("eski yagona cron moslik uchun saqlangan va guard'langan", () => {
   assert.match(matn, /cronGuard/, "eski route ham himoyalangan bo'lishi kerak");
   assert.match(matn, /eskirgan/, "eskirgani haqida ogohlantirish bo'lsin");
 });
+
+// ---------- Audit arxivlash (M-6) ----------
+
+test("12 oydan eski audit yozuvlari arxivga KO'CHADI, yangilari qoladi", async () => {
+  const { auditArxivla } = await import("@/lib/cron/auditArxiv");
+
+  const eskiSana = new Date();
+  eskiSana.setUTCMonth(eskiSana.getUTCMonth() - 13);
+  await rawPrisma.auditLog.createMany({
+    data: [
+      {
+        id: "arx-eski-1", tenantId: t1.tenant.id, businessId: t1.business.id,
+        action: "create", entity: "transaction", entityId: "TX-eski",
+        after: '{"summa":100}', createdAt: eskiSana,
+      },
+      {
+        id: "arx-eski-2", tenantId: t1.tenant.id,
+        action: "update", entity: "user", entityId: "U-eski", createdAt: eskiSana,
+      },
+      {
+        id: "arx-yangi-1", tenantId: t1.tenant.id,
+        action: "create", entity: "sale", entityId: "S-yangi", createdAt: new Date(),
+      },
+    ],
+  });
+
+  const kochdi = await auditArxivla();
+  assert.ok(kochdi >= 2, "kamida ikkita eski yozuv ko'chishi kerak");
+
+  // Eski yozuvlar asosiy jadvalda YO'Q, arxivda mazmuni bilan BOR.
+  assert.equal(await rawPrisma.auditLog.count({ where: { id: { in: ["arx-eski-1", "arx-eski-2"] } } }), 0);
+  const arxiv = await rawPrisma.auditLogArxiv.findUnique({ where: { id: "arx-eski-1" } });
+  assert.ok(arxiv, "arxiv yozuvi bo'lishi kerak");
+  assert.equal(arxiv.after, '{"summa":100}', "mazmun yo'qolmasin");
+  assert.equal(arxiv.tenantId, t1.tenant.id);
+
+  // Yangi yozuv joyida qoladi.
+  assert.equal(await rawPrisma.auditLog.count({ where: { id: "arx-yangi-1" } }), 1);
+
+  // Ikkinchi chaqiruv hech narsa ko'chirmaydi (idempotent).
+  assert.equal(await auditArxivla(), 0);
+});

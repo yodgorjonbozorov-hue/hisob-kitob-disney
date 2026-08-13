@@ -113,7 +113,9 @@ export async function listIlovalar(
   return rows.map((i) => ({
     id: i.id,
     nomi: i.nomi,
-    url: i.url,
+    // H-9: blob URL frontendga CHIQMAYDI — fayl faqat withTenant himoyasidagi
+    // proksi orqali beriladi. Tashqi havola rejimi o'z manzilida qoladi.
+    url: i.saqlagich === "blob" ? `/api/hujjatlar/ilova/${i.id}/fayl` : i.url,
     saqlagich: i.saqlagich,
     mimeType: i.mimeType,
     hajm: i.hajm,

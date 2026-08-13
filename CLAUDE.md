@@ -46,12 +46,13 @@ invariantlari — ular buzilsa mahsulot ishonchliligi yo'qoladi.
 
 - Har o'zgarishdan keyin: `npm run build` o'tishi shart.
 - Migratsiya: `prisma migrate dev --create-only` bilan yoziladi va qo'lda
-  ko'rib chiqiladi. Qo'llash esa deploy paytida avtomatik bo'ladi
-  (`scripts/db-migrate.mjs`).
-- Zaxirasiz migratsiya bo'lmaydi. Build zanjirining birinchi halqasi —
-  `scripts/deploy-zaxira.mjs`: kutayotgan migratsiya bo'lsa xom surat olib
-  Telegram zaxira kanaliga yuboradi, yuborilmasa build TO'XTAYDI.
-  Bu himoyani o'chirish faqat `ZAXIRASIZ_DAVOM=ha` bilan, bilib turib.
+  ko'rib chiqiladi. Qo'llangan migratsiya fayli HECH QACHON tahrirlanmaydi —
+  `db-migrate.mjs` checksum (SHA-256) bilan buni majburlaydi.
+- Build bazaga TEGMAYDI (`build` = faqat `next build`, TASK 3.1). Migratsiya
+  qo'llash alohida: lokalda `npm run db:apply`, production'da
+  `.github/workflows/migratsiya.yml` (`npm run apply:hammasi`) — bu yo'l
+  AVVAL xom zaxira oladi, keyin migratsiya qo'llaydi. Zaxirasiz migratsiya
+  bo'lmaydi; chetlab o'tish faqat `ZAXIRASIZ_DAVOM=ha` bilan, bilib turib.
 - Test: `npm run test:isolation` va tegishli test fayli ishga tushiriladi.
 
 ## Tegilmaydigan fayllar

@@ -295,3 +295,46 @@ test("kassa migratsiyasi ikkinchi marta ishga tushirilsa hech narsa buzmaydi", a
   assert.equal(await son(`SELECT COUNT(*) n FROM "Transaction" WHERE "accountId" IS NULL`), 0);
   assert.equal(await son(`SELECT SUM("summa") n FROM "Transaction"`), 33_000_000, "summalar o'zgarmasligi kerak");
 });
+
+// ---------- Checksum himoyasi (H-5) ----------
+
+test("qo'llangan migratsiya fayli o'zgargan bo'lsa skript to'xtaydi", async () => {
+  // Alohida toza baza: bu suite asosiy bazaga migratsiyalarni to'g'ridan-to'g'ri
+  // SQL bilan qo'llagan (_applied_migrations yo'q), checksum esa db-migrate.mjs
+  // ning o'z jadvalida yashaydi.
+  const CDB = "prisma/test-zanjir-checksum.db";
+  rmSync(CDB, { force: true });
+  const env = { ...process.env, DATABASE_URL: `file:./${CDB}` };
+
+  const birinchi = spawnSync(process.execPath, ["scripts/db-migrate.mjs"], { env, encoding: "utf8" });
+  assert.equal(birinchi.status, 0, birinchi.stderr);
+
+  const { createClient } = await import("@libsql/client");
+  const c2 = createClient({ url: `file:./${CDB}` });
+  try {
+    const qator = await c2.execute("SELECT name FROM _applied_migrations ORDER BY name DESC LIMIT 1");
+    const nom = String(qator.rows[0].name);
+
+    // Fayl o'zgarishini taqlid qilamiz: bazadagi checksum boshqacha —
+    // skript uchun bu "fayl bir xil nomda, boshqa mazmunda".
+    await c2.execute({
+      sql: "UPDATE _applied_migrations SET checksum = 'soxta-hash' WHERE name = ?",
+      args: [nom],
+    });
+    const res = spawnSync(process.execPath, ["scripts/db-migrate.mjs"], { env, encoding: "utf8" });
+    assert.notEqual(res.status, 0, "checksum mos kelmasa skript yiqilishi shart");
+    assert.match(res.stdout + res.stderr, /O'ZGARGAN/i);
+
+    // NULL checksum (checksum'gacha qo'llangan eski yozuv) — backfill qilinadi.
+    await c2.execute({
+      sql: "UPDATE _applied_migrations SET checksum = NULL WHERE name = ?",
+      args: [nom],
+    });
+    const qayta = spawnSync(process.execPath, ["scripts/db-migrate.mjs"], { env, encoding: "utf8" });
+    assert.equal(qayta.status, 0, qayta.stderr);
+    assert.match(qayta.stdout, /checksum yozildi/);
+  } finally {
+    await c2.close?.();
+    rmSync(CDB, { force: true });
+  }
+});

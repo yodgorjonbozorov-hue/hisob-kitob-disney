@@ -113,8 +113,10 @@ test("sana berilmasa bugungi sana qo'yiladi", async () => {
     })
   );
   const sale = await rawPrisma.sale.findFirst({ where: { productId: p.id } });
-  const bugun = new Date().toISOString().slice(0, 10);
-  assert.equal(sale.sana.toISOString().slice(0, 10), bugun);
+  // H-2: "bugun" endi Toshkent kalendari bo'yicha — UTC 19:00 dan keyin
+  // UTC-kun bilan farq qiladi, shuning uchun kutilma ham shu funksiyadan.
+  const { todayTashkentDateOnlyString } = await import("@/lib/date");
+  assert.equal(sale.sana.toISOString().slice(0, 10), todayTashkentDateOnlyString());
 });
 
 // ---------- H-1: narx buzilishi ----------
