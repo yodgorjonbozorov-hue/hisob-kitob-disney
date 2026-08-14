@@ -13,6 +13,7 @@ import { HOLAT_NOMI, type XaridHolat } from "@/lib/validation/xarid";
 import type { OrderDTO, SupplierDTO, XaridStats } from "@/lib/queries/xarid";
 import type { ProductAdminDTO } from "@/lib/queries/inventory";
 import { BuyurtmaModal } from "./BuyurtmaModal";
+import { QabulModal } from "./QabulModal";
 
 const HOLAT_TONE: Record<string, "kirim" | "chiqim" | "neutral"> = {
   qoralama: "neutral",
@@ -39,8 +40,9 @@ export function XaridClient({
   const [ochiq, setOchiq] = useState<string | null>(null);
   const [amal, setAmal] = useState<string | null>(null);
   const [xato, setXato] = useState<string | null>(null);
+  const [qabulOrder, setQabulOrder] = useState<OrderDTO | null>(null);
 
-  async function holatOzgartir(orderId: string, holat: "tasdiqlangan" | "qabul_qilingan" | "bekor") {
+  async function holatOzgartir(orderId: string, holat: "tasdiqlangan" | "bekor") {
     setAmal(orderId);
     setXato(null);
     try {
@@ -182,7 +184,7 @@ export function XaridClient({
                         )}
                         {(o.holat === "qoralama" || o.holat === "tasdiqlangan") && (
                           <>
-                            <Button size="sm" loading={amal === o.id} onClick={() => holatOzgartir(o.id, "qabul_qilingan")}>
+                            <Button size="sm" loading={amal === o.id} onClick={() => setQabulOrder(o)}>
                               Qabul qilish
                             </Button>
                             <Button
@@ -197,8 +199,11 @@ export function XaridClient({
                         )}
                         {o.holat === "qabul_qilingan" && (
                           <p className="text-2xs text-muted">
-                            Tovar omborga tushgan, {o.tolovTuri === "naqd" ? "chiqim" : "ta'minotchiga qarz"}{" "}
-                            yozilgan — o&apos;zgartirib bo&apos;lmaydi.
+                            Tovar omborga tushgan
+                            {o.tolanganSumma > 0 && ` · to'landi: ${o.tolanganSumma.toLocaleString("uz-UZ")} so'm`}
+                            {o.jamiSumma - o.tolanganSumma > 0 &&
+                              ` · qarz: ${(o.jamiSumma - o.tolanganSumma).toLocaleString("uz-UZ")} so'm`}{" "}
+                            — o&apos;zgartirib bo&apos;lmaydi.
                           </p>
                         )}
                       </div>
@@ -218,6 +223,17 @@ export function XaridClient({
           onClose={() => setYangiOpen(false)}
           onDone={() => {
             setYangiOpen(false);
+            router.refresh();
+          }}
+        />
+      )}
+
+      {qabulOrder && (
+        <QabulModal
+          order={qabulOrder}
+          onClose={() => setQabulOrder(null)}
+          onDone={() => {
+            setQabulOrder(null);
             router.refresh();
           }}
         />

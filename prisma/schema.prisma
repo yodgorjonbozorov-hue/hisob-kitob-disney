@@ -33,8 +33,39 @@ model Tenant {
   subscriptions    Subscription[]
   payments         Payment[]
   modules          TenantModule[]
+  roles            Role[]
 
   @@index([status])
+}
+
+/// MAXSUS ROL — mijoz o'zi yaratadigan rol (PRO tarif).
+///
+/// Tizim rollari (OWNER/ADMIN/CASHIER/SELLER) kodda qoladi — ular modul/nav
+/// skeletini beradi. Maxsus rol esa GRANULAR huquqlar to'plami: mijoz
+/// "Taminotchi", "Omborchi", "Haydovchi" kabi istalgan rol yaratadi va unga
+/// kerakli huquqlarni (lib/permissions/katalog.ts kodlari) belgilaydi.
+///
+/// `bazaRol` — nav/modul darajasidagi skelet ("ADMIN" | "CASHIER" | "SELLER"):
+/// maxsus rolli foydalanuvchi qaysi tizim roli kabi sahifalarni ko'rishini
+/// aniqlaydi; granular huquqlar shu skelet ichida qo'llanadi.
+model Role {
+  id        String    @id @default(cuid())
+  tenantId  String
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  nomi      String
+  izoh      String?
+  /// Huquq kodlari JSON massivi, masalan ["mahsulot.korish","pul.berish"].
+  huquqlar  String    @default("[]")
+  /// "ADMIN" | "CASHIER" | "SELLER" — nav skeleti (yuqoridagi izoh).
+  bazaRol   String    @default("SELLER")
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  users     User[]
+
+  @@unique([tenantId, nomi])
+  @@index([tenantId, isActive])
 }
 
 /// Tenant qaysi modullarni yoqqani. Modul katalogi kodda (lib/modules/registry.ts) —
@@ -180,8 +211,21 @@ model User {
   linkCode          String?
   linkCodeExpiresAt DateTime?
 
+  // MAXSUS ROL (PRO): tayinlangan bo'lsa granular huquqlar shu roldan olinadi,
+  // `rol` esa rol.bazaRol bilan sinxron saqlanadi (nav/modul skeleti uchun).
+  roleId String?
+  role   Role?   @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  /// Foydalanuvchiga ALOHIDA berilgan qo'shimcha huquqlar (JSON massiv).
+  huquqPlus  String?
+  /// Foydalanuvchidan ALOHIDA olib qo'yilgan huquqlar (JSON massiv).
+  huquqMinus String?
+
+  /// Shaxsiy kassalar (Account.userId) — har user o'z hamyoniga ega bo'la oladi.
+  shaxsiyKassalar Account[] @relation("KassaEgasi")
+
   @@index([businessId])
   @@index([tenantId])
+  @@index([roleId])
 }
 
 /// Kalit-qiymat ko'rinishidagi tizim sozlamalari (masalan, oxirgi yuborilgan oylik hisobot).
@@ -243,6 +287,11 @@ model Account {
   nomi             String
   /// "naqd" | "plastik" | "bank"
   turi             String            @default("naqd")
+  /// SHAXSIY KASSA EGASI (PRO): null — umumiy biznes kassasi (avvalgi xatti-harakat);
+  /// to'ldirilgan — shu foydalanuvchining shaxsiy hamyoni. Balans baribir
+  /// ledger'dan (Transaction + AccountTransfer) hisoblanadi.
+  userId           String?
+  user             User?             @relation("KassaEgasi", fields: [userId], references: [id], onDelete: SetNull)
   isActive         Boolean           @default(true)
   tartib           Int               @default(0)
   createdAt        DateTime          @default(now())
@@ -269,12 +318,30 @@ model AccountTransfer {
   toAccountId   String
   toAccount     Account  @relation("transferTo", fields: [toAccountId], references: [id], onDelete: Restrict)
   summa         Int
+  /// Valyuta — hozircha faqat "UZS" (butun tizim so'mda, Int).
+  valyuta       String   @default("UZS")
   sana          DateTime
   izoh          String?
   userId        String
+  // FOYDALANUVCHIDAN FOYDALANUVCHIGA O'TKAZMA (PRO): shaxsiy kassalar orasidagi
+  // transfer kim kimga pul berganini ham yozadi. Ism — snapshot (ShiftClose
+  // uslubi): foydalanuvchi o'chirilsa ham tarix o'qiladigan bo'lib qoladi.
+  fromUserId    String?
+  fromUserIsm   String?
+  toUserId      String?
+  toUserIsm     String?
+  /// "bajarildi" | "bekor". Bekor STORNO bilan amalga oshadi: qarama-qarshi
+  /// yo'nalishda yangi transfer yoziladi (ledger append-only qoladi), asl
+  /// yozuv esa shu bayroq bilan belgilanadi.
+  holat         String   @default("bajarildi")
+  /// Bog'liq hujjat: "purchaseOrder" | "debt" | "storno" (+ relatedId).
+  relatedType   String?
+  relatedId     String?
   createdAt     DateTime @default(now())
 
   @@index([businessId, sana])
+  @@index([businessId, fromUserId])
+  @@index([businessId, toUserId])
 }
 
 model Category {
@@ -607,6 +674,12 @@ model Supplier {
   businessId String
   business   Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
   nomi       String
+  /// TIZIM FOYDALANUVCHISIGA BOG'LASH (PRO): ta'minotchi tenant ichidagi user
+  /// bo'lsa (masalan "Taminotchi" maxsus rolli), xarid to'lovi chiqim o'rniga
+  /// uning SHAXSIY KASSASIGA transfer bilan yoziladi. FK ataylab yo'q
+  /// (DailyReportSetting.direktorId uslubi) — user o'chirilsa reyestr buzilmasin;
+  /// tenant tekshiruvi xizmat qatlamida (lib/services/xarid.ts).
+  userId     String?
   tel        String?
   manzil     String?
   izoh       String?
@@ -650,6 +723,11 @@ model PurchaseOrder {
   transactionId String?
   /// Qabul qilinganda ochilgan "beriladigan" qarz (qarzga bo'lsa).
   debtId        String?
+  /// QISMAN TO'LOV (PRO): qabul paytida to'langan qism (0..jamiSumma).
+  /// Qolgani `debtId` dagi qarzga tushadi va DebtPayment bilan yopiladi.
+  tolanganSumma Int                 @default(0)
+  /// Ta'minotchi tizim useri bo'lsa — qabul paytidagi kassa transferi.
+  transferId    String?
   createdAt     DateTime            @default(now())
   items         PurchaseOrderItem[]
 

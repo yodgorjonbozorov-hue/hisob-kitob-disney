@@ -1,4 +1,9 @@
 import { z } from "zod";
+import { HUQUQ_KODLARI } from "@/lib/permissions/katalog";
+
+const huquqKodi = z
+  .string()
+  .refine((k) => HUQUQ_KODLARI.has(k), { message: "Noma'lum huquq kodi" });
 
 export const createUserSchema = z.object({
   ism: z.string().min(1, "Ism kiritilishi shart").max(100),
@@ -8,6 +13,11 @@ export const createUserSchema = z.object({
   rol: z.enum(["OWNER", "CASHIER", "SELLER"]).default("CASHIER"),
   // Kassir uchun biznes id majburiy (server tekshiradi); owner/seller uchun bo'sh/null (tenant ichidagi barcha bizneslar).
   businessId: z.string().optional().nullable(),
+  // MAXSUS ROL (PRO): berilsa `rol` e'tiborsiz — rol.bazaRol ishlatiladi.
+  roleId: z.string().optional().nullable(),
+  // Alohida huquq override'lari (PRO).
+  huquqPlus: z.array(huquqKodi).max(50).optional(),
+  huquqMinus: z.array(huquqKodi).max(50).optional(),
 });
 
 export const updateUserSchema = z.object({
@@ -17,6 +27,10 @@ export const updateUserSchema = z.object({
   ism: z.string().min(1).max(100).optional(),
   rol: z.enum(["OWNER", "CASHIER", "SELLER"]).optional(),
   businessId: z.string().optional().nullable(),
+  // MAXSUS ROL (PRO): null — maxsus roldan chiqarish (tizim roliga qaytadi).
+  roleId: z.string().optional().nullable(),
+  huquqPlus: z.array(huquqKodi).max(50).optional().nullable(),
+  huquqMinus: z.array(huquqKodi).max(50).optional().nullable(),
 });
 
 export type CreateUserInput = z.infer<typeof createUserSchema>;

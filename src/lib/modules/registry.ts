@@ -188,6 +188,7 @@ export const MODULLAR: ModulTarifi[] = [
       { href: "/app/admin/bizneslar", label: "Bizneslar", icon: "business", tartib: 50, rollar: BOSHQARUVCHILAR },
       { href: "/app/admin/kategoriyalar", label: "Kategoriyalar", icon: "tags", tartib: 51, rollar: BOSHQARUVCHILAR },
       { href: "/app/admin/foydalanuvchilar", label: "Foydalanuvchilar", icon: "users", tartib: 52, rollar: BOSHQARUVCHILAR },
+      { href: "/app/admin/rollar", label: "Rollar va huquqlar", icon: "shield", tartib: 52, rollar: BOSHQARUVCHILAR },
       { href: "/app/admin/ochirilganlar", label: "O'chirilganlar", icon: "trash", tartib: 53, rollar: BOSHQARUVCHILAR },
       { href: "/app/admin/audit", label: "Audit jurnali", icon: "audit", tartib: 54, rollar: BOSHQARUVCHILAR },
       { href: "/app/sozlamalar/modullar", label: "Modullar", icon: "modules", tartib: 55, rollar: ["OWNER"] },

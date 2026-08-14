@@ -29,16 +29,28 @@ interface UserDTO {
   createdAt: string;
   businessId: string | null;
   businessNomi: string | null;
+  /** Maxsus rol (PRO) — tayinlangan bo'lsa rol select "custom:<id>" ko'rsatadi. */
+  roleId: string | null;
+  rolNomi: string | null;
+}
+
+interface RoleOption {
+  id: string;
+  nomi: string;
 }
 
 export function UsersClient({
   initialUsers,
   currentUserId,
   businesses,
+  customRoles,
+  pro,
 }: {
   initialUsers: UserDTO[];
   currentUserId: string;
   businesses: BusinessOption[];
+  customRoles: RoleOption[];
+  pro: boolean;
 }) {
   const [users, setUsers] = useState(initialUsers);
   const [modalOpen, setModalOpen] = useState(false);
@@ -73,18 +85,29 @@ export function UsersClient({
     }
   }
 
-  async function changeRol(u: UserDTO, rol: string) {
+  async function changeRol(u: UserDTO, qiymat: string) {
+    // "custom:<id>" — maxsus rol (PRO); aks holda tizim roli (maxsus roldan chiqariladi).
+    const body = qiymat.startsWith("custom:")
+      ? { roleId: qiymat.slice(7) }
+      : { rol: qiymat, roleId: null };
     const res = await fetch(`/api/users/${u.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rol }),
+      body: JSON.stringify(body),
     });
     if (res.ok) {
       const updated = await res.json();
       setUsers((prev) =>
         prev.map((x) =>
           x.id === u.id
-            ? { ...x, rol: updated.rol, businessId: updated.businessId, businessNomi: updated.business?.nomi ?? null }
+            ? {
+                ...x,
+                rol: updated.rol,
+                roleId: updated.roleId ?? null,
+                rolNomi: updated.role?.nomi ?? null,
+                businessId: updated.businessId,
+                businessNomi: updated.business?.nomi ?? null,
+              }
             : x
         )
       );
@@ -140,16 +163,28 @@ export function UsersClient({
                 <td className="py-2.5 text-muted">{u.login}</td>
                 <td className="py-2.5">
                   {u.id === currentUserId ? (
-                    ROL_LABEL[u.rol] ?? u.rol
+                    u.rolNomi ?? ROL_LABEL[u.rol] ?? u.rol
                   ) : (
                     <select
-                      value={u.rol}
+                      value={u.roleId ? `custom:${u.roleId}` : u.rol}
                       onChange={(e) => changeRol(u, e.target.value)}
                       className="rounded-lg border border-line bg-surface px-2 py-1 text-sm"
                     >
                       <option value="CASHIER">Kassir</option>
                       <option value="SELLER">Sotuvchi</option>
                       <option value="OWNER">Direktor</option>
+                      {pro && customRoles.length > 0 && (
+                        <optgroup label="Maxsus rollar">
+                          {customRoles.map((r) => (
+                            <option key={r.id} value={`custom:${r.id}`}>
+                              {r.nomi}
+                            </option>
+                          ))}
+                          {u.roleId && !customRoles.some((r) => r.id === u.roleId) && (
+                            <option value={`custom:${u.roleId}`}>{u.rolNomi ?? "Maxsus rol"}</option>
+                          )}
+                        </optgroup>
+                      )}
                     </select>
                   )}
                 </td>
@@ -212,8 +247,23 @@ export function UsersClient({
         </table>
       </Card>
 
+      {pro && (
+        <p className="text-xs text-faint">
+          Maxsus rollar (Taminotchi, Omborchi, Haydovchi...) va ularning huquqlari{" "}
+          <a href="/app/admin/rollar" className="text-brand hover:underline">
+            Rollar va huquqlar
+          </a>{" "}
+          bo'limida boshqariladi.
+        </p>
+      )}
+
       {modalOpen && (
-        <NewUserModal businesses={businesses} onClose={() => setModalOpen(false)} onCreated={handleCreated} />
+        <NewUserModal
+          businesses={businesses}
+          customRoles={pro ? customRoles : []}
+          onClose={() => setModalOpen(false)}
+          onCreated={handleCreated}
+        />
       )}
 
       {parolUser && <ParolTiklashModal user={parolUser} onClose={() => setParolUser(null)} />}
@@ -236,20 +286,25 @@ export function UsersClient({
 
 function NewUserModal({
   businesses,
+  customRoles,
   onClose,
   onCreated,
 }: {
   businesses: BusinessOption[];
+  customRoles: RoleOption[];
   onClose: () => void;
   onCreated: (u: UserDTO) => void;
 }) {
   const [ism, setIsm] = useState("");
   const [login, setLogin] = useState("");
   const [parol, setParol] = useState("");
-  const [rol, setRol] = useState<"OWNER" | "CASHIER" | "SELLER">("CASHIER");
+  // Tizim roli yoki "custom:<id>" (maxsus rol, PRO).
+  const [rol, setRol] = useState<string>("CASHIER");
   const [businessId, setBusinessId] = useState(businesses[0]?.id ?? "");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const custom = rol.startsWith("custom:");
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -262,7 +317,14 @@ function NewUserModal({
     const res = await fetch("/api/users", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ism, login, parol, rol, businessId: rol === "CASHIER" || rol === "SELLER" ? businessId || null : null }),
+      body: JSON.stringify({
+        ism,
+        login,
+        parol,
+        rol: custom ? "SELLER" : rol,
+        roleId: custom ? rol.slice(7) : null,
+        businessId: rol === "CASHIER" || rol === "SELLER" ? businessId || null : null,
+      }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -270,7 +332,7 @@ function NewUserModal({
       setLoading(false);
       return;
     }
-    onCreated(data);
+    onCreated({ ...data, rolNomi: data.role?.nomi ?? null, businessNomi: data.business?.nomi ?? null });
   }
 
   return (
@@ -303,12 +365,21 @@ function NewUserModal({
         />
         <select
           value={rol}
-          onChange={(e) => setRol(e.target.value as "OWNER" | "CASHIER" | "SELLER")}
+          onChange={(e) => setRol(e.target.value)}
           className="w-full rounded-lg border border-line px-3 py-2 text-sm"
         >
           <option value="CASHIER">Kassir</option>
           <option value="SELLER">Sotuvchi</option>
           <option value="OWNER">Direktor</option>
+          {customRoles.length > 0 && (
+            <optgroup label="Maxsus rollar">
+              {customRoles.map((r) => (
+                <option key={r.id} value={`custom:${r.id}`}>
+                  {r.nomi}
+                </option>
+              ))}
+            </optgroup>
+          )}
         </select>
         {(rol === "CASHIER" || rol === "SELLER") && (
           <div>

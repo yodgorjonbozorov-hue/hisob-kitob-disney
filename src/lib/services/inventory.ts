@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { createTransactionTx } from "@/lib/services/transactionService";
 import { runBusinessTx, type BusinessTx } from "@/lib/db/businessTx";
+import { currentTenantId } from "@/lib/db/tenantContext";
+import { ensureUserKassaTx } from "@/lib/services/userKassa";
 import { todayDateOnlyString, dateOnlyStringToUTCDate } from "@/lib/date";
 import { isAvto } from "@/lib/biznesTuri";
 import { logAudit } from "@/lib/services/audit";
@@ -358,19 +360,75 @@ export async function recordDebtPayment(params: {
     }
 
     const beriladigan = debt.turi === "beriladigan";
-    const categoryId = await ensureCategoryTx(
-      tx,
-      params.businessId,
-      beriladigan ? QARZ_TOLASH_KATEGORIYA : QARZ_TOLOVI_KATEGORIYA,
-      beriladigan ? "chiqim" : "kirim"
-    );
-    const txn = await createTransactionTx(tx, params.userId, params.businessId, {
-      turi: beriladigan ? "chiqim" : "kirim",
-      categoryId,
-      summa: params.summa,
-      sana: todayDateOnlyString(),
-      izoh: `${beriladigan ? "Qarz to'lash" : "Qarz to'lovi"}: ${debt.mijozNomi}`,
-    });
+
+    // PRO: qarz ICHKI ta'minotchi-user'ga tegishli bo'lsa (xarid buyurtmasi
+    // orqali ochilgan va supplier tizim useriga bog'langan) — to'lov chiqim
+    // emas, xaridor kassasidan ta'minotchining shaxsiy kassasiga TRANSFER:
+    // pul biznes ichida qoldi, kirim/chiqim sun'iy oshmasligi kerak.
+    let supplierUser: { id: string; ism: string } | null = null;
+    if (beriladigan) {
+      const order = await tx.purchaseOrder.findFirst({
+        where: { debtId: debt.id, businessId: params.businessId },
+        select: { supplierId: true },
+      });
+      if (order) {
+        const sup = await tx.supplier.findFirst({
+          where: { id: order.supplierId, businessId: params.businessId },
+          select: { userId: true },
+        });
+        if (sup?.userId) {
+          supplierUser = await tx.user.findFirst({
+            where: { id: sup.userId, tenantId: currentTenantId(), isActive: true },
+            select: { id: true, ism: true },
+          });
+        }
+      }
+    }
+
+    let transactionId: string | null = null;
+    if (supplierUser) {
+      const tolovchi = await tx.user.findFirst({
+        where: { id: params.userId, tenantId: currentTenantId(), isActive: true },
+        select: { id: true, ism: true },
+      });
+      if (!tolovchi) throw new ForbiddenError("Foydalanuvchi topilmadi");
+      const fromAccount = await ensureUserKassaTx(tx, params.businessId, tolovchi);
+      const toAccount = await ensureUserKassaTx(tx, params.businessId, supplierUser);
+      await tx.accountTransfer.create({
+        data: {
+          businessId: params.businessId,
+          fromAccountId: fromAccount.id,
+          toAccountId: toAccount.id,
+          summa: params.summa,
+          valyuta: "UZS",
+          sana: dateOnlyStringToUTCDate(todayDateOnlyString()),
+          izoh: `Qarz to'lash: ${debt.mijozNomi}`,
+          userId: params.userId,
+          fromUserId: tolovchi.id,
+          fromUserIsm: tolovchi.ism,
+          toUserId: supplierUser.id,
+          toUserIsm: supplierUser.ism,
+          holat: "bajarildi",
+          relatedType: "debt",
+          relatedId: debt.id,
+        },
+      });
+    } else {
+      const categoryId = await ensureCategoryTx(
+        tx,
+        params.businessId,
+        beriladigan ? QARZ_TOLASH_KATEGORIYA : QARZ_TOLOVI_KATEGORIYA,
+        beriladigan ? "chiqim" : "kirim"
+      );
+      const txn = await createTransactionTx(tx, params.userId, params.businessId, {
+        turi: beriladigan ? "chiqim" : "kirim",
+        categoryId,
+        summa: params.summa,
+        sana: todayDateOnlyString(),
+        izoh: `${beriladigan ? "Qarz to'lash" : "Qarz to'lovi"}: ${debt.mijozNomi}`,
+      });
+      transactionId = txn.id;
+    }
 
     await tx.debtPayment.create({
       data: {
@@ -378,7 +436,7 @@ export async function recordDebtPayment(params: {
         businessId: params.businessId,
         summa: params.summa,
         userId: params.userId,
-        transactionId: txn.id,
+        transactionId,
       },
     });
 

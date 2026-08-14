@@ -19,6 +19,7 @@
     "superadmin:reset": "node -r ts-node/register scripts/reset-superadmin.ts",
     "superadmin:bootstrap": "node scripts/bootstrap-superadmin.mjs",
     "client:create": "node -r ts-node/register scripts/create-client.ts",
+    "client:pro": "node -r ts-node/register scripts/pro-qilish.ts",
     "kassa:migratsiya": "node -r ts-node/register scripts/kassa-migratsiya.ts",
     "backup": "node -r ts-node/register scripts/backup.ts",
     "zaxira:xom": "node scripts/xom-zaxira.mjs",
@@ -66,6 +67,7 @@
     "e2e:tayyorla": "node scripts/e2e-tayyorla.mjs",
     "test:smoke": "node -r ts-node/register tests/smoke-brauzer.test.ts",
     "test:kelishilgan-narx": "node -r ts-node/register tests/kelishilgan-narx.test.ts",
+    "test:pro": "node -r ts-node/register tests/pro-stsenariy.test.ts",
     "test:kochirish": "node -r ts-node/register tests/kochirish.test.ts",
     "test:launch": "node -r ts-node/register tests/toliq-ishga-tushirish.test.ts"
   },

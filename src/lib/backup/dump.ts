@@ -32,6 +32,9 @@ export const BACKUP_VERSION = 1;
 export const ZAXIRA_JADVALLARI = [
   "tenant",
   "business",
+  // DIQQAT: `role` `user`dan OLDIN turishi SHART — User.roleId FK Role'ga
+  // murojaat qiladi. Tartib buzilsa zaxira tiklanmaydi.
+  "role",
   "user",
   "tenantModule",
   "subscription",

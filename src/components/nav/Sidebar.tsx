@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Receipt, FileText, PiggyBank, Bell, CalendarCheck, Repeat, Wallet,
   Package, ShoppingCart, HandCoins, Truck, Factory, Building2, Tags, Users, Trash2, ScrollText,
   BadgeCheck, Gavel, Contact2, IdCard, CalendarDays, FileSignature, ClipboardList,
-  LogOut, KeyRound, CreditCard, Blocks, Handshake, BookUser, ListChecks, Sparkles, type LucideIcon,
+  LogOut, KeyRound, CreditCard, Blocks, Handshake, BookUser, ListChecks, Sparkles, ShieldCheck, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ROL_LABEL, type Rol } from "@/lib/auth/roles";
@@ -51,6 +51,7 @@ const IKONLAR: Record<string, LucideIcon> = {
   business: Building2,
   tags: Tags,
   users: Users,
+  shield: ShieldCheck,
   trash: Trash2,
   audit: ScrollText,
   modules: Blocks,

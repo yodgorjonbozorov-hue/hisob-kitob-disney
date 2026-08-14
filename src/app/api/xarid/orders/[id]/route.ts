@@ -44,6 +44,8 @@ export const POST = withTenant<{ params: { id: string } }>(
         orderId: params.id,
         userId: user.userId,
         qabulSana: parsed.data.qabulSana,
+        tolanganSumma: parsed.data.tolanganSumma,
+        accountId: parsed.data.accountId,
       });
       dashboardYangilandi(businessId);
       return NextResponse.json(order);

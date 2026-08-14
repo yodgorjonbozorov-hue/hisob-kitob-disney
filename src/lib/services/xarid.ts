@@ -1,8 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { runBusinessTx, type BusinessTx } from "@/lib/db/businessTx";
+import { currentTenantId } from "@/lib/db/tenantContext";
 import { createTransactionTx } from "@/lib/services/transactionService";
 import { ensureCategoryTx } from "@/lib/services/inventory";
+import { ensureUserKassaTx } from "@/lib/services/userKassa";
 import { dateOnlyStringToUTCDate, todayDateOnlyString } from "@/lib/date";
 import { logAudit } from "@/lib/services/audit";
 import type {
@@ -19,6 +21,20 @@ const XARID_KATEGORIYA = "Tovar xaridi";
 // Ta'minotchilar
 // ---------------------------------------------------------------------------
 
+/** Ta'minotchi bog'lanadigan user shu tenantda va faol ekanini tekshiradi. */
+async function tekshirSupplierUser(userId: string | null | undefined): Promise<string | null> {
+  if (!userId) return null;
+  // Tenant-scoped client: boshqa tenant useri bu yerda ko'rinmaydi (null qaytadi).
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, isActive: true },
+  });
+  if (!user || !user.isActive) {
+    throw new BadRequestError("Bog'lanadigan foydalanuvchi topilmadi yoki faol emas");
+  }
+  return user.id;
+}
+
 export async function createSupplier(businessId: string, data: CreateSupplierInput) {
   const mavjud = await prisma.supplier.findFirst({
     where: { businessId, nomi: data.nomi, deletedAt: null },
@@ -26,10 +42,13 @@ export async function createSupplier(businessId: string, data: CreateSupplierInp
   });
   if (mavjud) throw new BadRequestError("Bu nomdagi ta'minotchi allaqachon bor");
 
+  const userId = await tekshirSupplierUser(data.userId);
+
   return prisma.supplier.create({
     data: {
       businessId,
       nomi: data.nomi,
+      userId: userId ?? undefined,
       tel: data.tel?.trim() || undefined,
       manzil: data.manzil?.trim() || undefined,
       izoh: data.izoh?.trim() || undefined,
@@ -40,7 +59,13 @@ export async function createSupplier(businessId: string, data: CreateSupplierInp
 export async function updateSupplier(businessId: string, id: string, data: UpdateSupplierInput) {
   const mavjud = await prisma.supplier.findFirst({ where: { id, businessId, deletedAt: null } });
   if (!mavjud) throw new ForbiddenError("Ta'minotchi topilmadi");
-  return prisma.supplier.update({ where: { id }, data });
+  const { userId, ...qolgan } = data;
+  const tekshirilgan =
+    userId === undefined ? undefined : userId === null ? null : await tekshirSupplierUser(userId);
+  return prisma.supplier.update({
+    where: { id },
+    data: { ...qolgan, ...(tekshirilgan === undefined ? {} : { userId: tekshirilgan }) },
+  });
 }
 
 /**
@@ -177,8 +202,13 @@ export async function updateOrder(
  * Bitta atomik amalda:
  *   1. har satr uchun `StockEntry` (ombor qoldig'i oshadi, tannarx snapshot);
  *   2. `Product.kelganNarx` yangi tannarxga yangilanadi;
- *   3. naqd bo'lsa — chiqim tranzaksiya; qarzga bo'lsa — "beriladigan" qarz
- *      (ta'minotchiga qarzdormiz, pul chiqimi to'lov paytida yoziladi).
+ *   3. pul harakati:
+ *      - TASHQI ta'minotchi: to'langan qism chiqim tranzaksiya;
+ *      - ICHKI ta'minotchi (supplier.userId, PRO): to'langan qism xaridor
+ *        kassasidan ta'minotchi-userning SHAXSIY kassasiga transfer — pul
+ *        biznes ichida qolgani uchun bu chiqim EMAS (AccountTransfer falsafasi);
+ *      - to'lanmagan qoldiq — "beriladigan" qarz (keyin DebtPayment bilan yopiladi).
+ *   `tolanganSumma` berilmasa eski xatti-harakat: naqd → to'liq, qarz → 0.
  *
  * Qoralama va tasdiqlangan buyurtma hech narsaga ta'sir qilmaydi — reja
  * bilan haqiqat aralashmasligi kerak.
@@ -188,8 +218,13 @@ export async function qabulQilish(params: {
   orderId: string;
   userId: string;
   qabulSana?: string | null;
+  /** QISMAN TO'LOV (PRO): qabul paytida to'lanadigan qism (0..jami). */
+  tolanganSumma?: number | null;
+  /** To'lov qaysi kassadan (berilmasa — shaxsiy/default kassa). */
+  accountId?: string | null;
 }) {
   const sana = params.qabulSana ?? todayDateOnlyString();
+  const tenantId = currentTenantId();
 
   const natija = await runBusinessTx(params.businessId, async (tx) => {
     const order = await tx.purchaseOrder.findFirst({
@@ -210,7 +245,7 @@ export async function qabulQilish(params: {
 
     const supplier = await tx.supplier.findFirst({
       where: { id: order.supplierId, businessId: params.businessId },
-      select: { nomi: true },
+      select: { nomi: true, userId: true },
     });
 
     let jamiSumma = 0;
@@ -234,27 +269,92 @@ export async function qabulQilish(params: {
       });
     }
 
+    // To'langan qism: berilmasa eski xatti-harakat (naqd → to'liq, qarz → 0).
+    const tolangan =
+      params.tolanganSumma ?? (order.tolovTuri === "naqd" ? jamiSumma : 0);
+    if (tolangan < 0 || tolangan > jamiSumma) {
+      throw new BadRequestError("To'langan summa 0 va jami summa oralig'ida bo'lishi kerak");
+    }
+
     let transactionId: string | null = null;
+    let transferId: string | null = null;
     let debtId: string | null = null;
 
-    if (order.tolovTuri === "naqd") {
-      const categoryId = await ensureCategoryTx(tx, params.businessId, XARID_KATEGORIYA, "chiqim");
-      const txn = await createTransactionTx(tx, params.userId, params.businessId, {
-        turi: "chiqim",
-        categoryId,
-        summa: jamiSumma,
-        sana,
-        izoh: `Xarid: ${supplier?.nomi ?? ""}`.trim(),
-      });
-      transactionId = txn.id;
-    } else {
-      // Qarzga olindi — ta'minotchiga qarzdormiz. Pul chiqimi to'lov paytida.
+    // ICHKI ta'minotchi (tizim useri) — to'lov shaxsiy kassaga transfer.
+    const supplierUser = supplier?.userId
+      ? await tx.user.findFirst({
+          where: { id: supplier.userId, tenantId, isActive: true },
+          select: { id: true, ism: true },
+        })
+      : null;
+
+    if (tolangan > 0) {
+      if (supplierUser) {
+        const xaridor = await tx.user.findFirst({
+          where: { id: params.userId, tenantId, isActive: true },
+          select: { id: true, ism: true },
+        });
+        if (!xaridor) throw new ForbiddenError("Foydalanuvchi topilmadi");
+        if (xaridor.id === supplierUser.id) {
+          throw new BadRequestError("Ta'minotchi va xaridor bitta foydalanuvchi bo'lishi mumkin emas");
+        }
+
+        let fromAccountId: string;
+        if (params.accountId) {
+          const acc = await tx.account.findFirst({
+            where: { id: params.accountId, businessId: params.businessId, isActive: true },
+            select: { id: true },
+          });
+          if (!acc) throw new ForbiddenError("Kassa topilmadi yoki nofaol");
+          fromAccountId = acc.id;
+        } else {
+          fromAccountId = (await ensureUserKassaTx(tx, params.businessId, xaridor)).id;
+        }
+        const toAccount = await ensureUserKassaTx(tx, params.businessId, supplierUser);
+
+        const transfer = await tx.accountTransfer.create({
+          data: {
+            businessId: params.businessId,
+            fromAccountId,
+            toAccountId: toAccount.id,
+            summa: tolangan,
+            valyuta: "UZS",
+            sana: dateOnlyStringToUTCDate(sana),
+            izoh: `Xarid to'lovi: ${supplier?.nomi ?? ""}`.trim(),
+            userId: params.userId,
+            fromUserId: xaridor.id,
+            fromUserIsm: xaridor.ism,
+            toUserId: supplierUser.id,
+            toUserIsm: supplierUser.ism,
+            holat: "bajarildi",
+            relatedType: "purchaseOrder",
+            relatedId: order.id,
+          },
+        });
+        transferId = transfer.id;
+      } else {
+        const categoryId = await ensureCategoryTx(tx, params.businessId, XARID_KATEGORIYA, "chiqim");
+        const txn = await createTransactionTx(tx, params.userId, params.businessId, {
+          turi: "chiqim",
+          categoryId,
+          summa: tolangan,
+          sana,
+          accountId: params.accountId ?? undefined,
+          izoh: `Xarid: ${supplier?.nomi ?? ""}`.trim(),
+        });
+        transactionId = txn.id;
+      }
+    }
+
+    // To'lanmagan qoldiq — ta'minotchiga qarz.
+    const qoldiq = jamiSumma - tolangan;
+    if (qoldiq > 0) {
       const debt = await tx.debt.create({
         data: {
           businessId: params.businessId,
           turi: "beriladigan",
           mijozNomi: supplier?.nomi ?? "Ta'minotchi",
-          jamiSumma,
+          jamiSumma: qoldiq,
           izoh: `Xarid buyurtmasi`,
           userId: params.userId,
         },
@@ -268,7 +368,9 @@ export async function qabulQilish(params: {
         holat: "qabul_qilingan",
         qabulSana: dateOnlyStringToUTCDate(sana),
         jamiSumma,
+        tolanganSumma: tolangan,
         transactionId,
+        transferId,
         debtId,
       },
     });
@@ -279,7 +381,12 @@ export async function qabulQilish(params: {
     action: "update",
     entity: "purchaseOrder",
     entityId: params.orderId,
-    after: { holat: "qabul_qilingan", jamiSumma: natija.jamiSumma, sana },
+    after: {
+      holat: "qabul_qilingan",
+      jamiSumma: natija.jamiSumma,
+      tolanganSumma: natija.tolanganSumma,
+      sana,
+    },
   });
   return natija;
 }

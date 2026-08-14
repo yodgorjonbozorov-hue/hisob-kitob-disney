@@ -7,6 +7,8 @@ export interface SupplierDTO {
   manzil: string | null;
   izoh: string | null;
   isActive: boolean;
+  /** Bog'langan tizim foydalanuvchisi (PRO) — to'lovlar uning kassasiga tushadi. */
+  userId: string | null;
   /** Qabul qilingan buyurtmalar bo'yicha jami xarid summasi. */
   jamiXarid: number;
   /** Ochiq (qoralama + tasdiqlangan) buyurtmalar soni. */
@@ -46,6 +48,7 @@ export async function listSuppliers(
     manzil: s.manzil,
     izoh: s.izoh,
     isActive: s.isActive,
+    userId: s.userId,
     jamiXarid: xaridMap.get(s.id) ?? 0,
     ochiqBuyurtma: ochiqMap.get(s.id) ?? 0,
   }));
@@ -64,11 +67,15 @@ export interface OrderDTO {
   id: string;
   supplierId: string;
   supplierNomi: string;
+  /** Ta'minotchi tizim useriga bog'langanmi (PRO) — to'lov kassa transferi bo'ladi. */
+  supplierUserId: string | null;
   holat: string;
   sana: string;
   qabulSana: string | null;
   tolovTuri: string;
   jamiSumma: number;
+  /** Qabul paytida to'langan qism (PRO qisman to'lov). */
+  tolanganSumma: number;
   izoh: string | null;
   satrlar: OrderSatrDTO[];
 }
@@ -77,7 +84,7 @@ export async function listOrders(businessId: string, limit = 50): Promise<OrderD
   const orders = await prisma.purchaseOrder.findMany({
     where: { businessId },
     include: {
-      supplier: { select: { nomi: true } },
+      supplier: { select: { nomi: true, userId: true } },
       items: { include: { product: { select: { nomi: true, birlik: true } } } },
     },
     orderBy: [{ sana: "desc" }, { createdAt: "desc" }],
@@ -88,11 +95,13 @@ export async function listOrders(businessId: string, limit = 50): Promise<OrderD
     id: o.id,
     supplierId: o.supplierId,
     supplierNomi: o.supplier.nomi,
+    supplierUserId: o.supplier.userId,
     holat: o.holat,
     sana: o.sana.toISOString(),
     qabulSana: o.qabulSana ? o.qabulSana.toISOString() : null,
     tolovTuri: o.tolovTuri,
     jamiSumma: o.jamiSumma,
+    tolanganSumma: o.tolanganSumma,
     izoh: o.izoh,
     satrlar: o.items.map((i) => ({
       productId: i.productId,

@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
 import { requireTenantPage } from "@/lib/auth/tenant";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { isManager } from "@/lib/auth/roles";
+import { isPro } from "@/lib/billing/pro";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import { getAccountBalances, listTransfers } from "@/lib/queries/accounts";
 import { KassaClient } from "./KassaClient";
@@ -11,7 +13,7 @@ import { KassaClient } from "./KassaClient";
  * Faqat boshqaruvchilar: kassir o'z smenasini "Kun yakuni" sahifasida ko'radi.
  */
 export default async function KassaPage() {
-  const { session, tenantId } = await requireTenantPage();
+  const { session, tenantId, tenant } = await requireTenantPage();
   return runWithTenant(tenantId, async () => {
     if (!isManager(session.rol)) {
       redirect("/app/tranzaksiyalar");
@@ -28,9 +30,18 @@ export default async function KassaPage() {
       );
     }
 
-    const [qoldiqlar, transferlar] = await Promise.all([
+    const pro = isPro(tenant.plan);
+    const [qoldiqlar, transferlar, userlar] = await Promise.all([
       getAccountBalances(businessId),
       listTransfers(businessId, 30),
+      // Foydalanuvchiga pul o'tkazish (PRO) uchun qabul qiluvchilar ro'yxati.
+      pro
+        ? prisma.user.findMany({
+            where: { isActive: true },
+            select: { id: true, ism: true },
+            orderBy: { ism: "asc" },
+          })
+        : Promise.resolve([]),
     ]);
 
     return (
@@ -42,7 +53,12 @@ export default async function KassaPage() {
             plastik va bank hisob-raqamlari bo&apos;yicha qoldiq
           </p>
         </div>
-        <KassaClient qoldiqlar={qoldiqlar} transferlar={transferlar} />
+        <KassaClient
+          qoldiqlar={qoldiqlar}
+          transferlar={transferlar}
+          userlar={userlar.filter((u) => u.id !== session.userId)}
+          pro={pro}
+        />
       </div>
     );
   });

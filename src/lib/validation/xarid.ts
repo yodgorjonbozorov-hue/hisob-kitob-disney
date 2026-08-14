@@ -16,6 +16,8 @@ export const createSupplierSchema = z.object({
   tel: z.string().trim().max(50).optional().nullable(),
   manzil: z.string().trim().max(200).optional().nullable(),
   izoh: z.string().trim().max(500).optional().nullable(),
+  /// Tizim foydalanuvchisiga bog'lash (PRO) — to'lovlar uning kassasiga tushadi.
+  userId: z.string().optional().nullable(),
 });
 
 export const updateSupplierSchema = createSupplierSchema.partial().extend({
@@ -50,6 +52,14 @@ export const orderHolatSchema = z.object({
   holat: z.enum(["tasdiqlangan", "qabul_qilingan", "bekor"]),
   /** Qabul qilishda — haqiqiy qabul sanasi (berilmasa bugun). */
   qabulSana: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
+  /**
+   * QISMAN TO'LOV (PRO): qabul paytida to'lanadigan qism.
+   * Berilmasa — eski xatti-harakat: naqd → to'liq to'lov, qarz → to'liq qarz.
+   * 0..jamiSumma oralig'ida bo'lishi server tomonda tekshiriladi.
+   */
+  tolanganSumma: z.number().int().min(0).optional().nullable(),
+  /** To'lov qaysi kassadan chiqadi (berilmasa — joriy userning shaxsiy/default kassasi). */
+  accountId: z.string().optional().nullable(),
 });
 
 export type CreateSupplierInput = z.infer<typeof createSupplierSchema>;

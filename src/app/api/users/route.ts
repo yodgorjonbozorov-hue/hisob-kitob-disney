@@ -5,6 +5,7 @@ import { requireManager } from "@/lib/auth/guard";
 import { withTenant } from "@/lib/auth/tenant";
 import { createUserSchema } from "@/lib/validation/user";
 import { hashPassword } from "@/lib/auth/password";
+import { requirePro } from "@/lib/billing/pro";
 
 const USER_SELECT = {
   id: true,
@@ -15,6 +16,10 @@ const USER_SELECT = {
   createdAt: true,
   businessId: true,
   business: { select: { nomi: true } },
+  roleId: true,
+  role: { select: { nomi: true, bazaRol: true } },
+  huquqPlus: true,
+  huquqMinus: true,
 } as const;
 
 export const GET = withTenant(async (_request, _ctx, { session: user }) => {
@@ -28,7 +33,8 @@ export const GET = withTenant(async (_request, _ctx, { session: user }) => {
   return NextResponse.json(users);
 });
 
-export const POST = withTenant(async (request, _ctx, { session: user }) => {
+export const POST = withTenant(async (request, _ctx, tenant) => {
+  const user = tenant.session;
   requireManager(user.rol);
 
   const body = await request.json();
@@ -37,11 +43,29 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
     return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
   }
 
+  // MAXSUS ROL (PRO): tanlangan bo'lsa tizim roli rol.bazaRol'dan olinadi —
+  // nav/modul skeleti shu orqali ishlaydi, granular huquqlar esa roldan.
+  let roleId: string | null = null;
+  let effectiveRol: string = parsed.data.rol;
+  if (parsed.data.roleId) {
+    requirePro(tenant);
+    const role = await prisma.role.findFirst({
+      where: { id: parsed.data.roleId, deletedAt: null, isActive: true },
+      select: { id: true, bazaRol: true },
+    });
+    if (!role) return NextResponse.json({ error: "Rol topilmadi" }, { status: 404 });
+    roleId = role.id;
+    effectiveRol = role.bazaRol;
+  }
+  if (parsed.data.huquqPlus?.length || parsed.data.huquqMinus?.length) {
+    requirePro(tenant);
+  }
+
   // Kassir uchun biznes MAJBURIY; sotuvchi uchun IXTIYORIY (biriktirilsa — yozuvlari
   // doim shu biznesga tushadi; biriktirilmasa — ko'p-biznesli). Owner/admin — biznessiz.
   let businessId: string | null = null;
-  if (parsed.data.rol === "CASHIER" || parsed.data.rol === "SELLER") {
-    if (parsed.data.rol === "CASHIER" && !parsed.data.businessId) {
+  if (effectiveRol === "CASHIER" || effectiveRol === "SELLER") {
+    if (effectiveRol === "CASHIER" && !parsed.data.businessId) {
       return NextResponse.json({ error: "Kassir uchun biznes tanlanishi shart" }, { status: 400 });
     }
     if (parsed.data.businessId) {
@@ -66,8 +90,11 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
       ism: parsed.data.ism,
       login: parsed.data.login,
       parolHash,
-      rol: parsed.data.rol,
+      rol: effectiveRol,
       businessId,
+      roleId,
+      huquqPlus: parsed.data.huquqPlus?.length ? JSON.stringify(parsed.data.huquqPlus) : undefined,
+      huquqMinus: parsed.data.huquqMinus?.length ? JSON.stringify(parsed.data.huquqMinus) : undefined,
     },
     select: USER_SELECT,
   });

@@ -9,7 +9,19 @@ import { Money } from "@/components/ui/Money";
 import { EmptyState } from "@/components/ui/EmptyState";
 import type { SupplierDTO } from "@/lib/queries/xarid";
 
-export function TaminotchilarClient({ suppliers }: { suppliers: SupplierDTO[] }) {
+interface UserOption {
+  id: string;
+  ism: string;
+}
+
+export function TaminotchilarClient({
+  suppliers,
+  userlar,
+}: {
+  suppliers: SupplierDTO[];
+  /** Ta'minotchini tizim useriga bog'lash (PRO) — bo'sh bo'lsa select ko'rinmaydi. */
+  userlar: UserOption[];
+}) {
   const router = useRouter();
   const [modal, setModal] = useState<SupplierDTO | "yangi" | null>(null);
 
@@ -77,6 +89,7 @@ export function TaminotchilarClient({ suppliers }: { suppliers: SupplierDTO[] })
       {modal && (
         <SupplierModal
           supplier={modal === "yangi" ? null : modal}
+          userlar={userlar}
           onClose={() => setModal(null)}
           onDone={() => {
             setModal(null);
@@ -90,10 +103,12 @@ export function TaminotchilarClient({ suppliers }: { suppliers: SupplierDTO[] })
 
 function SupplierModal({
   supplier,
+  userlar,
   onClose,
   onDone,
 }: {
   supplier: SupplierDTO | null;
+  userlar: UserOption[];
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -102,6 +117,7 @@ function SupplierModal({
   const [tel, setTel] = useState(supplier?.tel ?? "");
   const [manzil, setManzil] = useState(supplier?.manzil ?? "");
   const [izoh, setIzoh] = useState(supplier?.izoh ?? "");
+  const [userId, setUserId] = useState(supplier?.userId ?? "");
   const [isActive, setIsActive] = useState(supplier?.isActive ?? true);
   const [loading, setLoading] = useState(false);
   const [xato, setXato] = useState<string | null>(null);
@@ -121,6 +137,7 @@ function SupplierModal({
             tel: tel || null,
             manzil: manzil || null,
             izoh: izoh || null,
+            userId: userId || null,
             ...(tahrir ? { isActive } : {}),
           }),
         }
@@ -185,6 +202,26 @@ function SupplierModal({
           </label>
           <input id="tm-izoh" value={izoh} onChange={(e) => setIzoh(e.target.value)} maxLength={500} className={input} />
         </div>
+
+        {userlar.length > 0 && (
+          <div>
+            <label className="block text-sm text-muted mb-1" htmlFor="tm-user">
+              Tizim foydalanuvchisi (PRO)
+            </label>
+            <select id="tm-user" value={userId} onChange={(e) => setUserId(e.target.value)} className={input}>
+              <option value="">Bog&apos;lanmagan (tashqi ta&apos;minotchi)</option>
+              {userlar.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.ism}
+                </option>
+              ))}
+            </select>
+            <p className="text-2xs text-faint mt-1">
+              Bog&apos;lansa, xarid to&apos;lovlari chiqim o&apos;rniga shu foydalanuvchining shaxsiy
+              kassasiga o&apos;tkazma bo&apos;lib tushadi.
+            </p>
+          </div>
+        )}
 
         {tahrir && (
           <label className="flex items-center gap-2 text-sm text-fg">

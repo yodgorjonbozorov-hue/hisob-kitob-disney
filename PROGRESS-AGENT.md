@@ -2323,3 +2323,50 @@ kassa 11/11 · agregat 7/7 · soft-delete 8/8 · visibility 10/10 ·
 migratsiya 10/10 · atomik 6/6 · csv-import 13/13 · tasdiqlash 20/20 ·
 crm 7/7 · avto 25/25 · sotuv-bekor 11/11 · xarid 13/13 · hr 19/19 ·
 backup 6/6 · cron 10/10.
+
+---
+
+## 2026-08-14 — PRO yangilanish: maxsus rollar, shaxsiy kassalar, kg xaridda qisman to'lov (Fortex Selos)
+
+**Nima qilindi** (branch: `claude/fortex-selos-pro-upgrade-zwx1i3`):
+
+1. **Maxsus rollar (custom role system, PRO)**: mijoz endi o'zi rol yaratadi
+   ("Taminotchi", "Omborchi", "Haydovchi"...) — `Role` modeli (tenant-scoped,
+   TENANT_DIRECT), granular huquqlar katalogi `lib/permissions/katalog.ts`
+   (18 kod, 5 guruh) va effektiv huquq hisoblagichi `lib/permissions/tekshir.ts`
+   (baza rol/maxsus rol + `huquqPlus`/`huquqMinus` per-user override; OWNER
+   hech qachon cheklanmaydi). Tizim rollari buzilmadi — `Role.bazaRol`
+   nav/modul skeletini beradi, `User.rol` u bilan sinxron saqlanadi.
+   UI: `/app/admin/rollar` (kartochkalar + checkbox guruhli modal),
+   Foydalanuvchilar sahifasida maxsus rol tanlash (optgroup).
+2. **Shaxsiy kassalar va user-to-user transfer (PRO)**: `Account.userId`
+   (null = umumiy biznes kassasi — eski xatti-harakat), `AccountTransfer`
+   kengaytirildi: `fromUserId/toUserId` + ism snapshotlari, `holat`
+   (bajarildi/bekor — bekor STORNO bilan, ledger append-only), `valyuta`,
+   `relatedType/relatedId`. Balans FAQAT ledger'dan (mavjud
+   `getAccountBalances` o'zgarishsiz ishlayveradi). Servis
+   `lib/services/userKassa.ts`: kassa avtomatik ochish, sender≠receiver,
+   balans qoidasi (xodim minusga o'tolmaydi, boshqaruvchi oladi).
+   Transfer API endi `toUserId` rejimini qabul qiladi ("pul.berish" huquqi).
+3. **Kg xaridda qisman to'lov + ichki ta'minotchi**: `Supplier.userId` —
+   ta'minotchi tizim useriga bog'lansa, xarid to'lovi chiqim EMAS, uning
+   shaxsiy kassasiga TRANSFER (pul biznes ichida qoldi — aylanma soxta
+   oshmaydi). `qabulQilish` endi `tolanganSumma` (0..jami) oladi: to'langan
+   qism transfer/chiqim, qoldiq "beriladigan" qarz (`PurchaseOrder.tolanganSumma`,
+   `transferId`). `recordDebtPayment` ichki ta'minotchi qarzini ham transfer
+   bilan yopadi. UI: QabulModal (to'liq/qisman/hammasi qarzga), ta'minotchi
+   modalida user bog'lash.
+4. **PRO gate va upgrade**: `lib/billing/pro.ts` (`requirePro`) — rollar,
+   user-transfer, override API'lari PRO'da ochiq; `npm run client:pro -- --slug
+   <slug> [--kunlar 30]` mijozni PRO'ga o'tkazib barcha PRO modullarni yoqadi.
+   Dashboard'da PRO qatori: bugungi sotilgan/olingan kg (birlik=kg),
+   kassalar jami, foydalanuvchi/ta'minotchi soni.
+5. **Migratsiya** `20260814090000_pro_rollar_shaxsiy_kassa` — faqat ADD
+   COLUMN/CREATE TABLE (xavf: past, ma'lumot ustiga xatosiz tushadi —
+   migratsiya-zanjiri testi qamrab oladi). Zaxira: `role` jadval `user`dan
+   OLDIN (FK tartibi).
+
+**Tekshirildi:** build ✅ · pro-stsenariy 13/13 (YANGI: 100kg×8000=800k to'liq;
+qisman 500k→qarz 300k→0; storno; o'ziga transfer rad; xodim limiti; audit) ·
+izolyatsiya-royxati 9/9 · backup 6/6 · migratsiya 10/10 · xarid 13/13 ·
+kassa 11/11 · isolation 22/22 · tolov 14/14 · audit 12/12.

@@ -25,6 +25,7 @@ export type AuditAction = AuditAmal;
 export type AuditEntity =
   | "transaction"
   | "user"
+  | "role"
   | "category"
   | "sale"
   | "debt"

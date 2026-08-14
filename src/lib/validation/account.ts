@@ -36,6 +36,22 @@ export const transferSchema = z
     path: ["toAccountId"],
   });
 
+/**
+ * FOYDALANUVCHIDAN FOYDALANUVCHIGA PUL O'TKAZISH (PRO).
+ *
+ * Qabul qiluvchi KASSA emas, FOYDALANUVCHI tanlanadi — uning shaxsiy kassasi
+ * server tomonda topiladi (yo'q bo'lsa avtomatik ochiladi). Yuboruvchi kassa
+ * berilmasa — joriy foydalanuvchining shaxsiy kassasi.
+ */
+export const userTransferSchema = z.object({
+  toUserId: z.string().min(1, "Kimga pul berilishini tanlang"),
+  fromAccountId: z.string().optional().nullable(),
+  summa: z.number().int().positive("Summa musbat bo'lishi kerak"),
+  sana: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Sana noto'g'ri formatda"),
+  izoh: z.string().max(300).optional().nullable(),
+});
+
 export type CreateAccountInput = z.infer<typeof createAccountSchema>;
 export type UpdateAccountInput = z.infer<typeof updateAccountSchema>;
 export type TransferInput = z.infer<typeof transferSchema>;
+export type UserTransferInput = z.infer<typeof userTransferSchema>;
