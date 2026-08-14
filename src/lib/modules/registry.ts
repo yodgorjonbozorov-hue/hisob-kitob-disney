@@ -23,6 +23,8 @@ export interface NavItem {
   tartib: number;
   /** Qaysi rollar ko'radi. */
   rollar: Rol[];
+  /** Faqat PRO tarifda ko'rinadi — boshqa mijozlar menyusi O'ZGARMAYDI. */
+  faqatPro?: boolean;
 }
 
 export interface ModulTarifi {
@@ -188,7 +190,7 @@ export const MODULLAR: ModulTarifi[] = [
       { href: "/app/admin/bizneslar", label: "Bizneslar", icon: "business", tartib: 50, rollar: BOSHQARUVCHILAR },
       { href: "/app/admin/kategoriyalar", label: "Kategoriyalar", icon: "tags", tartib: 51, rollar: BOSHQARUVCHILAR },
       { href: "/app/admin/foydalanuvchilar", label: "Foydalanuvchilar", icon: "users", tartib: 52, rollar: BOSHQARUVCHILAR },
-      { href: "/app/admin/rollar", label: "Rollar va huquqlar", icon: "shield", tartib: 52, rollar: BOSHQARUVCHILAR },
+      { href: "/app/admin/rollar", label: "Rollar va huquqlar", icon: "shield", tartib: 52, rollar: BOSHQARUVCHILAR, faqatPro: true },
       { href: "/app/admin/ochirilganlar", label: "O'chirilganlar", icon: "trash", tartib: 53, rollar: BOSHQARUVCHILAR },
       { href: "/app/admin/audit", label: "Audit jurnali", icon: "audit", tartib: 54, rollar: BOSHQARUVCHILAR },
       { href: "/app/sozlamalar/modullar", label: "Modullar", icon: "modules", tartib: 55, rollar: ["OWNER"] },
@@ -218,6 +220,8 @@ export interface NavHolati {
   omborli: boolean;
   /** Aktiv biznes avto rejimidami — OMBOR yorliqlari "Avtopark/Mashina sotish" bo'ladi. */
   avto?: boolean;
+  /** Tenant PRO tarifdami — `faqatPro` havolalar faqat shunda ko'rinadi. */
+  pro?: boolean;
 }
 
 /** Avto rejimidagi biznes uchun OMBOR moduli yorliqlari (lib/biznesTuri.ts bilan mos). */
@@ -227,7 +231,7 @@ const AVTO_YORLIQLAR: Record<string, string> = {
 };
 
 /** Sidebar/menyu uchun tartiblangan havolalar ro'yxati. */
-export function computeNav({ rol, yoqilgan, omborli, avto = false }: NavHolati): NavItem[] {
+export function computeNav({ rol, yoqilgan, omborli, avto = false, pro = false }: NavHolati): NavItem[] {
   const items: NavItem[] = [];
   for (const m of MODULLAR) {
     if (!m.core && !yoqilgan.has(m.code)) continue;
@@ -235,6 +239,7 @@ export function computeNav({ rol, yoqilgan, omborli, avto = false }: NavHolati):
     if (!m.rollar.includes(rol)) continue;
     for (const item of m.nav) {
       if (!item.rollar.includes(rol)) continue;
+      if (item.faqatPro && !pro) continue;
       const label = avto ? AVTO_YORLIQLAR[item.href] ?? item.label : item.label;
       items.push(label === item.label ? item : { ...item, label });
     }

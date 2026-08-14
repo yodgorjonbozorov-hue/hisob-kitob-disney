@@ -4,6 +4,7 @@ import { requireManager } from "@/lib/auth/guard";
 import { resolveActiveBusinessId, requireOmborli } from "@/lib/business";
 import { updateOrder, qabulQilish, orderHolatiniOzgartir } from "@/lib/services/xarid";
 import { updateOrderSchema, orderHolatSchema } from "@/lib/validation/xarid";
+import { requirePro } from "@/lib/billing/pro";
 import { dashboardYangilandi } from "@/lib/cache";
 
 /** Qoralama buyurtmani tahrirlash. */
@@ -27,7 +28,8 @@ export const PATCH = withTenant<{ params: { id: string } }>(
  * Qabul qilish — ombor va pul yozuvlarini yaratadigan yagona qadam.
  */
 export const POST = withTenant<{ params: { id: string } }>(
-  async (request, { params }, { session: user }) => {
+  async (request, { params }, tenant) => {
+    const user = tenant.session;
     requireManager(user.rol);
     const businessId = await resolveActiveBusinessId(user);
     if (!businessId) return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });
@@ -39,6 +41,11 @@ export const POST = withTenant<{ params: { id: string } }>(
 
     if (parsed.data.holat === "qabul_qilingan") {
       await requireOmborli(businessId);
+      // Qisman to'lov — PRO imkoniyati. PRO bo'lmagan mijozda parametrlar
+      // e'tiborsiz qoldiriladi: eski xatti-harakat (naqd → to'liq, qarz → qarz)
+      // aynan avvalgidek qoladi.
+      const proParametrlar = parsed.data.tolanganSumma != null || parsed.data.accountId != null;
+      if (proParametrlar) requirePro(tenant);
       const order = await qabulQilish({
         businessId,
         orderId: params.id,

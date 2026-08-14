@@ -28,12 +28,15 @@ export function XaridClient({
   products,
   stats,
   omborli,
+  pro,
 }: {
   orders: OrderDTO[];
   suppliers: SupplierDTO[];
   products: ProductAdminDTO[];
   stats: XaridStats;
   omborli: boolean;
+  /** PRO: qabulda qisman to'lov modali; PRO'siz — eski bir bosishli qabul. */
+  pro: boolean;
 }) {
   const router = useRouter();
   const [yangiOpen, setYangiOpen] = useState(false);
@@ -42,7 +45,9 @@ export function XaridClient({
   const [xato, setXato] = useState<string | null>(null);
   const [qabulOrder, setQabulOrder] = useState<OrderDTO | null>(null);
 
-  async function holatOzgartir(orderId: string, holat: "tasdiqlangan" | "bekor") {
+  // PRO'siz mijozda "qabul_qilingan" ham shu yerdan yuboriladi (eski xatti-harakat:
+  // naqd → to'liq chiqim, qarz → to'liq qarz); PRO'da qabul QabulModal orqali.
+  async function holatOzgartir(orderId: string, holat: "tasdiqlangan" | "qabul_qilingan" | "bekor") {
     setAmal(orderId);
     setXato(null);
     try {
@@ -184,7 +189,11 @@ export function XaridClient({
                         )}
                         {(o.holat === "qoralama" || o.holat === "tasdiqlangan") && (
                           <>
-                            <Button size="sm" loading={amal === o.id} onClick={() => setQabulOrder(o)}>
+                            <Button
+                              size="sm"
+                              loading={amal === o.id}
+                              onClick={() => (pro ? setQabulOrder(o) : holatOzgartir(o.id, "qabul_qilingan"))}
+                            >
                               Qabul qilish
                             </Button>
                             <Button
@@ -199,10 +208,15 @@ export function XaridClient({
                         )}
                         {o.holat === "qabul_qilingan" && (
                           <p className="text-2xs text-muted">
+                            {/* tolanganSumma > 0 — yangi (qisman to'lovli) yozuv; 0 bo'lsa eski
+                                yozuv: to'lov holati tolovTuri'dan o'qiladi (naqd = to'liq to'langan). */}
                             Tovar omborga tushgan
-                            {o.tolanganSumma > 0 && ` · to'landi: ${o.tolanganSumma.toLocaleString("uz-UZ")} so'm`}
-                            {o.jamiSumma - o.tolanganSumma > 0 &&
-                              ` · qarz: ${(o.jamiSumma - o.tolanganSumma).toLocaleString("uz-UZ")} so'm`}{" "}
+                            {o.tolanganSumma > 0
+                              ? ` · to'landi: ${o.tolanganSumma.toLocaleString("uz-UZ")} so'm` +
+                                (o.jamiSumma - o.tolanganSumma > 0
+                                  ? ` · qarz: ${(o.jamiSumma - o.tolanganSumma).toLocaleString("uz-UZ")} so'm`
+                                  : "")
+                              : `, ${o.tolovTuri === "naqd" ? "chiqim" : "ta'minotchiga qarz"} yozilgan`}{" "}
                             — o&apos;zgartirib bo&apos;lmaydi.
                           </p>
                         )}
