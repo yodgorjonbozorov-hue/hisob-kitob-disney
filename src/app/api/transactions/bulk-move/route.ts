@@ -7,6 +7,7 @@ import { resolveActiveBusinessId } from "@/lib/business";
 import { logAudit, getClientIp } from "@/lib/services/audit";
 import { z } from "zod";
 import { dashboardYangilandi } from "@/lib/cache";
+import { kunlikBulkUz } from "@/lib/services/kunlik";
 
 const schema = z.object({
   ids: z.array(z.string()).min(1).max(500),
@@ -92,6 +93,13 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
     after: { toBusinessId: targetBusinessId, count: moved },
     ip: getClientIp(request),
   });
+
+  // Boshqa biznesga ko'chgan yozuv manba biznes kunligidan chiqadi
+  // (kunlik — pul tushgan biznesning ko'zgusi).
+  await kunlikBulkUz(
+    sourceBusinessId,
+    txs.map((t) => t.id)
+  );
 
   // Ikkala biznes dashboardi ham o'zgardi.
   dashboardYangilandi(sourceBusinessId);

@@ -8,6 +8,9 @@ export interface AccountDTO {
   turi: string;
   isActive: boolean;
   tartib: number;
+  /** Shaxsiy kassa egasi (PRO) — null bo'lsa umumiy biznes kassasi. */
+  userId: string | null;
+  egaIsm: string | null;
 }
 
 export interface AccountQoldiq extends AccountDTO {
@@ -26,6 +29,7 @@ export interface AccountQoldiq extends AccountDTO {
 export async function listAccounts(businessId: string, faqatFaol = false): Promise<AccountDTO[]> {
   const rows = await prisma.account.findMany({
     where: { businessId, ...(faqatFaol ? { isActive: true } : {}) },
+    include: { user: { select: { ism: true } } },
     orderBy: [{ isActive: "desc" }, { tartib: "asc" }, { createdAt: "asc" }],
   });
   return rows.map((a) => ({
@@ -34,6 +38,8 @@ export async function listAccounts(businessId: string, faqatFaol = false): Promi
     turi: a.turi,
     isActive: a.isActive,
     tartib: a.tartib,
+    userId: a.userId,
+    egaIsm: a.user?.ism ?? null,
   }));
 }
 
@@ -110,6 +116,11 @@ export interface TransferDTO {
   summa: number;
   sana: string;
   izoh: string | null;
+  /** User-to-user o'tkazma bo'lsa — kim kimga (ism snapshotlari). */
+  fromUserIsm: string | null;
+  toUserIsm: string | null;
+  /** "bajarildi" | "bekor" (storno bilan bekor qilingan). */
+  holat: string;
 }
 
 export async function listTransfers(businessId: string, limit = 50): Promise<TransferDTO[]> {
@@ -126,5 +137,8 @@ export async function listTransfers(businessId: string, limit = 50): Promise<Tra
     summa: t.summa,
     sana: t.sana.toISOString(),
     izoh: t.izoh,
+    fromUserIsm: t.fromUserIsm,
+    toUserIsm: t.toUserIsm,
+    holat: t.holat,
   }));
 }

@@ -33,8 +33,39 @@ model Tenant {
   subscriptions    Subscription[]
   payments         Payment[]
   modules          TenantModule[]
+  roles            Role[]
 
   @@index([status])
+}
+
+/// MAXSUS ROL — mijoz o'zi yaratadigan rol (PRO tarif).
+///
+/// Tizim rollari (OWNER/ADMIN/CASHIER/SELLER) kodda qoladi — ular modul/nav
+/// skeletini beradi. Maxsus rol esa GRANULAR huquqlar to'plami: mijoz
+/// "Taminotchi", "Omborchi", "Haydovchi" kabi istalgan rol yaratadi va unga
+/// kerakli huquqlarni (lib/permissions/katalog.ts kodlari) belgilaydi.
+///
+/// `bazaRol` — nav/modul darajasidagi skelet ("ADMIN" | "CASHIER" | "SELLER"):
+/// maxsus rolli foydalanuvchi qaysi tizim roli kabi sahifalarni ko'rishini
+/// aniqlaydi; granular huquqlar shu skelet ichida qo'llanadi.
+model Role {
+  id        String    @id @default(cuid())
+  tenantId  String
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  nomi      String
+  izoh      String?
+  /// Huquq kodlari JSON massivi, masalan ["mahsulot.korish","pul.berish"].
+  huquqlar  String    @default("[]")
+  /// "ADMIN" | "CASHIER" | "SELLER" — nav skeleti (yuqoridagi izoh).
+  bazaRol   String    @default("SELLER")
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  users     User[]
+
+  @@unique([tenantId, nomi])
+  @@index([tenantId, isActive])
 }
 
 /// Tenant qaysi modullarni yoqqani. Modul katalogi kodda (lib/modules/registry.ts) —
@@ -101,49 +132,52 @@ model Payment {
 
 /// Biznes (kompaniya bo'limi). Har bir biznesning o'z kategoriyalari, tranzaksiyalari va dashboard'i.
 model Business {
-  id               String                 @id @default(cuid())
-  nomi             String
-  isActive         Boolean                @default(true)
+  id                 String                 @id @default(cuid())
+  nomi               String
+  isActive           Boolean                @default(true)
   // Ombor (inventar) tizimi yoqilganmi — tovar sotadigan bizneslar uchun (masalan Salyut).
-  omborli          Boolean                @default(false)
+  omborli            Boolean                @default(false)
   // Biznes turi: "umumiy" | "avto". Avto — olib-sotarlar uchun (ombor → avtopark).
   // Faqat UI matnlari va sotuv qoidalariga ta'sir qiladi (lib/biznesTuri.ts).
-  turi             String                 @default("umumiy")
-  createdAt        DateTime               @default(now())
-  tenantId         String
-  tenant           Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  categories       Category[]
-  transactions     Transaction[]
-  users            User[]
-  products         Product[]
-  budgets          Budget[]
-  shiftCloses      ShiftClose[]
-  recurrings       RecurringTransaction[]
-  sales            Sale[]
-  debts            Debt[]
-  stockEntries     StockEntry[]
-  debtPayments     DebtPayment[]
-  auditLogs        AuditLog[]
-  contacts         Contact[]
-  stages           Stage[]
-  deals            Deal[]
-  crmActivities    Activity[]
-  tasks            Task[]
-  productExpenses  ProductExpense[]
-  accounts         Account[]
-  transfers        AccountTransfer[]
-  adjustments      StockAdjustment[]
-  suppliers        Supplier[]
-  purchaseOrders   PurchaseOrder[]
-  purchaseItems    PurchaseOrderItem[]
-  approvalRules    ApprovalRule[]
-  approvalRequests ApprovalRequest[]
-  employees        Employee[]
-  attendances      Attendance[]
-  payrolls         Payroll[]
-  advances         PayrollAdvance[]
-  contracts        Contract[]
-  attachments      Attachment[]
+  turi               String                 @default("umumiy")
+  createdAt          DateTime               @default(now())
+  tenantId           String
+  tenant             Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  categories         Category[]
+  transactions       Transaction[]
+  users              User[]
+  products           Product[]
+  budgets            Budget[]
+  shiftCloses        ShiftClose[]
+  recurrings         RecurringTransaction[]
+  sales              Sale[]
+  debts              Debt[]
+  stockEntries       StockEntry[]
+  debtPayments       DebtPayment[]
+  auditLogs          AuditLog[]
+  contacts           Contact[]
+  stages             Stage[]
+  deals              Deal[]
+  crmActivities      Activity[]
+  tasks              Task[]
+  productExpenses    ProductExpense[]
+  accounts           Account[]
+  transfers          AccountTransfer[]
+  adjustments        StockAdjustment[]
+  suppliers          Supplier[]
+  purchaseOrders     PurchaseOrder[]
+  purchaseItems      PurchaseOrderItem[]
+  approvalRules      ApprovalRule[]
+  approvalRequests   ApprovalRequest[]
+  employees          Employee[]
+  attendances        Attendance[]
+  payrolls           Payroll[]
+  advances           PayrollAdvance[]
+  contracts          Contract[]
+  attachments        Attachment[]
+  dailyReports       DailyReport[]
+  dailyTransactions  DailyTransaction[]
+  dailyReportSetting DailyReportSetting?
 
   @@index([tenantId])
 }
@@ -177,8 +211,21 @@ model User {
   linkCode          String?
   linkCodeExpiresAt DateTime?
 
+  // MAXSUS ROL (PRO): tayinlangan bo'lsa granular huquqlar shu roldan olinadi,
+  // `rol` esa rol.bazaRol bilan sinxron saqlanadi (nav/modul skeleti uchun).
+  roleId String?
+  role   Role?   @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  /// Foydalanuvchiga ALOHIDA berilgan qo'shimcha huquqlar (JSON massiv).
+  huquqPlus  String?
+  /// Foydalanuvchidan ALOHIDA olib qo'yilgan huquqlar (JSON massiv).
+  huquqMinus String?
+
+  /// Shaxsiy kassalar (Account.userId) — har user o'z hamyoniga ega bo'la oladi.
+  shaxsiyKassalar Account[] @relation("KassaEgasi")
+
   @@index([businessId])
   @@index([tenantId])
+  @@index([roleId])
 }
 
 /// Kalit-qiymat ko'rinishidagi tizim sozlamalari (masalan, oxirgi yuborilgan oylik hisobot).
@@ -240,6 +287,11 @@ model Account {
   nomi             String
   /// "naqd" | "plastik" | "bank"
   turi             String            @default("naqd")
+  /// SHAXSIY KASSA EGASI (PRO): null — umumiy biznes kassasi (avvalgi xatti-harakat);
+  /// to'ldirilgan — shu foydalanuvchining shaxsiy hamyoni. Balans baribir
+  /// ledger'dan (Transaction + AccountTransfer) hisoblanadi.
+  userId           String?
+  user             User?             @relation("KassaEgasi", fields: [userId], references: [id], onDelete: SetNull)
   isActive         Boolean           @default(true)
   tartib           Int               @default(0)
   createdAt        DateTime          @default(now())
@@ -266,12 +318,30 @@ model AccountTransfer {
   toAccountId   String
   toAccount     Account  @relation("transferTo", fields: [toAccountId], references: [id], onDelete: Restrict)
   summa         Int
+  /// Valyuta — hozircha faqat "UZS" (butun tizim so'mda, Int).
+  valyuta       String   @default("UZS")
   sana          DateTime
   izoh          String?
   userId        String
+  // FOYDALANUVCHIDAN FOYDALANUVCHIGA O'TKAZMA (PRO): shaxsiy kassalar orasidagi
+  // transfer kim kimga pul berganini ham yozadi. Ism — snapshot (ShiftClose
+  // uslubi): foydalanuvchi o'chirilsa ham tarix o'qiladigan bo'lib qoladi.
+  fromUserId    String?
+  fromUserIsm   String?
+  toUserId      String?
+  toUserIsm     String?
+  /// "bajarildi" | "bekor". Bekor STORNO bilan amalga oshadi: qarama-qarshi
+  /// yo'nalishda yangi transfer yoziladi (ledger append-only qoladi), asl
+  /// yozuv esa shu bayroq bilan belgilanadi.
+  holat         String   @default("bajarildi")
+  /// Bog'liq hujjat: "purchaseOrder" | "debt" | "storno" (+ relatedId).
+  relatedType   String?
+  relatedId     String?
   createdAt     DateTime @default(now())
 
   @@index([businessId, sana])
+  @@index([businessId, fromUserId])
+  @@index([businessId, toUserId])
 }
 
 model Category {
@@ -305,6 +375,10 @@ model Transaction {
   /// skripti (scripts/kassa-migratsiya.ts) ularni default kassaga bog'laydi.
   accountId       String?
   account         Account?         @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  /// To'lov turi: "naqd" | "click" | "qarz". Null — eski yozuvlar, ularda tur
+  /// kassa (account.turi) dan chiqariladi. "qarz"da pul kassaga tushmagan,
+  /// shuning uchun accountId null bo'ladi va kassa qoldig'iga kirmaydi.
+  tolovTuri       String?
   summa           Int
   sana            DateTime
   izoh            String?
@@ -600,6 +674,12 @@ model Supplier {
   businessId String
   business   Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
   nomi       String
+  /// TIZIM FOYDALANUVCHISIGA BOG'LASH (PRO): ta'minotchi tenant ichidagi user
+  /// bo'lsa (masalan "Taminotchi" maxsus rolli), xarid to'lovi chiqim o'rniga
+  /// uning SHAXSIY KASSASIGA transfer bilan yoziladi. FK ataylab yo'q
+  /// (DailyReportSetting.direktorId uslubi) — user o'chirilsa reyestr buzilmasin;
+  /// tenant tekshiruvi xizmat qatlamida (lib/services/xarid.ts).
+  userId     String?
   tel        String?
   manzil     String?
   izoh       String?
@@ -643,6 +723,11 @@ model PurchaseOrder {
   transactionId String?
   /// Qabul qilinganda ochilgan "beriladigan" qarz (qarzga bo'lsa).
   debtId        String?
+  /// QISMAN TO'LOV (PRO): qabul paytida to'langan qism (0..jamiSumma).
+  /// Qolgani `debtId` dagi qarzga tushadi va DebtPayment bilan yopiladi.
+  tolanganSumma Int                 @default(0)
+  /// Ta'minotchi tizim useri bo'lsa — qabul paytidagi kassa transferi.
+  transferId    String?
   createdAt     DateTime            @default(now())
   items         PurchaseOrderItem[]
 
@@ -984,6 +1069,103 @@ model Payroll {
   @@unique([employeeId, oy])
   @@index([businessId, oy, holat])
   @@index([transactionId])
+}
+
+// ==== KUNLIK HISOBOT moduli ====
+
+/// KUNLIK HISOBOT — bir biznes + bir sana = BITTA hisobot.
+///
+/// Oylik hisobotdan ATAYLAB alohida tizim: kunlik tushumlar (naqd/Click/qarz)
+/// `Transaction` jadvaliga YOZILMAYDI, shuning uchun mavjud oylik hisobot,
+/// kassa qoldig'i va budjetga umuman ta'sir qilmaydi.
+///
+/// Summalar har mutatsiyada DailyTransaction'lardan tranzaksiya ichida QAYTA
+/// hisoblanadi — frontenddan kelgan songa ishonilmaydi.
+///
+/// `sana` — Toshkent (Asia/Tashkent, UTC+5) kalendar kuni, UTC yarim tun
+/// sifatida saqlanadi. Kun O'zbekiston yarim tunida almashadi.
+///
+/// holat: "OPEN" | "SUBMITTED" | "CONFIRMED".
+///   OPEN      — kun ochiq, tushum kiritiladi;
+///   SUBMITTED — xodim kassani TOPSHIRDI (sanagan naqdini kiritib), direktor
+///               tasdig'ini kutmoqda. Bu holatda ham tushum kiritilmaydi;
+///   CONFIRMED — direktor tasdiqladi.
+/// Yakunlangan (SUBMITTED/CONFIRMED) kunga tushum kiritib/o'zgartirib
+/// bo'lmaydi — avval direktor/boshqaruvchi uni qayta ochadi.
+model DailyReport {
+  id             String             @id @default(cuid())
+  businessId     String
+  business       Business           @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  sana           DateTime
+  holat          String             @default("OPEN")
+  naqdSumma      Int                @default(0)
+  clickSumma     Int                @default(0)
+  qarzSumma      Int                @default(0)
+  /// naqd + click + qarz (backend formulasi, jamlashTx).
+  jamiSumma      Int                @default(0)
+  /// KASSA TOPSHIRISH (pul nazorati): xodim kun oxirida kassadagi naqdni
+  /// SANAB kiritadi. Direktor `sanalganNaqd` ni tizim hisoblagan `naqdSumma`
+  /// bilan solishtiradi — farq pul yo'qolganini (yoki ortiqchasini) darhol
+  /// ko'rsatadi. Ism snapshot — xodim o'chirilsa ham tarix qoladi.
+  submittedBy    String?
+  submittedByIsm String?
+  submittedAt    DateTime?
+  sanalganNaqd   Int?
+  /// Tasdiqlagan foydalanuvchi (User.id) va ism snapshot'i — foydalanuvchi
+  /// keyin o'chirilsa ham tarixda kim tasdiqlagani ko'rinib turadi.
+  confirmedBy    String?
+  confirmedByIsm String?
+  confirmedAt    DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  items          DailyTransaction[]
+
+  @@unique([businessId, sana])
+  @@index([businessId, holat, sana])
+}
+
+/// Kunlik hisobot tushumi. tolovTuri: "CASH" | "CLICK" | "DEBT".
+///
+/// `userIsm` — kiritgan xodim ismining snapshot'i (ShiftClose uslubi):
+/// User'ga FK yo'q, xodim o'chirilsa ham "kim kiritgani" tarixda qoladi.
+model DailyTransaction {
+  id         String      @id @default(cuid())
+  businessId String
+  business   Business    @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  reportId   String
+  report     DailyReport @relation(fields: [reportId], references: [id], onDelete: Restrict)
+  summa      Int
+  tolovTuri  String
+  izoh       String?
+  userId     String
+  userIsm    String?
+  /// Yozuvlar (Transaction) dan AVTOMATIK ulangan bo'lsa — o'sha yozuv IDsi.
+  /// Bugungi sanali kirim tranzaksiyasi kunlikka o'zi tushadi (kunlikSinxron);
+  /// boshqa sana tanlangan yozuv tushmaydi. FK ataylab yo'q — tranzaksiyani
+  /// butunlay o'chirishni to'sib qo'ymasin; sinxron xizmat qatlamida.
+  transactionId String? @unique
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  /// Yumshoq o'chirish — o'chirilgan tushum jamiga kirmaydi, tarixda qoladi.
+  deletedAt  DateTime?
+
+  @@index([reportId, deletedAt])
+  @@index([businessId, deletedAt, createdAt])
+}
+
+/// KUNLIK HISOBOT SOZLAMASI — biznes uchun tayinlangan direktor.
+///
+/// Kun yakunini FAQAT shu direktor tasdiqlaydi (tayinlanmagan bo'lsa,
+/// vaqtincha OWNER/ADMIN tasdiqlay oladi). `direktorId` — User.id;
+/// FK ataylab yo'q: foydalanuvchi o'chirilsa sozlama yozuvi buzilmasin,
+/// tenant/biznes tekshiruvi xizmat qatlamida (setKunlikDirektor).
+model DailyReportSetting {
+  id         String   @id @default(cuid())
+  businessId String   @unique
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  direktorId String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 // ==== HUJJATLAR moduli (Faza 6.6) ====

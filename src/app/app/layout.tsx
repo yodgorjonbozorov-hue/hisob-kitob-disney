@@ -5,6 +5,7 @@ import { getAccessibleBusinesses, resolveActiveBusinessId } from "@/lib/business
 import { getEnabledModules } from "@/lib/modules/guard";
 import { computeNav, computeMobileTabs } from "@/lib/modules/registry";
 import { isAvto } from "@/lib/biznesTuri";
+import { isPro } from "@/lib/billing/pro";
 import Sidebar from "@/components/nav/Sidebar";
 import MobileNav from "@/components/nav/MobileNav";
 import { BottomNav } from "@/components/nav/BottomNav";
@@ -45,6 +46,8 @@ export default async function ProtectedLayout({
     yoqilgan: yoqilganModullar,
     omborli: activeOmborli,
     avto: activeAvto,
+    // PRO havolalar (Rollar va huquqlar) faqat PRO mijozda — boshqalar menyusi o'zgarmaydi.
+    pro: isPro(ctx.tenant.plan),
   };
   const navItems = computeNav(navHolati);
   const mobileTabs = computeMobileTabs(navHolati);

@@ -29,7 +29,7 @@ import { auditYoz, entityNomi, type AuditAmal } from "./auditWriter";
  * `tenantId` yoki `businessId` maydoni bor model albatta ro'yxatda bo'lishi,
  * yoki `TIZIM_MODELLAR` da SABABI bilan yozilishi kerak.
  */
-export const TENANT_DIRECT = new Set(["Business", "User", "Subscription", "Payment", "TenantModule"]);
+export const TENANT_DIRECT = new Set(["Business", "User", "Subscription", "Payment", "TenantModule", "Role"]);
 
 /**
  * ATAYLAB tenantga bog'lanmagan tizim jadvallari — sababi bilan.
@@ -88,6 +88,10 @@ const BUSINESS_SCOPED = new Set([
   // Hujjatlar (Faza 6.6)
   "Contract",
   "Attachment",
+  // Kunlik hisobot
+  "DailyReport",
+  "DailyTransaction",
+  "DailyReportSetting",
 ]);
 // AuditLog: businessId nullable — biznesga bog'langan yozuvlar tenant bo'yicha filtrlanadi.
 export const AUDIT_MODEL = "AuditLog";

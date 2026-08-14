@@ -32,6 +32,9 @@ export const BACKUP_VERSION = 1;
 export const ZAXIRA_JADVALLARI = [
   "tenant",
   "business",
+  // DIQQAT: `role` `user`dan OLDIN turishi SHART — User.roleId FK Role'ga
+  // murojaat qiladi. Tartib buzilsa zaxira tiklanmaydi.
+  "role",
   "user",
   "tenantModule",
   "subscription",
@@ -71,6 +74,10 @@ export const ZAXIRA_JADVALLARI = [
   "payrollAdvance",
   "contract",
   "attachment",
+  // dailyReport business/user'dan keyin; dailyTransaction dailyReport'ga FK bilan bog'liq.
+  "dailyReport",
+  "dailyTransaction",
+  "dailyReportSetting",
 ] as const;
 
 export type ZaxiraJadval = (typeof ZAXIRA_JADVALLARI)[number];

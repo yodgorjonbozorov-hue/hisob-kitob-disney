@@ -129,12 +129,15 @@ export async function createTransfer(
  * Yozuv uchun kassani aniqlaydi.
  *
  * Foydalanuvchi tanlagan bo'lsa — u shu biznesniki ekani tekshiriladi.
- * Tanlanmagan bo'lsa — birinchi faol kassa (bitta kassali bizneslarda UI'da
- * bu qadam umuman ko'rsatilmaydi).
+ * Tanlanmagan bo'lsa — to'lov turiga MOS birinchi faol kassa (naqd → naqd
+ * kassa, click → plastik/bank kassa); mos kassa bo'lmasa yoki tur berilmasa —
+ * birinchi faol kassa (bitta kassali bizneslarda UI'da bu qadam umuman
+ * ko'rsatilmaydi).
  */
 export async function resolveAccountId(
   businessId: string,
-  accountId?: string | null
+  accountId?: string | null,
+  tolovTuri?: string | null
 ): Promise<string | null> {
   if (accountId) {
     const acc = await prisma.account.findFirst({
@@ -143,6 +146,15 @@ export async function resolveAccountId(
     });
     if (!acc) throw new ForbiddenError("Kassa topilmadi yoki nofaol");
     return acc.id;
+  }
+  if (tolovTuri === "naqd" || tolovTuri === "click") {
+    const mosTurlar = tolovTuri === "naqd" ? ["naqd"] : ["plastik", "bank"];
+    const mos = await prisma.account.findFirst({
+      where: { businessId, isActive: true, turi: { in: mosTurlar } },
+      orderBy: [{ tartib: "asc" }, { createdAt: "asc" }],
+      select: { id: true },
+    });
+    if (mos) return mos.id;
   }
   const birinchi = await prisma.account.findFirst({
     where: { businessId, isActive: true },

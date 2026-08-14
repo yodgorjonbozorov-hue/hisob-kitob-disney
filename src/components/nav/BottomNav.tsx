@@ -32,6 +32,9 @@ const ICONS: Record<string, React.ReactNode> = {
   chart: (
     <path d="M3 3v18h18M8 14v3M13 10v7M18 6v11" />
   ),
+  daily: (
+    <path d="M9 3h6v4H9zM9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 12h6M9 16h4" />
+  ),
   menu: (
     <path d="M4 6h16M4 12h16M4 18h16" />
   ),

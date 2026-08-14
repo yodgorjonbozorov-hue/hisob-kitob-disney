@@ -6,8 +6,11 @@ import { isManager } from "@/lib/auth/roles";
 import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { listTransactions } from "@/lib/queries/transactions";
 import { formatSom } from "@/lib/format";
+import { dateOnlyStringToUTCDate } from "@/lib/date";
+import { isModuleOnForTenant } from "@/lib/modules/guard";
 import { TransactionsClient } from "./TransactionsClient";
 import { listAccounts } from "@/lib/queries/accounts";
+import type { Prisma } from "@prisma/client";
 
 interface SearchParams {
   from?: string;
@@ -63,6 +66,32 @@ export default async function TranzaksiyalarPage({
     listAccounts(businessId, true),
   ]);
 
+  // QARZ bo'limi jami — yozuvlardagi qarz tranzaksiyalari (totals.qarzKirim)
+  // USTIGA kunlik hisobotda qo'lda kiritilgan qarz tushumlari qo'shiladi
+  // (KUNLIK moduli yoqiq bo'lsa). Yozuvlardan avto-ulangan tushumlar
+  // (transactionId bor) sanalmaydi — ular totals.qarzKirim'da allaqachon bor.
+  let qarzSumma: number | null = null;
+  if (await isModuleOnForTenant(tenantId, "KUNLIK")) {
+    const qarzWhere: Prisma.DailyTransactionWhereInput = {
+      businessId,
+      tolovTuri: "DEBT",
+      transactionId: null,
+      deletedAt: null,
+    };
+    const scopeUserId = transactionScopeUserId(session);
+    if (scopeUserId) qarzWhere.userId = scopeUserId;
+    if (searchParams.from || searchParams.to) {
+      const sana: Prisma.DateTimeFilter = {};
+      if (searchParams.from) sana.gte = dateOnlyStringToUTCDate(searchParams.from);
+      if (searchParams.to) {
+        sana.lt = new Date(dateOnlyStringToUTCDate(searchParams.to).getTime() + 24 * 60 * 60 * 1000);
+      }
+      qarzWhere.report = { sana };
+    }
+    const agg = await prisma.dailyTransaction.aggregate({ _sum: { summa: true }, where: qarzWhere });
+    qarzSumma = agg._sum.summa ?? 0;
+  }
+
   // Ko'chirish maqsadlari — direktor uchun joriy bizneskan boshqa bizneslar.
   const canMove = isManager(session.rol);
   const moveTargets = canMove
@@ -86,6 +115,11 @@ export default async function TranzaksiyalarPage({
         hideProfit={hideProfit}
         moveTargets={moveTargets}
         totals={result.totals}
+        qarzSumma={
+          qarzSumma === null && result.totals.qarzKirim === 0
+            ? null
+            : (qarzSumma ?? 0) + result.totals.qarzKirim
+        }
         filters={{
           from: searchParams.from ?? "",
           to: searchParams.to ?? "",

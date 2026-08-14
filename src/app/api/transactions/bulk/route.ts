@@ -5,6 +5,7 @@ import { withTenant } from "@/lib/auth/tenant";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { z } from "zod";
 import { dashboardYangilandi } from "@/lib/cache";
+import { kunlikBulkUz } from "@/lib/services/kunlik";
 
 const schema = z.object({ ids: z.array(z.string()).min(1).max(500) });
 
@@ -28,6 +29,9 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
     },
     data: { deletedAt: new Date() },
   });
+
+  // Kunlik hisobotga ulangan tushumlar ham chiqariladi (ochiq kunlardan).
+  await kunlikBulkUz(businessId, parsed.data.ids);
 
   dashboardYangilandi(businessId);
   return NextResponse.json({ ok: true, deleted: res.count });

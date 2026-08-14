@@ -25,6 +25,7 @@ export type AuditAction = AuditAmal;
 export type AuditEntity =
   | "transaction"
   | "user"
+  | "role"
   | "category"
   | "sale"
   | "debt"
@@ -45,7 +46,10 @@ export type AuditEntity =
   | "payroll"
   | "payrollAdvance"
   | "contract"
-  | "attachment";
+  | "attachment"
+  | "dailyReport"
+  | "dailyTransaction"
+  | "dailyReportSetting";
 
 interface AuditInput {
   businessId?: string | null;

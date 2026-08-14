@@ -22,9 +22,10 @@ import {
   getDailyDynamicsKesh,
 } from "@/lib/queries/dashboardCached";
 import { getDebtTotals } from "@/lib/queries/inventory";
-import { getJamiKassaQoldiq } from "@/lib/queries/accounts";
 import { getTodayTotals } from "@/lib/queries/shift";
 import { listTransactions } from "@/lib/queries/transactions";
+import { getProBugun } from "@/lib/queries/proDashboard";
+import { isPro } from "@/lib/billing/pro";
 import { KassaHome } from "./KassaHome";
 
 export default async function DashboardPage({
@@ -32,7 +33,7 @@ export default async function DashboardPage({
 }: {
   searchParams: { month?: string };
 }) {
-  const { session, tenantId } = await requireTenantPage();
+  const { session, tenantId, tenant } = await requireTenantPage();
   // Tenant konteksti: quyidagi barcha prisma so'rovlari shu tenantga avtomatik cheklanadi.
   return runWithTenant(tenantId, async () => {
 
@@ -87,7 +88,8 @@ export default async function DashboardPage({
   }
 
   const business = await getActiveBusiness(session);
-  const [summary, kirimBreakdown, chiqimBreakdown, trend, daily, qarzTotal, categoryCount, kassaQoldiq] = await Promise.all([
+  const pro = isPro(tenant.plan);
+  const [summary, kirimBreakdown, chiqimBreakdown, trend, daily, qarzTotal, categoryCount, proBugun] = await Promise.all([
     getMonthSummaryKesh(businessId, month),
     getCategoryBreakdownKesh(businessId, month, "kirim"),
     getCategoryBreakdownKesh(businessId, month, "chiqim"),
@@ -95,7 +97,8 @@ export default async function DashboardPage({
     getDailyDynamicsKesh(businessId, month),
     business?.omborli ? getDebtTotals(businessId) : Promise.resolve({ olinadigan: 0, beriladigan: 0, sof: 0 }),
     prisma.category.count({ where: { businessId } }),
-    getJamiKassaQoldiq(businessId),
+    // PRO: bugungi kg va kassa/jamoa ko'rsatkichlari (kengaytirilgan dashboard).
+    pro ? getProBugun(businessId) : Promise.resolve(null),
   ]);
 
   return (
@@ -129,16 +132,10 @@ export default async function DashboardPage({
         </Card>
       )}
 
+      {/* Barcha kartalar TANLANGAN OY ko'rsatkichlari — umumiy (butun davr)
+          kassa qoldig'i ataylab ko'rsatilmaydi: oy raqamlari bilan yonma-yon
+          turganda chalg'itardi. Kassalar bo'yicha qoldiq /app/kassa sahifasida. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard
-          label="Kassa qoldig'i"
-          value={formatMoneyCompact(kassaQoldiq)}
-          accent={kassaQoldiq >= 0 ? "brand" : "expense"}
-        >
-          <Link href="/app/kassa" className="text-2xs text-brand hover:underline mt-1 inline-block">
-            Kassalar bo&apos;yicha &rarr;
-          </Link>
-        </StatCard>
         <StatCard
           label="Jami kirim"
           value={formatMoneyCompact(summary.jamiKirim)}
@@ -173,6 +170,34 @@ export default async function DashboardPage({
           )}
         </StatCard>
       </div>
+
+      {proBugun && (
+        <Card>
+          <h2 className="font-semibold text-fg mb-3">Bugun (PRO ko&apos;rsatkichlar)</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-sm">
+            <div>
+              <p className="text-2xs text-muted">Sotilgan</p>
+              <p className="font-semibold tnum text-fg">{proBugun.sotilganKg.toLocaleString("uz-UZ")} kg</p>
+            </div>
+            <div>
+              <p className="text-2xs text-muted">Sotib olingan</p>
+              <p className="font-semibold tnum text-fg">{proBugun.olinganKg.toLocaleString("uz-UZ")} kg</p>
+            </div>
+            <div>
+              <p className="text-2xs text-muted">Kassalar jami</p>
+              <p className="font-semibold tnum text-fg">{formatMoneyCompact(proBugun.kassaJami)}</p>
+            </div>
+            <div>
+              <p className="text-2xs text-muted">Foydalanuvchilar</p>
+              <p className="font-semibold tnum text-fg">{proBugun.faolUserlar}</p>
+            </div>
+            <div>
+              <p className="text-2xs text-muted">Ta&apos;minotchilar</p>
+              <p className="font-semibold tnum text-fg">{proBugun.taminotchilar}</p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>

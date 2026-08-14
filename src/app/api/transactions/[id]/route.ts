@@ -6,7 +6,9 @@ import { isManager } from "@/lib/auth/roles";
 import { updateTransactionSchema } from "@/lib/validation/transaction";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { resolveActiveBusinessId } from "@/lib/business";
+import { resolveAccountId } from "@/lib/services/accounts";
 import { dashboardYangilandi } from "@/lib/cache";
+import { kunlikSinxron } from "@/lib/services/kunlik";
 
 export const PATCH = withTenant<{ params: { id: string } }>(async (request, { params }, { session: user }) => {
   const businessId = await resolveActiveBusinessId(user);
@@ -43,6 +45,27 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
     }
   }
 
+  // To'lov turi qoidasi yakuniy holatda tekshiriladi (turi va tolovTuri
+  // birga yoki alohida o'zgarishi mumkin): qarz faqat kirim uchun.
+  const yakuniyTuri = data.turi ?? existing.turi;
+  const yakuniyTolov = data.tolovTuri !== undefined ? data.tolovTuri : existing.tolovTuri;
+  if (yakuniyTolov === "qarz" && yakuniyTuri === "chiqim") {
+    return NextResponse.json({ error: "Qarz to'lov turi faqat kirim uchun" }, { status: 400 });
+  }
+
+  // Kassa bog'lanishi to'lov turiga ergashadi: qarz — kassasiz; qarzdan
+  // naqd/click'ka qaytsa — mos faol kassa qayta bog'lanadi.
+  let accountYangilash: { accountId: string | null } | Record<string, never> = {};
+  if (data.tolovTuri !== undefined) {
+    if (yakuniyTolov === "qarz") {
+      accountYangilash = { accountId: null };
+    } else if (existing.accountId === null || data.accountId !== undefined) {
+      accountYangilash = {
+        accountId: await resolveAccountId(businessId!, data.accountId, yakuniyTolov),
+      };
+    }
+  }
+
   const updated = await prisma.transaction.update({
     where: { id: params.id },
     data: {
@@ -50,11 +73,21 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
       ...(data.categoryId !== undefined ? { categoryId: data.categoryId } : {}),
       ...(data.summa !== undefined ? { summa: data.summa } : {}),
       ...(data.sana !== undefined ? { sana: dateOnlyStringToUTCDate(data.sana) } : {}),
+      ...(data.tolovTuri !== undefined ? { tolovTuri: data.tolovTuri } : {}),
+      ...accountYangilash,
       ...(data.izoh !== undefined ? { izoh: data.izoh } : {}),
       ...(data.filial !== undefined ? { filial: data.filial } : {}),
     },
-    include: { category: true, user: { select: { id: true, ism: true } } },
+    include: {
+      category: true,
+      user: { select: { id: true, ism: true } },
+      account: { select: { id: true, nomi: true, turi: true } },
+    },
   });
+
+  // Kunlik hisobot bilan sinxron: sana bugungidan boshqasiga o'zgarsa kunlikdan
+  // chiqadi, bugunga o'zgarsa tushadi, summa o'zgarsa qayta jamlanadi.
+  await kunlikSinxron(updated, updated.user.ism);
 
   dashboardYangilandi(existing.businessId);
   return NextResponse.json(updated);
@@ -75,15 +108,17 @@ export const DELETE = withTenant<{ params: { id: string } }>(async (request, { p
   const permanent = new URL(request.url).searchParams.get("permanent") === "true";
 
   if (permanent) {
-    // Butunlay o'chirish — faqat admin.
+    // Butunlay o'chirish — faqat admin. Avval kunlikdagi ulangan tushum olib tashlanadi.
     if (!isManager(user.rol)) throw new ForbiddenError("Butunlay o'chirish faqat direktor uchun");
+    await kunlikSinxron({ ...existing, deletedAt: new Date() }, null);
     await prisma.transaction.delete({ where: { id: params.id } });
     dashboardYangilandi(existing.businessId);
     return NextResponse.json({ ok: true, permanent: true });
   }
 
-  // Soft delete — belgilanadi (undo/savat uchun).
+  // Soft delete — belgilanadi (undo/savat uchun). Kunlikdagi ulangan tushum ham chiqadi.
   await prisma.transaction.update({ where: { id: params.id }, data: { deletedAt: new Date() } });
+  await kunlikSinxron({ ...existing, deletedAt: new Date() }, null);
   dashboardYangilandi(existing.businessId);
   return NextResponse.json({ ok: true });
 });

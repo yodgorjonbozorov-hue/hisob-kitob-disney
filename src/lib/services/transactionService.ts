@@ -3,6 +3,7 @@ import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { ForbiddenError } from "@/lib/auth/guard";
 import type { BusinessTx } from "@/lib/db/businessTx";
 import { resolveAccountId } from "@/lib/services/accounts";
+import { kunlikSinxron } from "@/lib/services/kunlik";
 
 export interface CreateTransactionData {
   turi: "kirim" | "chiqim";
@@ -11,8 +12,10 @@ export interface CreateTransactionData {
   sana: string; // "YYYY-MM-DD"
   izoh?: string | null;
   filial?: string | null;
-  /** Qaysi kassa/hisob-raqamga tushdi. Berilmasa birinchi faol kassa olinadi. */
+  /** Qaysi kassa/hisob-raqamga tushdi. Berilmasa to'lov turiga mos faol kassa olinadi. */
   accountId?: string | null;
+  /** "naqd" | "click" | "qarz". Berilmasa kassa turidan chiqariladi (eski xulq). */
+  tolovTuri?: string | null;
 }
 
 /**
@@ -28,23 +31,39 @@ export async function createTransaction(userId: string, businessId: string, data
     throw new ForbiddenError("Kategoriya bu biznesga tegishli emas");
   }
 
-  // Kassa: tanlangani tekshiriladi, tanlanmagani — birinchi faol kassa.
-  const accountId = await resolveAccountId(businessId, data.accountId);
+  // Kassa: tanlangani tekshiriladi, tanlanmagani — to'lov turiga mos faol
+  // kassa. QARZ — pul kassaga tushmagan, hech qaysi kassaga bog'lanmaydi
+  // (kassa qoldig'iga kirmaydi).
+  const accountId =
+    data.tolovTuri === "qarz"
+      ? null
+      : await resolveAccountId(businessId, data.accountId, data.tolovTuri);
 
-  return prisma.transaction.create({
+  const created = await prisma.transaction.create({
     data: {
       turi: data.turi,
       categoryId: data.categoryId,
       businessId,
       accountId,
+      tolovTuri: data.tolovTuri ?? undefined,
       summa: data.summa,
       sana: dateOnlyStringToUTCDate(data.sana),
       izoh: data.izoh ?? undefined,
       filial: data.filial ?? undefined,
       userId,
     },
-    include: { category: true, user: { select: { id: true, ism: true } } },
+    include: {
+      category: true,
+      user: { select: { id: true, ism: true } },
+      account: { select: { id: true, nomi: true, turi: true } },
+    },
   });
+
+  // BUGUNGI sanali kirim kunlik hisobotga o'zi tushadi (boshqa sana — tushmaydi).
+  // Sinxron xatosi asosiy yozuvni buzmaydi (kunlikSinxron ichida ushlanadi).
+  await kunlikSinxron(created, created.user.ism);
+
+  return created;
 }
 
 /**
@@ -67,14 +86,15 @@ export async function createTransactionTx(
   }
 
   // Tranzaksiya ichida: kassa xom `tx` bilan qidiriladi (businessId qo'lda).
-  let accountId = data.accountId ?? null;
+  // QARZ — kassaga bog'lanmaydi (createTransaction bilan bir xil qoida).
+  let accountId = data.tolovTuri === "qarz" ? null : data.accountId ?? null;
   if (accountId) {
     const acc = await tx.account.findFirst({
       where: { id: accountId, businessId, isActive: true },
       select: { id: true },
     });
     if (!acc) throw new ForbiddenError("Kassa topilmadi yoki nofaol");
-  } else {
+  } else if (data.tolovTuri !== "qarz") {
     const birinchi = await tx.account.findFirst({
       where: { businessId, isActive: true },
       orderBy: [{ tartib: "asc" }, { createdAt: "asc" }],
@@ -89,6 +109,7 @@ export async function createTransactionTx(
       categoryId: data.categoryId,
       businessId,
       accountId,
+      tolovTuri: data.tolovTuri ?? undefined,
       summa: data.summa,
       sana: dateOnlyStringToUTCDate(data.sana),
       izoh: data.izoh ?? undefined,

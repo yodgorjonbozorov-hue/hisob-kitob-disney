@@ -15,12 +15,22 @@ import { TransferModal } from "./TransferModal";
 /** Kassa turi belgisi — ro'yxatda darrov ajralib tursin. */
 const TURI_BELGI: Record<string, string> = { naqd: "💵", plastik: "💳", bank: "🏦" };
 
+export interface UserOption {
+  id: string;
+  ism: string;
+}
+
 export function KassaClient({
   qoldiqlar,
   transferlar,
+  userlar,
+  pro,
 }: {
   qoldiqlar: AccountQoldiq[];
   transferlar: TransferDTO[];
+  /** Foydalanuvchiga o'tkazish (PRO) uchun qabul qiluvchilar. */
+  userlar: UserOption[];
+  pro: boolean;
 }) {
   const router = useRouter();
   const [kassaModal, setKassaModal] = useState<AccountQoldiq | "yangi" | null>(null);
@@ -44,13 +54,17 @@ export function KassaClient({
             <Money value={jami} size="display" tone={jami >= 0 ? "brand" : "expense"} />
           </div>
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => setTransferModal(true)} disabled={faollar.length < 2}>
+            <Button
+              variant="secondary"
+              onClick={() => setTransferModal(true)}
+              disabled={faollar.length < 2 && !(pro && userlar.length > 0)}
+            >
               Pul ko&apos;chirish
             </Button>
             <Button onClick={() => setKassaModal("yangi")}>Yangi kassa</Button>
           </div>
         </div>
-        {faollar.length < 2 && (
+        {faollar.length < 2 && !(pro && userlar.length > 0) && (
           <p className="text-2xs text-faint mt-3">
             Pul ko&apos;chirish uchun kamida ikkita faol kassa kerak.
           </p>
@@ -68,12 +82,14 @@ export function KassaClient({
           >
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-medium text-fg truncate">
-                {TURI_BELGI[q.turi] ?? "💰"} {q.nomi}
+                {q.userId ? "👤" : TURI_BELGI[q.turi] ?? "💰"} {q.nomi}
               </p>
               {!q.isActive && <span className="text-2xs text-faint shrink-0">nofaol</span>}
             </div>
             <p className="text-2xs text-faint mt-0.5">
-              {ACCOUNT_TURI_NOMI[q.turi as AccountTuri] ?? q.turi}
+              {q.userId
+                ? `Shaxsiy kassa · ${q.egaIsm ?? "egasi o'chirilgan"}`
+                : ACCOUNT_TURI_NOMI[q.turi as AccountTuri] ?? q.turi}
             </p>
             <div className="mt-3">
               <Money value={q.qoldiq} size="xl" tone={q.qoldiq >= 0 ? "neutral" : "expense"} />
@@ -109,12 +125,15 @@ export function KassaClient({
             {transferlar.map((t) => (
               <li key={t.id} className="py-3 flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm text-fg truncate">
-                    {t.fromNomi} → {t.toNomi}
+                  <p className={`text-sm truncate ${t.holat === "bekor" ? "text-faint line-through" : "text-fg"}`}>
+                    {t.fromUserIsm && t.toUserIsm
+                      ? `${t.fromUserIsm} → ${t.toUserIsm}`
+                      : `${t.fromNomi} → ${t.toNomi}`}
                   </p>
                   <p className="text-2xs text-faint">
                     {formatDateUz(new Date(t.sana))}
                     {t.izoh ? ` · ${t.izoh}` : ""}
+                    {t.holat === "bekor" ? " · bekor qilingan" : ""}
                   </p>
                 </div>
                 <Money value={t.summa} size="md" tone="neutral" />
@@ -134,6 +153,7 @@ export function KassaClient({
       {transferModal && (
         <TransferModal
           kassalar={faollar}
+          userlar={pro ? userlar : []}
           onClose={() => setTransferModal(false)}
           onDone={yangilash}
         />

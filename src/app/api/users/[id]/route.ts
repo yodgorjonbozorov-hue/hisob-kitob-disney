@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { rawPrisma } from "@/lib/db/rawPrisma";
 import { requireManager } from "@/lib/auth/guard";
 import { withTenant } from "@/lib/auth/tenant";
 import { updateUserSchema } from "@/lib/validation/user";
 import { hashPassword } from "@/lib/auth/password";
+import { requirePro } from "@/lib/billing/pro";
 
 const USER_SELECT = {
   id: true,
@@ -14,9 +16,14 @@ const USER_SELECT = {
   createdAt: true,
   businessId: true,
   business: { select: { nomi: true } },
+  roleId: true,
+  role: { select: { nomi: true, bazaRol: true } },
+  huquqPlus: true,
+  huquqMinus: true,
 } as const;
 
-export const PATCH = withTenant<{ params: { id: string } }>(async (request, { params }, { session: user }) => {
+export const PATCH = withTenant<{ params: { id: string } }>(async (request, { params }, tenant) => {
+  const user = tenant.session;
   requireManager(user.rol);
 
   const body = await request.json();
@@ -27,13 +34,50 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
 
   const existing = await prisma.user.findUnique({
     where: { id: params.id },
-    select: { rol: true, businessId: true },
+    select: { rol: true, businessId: true, login: true },
   });
   if (!existing) {
     return NextResponse.json({ error: "Foydalanuvchi topilmadi" }, { status: 404 });
   }
 
-  const { parol, businessId, rol, ...rest } = parsed.data;
+  const { parol, businessId, login, roleId, huquqPlus, huquqMinus, ...rest } = parsed.data;
+  let { rol } = parsed.data;
+
+  // MAXSUS ROL (PRO): roleId berilsa tizim roli rol.bazaRol'dan sinxronlanadi;
+  // null — maxsus roldan chiqarish (joriy/berilgan tizim roli qoladi).
+  let roleData: { roleId?: string | null } = {};
+  if (roleId !== undefined) {
+    requirePro(tenant);
+    if (roleId === null) {
+      roleData = { roleId: null };
+    } else {
+      const role = await prisma.role.findFirst({
+        where: { id: roleId, deletedAt: null, isActive: true },
+        select: { id: true, bazaRol: true },
+      });
+      if (!role) return NextResponse.json({ error: "Rol topilmadi" }, { status: 404 });
+      roleData = { roleId: role.id };
+      rol = role.bazaRol as typeof rol;
+    }
+  }
+  let overrideData: { huquqPlus?: string | null; huquqMinus?: string | null } = {};
+  if (huquqPlus !== undefined || huquqMinus !== undefined) {
+    requirePro(tenant);
+    if (huquqPlus !== undefined) {
+      overrideData.huquqPlus = huquqPlus?.length ? JSON.stringify(huquqPlus) : null;
+    }
+    if (huquqMinus !== undefined) {
+      overrideData.huquqMinus = huquqMinus?.length ? JSON.stringify(huquqMinus) : null;
+    }
+  }
+
+  // Login BUTUN tizim bo'ylab unique — shuning uchun rawPrisma (tenantlar aro tekshiruv).
+  if (login !== undefined && login !== existing.login) {
+    const band = await rawPrisma.user.findUnique({ where: { login }, select: { id: true } });
+    if (band) {
+      return NextResponse.json({ error: "Bu login band" }, { status: 409 });
+    }
+  }
   const effectiveRol = rol ?? existing.rol;
 
   // Biznesni rol asosida hal qilamiz:
@@ -64,7 +108,10 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
     data: {
       ...rest,
       ...(rol !== undefined ? { rol } : {}),
+      ...(login !== undefined && login !== existing.login ? { login } : {}),
       ...businessIdData,
+      ...roleData,
+      ...overrideData,
       ...(parol ? { parolHash: await hashPassword(parol) } : {}),
     },
     select: USER_SELECT,

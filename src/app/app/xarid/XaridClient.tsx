@@ -13,6 +13,7 @@ import { HOLAT_NOMI, type XaridHolat } from "@/lib/validation/xarid";
 import type { OrderDTO, SupplierDTO, XaridStats } from "@/lib/queries/xarid";
 import type { ProductAdminDTO } from "@/lib/queries/inventory";
 import { BuyurtmaModal } from "./BuyurtmaModal";
+import { QabulModal } from "./QabulModal";
 
 const HOLAT_TONE: Record<string, "kirim" | "chiqim" | "neutral"> = {
   qoralama: "neutral",
@@ -27,19 +28,25 @@ export function XaridClient({
   products,
   stats,
   omborli,
+  pro,
 }: {
   orders: OrderDTO[];
   suppliers: SupplierDTO[];
   products: ProductAdminDTO[];
   stats: XaridStats;
   omborli: boolean;
+  /** PRO: qabulda qisman to'lov modali; PRO'siz — eski bir bosishli qabul. */
+  pro: boolean;
 }) {
   const router = useRouter();
   const [yangiOpen, setYangiOpen] = useState(false);
   const [ochiq, setOchiq] = useState<string | null>(null);
   const [amal, setAmal] = useState<string | null>(null);
   const [xato, setXato] = useState<string | null>(null);
+  const [qabulOrder, setQabulOrder] = useState<OrderDTO | null>(null);
 
+  // PRO'siz mijozda "qabul_qilingan" ham shu yerdan yuboriladi (eski xatti-harakat:
+  // naqd → to'liq chiqim, qarz → to'liq qarz); PRO'da qabul QabulModal orqali.
   async function holatOzgartir(orderId: string, holat: "tasdiqlangan" | "qabul_qilingan" | "bekor") {
     setAmal(orderId);
     setXato(null);
@@ -182,7 +189,11 @@ export function XaridClient({
                         )}
                         {(o.holat === "qoralama" || o.holat === "tasdiqlangan") && (
                           <>
-                            <Button size="sm" loading={amal === o.id} onClick={() => holatOzgartir(o.id, "qabul_qilingan")}>
+                            <Button
+                              size="sm"
+                              loading={amal === o.id}
+                              onClick={() => (pro ? setQabulOrder(o) : holatOzgartir(o.id, "qabul_qilingan"))}
+                            >
                               Qabul qilish
                             </Button>
                             <Button
@@ -197,8 +208,16 @@ export function XaridClient({
                         )}
                         {o.holat === "qabul_qilingan" && (
                           <p className="text-2xs text-muted">
-                            Tovar omborga tushgan, {o.tolovTuri === "naqd" ? "chiqim" : "ta'minotchiga qarz"}{" "}
-                            yozilgan — o&apos;zgartirib bo&apos;lmaydi.
+                            {/* tolanganSumma > 0 — yangi (qisman to'lovli) yozuv; 0 bo'lsa eski
+                                yozuv: to'lov holati tolovTuri'dan o'qiladi (naqd = to'liq to'langan). */}
+                            Tovar omborga tushgan
+                            {o.tolanganSumma > 0
+                              ? ` · to'landi: ${o.tolanganSumma.toLocaleString("uz-UZ")} so'm` +
+                                (o.jamiSumma - o.tolanganSumma > 0
+                                  ? ` · qarz: ${(o.jamiSumma - o.tolanganSumma).toLocaleString("uz-UZ")} so'm`
+                                  : "")
+                              : `, ${o.tolovTuri === "naqd" ? "chiqim" : "ta'minotchiga qarz"} yozilgan`}{" "}
+                            — o&apos;zgartirib bo&apos;lmaydi.
                           </p>
                         )}
                       </div>
@@ -218,6 +237,17 @@ export function XaridClient({
           onClose={() => setYangiOpen(false)}
           onDone={() => {
             setYangiOpen(false);
+            router.refresh();
+          }}
+        />
+      )}
+
+      {qabulOrder && (
+        <QabulModal
+          order={qabulOrder}
+          onClose={() => setQabulOrder(null)}
+          onDone={() => {
+            setQabulOrder(null);
             router.refresh();
           }}
         />
