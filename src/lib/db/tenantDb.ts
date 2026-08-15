@@ -92,6 +92,8 @@ const BUSINESS_SCOPED = new Set([
   "DailyReport",
   "DailyTransaction",
   "DailyReportSetting",
+  // Smena yakuni (kun ichida kassani sanab topshirish)
+  "Smena",
 ]);
 // AuditLog: businessId nullable — biznesga bog'langan yozuvlar tenant bo'yicha filtrlanadi.
 export const AUDIT_MODEL = "AuditLog";

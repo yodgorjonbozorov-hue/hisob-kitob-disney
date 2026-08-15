@@ -178,6 +178,7 @@ model Business {
   dailyReports       DailyReport[]
   dailyTransactions  DailyTransaction[]
   dailyReportSetting DailyReportSetting?
+  smenalar           Smena[]
 
   @@index([tenantId])
 }
@@ -1166,6 +1167,64 @@ model DailyReportSetting {
   direktorId String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+}
+
+/// SMENA YAKUNI — kun ichida kassani bir necha marta sanab topshirish.
+///
+/// Nega kerak: ikki sotuvchi navbatma-navbat ishlaganda kunlik JAMI raqam
+/// kimning puli qancha ekanini ko'rsatmaydi — kam chiqsa aybdorni topib
+/// bo'lmaydi. Smena yopilganda o'sha oynadagi tushum MUZLATILADI, xodim
+/// kassadagi naqdni SANAB kiritadi va farq shu qatorda qoladi. Keyingi
+/// smena esa 0 dan (yoki ataylab qoldirilgan qaytim pulidan) boshlanadi.
+///
+/// KIRIM/CHIQIMGA TEGMAYDI: smena — kun ichidagi KESIM, hosila ko'rinish.
+/// Bu yerda hech qanday Transaction ham, DailyTransaction ham yozilmaydi,
+/// shuning uchun kunlik va oylik raqamlar avvalgidek qoladi.
+///
+/// OYNA: har qator faqat YOPILGAN smenani bildiradi (ochiq holat saqlanmaydi).
+/// Joriy smena hosila — u oxirgi yopilgan smenaning `tugashAt` idan hozirgacha
+/// bo'lgan oraliq. Tushum oynaga `createdAt` bo'yicha tegishli bo'ladi
+/// (`boshlanishAt` < createdAt <= `tugashAt`), chunki drawer'dagi pul
+/// yozuvning `sana` siga emas, KIRITILGAN paytiga qarab to'planadi.
+model Smena {
+  id                String   @id @default(cuid())
+  businessId        String
+  business          Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  /// Smena YOPILGAN Toshkent kalendar kuni (UTC-midnight).
+  sana              DateTime
+  /// Kun ichidagi tartib raqami: 1, 2, 3...
+  raqam             Int
+  /// Oyna boshi — oldingi smena yopilgan payt (birinchisida Toshkent kun boshi).
+  boshlanishAt      DateTime
+  /// Oyna oxiri — yopilgan payt.
+  tugashAt          DateTime
+  /// Yopgan xodim. Ism — snapshot (ShiftClose uslubi): xodim keyin
+  /// o'chirilsa ham kim topshirgani tarixda ko'rinib turadi.
+  yopganUserId      String
+  yopganIsm         String?
+  /// Oyna summalari — yopish paytida MUZLATILADI (keyin tushum tahrirlansa ham o'zgarmaydi).
+  naqd              Int      @default(0)
+  click             Int      @default(0)
+  qarz              Int      @default(0)
+  /// Shu oynada kassadan naqd chiqim (Yozuvlardagi chiqim, faqat naqd to'lov turi).
+  naqdChiqim        Int      @default(0)
+  /// Smena boshida kassada bo'lgan naqd — oldingi smena qaytim uchun qoldirgani.
+  boshlangichQoldiq Int      @default(0)
+  /// boshlangichQoldiq + naqd − naqdChiqim (tizim hisobi).
+  kutilganNaqd      Int      @default(0)
+  /// Xodim kassani SANAB kiritgan naqd.
+  sanalganNaqd      Int      @default(0)
+  /// sanalganNaqd − kutilganNaqd. Manfiy = KAM — xodim tekshiruvining yuragi.
+  farq              Int      @default(0)
+  /// Sanalgan puldan kassada ataylab QOLDIRILGANI (qaytim uchun). Qolgani
+  /// topshiriladi; shuning uchun keyingi smenaning `boshlangichQoldiq` i shu.
+  qoldirilganNaqd   Int      @default(0)
+  izoh              String?
+  createdAt         DateTime @default(now())
+
+  @@unique([businessId, sana, raqam])
+  @@index([businessId, sana])
+  @@index([businessId, tugashAt])
 }
 
 // ==== HUJJATLAR moduli (Faza 6.6) ====

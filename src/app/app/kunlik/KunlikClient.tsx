@@ -13,9 +13,11 @@ import {
   type KunlikTolovTuri,
 } from "@/lib/validation/kunlik";
 import type { KunlikDirektorDTO, KunlikReportDTO } from "@/lib/queries/kunlik";
+import type { SmenaHolatDTO } from "@/lib/queries/smena";
 import type { KunlikRuxsat } from "@/lib/services/kunlik";
 import { TushumForm } from "./TushumForm";
 import { DirektorModal } from "./DirektorModal";
+import { SmenaCard } from "./SmenaCard";
 import { YakunCard } from "./YakunCard";
 import { sanaSur, sanaUz, soatToshkent } from "./vaqt";
 
@@ -24,11 +26,13 @@ export function KunlikClient({
   ruxsat,
   bugun,
   direktor,
+  smena,
 }: {
   report: KunlikReportDTO;
   ruxsat: KunlikRuxsat;
   bugun: string;
   direktor: KunlikDirektorDTO;
+  smena: SmenaHolatDTO;
 }) {
   const router = useRouter();
   const [direktorModal, setDirektorModal] = useState(false);
@@ -112,6 +116,8 @@ export function KunlikClient({
           </div>
         </Card>
       </div>
+
+      <SmenaCard holat={smena} ruxsat={ruxsat} bugungi={bugungi} />
 
       <YakunCard report={report} ruxsat={ruxsat} bugungi={bugungi} />
 
