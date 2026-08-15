@@ -2521,3 +2521,150 @@ tasdiqlash 20/20.
 ochiq qarz 400k−100k=300k ta'minotchi kesimida, yozuvlar soni, double-entry
 invarianti buzilmagan) · kassa 11/11 · xarid 13/13 · isolation 22/22 ·
 izolyatsiya-royxati 9/9 · visibility 10/10 · audit 12/12 · superadmin 10/10.
+
+---
+
+## 2026-08-15 — CI quvuri: tsc + lint + testlar (`.github/workflows/ci.yml`)
+
+**Nima qilindi** (branch: `claude/ci-pipeline-setup-yjmpgv`):
+
+Loyihada 45 ta test skripti bor edi, lekin `.github/workflows/` da faqat
+operatsion workflow'lar (migratsiya, ko'chirish, launch, TWA) turardi — ya'ni
+push va PR da HECH NARSA tekshirilmasdi. Endi tekshiriladi.
+
+1. `.github/workflows/ci.yml` (yangi) — push (barcha branch) va pull_request.
+   Node 20 + npm cache. Ikkita job:
+   - **`tekshiruv`** — npm ci → prisma generate → tsc → lint → CI bazasi
+     (migratsiya + seed) → testlar. Qadamlar fail-fast.
+   - **`izolyatsiya-qorovuli`** — faqat `test:izolyatsiya-royxati` va
+     `test:backup`. Bu ikkisi arxitektura invariantini qo'riqlaydi
+     (tenantDb ro'yxati fail-open, ZAXIRA_JADVALLARI to'liqligi), shuning
+     uchun 43 test orasida ko'milib ketmasin deb alohida ajratildi.
+   - `concurrency: cancel-in-progress` — bir branch uchun eski run bekor bo'ladi.
+2. `scripts/test-hammasi.mjs` (yangi) + `npm run test:hammasi` skripti —
+   package.json dagi barcha `test:` skriptlarini topadi, ketma-ket ishga
+   tushiradi, natijani jadval bo'lib chiqaradi (o'tdi/yiqildi/soniya), bittasi
+   yiqilsa exit 1. Ketma-ket ataylab: har test o'z SQLite bazasini o'chirib
+   qayta yaratadi, parallel ishlatilsa poyga bo'ladi.
+3. `docs/CI-YIQILGAN-TESTLAR.md` (yangi) — yiqilgan tekshiruvlar ro'yxati.
+
+**CI bazasi haqida:** har test fayli o'z boshida `DATABASE_URL` ni
+`file:./prisma/test-*.db` ga qo'yadi va `scripts/db-migrate.mjs` ni o'zi ishga
+tushiradi. Ya'ni testlarga umumiy baza SHART emas. `seed.ts` ni o'zgartirish
+ham kerak bo'lmadi — u toza muhitda `DATABASE_URL="file:./ci.db"` bilan
+muammosiz ishlaydi (sinab ko'rildi). CI bazasi qadami boshqa maqsad uchun
+qoldirildi: migratsiya zanjiri toza bazaga qo'llanishini va seed ishlashini
+alohida tekshiradi.
+
+**Natija:** 45 skript → 43 tasi CI'da ishga tushadi → **42 o'tdi, 1 yiqildi**.
+Umumiy vaqt ~100 soniya.
+
+**Yiqilganlar — TUZATILMADI (ataylab), hammasi `docs/CI-YIQILGAN-TESTLAR.md` da:**
+
+1. `test:dialect` — HAQIQIY nosozlik. Postgres init migratsiyasi eskirgan:
+   sxemada 45 model, `prisma/migrations-postgres/00000000000000_init/migration.sql`
+   da 43 jadval. Yetishmaydi: **`Role`** va **`Smena`** (ular
+   `20260814090000_pro_rollar_shaxsiy_kassa` va `20260815100000_smena_yakuni`
+   da qo'shilgan). Postgres'ga ko'chirilsa PRO rollari va smena yakuni
+   ishlamaydi. Yechim: `npm run pg:migratsiya` + SQL'ni qo'lda ko'rib chiqish.
+2. `npx tsc --noEmit` — `tests/toliq-ishga-tushirish.test.ts:158` da bitta tur
+   xatosi (`unknown[]` → libsql `InArgs`). Test o'zi o'tadi (ts-node
+   `transpileOnly`). `src/` da tur xatosi YO'Q — butun repoda shu bitta.
+3. `npm run lint` — repoda ESLint konfiguratsiyasi umuman yo'q, `next lint`
+   sozlash so'roviga tushib exit 1 qaytaradi. Ya'ni lint hech qachon
+   ishlamagan. CI'da `< /dev/null` bilan chaqiriladi — osilib qolmaydi.
+
+Uchalasi ham ci.yml da `continue-on-error: true` va TODO izohi bilan
+belgilangan. `test:dialect` `--tashla=` orqali asosiy yurishdan chiqarilib,
+alohida qadamda ko'rinadigan qilib qo'yilgan — yashirilmagan.
+
+**CI'da ataylab ishlatilmaydi:** `test:smoke` (Playwright brauzeri + ishlab
+turgan server) va `test:postgres` (`PG_TEST_URL`). Jadvalda "CI'da
+ishlatilmadi" deb alohida ko'rsatiladi.
+
+**Tegilmadi:** `prisma/schema.prisma`, `src/**`, mavjud workflow'lar, mavjud
+test fayllari.
+
+**Tekshirildi:** `npm run test:hammasi` lokalda ✅ (jadval chiqadi) ·
+`action-validator` ci.yml sxemasini tasdiqladi ✅ · CI bazasi ketma-ketligi
+(migratsiya + seed, `file:./ci.db`) lokalda takrorlandi ✅.
+`npm run build` ishga TUSHIRILMADI: build zanjirining birinchi halqasi
+`scripts/deploy-zaxira.mjs` bo'lib, u haqiqiy bazaga va Telegram zaxira
+kanaliga ulanishni talab qiladi. Bu o'zgarish `src/` ga tegmaydi, ya'ni build
+chiqishiga ta'sir qilmaydi.
+
+**Keyingi sessiya uchun tavsiya (muhimlik tartibida):**
+
+1. `npm run pg:migratsiya` — Postgres migratsiyasini yangilash (`Role`,
+   `Smena`). Bu yagona HAQIQIY nosozlik va u ko'chirishni buzadi.
+2. `.eslintrc.json` qo'shish va chiqqan ogohlantirishlarni bosqichma-bosqich
+   tozalash. Birinchi marta yoqilganda ko'p natija chiqishi kutiladi.
+3. `tests/toliq-ishga-tushirish.test.ts:158` — `unknown[]` → `InValue[]`.
+   Shundan keyin tsc qadamidan `continue-on-error` olib tashlanadi.
+4. Uchtasi tuzatilgach: ci.yml dan barcha `continue-on-error`, `--tashla=` va
+   TODO izohlari olib tashlanadi; `docs/CI-YIQILGAN-TESTLAR.md` bo'shatiladi.
+5. Ixtiyoriy: `test:smoke` uchun alohida job (Playwright + `npm run
+   e2e:tayyorla`), `test:postgres` uchun `services: postgres` bilan job.
+
+---
+
+## 2026-08-15 — Xavfsizlik S-1: sessiya huquq bekor qilishni darhol ko'radi
+
+**Nima qilindi** (branch: `claude/ci-pipeline-setup-yjmpgv`):
+
+**Xato.** `src/lib/auth/tenant.ts:loadTenant()` sessiyada `tenantId` bo'lsa
+foydalanuvchini bazadan UMUMAN o'qimasdi — `User` jadvaliga boradigan tarmoq
+faqat eski (migratsiyagacha ochilgan) sessiyalar uchun qolgan edi. Ya'ni
+`isActive` tekshiruvi kodda bor edi, lekin amalda o'lik. Oqibati: bloklangan
+xodim cookie muddati (7 kun) tugaguncha ishlayverardi; roli tushirilgan
+foydalanuvchi eski huquqini saqlab qolardi (guard'lar `ctx.session.rol` ga
+qaraydi, u esa cookie'dan kelardi); boshqa tenantga ko'chirilgan foydalanuvchi
+eskisida qolib ketardi.
+
+**Tuzatish** — `superadmin.ts:verifySuperadmin()` naqshi tenant tomoniga ham
+qo'llandi:
+
+1. `userLive(userId)` — `requestCache` bilan o'ralgan yangi lookup
+   (`select: { tenantId, isActive, rol, roleId }`).
+2. `buildContext()` endi HAR so'rovda `userLive()` chaqiradi — sessiyada
+   `tenantId` bor-yo'qligidan qat'i nazar. `loadTenant()` olib tashlandi.
+3. FAIL-CLOSED: foydalanuvchi topilmasa (o'chirilgan), `isActive=false`
+   (bloklangan) yoki `tenantId` bo'lmasa — `null`, chaqiruvchi 403/redirect qiladi.
+4. `tenantId` BAZADAN olinadi, sessiyadagisi emas.
+5. `session.rol` bazadagi rol bilan sinxronlanadi (`normalizeRol` orqali).
+   `session.save()` ATAYLAB chaqirilmaydi — cookie'ga yozilmaydi, o'zgarish
+   faqat joriy so'rovga tegishli.
+
+**Unumdorlik.** Bir kontekst qurilishi = 2 lookup (user + tenant), ikkalasi ham
+`requestCache` ostida. Bir so'rovda layout ham, sahifa ham kontekst qursa —
+DB'ga baribir 2 ta so'rov ketadi (test buni tekshiradi). Ya'ni S-1 tuzatishi
+so'rovga JAMI +1 `findUnique` qo'shdi.
+
+**Yangi test:** `tests/sessiya-bekor.test.ts` + `npm run test:sessiya-bekor`,
+8 ta holat. Testda `React.cache` o'rniga teng ma'noli memoizer qo'yiladi
+(ts-node'da `React.cache` mavjud emas — `lib/requestCache.ts` u holda keshsiz
+ishlaydi), `getCurrentUser()` esa sessiya taqlidi bilan almashtiriladi.
+**Test eski kodga qarshi ham ishga tushirildi: 8 tadan 6 tasi yiqildi** — ya'ni
+u haqiqatan S-1 ni ushlaydi, shunchaki yashil rang emas.
+
+**CLAUDE.md** — "Arxitektura invariantlari" ga qoida qo'shildi: sessiyadagi
+rol/tenant ma'lumotiga ishonilmaydi, har so'rovda bazadan tekshiriladi.
+
+**Tegilmadi:** `src/lib/auth/superadmin.ts` (allaqachon to'g'ri),
+`session.ts` cookie sozlamalari, `prisma/schema.prisma` (yangi ustun kerak emas).
+
+**Tekshirildi:** `npm run build` ✅ · `npm run test:sessiya-bekor` 8/8 ✅ ·
+`npm run test:isolation` ✅ · `npm run test:visibility` ✅ ·
+`npm run test:hammasi` — **43/43 o'tdi** ✅ · `npx tsc --noEmit` — `src/` toza,
+faqat oldin hujjatlashtirilgan `tests/toliq-ishga-tushirish.test.ts:158`
+xatosi qoldi (`docs/CI-YIQILGAN-TESTLAR.md`, 2-band).
+
+**Yo'l-yo'lakay TUZATILMAGAN, keyingi sessiyalar uchun (ataylab qoldirildi):**
+
+1. `session.businessId` hamon cookie'dan keladi va yangilanmaydi — boshqa
+   biznesga ko'chirilgan kassir eski biznes ma'lumotini ko'rishda davom etadi.
+   Bu S-1 ning qo'shnisi, lekin alohida masala (ko'rinish doirasi).
+2. Bazada SUPERADMIN ga ko'tarilgan, lekin cookie'sida eski rol turgan
+   foydalanuvchi `/app` ↔ `/superadmin` orasida cheksiz redirect'ga tushishi
+   mumkin (`requireTenantPage` sessiyadagi rolga qarab redirect qiladi, keyin
+   superadmin guard'i bazadan tekshirib qaytaradi). S-1 dan OLDIN ham bor edi.

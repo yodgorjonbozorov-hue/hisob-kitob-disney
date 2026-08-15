@@ -71,7 +71,9 @@
     "test:pro": "node -r ts-node/register tests/pro-stsenariy.test.ts",
     "test:mijoz-xos": "node -r ts-node/register tests/mijoz-xos.test.ts",
     "test:kochirish": "node -r ts-node/register tests/kochirish.test.ts",
-    "test:launch": "node -r ts-node/register tests/toliq-ishga-tushirish.test.ts"
+    "test:launch": "node -r ts-node/register tests/toliq-ishga-tushirish.test.ts",
+    "test:sessiya-bekor": "node -r ts-node/register tests/sessiya-bekor.test.ts",
+    "test:hammasi": "node scripts/test-hammasi.mjs"
   },
   "prisma": {
     "seed": "node -r ts-node/register prisma/seed.ts"

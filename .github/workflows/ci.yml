@@ -1,0 +1,126 @@
+# CI — har push va pull request'da kod tekshiriladi.
+#
+# Nega kerak: loyihada 45 ta test skripti bor edi, lekin ularni hech kim
+# avtomatik ishga tushirmasdi. Ya'ni sinmagan kod bilan singan kodni faqat
+# qo'lda ajratish mumkin edi.
+#
+# Qadamlar ketma-ket va fail-fast: biri yiqilsa keyingisi ishlamaydi
+# (GitHub Actions'da bir job ichidagi qadamlar shunday ishlaydi).
+#
+# Baza: har test fayli o'z SQLite bazasini (prisma/test-*.db) o'zi yaratadi va
+# migratsiyalarni o'zi qo'llaydi. Shu bois testlarga umumiy baza SHART emas.
+# "CI bazasi" qadami boshqa maqsad uchun: migratsiya zanjiri toza bazaga
+# qo'llanishini va seed ishlashini alohida tekshiradi.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# Bitta branch uchun eski run bekor qilinadi — yangi push kelganda eskisini
+# oxirigacha kutish keraksiz.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tekshiruv:
+    name: tsc + lint + testlar
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      # Prisma generate va CI bazasi uchun. Testlar buni o'z fayllarida
+      # qayta yozadi (har biri prisma/test-*.db ishlatadi).
+      DATABASE_URL: "file:./ci.db"
+      # ts-node/register har testda ishlaydi; production tekshiruvlari yoqilmasin.
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Bog'liqliklar
+        run: npm ci
+
+      - name: Prisma client
+        run: npx prisma generate
+
+      # TODO: hozircha continue-on-error — `tests/toliq-ishga-tushirish.test.ts:158`
+      # da bitta tur xatosi bor (`unknown[]` -> libsql `InArgs`). Test o'zi o'tadi
+      # (ts-node transpileOnly rejimida turlarni tekshirmaydi). Sabab va yechim:
+      # docs/CI-YIQILGAN-TESTLAR.md. Tuzatilgach continue-on-error olib tashlanadi.
+      - name: Turlar tekshiruvi (tsc)
+        continue-on-error: true
+        run: npx tsc --noEmit
+
+      # TODO: hozircha continue-on-error — repoda ESLint konfiguratsiyasi yo'q,
+      # shuning uchun `next lint` sozlash so'roviga tushib exit 1 qaytaradi.
+      # `< /dev/null` — CI'da interaktiv so'rovni kutib qolmaslik uchun.
+      # Sabab va yechim: docs/CI-YIQILGAN-TESTLAR.md.
+      - name: Lint
+        continue-on-error: true
+        run: npm run lint < /dev/null
+
+      # Toza CI bazasi: migratsiya zanjiri boshidan oxirigacha qo'llanadimi va
+      # seed ishlaydimi. Testlar bu bazadan foydalanmaydi.
+      - name: CI bazasi — migratsiyalar
+        run: |
+          rm -f ci.db
+          node scripts/db-migrate.mjs
+
+      - name: CI bazasi — seed
+        run: npm run db:seed
+
+      # Ma'lum yiqilgan testlar (--tashla) bu qadamdan chiqariladi va PASTDA
+      # alohida, continue-on-error bilan ishga tushadi. Ya'ni ular yashirilmaydi,
+      # lekin butun quvurni to'xtatib ham qo'ymaydi.
+      - name: Testlar
+        run: npm run test:hammasi -- --tashla=test:dialect
+
+      # TODO: `test:dialect` yiqiladi — Postgres init migratsiyasi eskirgan
+      # (sxemada 45 model, migratsiyada 43 jadval; `Role` va `Smena` yo'q).
+      # Yechim: `npm run pg:migratsiya`. Batafsil: docs/CI-YIQILGAN-TESTLAR.md.
+      # Tuzatilgach yuqoridagi `--tashla=` va bu qadam olib tashlanadi.
+      - name: Yiqilgan testlar (vaqtincha, TODO)
+        continue-on-error: true
+        run: npm run test:dialect
+
+  # Arxitektura invariantlarini qo'riqlaydigan ikkita test alohida job'da —
+  # ular yiqilsa sabab boshqa testlar orasida ko'milib ketmasin.
+  #   izolyatsiya-royxati — tenantDb ro'yxatiga tushmagan model FILTRSIZ o'tadi
+  #                         (fail-open): barcha tenantlarga ko'rinib qoladi.
+  #   backup              — ZAXIRA_JADVALLARI ro'yxatiga tushmagan model
+  #                         zaxiraga kirmaydi: tiklashda ma'lumot yo'qoladi.
+  izolyatsiya-qorovuli:
+    name: Izolyatsiya va zaxira qorovuli
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      DATABASE_URL: "file:./ci.db"
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Bog'liqliklar
+        run: npm ci
+
+      - name: Prisma client
+        run: npx prisma generate
+
+      - name: Tenant izolyatsiyasi ro'yxati
+        run: npm run test:izolyatsiya-royxati
+
+      - name: Zaxira ro'yxati
+        run: npm run test:backup
