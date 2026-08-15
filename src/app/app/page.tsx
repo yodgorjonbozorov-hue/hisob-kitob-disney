@@ -25,7 +25,7 @@ import { getDebtTotals } from "@/lib/queries/inventory";
 import { getTodayTotals } from "@/lib/queries/shift";
 import { listTransactions } from "@/lib/queries/transactions";
 import { getProBugun } from "@/lib/queries/proDashboard";
-import { isPro } from "@/lib/billing/pro";
+import { bugunPaneliKorinadi } from "@/lib/mijozXos";
 import { KassaHome } from "./KassaHome";
 
 export default async function DashboardPage({
@@ -88,7 +88,9 @@ export default async function DashboardPage({
   }
 
   const business = await getActiveBusiness(session);
-  const pro = isPro(tenant.plan);
+  // "Bugun" bloki — mijozga xos (Fortex Selos), tarif imkoniyati EMAS.
+  // Boshqa mijozlarning dashboard'i o'zgarmaydi.
+  const bugunPanel = bugunPaneliKorinadi(tenant);
   const [summary, kirimBreakdown, chiqimBreakdown, trend, daily, qarzTotal, categoryCount, proBugun] = await Promise.all([
     getMonthSummaryKesh(businessId, month),
     getCategoryBreakdownKesh(businessId, month, "kirim"),
@@ -97,8 +99,8 @@ export default async function DashboardPage({
     getDailyDynamicsKesh(businessId, month),
     business?.omborli ? getDebtTotals(businessId) : Promise.resolve({ olinadigan: 0, beriladigan: 0, sof: 0 }),
     prisma.category.count({ where: { businessId } }),
-    // PRO: bugungi kg va kassa/jamoa ko'rsatkichlari (kengaytirilgan dashboard).
-    pro ? getProBugun(businessId) : Promise.resolve(null),
+    // Bugungi kg va kassa/jamoa ko'rsatkichlari (mijozga xos blok).
+    bugunPanel ? getProBugun(businessId) : Promise.resolve(null),
   ]);
 
   return (
@@ -173,7 +175,7 @@ export default async function DashboardPage({
 
       {proBugun && (
         <Card>
-          <h2 className="font-semibold text-fg mb-3">Bugun (PRO ko&apos;rsatkichlar)</h2>
+          <h2 className="font-semibold text-fg mb-3">Bugun</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-sm">
             <div>
               <p className="text-2xs text-muted">Sotilgan</p>

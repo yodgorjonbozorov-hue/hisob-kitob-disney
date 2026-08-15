@@ -18,6 +18,8 @@ function clientIp(request: NextRequest): string | null {
 export interface TenantInfo {
   id: string;
   name: string;
+  /** URL-slug — mijozga xos bloklarni ochishda kalit (lib/mijozXos.ts). */
+  slug: string;
   status: string;
   trialEndsAt: Date | null;
   currentPeriodEnd: Date | null;
@@ -44,6 +46,7 @@ const tenantByIdCached = requestCache(async (tenantId: string): Promise<TenantIn
     select: {
       id: true,
       name: true,
+      slug: true,
       status: true,
       trialEndsAt: true,
       currentPeriodEnd: true,

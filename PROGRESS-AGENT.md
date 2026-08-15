@@ -2370,3 +2370,35 @@ backup 6/6 · cron 10/10.
 qisman 500k→qarz 300k→0; storno; o'ziga transfer rad; xodim limiti; audit) ·
 izolyatsiya-royxati 9/9 · backup 6/6 · migratsiya 10/10 · xarid 13/13 ·
 kassa 11/11 · isolation 22/22 · tolov 14/14 · audit 12/12.
+
+---
+
+## 2026-08-15 — "Bugun" bloki faqat Fortex Selosga (mijozga xos blok)
+
+**Muammo:** dashboard'dagi "Bugun (PRO ko'rsatkichlar)" bloki `isPro(plan)`
+bilan ochilardi. Bu blok Fortex Selos uchun buyurtma qilingan edi (kg savdosi,
+shaxsiy kassalar), lekin PRO tarifdagi HAR bir mijoz uni ko'rib turgan —
+begona ko'rsatkichlar boshqa mijozlarning panelini to'ldirgan.
+
+**Nima qilindi** (branch: `claude/manabu-qism-visibility-5ztu13`):
+
+1. `src/lib/mijozXos.ts` (yangi, sof modul) — mijozga xos bloklar ro'yxati.
+   `bugunPaneliKorinadi(tenant)` tenant `slug` yoki kompaniya nomini bir xil
+   kalitga keltirib solishtiradi ("Fortex Selos" == "fortex-selos"), shuning
+   uchun slug to'qnashuv suffiksi bilan yaratilgan bo'lsa ("fortex-selos-2")
+   ham mijoz nom bo'yicha topiladi. Ro'yxat env bilan kengaytiriladi:
+   `BUGUN_PANEL_MIJOZLARI="fortex-selos-uzb,Boshqa Mijoz"` — kod tegilmaydi.
+   Standart ro'yxat: `fortex-selos-uzb` (bazadagi haqiqiy tenant) va
+   `fortex-selos` (nom qisqartirilsa blok yo'qolib qolmasin).
+2. `src/app/app/page.tsx` — gate `isPro(tenant.plan)` o'rniga
+   `bugunPaneliKorinadi(tenant)`. Blok yopiq bo'lsa `getProBugun()` umuman
+   chaqirilmaydi (boshqa mijozlarga ortiqcha 5 ta so'rov ham ketmaydi).
+   Sarlavha "Bugun (PRO ko'rsatkichlar)" → "Bugun": blok endi tarif
+   imkoniyati emas, shuning uchun "PRO" so'zi chalg'itardi.
+3. `src/lib/auth/tenant.ts` — `TenantInfo` ga `slug` qo'shildi (select ham).
+   Boshqa gate'lar (rollar, shaxsiy kassa, user-transfer API) O'ZGARMADI —
+   ular haqiqatan PRO tarif imkoniyatlari va `requirePro` bilan qoladi.
+
+**Tekshirildi:** build ✅ · mijoz-xos 5/5 (YANGI: haqiqiy slug, qisqa nom,
+suffiksli slug, nom yozilishi, boshqa mijozga ko'rinmasligi) · pro-stsenariy 13/13 ·
+isolation 22/22 · izolyatsiya-royxati 9/9 · modules 14/14.
