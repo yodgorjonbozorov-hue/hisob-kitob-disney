@@ -32,6 +32,12 @@ interface UserDTO {
   /** Maxsus rol (PRO) — tayinlangan bo'lsa rol select "custom:<id>" ko'rsatadi. */
   roleId: string | null;
   rolNomi: string | null;
+  /** Shaxsiy kassalari qoldig'i (ledger'dan, joriy biznes). */
+  balans: number;
+  /** Ta'minotchi sifatida ochiq qarz (biznes shu odamga qarzdor). */
+  qarz: number;
+  /** Pul harakatlari soni: tranzaksiyalar + o'tkazmalar. */
+  amallar: number;
 }
 
 interface RoleOption {
@@ -45,12 +51,15 @@ export function UsersClient({
   businesses,
   customRoles,
   pro,
+  moliyaBiznes,
 }: {
   initialUsers: UserDTO[];
   currentUserId: string;
   businesses: BusinessOption[];
   customRoles: RoleOption[];
   pro: boolean;
+  /** Balans/qarz ustunlari qaysi biznes kesimida (null — biznes tanlanmagan). */
+  moliyaBiznes: string | null;
 }) {
   const [users, setUsers] = useState(initialUsers);
   const [modalOpen, setModalOpen] = useState(false);
@@ -144,13 +153,23 @@ export function UsersClient({
       </div>
 
       <Card>
-        <table className="w-full text-sm">
+        {moliyaBiznes && (
+          <p className="text-2xs text-faint mb-2">
+            Balans, qarz va yozuvlar — <span className="font-medium">{moliyaBiznes}</span> kesimida.
+          </p>
+        )}
+        {/* Ustunlar ko'p — tor ekranda jadval o'zi suriladi, sahifa emas. */}
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[900px]">
           <thead>
             <tr className="text-left text-faint text-xs uppercase">
               <th className="pb-2">Ism</th>
               <th className="pb-2">Login</th>
               <th className="pb-2">Rol</th>
               <th className="pb-2">Biznes</th>
+              {moliyaBiznes && <th className="pb-2 text-right">Balans</th>}
+              {moliyaBiznes && <th className="pb-2 text-right">Qarz</th>}
+              {moliyaBiznes && <th className="pb-2 text-right">Yozuvlar</th>}
               <th className="pb-2">Holati</th>
               <th className="pb-2">Qo'shilgan</th>
               <th className="pb-2 text-right">Amal</th>
@@ -207,6 +226,29 @@ export function UsersClient({
                     "Barcha"
                   )}
                 </td>
+                {moliyaBiznes && (
+                  <>
+                    {/* Balans manfiy bo'lishi normal: xodim biznes nomidan pul
+                        sarflagan bo'lsa (masalan xarid to'lovi) qarzdorlik emas,
+                        shunchaki uning kassasidan chiqqan pul. */}
+                    <td className="py-2.5 text-right tnum whitespace-nowrap">
+                      <span
+                        className={
+                          u.balans > 0 ? "text-income" : u.balans < 0 ? "text-expense" : "text-muted"
+                        }
+                      >
+                        {u.balans > 0 ? "+" : ""}
+                        {u.balans.toLocaleString("uz-UZ")}
+                      </span>
+                    </td>
+                    <td className="py-2.5 text-right tnum whitespace-nowrap">
+                      <span className={u.qarz > 0 ? "text-expense" : "text-muted"}>
+                        {u.qarz.toLocaleString("uz-UZ")}
+                      </span>
+                    </td>
+                    <td className="py-2.5 text-right tnum text-muted">{u.amallar}</td>
+                  </>
+                )}
                 <td className="py-2.5">
                   <Badge tone={u.isActive ? "kirim" : "neutral"}>{u.isActive ? "Faol" : "Nofaol"}</Badge>
                 </td>
@@ -245,6 +287,7 @@ export function UsersClient({
             ))}
           </tbody>
         </table>
+        </div>
       </Card>
 
       {pro && (
@@ -332,7 +375,15 @@ function NewUserModal({
       setLoading(false);
       return;
     }
-    onCreated({ ...data, rolNomi: data.role?.nomi ?? null, businessNomi: data.business?.nomi ?? null });
+    // Yangi foydalanuvchining hali birorta yozuvi yo'q — moliya ustunlari nol.
+    onCreated({
+      ...data,
+      rolNomi: data.role?.nomi ?? null,
+      businessNomi: data.business?.nomi ?? null,
+      balans: 0,
+      qarz: 0,
+      amallar: 0,
+    });
   }
 
   return (

@@ -4,6 +4,8 @@ import { requireTenantPage } from "@/lib/auth/tenant";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { isManager } from "@/lib/auth/roles";
 import { isPro } from "@/lib/billing/pro";
+import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
+import { getUserMoliya } from "@/lib/queries/userMoliya";
 import { UsersClient } from "./UsersClient";
 
 export default async function FoydalanuvchilarPage() {
@@ -42,6 +44,12 @@ export default async function FoydalanuvchilarPage() {
       : Promise.resolve([]),
   ]);
 
+  // Balans/qarz/amallar — JORIY biznes kesimida (kassa va qarz biznesga bog'langan).
+  // Biznes tanlanmagan bo'lsa ustunlar ko'rsatilmaydi (raqamsiz ustun chalg'itardi).
+  const businessId = await resolveActiveBusinessId(session);
+  const business = businessId ? await getActiveBusiness(session) : null;
+  const moliya = businessId ? await getUserMoliya(businessId) : null;
+
   const usersDTO = users.map((u) => ({
     id: u.id,
     ism: u.ism,
@@ -53,6 +61,9 @@ export default async function FoydalanuvchilarPage() {
     businessNomi: u.business?.nomi ?? null,
     roleId: u.roleId,
     rolNomi: u.role?.nomi ?? null,
+    balans: moliya?.get(u.id)?.balans ?? 0,
+    qarz: moliya?.get(u.id)?.qarz ?? 0,
+    amallar: moliya?.get(u.id)?.amallar ?? 0,
   }));
 
   return (
@@ -64,6 +75,7 @@ export default async function FoydalanuvchilarPage() {
         businesses={businesses}
         customRoles={roles}
         pro={pro}
+        moliyaBiznes={business?.nomi ?? null}
       />
     </div>
   );

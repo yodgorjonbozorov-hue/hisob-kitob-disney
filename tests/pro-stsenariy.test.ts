@@ -544,7 +544,59 @@ test("to'langan summa jami summadan oshib keta olmaydi", async () => {
   );
 });
 
-// ---------- 7. Audit log ----------
+// ---------- 7. Foydalanuvchilar sahifasi ustunlari (Balans / Qarz / Yozuvlar) ----------
+
+test("user moliyasi: balans ledger'ga teng, ochiq qarz ta'minotchi kesimida ko'rinadi", async () => {
+  const { getUserMoliya } = await import("@/lib/queries/userMoliya");
+
+  const murodOldin = await kassaQoldiq(t.user.id);
+  const baxtiyorOldin = await kassaQoldiq(baxtiyor.id);
+
+  // 50 kg × 8 000 = 400 000, faqat 100 000 to'lanadi → ochiq qarz 300 000.
+  const order = await T(async () =>
+    xarid.createOrder(t.business.id, t.user.id, {
+      supplierId: supplier.id,
+      sana: "2026-08-18",
+      tolovTuri: "naqd",
+      satrlar: [{ productId: selos.id, miqdor: 50, birlikNarx: 8_000 }],
+    })
+  );
+  await T(async () =>
+    xarid.qabulQilish({
+      businessId: t.business.id,
+      orderId: order.id,
+      userId: t.user.id,
+      tolanganSumma: 100_000,
+    })
+  );
+
+  const moliya = await T(async () => getUserMoliya(t.business.id));
+  const murod = moliya.get(t.user.id)!;
+  const bax = moliya.get(baxtiyor.id)!;
+
+  // Balans — mustaqil hisoblangan kassa qoldig'i bilan bir xil.
+  assert.equal(murod.balans, murodOldin - 100_000);
+  assert.equal(bax.balans, baxtiyorOldin + 100_000);
+  assert.equal(murod.balans, await kassaQoldiq(t.user.id));
+  assert.equal(bax.balans, await kassaQoldiq(baxtiyor.id));
+
+  // Qarz — biznes Baxtiyor akaga 300 000 qarzdor; xaridorda qarz yo'q.
+  assert.equal(bax.qarz, 300_000, "400k − 100k");
+  assert.equal(murod.qarz, 0);
+
+  // Yozuvlar soni — har ikkalasida ham pul harakatlari bor.
+  assert.ok(murod.amallar > 0 && bax.amallar > 0);
+  assert.equal(murod.amallar, bax.amallar, "har o'tkazma ikkala tomonda ham sanaladi");
+
+  // Double-entry invarianti shundan keyin ham buzilmagan.
+  const balanslar = await T(async () => accounts.getAccountBalances(t.business.id));
+  assert.equal(
+    balanslar.reduce((s: number, k: any) => s + k.qoldiq, 0),
+    0
+  );
+});
+
+// ---------- 8. Audit log ----------
 
 test("muhim amallar audit jurnalida qolgan", async () => {
   const logs = await rawPrisma.auditLog.findMany({

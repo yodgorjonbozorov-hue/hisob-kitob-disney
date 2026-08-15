@@ -2490,3 +2490,34 @@ atomik 6/6 · soft-delete 8/8 · agregat 7/7 · audit 12/12 · backup 6/6 ·
 migratsiya 10/10 · cron 10/10 · tolov 14/14 · visibility 10/10 ·
 csv-import 13/13 · inventarizatsiya 11/11 · sotuv-bekor 11/11 · hr 19/19 ·
 tasdiqlash 20/20.
+
+---
+
+## 2026-08-15 — Foydalanuvchilar sahifasi: Balans / Qarz / Yozuvlar ustunlari (§12)
+
+**Nima qilindi** (branch: `claude/manabu-qism-visibility-5ztu13`):
+
+1. `src/lib/queries/userMoliya.ts` (yangi) — `getUserMoliya(businessId)` bitta
+   Map qaytaradi: har user uchun `balans`, `qarz`, `amallar`. To'plam bo'yicha
+   so'rovlar — N+1 YO'Q (userlar soni oshsa ham so'rovlar soni o'zgarmaydi).
+   - **Balans** — `getAccountBalances()` dan, ya'ni LEDGER'dan (Transaction +
+     AccountTransfer), kassa egasi bo'yicha yig'iladi. Alohida saqlanmaydi.
+   - **Qarz** — ta'minotchi sifatida ochiq "beriladigan" qoldiq. `Debt` da
+     `supplierId` yo'q, shuning uchun bog'lanish buyurtma orqali:
+     `PurchaseOrder.debtId → PurchaseOrder.supplier.userId`.
+   - **Yozuvlar** — tranzaksiyalar + o'tkazmalar (har o'tkazma ikkala tomonda).
+2. `foydalanuvchilar/page.tsx` — raqamlar JORIY biznes kesimida (kassa va qarz
+   biznesga bog'langan). Biznes tanlanmagan bo'lsa ustunlar umuman
+   ko'rsatilmaydi — bo'sh ustun chalg'itardi. Sarlavha ostida qaysi biznes
+   ekani yozib qo'yiladi.
+3. `UsersClient.tsx` — 3 ustun + jadval `overflow-x-auto` ichiga olindi
+   (§17: tor ekranda sahifa emas, jadvalning o'zi suriladi). Balans musbat —
+   yashil, manfiy — qizil (xodim biznes nomidan pul sarflagan holat, bu
+   qarzdorlik emas).
+
+**Migratsiya:** YO'Q — barcha raqamlar mavjud jadvallardan hisoblanadi.
+
+**Tekshirildi:** build ✅ · pro-stsenariy 22/22 (YANGI: balans ledger'ga teng,
+ochiq qarz 400k−100k=300k ta'minotchi kesimida, yozuvlar soni, double-entry
+invarianti buzilmagan) · kassa 11/11 · xarid 13/13 · isolation 22/22 ·
+izolyatsiya-royxati 9/9 · visibility 10/10 · audit 12/12 · superadmin 10/10.
