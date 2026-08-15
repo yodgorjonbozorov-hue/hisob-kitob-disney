@@ -2402,3 +2402,50 @@ begona ko'rsatkichlar boshqa mijozlarning panelini to'ldirgan.
 **Tekshirildi:** build ✅ · mijoz-xos 5/5 (YANGI: haqiqiy slug, qisqa nom,
 suffiksli slug, nom yozilishi, boshqa mijozga ko'rinmasligi) · pro-stsenariy 13/13 ·
 isolation 22/22 · izolyatsiya-royxati 9/9 · modules 14/14.
+
+---
+
+## 2026-08-15 — ERP spec auditi (§8–§19): to'lov holati, dashboard, senariy testi
+
+**Kontekst:** mijoz to'liq ERP spetsifikatsiyasini berdi (qarz tizimi, kassalar,
+double-entry, audit log, dashboard, validatsiya, xavfsizlik, test senariysi).
+Avval mavjud kod auditdan o'tkazildi — asosiy oqim allaqachon bor va to'g'ri
+ishlayotgani aniqlandi (§19 senariysi `tests/pro-stsenariy.test.ts` da qoplangan).
+Faqat haqiqiy bo'shliqlar yopildi; ishlayotgan mexanizmga tegilmadi.
+
+**Nima qilindi** (branch: `claude/manabu-qism-visibility-5ztu13`):
+
+1. **§13 To'lov holati** — `lib/validation/xarid.ts` da `tolovHolati()` sof
+   funksiyasi: Qoralama / Kutilmoqda / To'langan / Qisman to'langan / Qarz /
+   Bekor. Bazada saqlanmaydi — mavjud maydonlardan hisoblanadi, shuning uchun
+   MIGRATSIYA KERAK EMAS. Eski yozuvlar (`tolanganSumma` default 0) `debtId` va
+   `transactionId` izlari bo'yicha to'g'ri ajratiladi. `OrderDTO` ga
+   `tolovHolati` va `qoldiqQarz` qo'shildi; Xarid ro'yxatida ikkinchi nishon
+   (badge) sifatida ko'rinadi — tovar holati va PUL holati endi alohida.
+2. **§12 Dashboard "Bugun"** — blokka bugungi Kirim, Chiqim va joriy Qarz (sof
+   + beriladigan) qo'shildi. 5 ustun → 7. Kirim/chiqim/kg — BUGUNGI kun;
+   kassa va qarz — JORIY holat (izohda ajratilgan).
+3. **§14 Validatsiya** — `birlikNarx` endi `positive()`: 0 narxli qabul tannarx
+   snapshotini nolga tushirib keyingi foyda hisobini buzardi.
+4. **§19 Test senariysi kuchaytirildi** (13 → 21 test). Yangi tekshiruvlar:
+   - har xarid to'lovi AYNAN o'z summasi bilan transfer yozgan (800k, 500k),
+     har biri SOURCE→DESTINATION (Murod→Baxtiyor, UZS);
+   - qarz to'lovi 300k alohida ledger yozuvi (`relatedType: "debt"`);
+   - **DOUBLE-ENTRY invariant:** ichki o'tkazmalarda Σ(barcha kassa qoldig'i) = 0
+     — manbasiz pul paydo bo'lmaydi va yo'qolmaydi;
+   - balans xom ledger'dan MUSTAQIL qayta hisoblanib solishtiriladi
+     (`getAccountBalances` ga ishonmasdan);
+   - qarz matematikasi yopiq: 800k = 500k to'lov + 300k qarz to'lovi;
+   - `tolovHolati` 8 holat bo'yicha (eski yozuvlar ham);
+   - 0 kg / 0 narx / manfiy miqdor rad etiladi;
+   - jamidan ortiq to'lov rad etiladi va ATOMIK rollback bo'ladi (ombor tegilmagan).
+
+**Migratsiya:** YO'Q. Schema o'zgarmadi — `Account.turi` (naqd/plastik/bank) va
+`Account.userId` §9 uchun allaqachon yetarli, to'lov holati esa hisoblanadi.
+
+**Tekshirildi:** build ✅ · pro-stsenariy 21/21 · xarid 13/13 · kassa 11/11 ·
+mijoz-xos 5/5 · isolation 22/22 · izolyatsiya-royxati 9/9 · modules 14/14 ·
+atomik 6/6 · soft-delete 8/8 · agregat 7/7 · audit 12/12 · backup 6/6 ·
+migratsiya 10/10 · cron 10/10 · tolov 14/14 · visibility 10/10 ·
+csv-import 13/13 · inventarizatsiya 11/11 · sotuv-bekor 11/11 · hr 19/19 ·
+tasdiqlash 20/20.

@@ -387,7 +387,164 @@ test("o'tkazmani bekor qilish — storno bilan, balans tiklanadi", async () => {
   assert.ok(storno, "teskari yozuv (append-only ledger)");
 });
 
-// ---------- 5. Audit log ----------
+// ---------- 5. Matematik yaxlitlik (double-entry) ----------
+
+test("har xarid to'lovi aynan o'z summasi bilan transfer yozgan (800k va 500k)", async () => {
+  const transferlar = await rawPrisma.accountTransfer.findMany({
+    where: { businessId: t.business.id, relatedType: "purchaseOrder" },
+    select: { summa: true, fromUserId: true, toUserId: true, valyuta: true },
+    orderBy: { createdAt: "asc" },
+  });
+  assert.deepEqual(
+    transferlar.map((x: any) => x.summa),
+    [800_000, 500_000],
+    "to'liq to'lov 800k, qisman to'lov 500k"
+  );
+  // Har transfer SOURCE → DESTINATION: Murod → Baxtiyor.
+  for (const x of transferlar) {
+    assert.equal(x.fromUserId, t.user.id);
+    assert.equal(x.toUserId, baxtiyor.id);
+    assert.equal(x.valyuta, "UZS");
+  }
+});
+
+test("qarz to'lovi 300k ham alohida transfer sifatida yozilgan", async () => {
+  const tolov = await rawPrisma.accountTransfer.findFirst({
+    where: { businessId: t.business.id, relatedType: "debt", relatedId: qarzId },
+    select: { summa: true, fromUserId: true, toUserId: true },
+  });
+  assert.ok(tolov, "qarz to'lovi ledger'da");
+  assert.equal(tolov.summa, 300_000);
+  assert.equal(tolov.fromUserId, t.user.id);
+  assert.equal(tolov.toUserId, baxtiyor.id);
+});
+
+test("DOUBLE-ENTRY: ichki o'tkazmalarda barcha kassalar yig'indisi 0", async () => {
+  // Bu stsenariyda tashqi pul (kirim/chiqim tranzaksiya) umuman yo'q —
+  // pul faqat biznes ICHIDA ko'chgan. Demak Σ(barcha kassa qoldig'i) = 0
+  // bo'lishi SHART: har o'tkazma bir kassadan chiqib ikkinchisiga tushgan.
+  const balanslar = await T(async () => accounts.getAccountBalances(t.business.id));
+  const yigindi = balanslar.reduce((s: number, k: any) => s + k.qoldiq, 0);
+  assert.equal(yigindi, 0, "manbasiz pul paydo bo'lmagan va yo'qolmagan");
+});
+
+test("balans ledger'dan qayta hisoblanganda bir xil chiqadi (mustaqil tekshiruv)", async () => {
+  // getAccountBalances'ga ishonmasdan, xom ledger'dan qo'lda hisoblaymiz.
+  const kassalar = await rawPrisma.account.findMany({
+    where: { businessId: t.business.id },
+    select: { id: true, userId: true },
+  });
+  const murodKassa = kassalar.filter((k: any) => k.userId === t.user.id).map((k: any) => k.id);
+  const baxtiyorKassa = kassalar.filter((k: any) => k.userId === baxtiyor.id).map((k: any) => k.id);
+
+  const hammasi = await rawPrisma.accountTransfer.findMany({
+    where: { businessId: t.business.id },
+    select: { fromAccountId: true, toAccountId: true, summa: true },
+  });
+  const qoldiq = (ids: string[]) =>
+    hammasi.reduce(
+      (s: number, x: any) =>
+        s + (ids.includes(x.toAccountId) ? x.summa : 0) - (ids.includes(x.fromAccountId) ? x.summa : 0),
+      0
+    );
+
+  assert.equal(qoldiq(murodKassa), await kassaQoldiq(t.user.id), "Murod: xom ledger = hisoblangan balans");
+  assert.equal(qoldiq(baxtiyorKassa), await kassaQoldiq(baxtiyor.id), "Baxtiyor: xom ledger = hisoblangan balans");
+  assert.equal(qoldiq(murodKassa) + qoldiq(baxtiyorKassa), 0, "ikki tomon bir-birini qoplaydi");
+});
+
+test("qarz tarixi matematik jihatdan yopiq: 800k = 500k to'lov + 300k qarz to'lovi", async () => {
+  const debt = await rawPrisma.debt.findUnique({
+    where: { id: qarzId },
+    include: { payments: { select: { summa: true } } },
+  });
+  const tolovlarJami = debt.payments.reduce((s: number, p: any) => s + p.summa, 0);
+  assert.equal(debt.jamiSumma, 300_000, "qarz = 800k − 500k");
+  assert.equal(tolovlarJami, 300_000, "to'lovlar yig'indisi qarzga teng");
+  assert.equal(debt.jamiSumma - debt.tolangan, 0, "qoldiq 0");
+  assert.equal(debt.isYopilgan, true);
+
+  // Buyurtma tomonidan: to'langan (500k) + qarz (300k) = jami (800k).
+  const order = await rawPrisma.purchaseOrder.findFirst({ where: { debtId: qarzId } });
+  assert.equal(order.tolanganSumma + debt.jamiSumma, order.jamiSumma);
+  assert.equal(order.jamiSumma, 800_000);
+});
+
+// ---------- 6. To'lov holati (§13) va validatsiya (§14) ----------
+
+test("to'lov holati: to'langan / qisman / qarz — eski yozuvlar ham to'g'ri", async () => {
+  const { tolovHolati } = await import("@/lib/validation/xarid");
+  const asos = { holat: "qabul_qilingan", jamiSumma: 800_000, tolovTuri: "naqd" };
+
+  assert.equal(tolovHolati({ ...asos, tolanganSumma: 800_000 }), "tolangan");
+  assert.equal(tolovHolati({ ...asos, tolanganSumma: 500_000 }), "qisman");
+  assert.equal(tolovHolati({ ...asos, tolanganSumma: 0, debtId: "d1" }), "qarz");
+  // Eski yozuv: tolanganSumma to'ldirilmagan (0), lekin chiqim yozilgan.
+  assert.equal(tolovHolati({ ...asos, tolanganSumma: 0, transactionId: "t1" }), "tolangan");
+  assert.equal(tolovHolati({ ...asos, tolovTuri: "qarz", tolanganSumma: 0 }), "qarz");
+  assert.equal(tolovHolati({ ...asos, holat: "qoralama", tolanganSumma: 0 }), "qoralama");
+  assert.equal(tolovHolati({ ...asos, holat: "tasdiqlangan", tolanganSumma: 0 }), "kutilmoqda");
+  assert.equal(tolovHolati({ ...asos, holat: "bekor", tolanganSumma: 0 }), "bekor");
+});
+
+test("validatsiya: miqdor va narx 0 dan katta bo'lishi shart", async () => {
+  const { createOrderSchema } = await import("@/lib/validation/xarid");
+  const asos = { supplierId: "s1", sana: "2026-08-16", tolovTuri: "naqd" as const };
+
+  assert.equal(
+    createOrderSchema.safeParse({
+      ...asos,
+      satrlar: [{ productId: "p1", miqdor: 100, birlikNarx: 8_000 }],
+    }).success,
+    true
+  );
+  assert.equal(
+    createOrderSchema.safeParse({ ...asos, satrlar: [{ productId: "p1", miqdor: 0, birlikNarx: 8_000 }] }).success,
+    false,
+    "0 kg rad etiladi"
+  );
+  assert.equal(
+    createOrderSchema.safeParse({ ...asos, satrlar: [{ productId: "p1", miqdor: 100, birlikNarx: 0 }] }).success,
+    false,
+    "0 narx rad etiladi"
+  );
+  assert.equal(
+    createOrderSchema.safeParse({ ...asos, satrlar: [{ productId: "p1", miqdor: -5, birlikNarx: 8_000 }] }).success,
+    false,
+    "manfiy miqdor rad etiladi"
+  );
+});
+
+test("to'langan summa jami summadan oshib keta olmaydi", async () => {
+  const order = await T(async () =>
+    xarid.createOrder(t.business.id, t.user.id, {
+      supplierId: supplier.id,
+      sana: "2026-08-17",
+      tolovTuri: "naqd",
+      satrlar: [{ productId: selos.id, miqdor: 10, birlikNarx: 8_000 }],
+    })
+  );
+  await assert.rejects(
+    () =>
+      T(async () =>
+        xarid.qabulQilish({
+          businessId: t.business.id,
+          orderId: order.id,
+          userId: t.user.id,
+          tolanganSumma: 200_000, // jami 80 000
+        })
+      ),
+    /oralig'ida/
+  );
+  // Rad etilgan qabul omborga ham, pulga ham tegmagan.
+  const p = await rawPrisma.product.findUnique({ where: { id: selos.id } });
+  assert.equal(p.miqdor, 200, "atomik: rollback bo'ldi");
+  await T(async () =>
+    xarid.orderHolatiniOzgartir({ businessId: t.business.id, orderId: order.id, holat: "bekor" })
+  );
+});
+
+// ---------- 7. Audit log ----------
 
 test("muhim amallar audit jurnalida qolgan", async () => {
   const logs = await rawPrisma.auditLog.findMany({

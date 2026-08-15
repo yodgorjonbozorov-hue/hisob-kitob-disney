@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { tolovHolati, type TolovHolat } from "@/lib/validation/xarid";
 
 export interface SupplierDTO {
   id: string;
@@ -76,6 +77,10 @@ export interface OrderDTO {
   jamiSumma: number;
   /** Qabul paytida to'langan qism (PRO qisman to'lov). */
   tolanganSumma: number;
+  /** Qoldiq qarz (jami − to'langan); to'liq to'langanda 0. */
+  qoldiqQarz: number;
+  /** Pul oqimi holati — tovar holatidan alohida (lib/validation/xarid.ts). */
+  tolovHolati: TolovHolat;
   izoh: string | null;
   satrlar: OrderSatrDTO[];
 }
@@ -102,6 +107,8 @@ export async function listOrders(businessId: string, limit = 50): Promise<OrderD
     tolovTuri: o.tolovTuri,
     jamiSumma: o.jamiSumma,
     tolanganSumma: o.tolanganSumma,
+    qoldiqQarz: Math.max(0, o.jamiSumma - o.tolanganSumma),
+    tolovHolati: tolovHolati(o),
     izoh: o.izoh,
     satrlar: o.items.map((i) => ({
       productId: i.productId,
