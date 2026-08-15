@@ -176,7 +176,16 @@ export default async function DashboardPage({
       {proBugun && (
         <Card>
           <h2 className="font-semibold text-fg mb-3">Bugun</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-sm">
+          {/* Kirim/chiqim va kg — BUGUNGI kun; kassa va qarz — JORIY holat. */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 text-sm">
+            <div>
+              <p className="text-2xs text-muted">Kirim</p>
+              <p className="font-semibold tnum text-income">{formatMoneyCompact(proBugun.kirim)}</p>
+            </div>
+            <div>
+              <p className="text-2xs text-muted">Chiqim</p>
+              <p className="font-semibold tnum text-expense">{formatMoneyCompact(proBugun.chiqim)}</p>
+            </div>
             <div>
               <p className="text-2xs text-muted">Sotilgan</p>
               <p className="font-semibold tnum text-fg">{proBugun.sotilganKg.toLocaleString("uz-UZ")} kg</p>
@@ -186,16 +195,22 @@ export default async function DashboardPage({
               <p className="font-semibold tnum text-fg">{proBugun.olinganKg.toLocaleString("uz-UZ")} kg</p>
             </div>
             <div>
+              <p className="text-2xs text-muted">Qarz (sof)</p>
+              <p className="font-semibold tnum text-fg">{formatMoneyCompact(proBugun.qarzSof)}</p>
+              {proBugun.qarzBeriladigan > 0 && (
+                <p className="text-2xs text-muted tnum">
+                  beriladigan: {formatMoneyCompact(proBugun.qarzBeriladigan)}
+                </p>
+              )}
+            </div>
+            <div>
               <p className="text-2xs text-muted">Kassalar jami</p>
               <p className="font-semibold tnum text-fg">{formatMoneyCompact(proBugun.kassaJami)}</p>
             </div>
             <div>
               <p className="text-2xs text-muted">Foydalanuvchilar</p>
               <p className="font-semibold tnum text-fg">{proBugun.faolUserlar}</p>
-            </div>
-            <div>
-              <p className="text-2xs text-muted">Ta&apos;minotchilar</p>
-              <p className="font-semibold tnum text-fg">{proBugun.taminotchilar}</p>
+              <p className="text-2xs text-muted tnum">ta&apos;minotchi: {proBugun.taminotchilar}</p>
             </div>
           </div>
         </Card>

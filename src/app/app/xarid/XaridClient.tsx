@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Money } from "@/components/ui/Money";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatDateUZ } from "@/lib/format";
-import { HOLAT_NOMI, type XaridHolat } from "@/lib/validation/xarid";
+import { HOLAT_NOMI, TOLOV_HOLAT_NOMI, type TolovHolat, type XaridHolat } from "@/lib/validation/xarid";
 import type { OrderDTO, SupplierDTO, XaridStats } from "@/lib/queries/xarid";
 import type { ProductAdminDTO } from "@/lib/queries/inventory";
 import { BuyurtmaModal } from "./BuyurtmaModal";
@@ -20,6 +20,16 @@ const HOLAT_TONE: Record<string, "kirim" | "chiqim" | "neutral"> = {
   tasdiqlangan: "neutral",
   qabul_qilingan: "kirim",
   bekor: "chiqim",
+};
+
+/** To'lov holati — tovar holati yonida alohida nishon (Paid/Partially/Debt). */
+const TOLOV_TONE: Record<TolovHolat, "kirim" | "chiqim" | "neutral"> = {
+  qoralama: "neutral",
+  kutilmoqda: "neutral",
+  tolangan: "kirim",
+  qisman: "neutral",
+  qarz: "chiqim",
+  bekor: "neutral",
 };
 
 export function XaridClient({
@@ -146,6 +156,11 @@ export function XaridClient({
                       <Badge tone={HOLAT_TONE[o.holat] ?? "neutral"}>
                         {HOLAT_NOMI[o.holat as XaridHolat] ?? o.holat}
                       </Badge>
+                      {/* Tovar holati "qabul qilingan" bo'lganda pul holati alohida
+                          ko'rsatiladi — qolgan holatlarda ikkalasi bir xil bo'lardi. */}
+                      {o.holat === "qabul_qilingan" && (
+                        <Badge tone={TOLOV_TONE[o.tolovHolati]}>{TOLOV_HOLAT_NOMI[o.tolovHolati]}</Badge>
+                      )}
                     </div>
                   </button>
 
