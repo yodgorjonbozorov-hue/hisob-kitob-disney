@@ -3,6 +3,7 @@ import { requireModulePage } from "@/lib/modules/guard";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import { getKunlikReport, getKunlikDirektor } from "@/lib/queries/kunlik";
+import { getSmenaHolat } from "@/lib/queries/smena";
 import { getKunlikRuxsat, kunlikBugun } from "@/lib/services/kunlik";
 import { KunlikClient } from "./KunlikClient";
 
@@ -42,9 +43,10 @@ export default async function KunlikPage({
     const sana =
       soralgan && /^\d{4}-\d{2}-\d{2}$/.test(soralgan) && ruxsat.tarixniKoradi ? soralgan : bugun;
 
-    const [report, direktor] = await Promise.all([
+    const [report, direktor, smena] = await Promise.all([
       getKunlikReport(businessId, sana),
       getKunlikDirektor(businessId),
+      getSmenaHolat(businessId, sana, bugun),
     ]);
 
     return (
@@ -57,7 +59,13 @@ export default async function KunlikPage({
             tasdiqlaydi
           </p>
         </div>
-        <KunlikClient report={report} ruxsat={ruxsat} bugun={bugun} direktor={direktor} />
+        <KunlikClient
+          report={report}
+          ruxsat={ruxsat}
+          bugun={bugun}
+          direktor={direktor}
+          smena={smena}
+        />
       </div>
     );
   });
