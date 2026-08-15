@@ -2,6 +2,7 @@ import { requestCache } from "@/lib/requestCache";
 import { NextRequest, NextResponse } from "next/server";
 import { redirect } from "next/navigation";
 import { getCurrentUser, requireUser, type SessionData } from "./session";
+import { normalizeRol } from "./roles";
 import { handleApiError, UnauthorizedError, ForbiddenError } from "./guard";
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { runWithTenant } from "@/lib/db/tenantContext";
@@ -56,31 +57,48 @@ const tenantByIdCached = requestCache(async (tenantId: string): Promise<TenantIn
   })
 );
 
-const userTenantIdCached = requestCache(async (userId: string) =>
+/**
+ * Foydalanuvchining JORIY holati — BAZADAN, har so'rovda (S-1 tuzatishi).
+ *
+ * Sessiya cookie'si 7 kun yashaydi, shuning uchun undagi rol/tenant huquq
+ * manbai sifatida ISHLATILMAYDI: bloklangan xodim yoki roli tushirilgan
+ * foydalanuvchi aks holda cookie tugaguncha eski huquqini saqlab qolardi.
+ * `superadmin.ts:verifySuperadmin()` shu naqshni allaqachon qo'llaydi.
+ *
+ * Bu yerda ustiga `requestCache` qo'shiladi: bir so'rovda layout ham, sahifa
+ * ham kontekstni quradi — kesh ularni BITTA `findUnique` ga birlashtiradi.
+ */
+const userLive = requestCache(async (userId: string) =>
   rawPrisma.user.findUnique({
     where: { id: userId },
-    select: { tenantId: true, isActive: true },
+    select: { tenantId: true, isActive: true, rol: true, roleId: true },
   })
 );
 
 /**
- * Sessiyadan tenantni yuklaydi. Eski (migratsiyagacha ochilgan) sessiyalarda
- * tenantId bo'lmaydi — bazadan o'qiladi (fail-closed: topilmasa null).
+ * So'rov kontekstini quradi. FAIL-CLOSED — quyidagi hollarda `null`:
+ * foydalanuvchi topilmasa (o'chirilgan), `isActive=false` (bloklangan),
+ * tenantga tegishli bo'lmasa (SUPERADMIN yoki bog'lanmagan), tenant topilmasa.
+ *
+ * Tenant ham, rol ham BAZADAN olinadi — sessiyadagi qiymatlar eskirgan
+ * bo'lishi mumkin (foydalanuvchi boshqa tenantga ko'chirilgan yoki roli
+ * o'zgartirilgan).
  */
-async function loadTenant(session: Required<SessionData>): Promise<TenantInfo | null> {
-  let tenantId = session.tenantId ?? null;
-  if (!tenantId) {
-    const user = await userTenantIdCached(session.userId);
-    if (!user || !user.isActive) return null;
-    tenantId = user.tenantId;
-  }
-  if (!tenantId) return null;
-  return tenantByIdCached(tenantId);
-}
-
 async function buildContext(session: Required<SessionData>): Promise<TenantContext | null> {
-  const tenant = await loadTenant(session);
+  const user = await userLive(session.userId);
+  if (!user || !user.isActive) return null;
+  if (!user.tenantId) return null;
+
+  const tenant = await tenantByIdCached(user.tenantId);
   if (!tenant) return null;
+
+  // Sessiya obyekti shu so'rov ichida bazadagi haqiqat bilan sinxronlanadi.
+  // `save()` ATAYLAB chaqirilmaydi — cookie'ga yozilmaydi, o'zgarish faqat
+  // joriy so'rovga tegishli. Guard'lar (`forbidSeller`, `requireManager`,
+  // modul guard'i) aynan `ctx.session.rol` ga qaraydi.
+  session.rol = normalizeRol(user.rol);
+  session.tenantId = tenant.id;
+
   return { session, tenantId: tenant.id, tenant, access: computeAccess(tenant) };
 }
 

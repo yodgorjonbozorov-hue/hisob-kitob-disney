@@ -2605,3 +2605,66 @@ chiqishiga ta'sir qilmaydi.
    TODO izohlari olib tashlanadi; `docs/CI-YIQILGAN-TESTLAR.md` bo'shatiladi.
 5. Ixtiyoriy: `test:smoke` uchun alohida job (Playwright + `npm run
    e2e:tayyorla`), `test:postgres` uchun `services: postgres` bilan job.
+
+---
+
+## 2026-08-15 — Xavfsizlik S-1: sessiya huquq bekor qilishni darhol ko'radi
+
+**Nima qilindi** (branch: `claude/ci-pipeline-setup-yjmpgv`):
+
+**Xato.** `src/lib/auth/tenant.ts:loadTenant()` sessiyada `tenantId` bo'lsa
+foydalanuvchini bazadan UMUMAN o'qimasdi — `User` jadvaliga boradigan tarmoq
+faqat eski (migratsiyagacha ochilgan) sessiyalar uchun qolgan edi. Ya'ni
+`isActive` tekshiruvi kodda bor edi, lekin amalda o'lik. Oqibati: bloklangan
+xodim cookie muddati (7 kun) tugaguncha ishlayverardi; roli tushirilgan
+foydalanuvchi eski huquqini saqlab qolardi (guard'lar `ctx.session.rol` ga
+qaraydi, u esa cookie'dan kelardi); boshqa tenantga ko'chirilgan foydalanuvchi
+eskisida qolib ketardi.
+
+**Tuzatish** — `superadmin.ts:verifySuperadmin()` naqshi tenant tomoniga ham
+qo'llandi:
+
+1. `userLive(userId)` — `requestCache` bilan o'ralgan yangi lookup
+   (`select: { tenantId, isActive, rol, roleId }`).
+2. `buildContext()` endi HAR so'rovda `userLive()` chaqiradi — sessiyada
+   `tenantId` bor-yo'qligidan qat'i nazar. `loadTenant()` olib tashlandi.
+3. FAIL-CLOSED: foydalanuvchi topilmasa (o'chirilgan), `isActive=false`
+   (bloklangan) yoki `tenantId` bo'lmasa — `null`, chaqiruvchi 403/redirect qiladi.
+4. `tenantId` BAZADAN olinadi, sessiyadagisi emas.
+5. `session.rol` bazadagi rol bilan sinxronlanadi (`normalizeRol` orqali).
+   `session.save()` ATAYLAB chaqirilmaydi — cookie'ga yozilmaydi, o'zgarish
+   faqat joriy so'rovga tegishli.
+
+**Unumdorlik.** Bir kontekst qurilishi = 2 lookup (user + tenant), ikkalasi ham
+`requestCache` ostida. Bir so'rovda layout ham, sahifa ham kontekst qursa —
+DB'ga baribir 2 ta so'rov ketadi (test buni tekshiradi). Ya'ni S-1 tuzatishi
+so'rovga JAMI +1 `findUnique` qo'shdi.
+
+**Yangi test:** `tests/sessiya-bekor.test.ts` + `npm run test:sessiya-bekor`,
+8 ta holat. Testda `React.cache` o'rniga teng ma'noli memoizer qo'yiladi
+(ts-node'da `React.cache` mavjud emas — `lib/requestCache.ts` u holda keshsiz
+ishlaydi), `getCurrentUser()` esa sessiya taqlidi bilan almashtiriladi.
+**Test eski kodga qarshi ham ishga tushirildi: 8 tadan 6 tasi yiqildi** — ya'ni
+u haqiqatan S-1 ni ushlaydi, shunchaki yashil rang emas.
+
+**CLAUDE.md** — "Arxitektura invariantlari" ga qoida qo'shildi: sessiyadagi
+rol/tenant ma'lumotiga ishonilmaydi, har so'rovda bazadan tekshiriladi.
+
+**Tegilmadi:** `src/lib/auth/superadmin.ts` (allaqachon to'g'ri),
+`session.ts` cookie sozlamalari, `prisma/schema.prisma` (yangi ustun kerak emas).
+
+**Tekshirildi:** `npm run build` ✅ · `npm run test:sessiya-bekor` 8/8 ✅ ·
+`npm run test:isolation` ✅ · `npm run test:visibility` ✅ ·
+`npm run test:hammasi` — **43/43 o'tdi** ✅ · `npx tsc --noEmit` — `src/` toza,
+faqat oldin hujjatlashtirilgan `tests/toliq-ishga-tushirish.test.ts:158`
+xatosi qoldi (`docs/CI-YIQILGAN-TESTLAR.md`, 2-band).
+
+**Yo'l-yo'lakay TUZATILMAGAN, keyingi sessiyalar uchun (ataylab qoldirildi):**
+
+1. `session.businessId` hamon cookie'dan keladi va yangilanmaydi — boshqa
+   biznesga ko'chirilgan kassir eski biznes ma'lumotini ko'rishda davom etadi.
+   Bu S-1 ning qo'shnisi, lekin alohida masala (ko'rinish doirasi).
+2. Bazada SUPERADMIN ga ko'tarilgan, lekin cookie'sida eski rol turgan
+   foydalanuvchi `/app` ↔ `/superadmin` orasida cheksiz redirect'ga tushishi
+   mumkin (`requireTenantPage` sessiyadagi rolga qarab redirect qiladi, keyin
+   superadmin guard'i bazadan tekshirib qaytaradi). S-1 dan OLDIN ham bor edi.

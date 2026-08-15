@@ -15,6 +15,13 @@ invariantlari — ular buzilsa mahsulot ishonchliligi yo'qoladi.
   - `src/lib/backup/` — barcha tenantlar zaxirasi
   Boshqa har qanday joyda `rawPrisma` ishlatish — xato.
 - Har API route `withTenant()` yoki `withSuperadmin()` bilan o'raladi.
+- Sessiyadagi rol/tenant ma'lumotiga ISHONILMAYDI — har so'rovda bazadan
+  tekshiriladi (`lib/auth/tenant.ts:buildContext`). Bu S-1 tuzatishi:
+  cookie 7 kun yashaydi, ya'ni unga tayanilsa bloklangan xodim va roli
+  tushirilgan foydalanuvchi bir hafta eski huquqi bilan ishlayveradi.
+  Tekshiruv FAIL-CLOSED: foydalanuvchi topilmasa yoki `isActive=false`
+  bo'lsa — kontekst qurilmaydi. Xuddi shu naqsh superadmin tomonida ham
+  bor (`lib/auth/superadmin.ts:verifySuperadmin`).
 - Yozish amallari zod bilan validatsiya qilinadi (`lib/validation/`).
 - Pul har doim `Int` (so'm), hech qachon float.
 - Sana: `"YYYY-MM-DD"` string ↔ UTC-midnight `Date` (`lib/date.ts` funksiyalari).
