@@ -29,8 +29,17 @@ function royxat(env: string | undefined, standart: string): Set<string> {
   return new Set(xom.map(kalit).filter(Boolean));
 }
 
-/** "Bugun (kunlik ko'rsatkichlar)" bloki ochiq mijozlar. */
-const BUGUN_PANEL = royxat(process.env.BUGUN_PANEL_MIJOZLARI, "fortex-selos");
+/**
+ * "Bugun (kunlik ko'rsatkichlar)" bloki ochiq mijozlar.
+ *
+ * Bazadagi tenant — "Fortex Selos UZB" (`fortex-selos-uzb`). Qisqa nom ham
+ * ro'yxatda: mijoz kompaniya nomini "Fortex Selos" ga o'zgartirsa yoki
+ * ikkinchi tenant shu nom bilan ochilsa blok yo'qolib qolmasin.
+ */
+const BUGUN_PANEL = royxat(
+  process.env.BUGUN_PANEL_MIJOZLARI,
+  "fortex-selos-uzb,fortex-selos"
+);
 
 /** Tenantning taqqoslash kalitlari: slug ham, kompaniya nomi ham. */
 function tenantKalitlari(tenant: { name: string; slug: string }): string[] {

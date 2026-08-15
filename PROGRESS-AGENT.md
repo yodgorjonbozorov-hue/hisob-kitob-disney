@@ -2387,7 +2387,9 @@ begona ko'rsatkichlar boshqa mijozlarning panelini to'ldirgan.
    kalitga keltirib solishtiradi ("Fortex Selos" == "fortex-selos"), shuning
    uchun slug to'qnashuv suffiksi bilan yaratilgan bo'lsa ("fortex-selos-2")
    ham mijoz nom bo'yicha topiladi. Ro'yxat env bilan kengaytiriladi:
-   `BUGUN_PANEL_MIJOZLARI="fortex-selos,Boshqa Mijoz"` — kod tegilmaydi.
+   `BUGUN_PANEL_MIJOZLARI="fortex-selos-uzb,Boshqa Mijoz"` — kod tegilmaydi.
+   Standart ro'yxat: `fortex-selos-uzb` (bazadagi haqiqiy tenant) va
+   `fortex-selos` (nom qisqartirilsa blok yo'qolib qolmasin).
 2. `src/app/app/page.tsx` — gate `isPro(tenant.plan)` o'rniga
    `bugunPaneliKorinadi(tenant)`. Blok yopiq bo'lsa `getProBugun()` umuman
    chaqirilmaydi (boshqa mijozlarga ortiqcha 5 ta so'rov ham ketmaydi).
@@ -2397,6 +2399,6 @@ begona ko'rsatkichlar boshqa mijozlarning panelini to'ldirgan.
    Boshqa gate'lar (rollar, shaxsiy kassa, user-transfer API) O'ZGARMADI —
    ular haqiqatan PRO tarif imkoniyatlari va `requirePro` bilan qoladi.
 
-**Tekshirildi:** build ✅ · mijoz-xos 4/4 (YANGI: slug, suffiksli slug, nom
-yozilishi, boshqa mijozga ko'rinmasligi) · pro-stsenariy 13/13 ·
+**Tekshirildi:** build ✅ · mijoz-xos 5/5 (YANGI: haqiqiy slug, qisqa nom,
+suffiksli slug, nom yozilishi, boshqa mijozga ko'rinmasligi) · pro-stsenariy 13/13 ·
 isolation 22/22 · izolyatsiya-royxati 9/9 · modules 14/14.

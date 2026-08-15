@@ -12,7 +12,11 @@ import assert from "node:assert/strict";
 
 import { bugunPaneliKorinadi } from "@/lib/mijozXos";
 
-test("Fortex Selos — slug bo'yicha ko'rinadi", () => {
+test("Fortex Selos UZB — bazadagi haqiqiy tenant (slug bo'yicha)", () => {
+  assert.equal(bugunPaneliKorinadi({ name: "Fortex Selos UZB", slug: "fortex-selos-uzb" }), true);
+});
+
+test("Fortex Selos — qisqa nom ham ro'yxatda", () => {
   assert.equal(bugunPaneliKorinadi({ name: "Fortex Selos", slug: "fortex-selos" }), true);
 });
 
