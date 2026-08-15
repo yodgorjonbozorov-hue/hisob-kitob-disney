@@ -78,6 +78,8 @@ export const ZAXIRA_JADVALLARI = [
   "dailyReport",
   "dailyTransaction",
   "dailyReportSetting",
+  // Smena yakuni — faqat Business'ga FK bilan bog'liq (undan keyin tursa yetarli).
+  "smena",
 ] as const;
 
 export type ZaxiraJadval = (typeof ZAXIRA_JADVALLARI)[number];

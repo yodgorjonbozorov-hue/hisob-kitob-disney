@@ -49,7 +49,8 @@ export type AuditEntity =
   | "attachment"
   | "dailyReport"
   | "dailyTransaction"
-  | "dailyReportSetting";
+  | "dailyReportSetting"
+  | "smena";
 
 interface AuditInput {
   businessId?: string | null;

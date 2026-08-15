@@ -2370,3 +2370,42 @@ backup 6/6 · cron 10/10.
 qisman 500k→qarz 300k→0; storno; o'ziga transfer rad; xodim limiti; audit) ·
 izolyatsiya-royxati 9/9 · backup 6/6 · migratsiya 10/10 · xarid 13/13 ·
 kassa 11/11 · isolation 22/22 · tolov 14/14 · audit 12/12.
+
+## 2026-08-15 — SMENA YAKUNI: kun ichida kassani bir necha marta sanab topshirish
+
+**Talab (Disney Flowers):** sotuvchilar ikki smenada ishlaydi. 1-smena tugaganda
+kassadagi pul sanab olinadi va kassa 0 dan boshlanishi kerak; 2-smena ham xuddi
+shunday. Kirim/chiqim raqamlariga hech qanday o'zgarish bo'lmasin. Maqsad —
+kassadagi xodimni tekshirish.
+
+**Qaror:** smena — kun ichidagi KESIM, hosila ko'rinish. Yangi `Smena` jadvali
+faqat YOPILGAN smenani yozadi; joriy (ochiq) smena hisoblanadi — oxirgi
+yopilganning `tugashAt` idan hozirgacha. Shuning uchun "ochiq smena" holati,
+uni ochish tugmasi va race yo'q.
+
+1. **Model `Smena`** (`20260815100000_smena_yakuni`, faqat CREATE TABLE — xavf: past):
+   `sana`+`raqam` (unique), oyna (`boshlanishAt`/`tugashAt`), yopgan xodim
+   (ism snapshot), MUZLATILGAN summalar (`naqd`/`click`/`qarz`/`naqdChiqim`),
+   `boshlangichQoldiq`, `kutilganNaqd`, `sanalganNaqd`, `farq`, `qoldirilganNaqd`.
+2. **Oyna `createdAt` bo'yicha** kesiladi (`boshlanishAt` < createdAt <= `tugashAt`),
+   yozuvning `sana` si bo'yicha EMAS: kassadagi pul kiritilgan paytga qarab
+   to'planadi. Kechagi tugash payti kun boshi bilan almashtirilmaydi — aks holda
+   smena yopilgandan keyin kiritilgan kech tushum hech qaysi smenaga tushmay qolardi.
+3. **Kutilgan naqd** = boshlangich qoldiq + naqd tushum − naqd chiqim. Click/qarz
+   kassadagi naqdga kirmaydi; chiqim naqdligi `tolovTuri` dan (bo'lmasa kassa
+   turidan) aniqlanadi — kunlik sinxron bilan bir xil qoida.
+4. **Kirim/chiqimga TEGILMAYDI:** smena hech qanday Transaction/DailyTransaction
+   yozmaydi va o'zgartirmaydi; kunlik va oylik raqamlar avvalgidek.
+   `tests/smena.test.ts` buni alohida qo'riqlaydi.
+5. **Nazorat:** joriy smenaning tizim hisobi xodimga KO'RSATILMAYDI (TopshirishModal
+   qoidasi) — faqat direktor/boshqaruvchi ko'radi, aks holda sanashning ma'nosi
+   qolmaydi. Yopilgandan keyin farq hammaga ko'rinadi.
+6. **Qaytim puli:** sanalgandan bir qismini kassada ataylab qoldirish mumkin
+   (`qoldirilganNaqd`) — u keyingi smenaning boshlangich qoldig'i bo'ladi.
+   Bo'sh qoldirilsa 0: pul to'liq topshirildi, keyingi smena 0 dan boshlanadi.
+7. **Qayta ochish** — faqat OXIRGI smena va faqat direktor/boshqaruvchi
+   (o'rtadagisi olinsa qo'shni oynalar ustma-ust tushib, bir pul ikki marta
+   hisoblanardi). Qator o'chadi, audit jurnalida raqamlari bilan qoladi.
+
+**Tekshirildi:** build ✅ · smena 14/14 (YANGI) · kunlik 27/27 · isolation 22/22 ·
+izolyatsiya-royxati 9/9 · backup 6/6 · kassa 11/11.
