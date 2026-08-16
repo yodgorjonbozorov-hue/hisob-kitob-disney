@@ -2545,6 +2545,21 @@ o'zgartirmaydi — faqat kassirning qo'lidagi pul qoldig'i 0 ga tushadi.
 2 indeks. Mavjud jadvallarga va ma'lumotga tegilmaydi (xavf: past).
 `prisma/migrations-postgres/` qayta generatsiya qilindi.
 
+**`main` bilan birlashtirishda yo'l-yo'lakay tuzatildi** (qarz tizimi
+bilan bir vaqtda ishlangani uchun):
+- `scripts/qarz-migratsiya.ts` — `.finally(() => rawPrisma.$disconnect())`
+  DATABASE_URL yo'q bo'lganda ham lazy getterni o'qib, `URL_INVALID` bilan
+  BUTUN build zanjirini to'xtatardi (migratsiyaning o'zi "o'tkazib yuborildi"
+  deb chiqqan bo'lsa ham). `kassa-migratsiya.ts` dagi `ulanishniYop` qoidasiga
+  keltirildi.
+- `tests/atomik.test.ts` — `recordDebtPayment` `inventory` dan `qarz`
+  xizmatiga ko'chirilgan edi, test esa eski joydan chaqirib qizil turardi.
+  `qarzSvc.qarzTolov` ga o'tkazildi.
+- `tests/modules.test.ts` — CASHIER nav ro'yxatiga `/app/kassam` qo'shildi.
+  SELLER menyusi ATAYLAB tegilmadi ("Sotuvchi faqat Yozuvlar ko'radi"
+  qoidasi saqlandi) — sotuvchi o'z kassasiga Yozuvlar sahifasidagi karta
+  orqali kiradi.
+
 **Tekshirildi:** build ✅ · kassir-kassa 22/22 (YANGI — FINAL TEST stsenariysi:
 5 mln kirim + 4 mln chiqim → kassa 1 mln → topshirildi → qabul qilindi →
 kassa 0, Kirim/Chiqim/Sof/biznes kassalari O'ZGARMADI, Transaction yozilmadi
@@ -2582,3 +2597,77 @@ postgres 2/2 · isolation 9/9 · izolyatsiya-royxati 9/9.
 ochiq qarz 400k−100k=300k ta'minotchi kesimida, yozuvlar soni, double-entry
 invarianti buzilmagan) · kassa 11/11 · xarid 13/13 · isolation 22/22 ·
 izolyatsiya-royxati 9/9 · visibility 10/10 · audit 12/12 · superadmin 10/10.
+
+---
+
+## 2026-08-16 — Qarz tizimi: qarz kirim emas, alohida moliyaviy majburiyat
+
+**Muammo** (branch: `claude/debt-system-refactor-gh98et`):
+
+Yozuvlar sahifasida "Kirim → To'lov turi: Qarz" tanlansa oddiy `Transaction`
+yozilardi va **hech qanday `Debt` yozuvi yaratilmasdi**. Ikki oqibat:
+
+1. Summa `jamiKirim` ga qo'shilib, **Sof balans qarz miqdoricha oshib ketardi**
+   (kassa qoldig'i esa to'g'ri edi — `accountId` null bo'lgani uchun);
+2. Qarz Qarzlar ro'yxatida umuman ko'rinmasdi — mijoz saqlanmasdi, uni yopib
+   ham bo'lmasdi.
+
+Sotuv modulidagi "qarzga sotuv" yo'li esa TO'G'RI ishlardi (`Debt` yozardi,
+kirim yozmasdi) — ya'ni bitta mahsulotda ikkita bir-biriga zid qarz oqimi bor edi.
+
+**Nima qilindi:**
+
+1. **`src/lib/qarzFiltr.ts` (yangi)** — "real pul" filtri yagona joyda.
+   `tolovTuri = "qarz"` yozuv daromad jamlarida qatnashmaydi. Filtr ATAYLAB
+   `OR: [{ tolovTuri: null }, { tolovTuri: { not: "qarz" } }]` ko'rinishida:
+   SQL'da `NULL <> 'qarz'` → NULL, ya'ni oddiy `not` bilan BARCHA eski
+   (`tolovTuri` siz) yozuvlar hisobotlardan jimgina yo'qolardi. Test bilan
+   qo'riqlanadi.
+   Qo'llanilgan joylar: `queries/transactions.ts` (footer jamlari),
+   `queries/dashboard.ts` (oylik xulosa, trend, kunlik dinamika, kategoriya
+   taqsimoti), `queries/shift.ts` (kutilgan naqd, bugungi jami),
+   `reports/dailyDigest.ts` (Telegram xulosasi).
+2. **`src/lib/services/qarz.ts` (yangi)** — `createQarz` (pul harakati YO'Q),
+   `qarzTolov` (kirim AYNAN to'lov sanasi bilan + idempotentlik), `qarzBekor`.
+   `recordDebtPayment` `services/inventory.ts` dan shu yerga ko'chirildi.
+3. **Idempotentlik** — `DebtPayment.idempotencyKey` + `@@unique([debtId,
+   idempotencyKey])`. Klient forma ochilganda bitta kalit yaratadi; tugma ikki
+   marta bosilsa server mavjud to'lovni qaytaradi, kirim ikkinchi marta
+   yozilmaydi. Poyga bazadagi unique cheklov bilan hal qilinadi.
+4. **Holat** — `Debt.status`: OPEN / PARTIALLY_PAID / PAID / CANCELLED.
+   `qarzHolatHisobla()` (validation/qarz.ts) — yagona manba; `isYopilgan`
+   eski ustun sifatida u bilan birga yangilanadi (ochiq qarz jamlari va mijoz
+   limiti hali unga tayanadi).
+5. **Qarzlar moduli** — `/app/qarzlar` OMBOR modulidan MOLIYA (core) ga
+   ko'chirildi: qarz ombordan mustaqil, ombori yo'q biznes ham yozadi.
+   Dashboard (5 ko'rsatkich, serverda jamlanadi), filtr, jadval, tafsilot +
+   to'lov tarixi, bekor qilish.
+6. **Mijoz** — `components/qarz/MijozTanlash.tsx`: qidiruv + yangi mijoz bitta
+   maydonda. Manba MIJOZLAR modulidan MUSTAQIL (`/api/debts/mijozlar`):
+   kartochkalar + oldingi qarzlardagi ism/telefon. Telefon
+   `+998901234567` ko'rinishiga normallashtiriladi (bir mijozning ikkita
+   kartochkasi paydo bo'lmasin).
+7. **Hisobot** — oylik hisobotda "Qarz harakati" bloki: qarzga berilgan /
+   qarzdan tushgan / ochiq qoldiq. Sof foydaga qo'shilmaydi.
+
+**Migratsiya:** `20260816090000_qarz_tizimi` — faqat `ADD COLUMN` +
+mavjud qatorlarni to'ldiruvchi `UPDATE`. Jadval QAYTA QURILMAYDI, ID'lar va
+FK'lar tegilmaydi. `Debt`: status, sana, categoryId, masulId/masulIsm,
+manbaTransactionId, updatedAt/updatedBy, cancelledAt/By/Reason.
+`DebtPayment`: sana, tolovTuri, accountId, izoh, idempotencyKey.
+
+**Eski ma'lumot:** `scripts/qarz-migratsiya.ts` (build zanjiriga qo'shildi,
+`npm run qarz:migratsiya`) eski `tolovTuri="qarz"` kirimlarni `Debt` ga
+ko'chiradi. Asl tranzaksiyaga TEGMAYDI (ID, summa, sana, izoh joyida) —
+faqat `Debt.manbaTransactionId` orqali bog'lanadi, shu bilan idempotent.
+Mijoz ismi izohdan olinadi, telefonni qo'lda to'ldirish kerak.
+
+**Tekshirildi:** build ✅ · qarz 16/16 (YANGI: spetsifikatsiyadagi 5 test
+stsenariysi + NULL `tolovTuri` regressiyasi) · pro-stsenariy 22/22 ·
+migratsiya-zanjiri 10/10 (mavjud ma'lumot ustiga apply) · isolation 22/22 ·
+izolyatsiya-royxati 9/9 · backup 6/6 · modules 15/15 · kassa 11/11 ·
+kunlik 27/27 · smena 14/14 · avto 25/25 · sotuv-bekor 11/11 · xarid 13/13 ·
+mijozlar 15/15 · agregat 7/7 · soft-delete 8/8 · audit-qoldiq 10/10 ·
+inventarizatsiya 11/11 · tolov 14/14 · hr 19/19 · hujjatlar 20/20 ·
+tasdiqlash 20/20 · visibility 10/10 · kochirish 8/8 · csv-import 13/13 ·
+crm 7/7 · ai 6/6 · automation 3/3.

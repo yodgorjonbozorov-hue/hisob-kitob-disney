@@ -378,10 +378,21 @@ CREATE TABLE "Debt" (
     "jamiSumma" INTEGER NOT NULL,
     "tolangan" INTEGER NOT NULL DEFAULT 0,
     "isYopilgan" BOOLEAN NOT NULL DEFAULT false,
+    "status" TEXT NOT NULL DEFAULT 'OPEN',
+    "sana" TIMESTAMP(3),
+    "categoryId" TEXT,
+    "masulId" TEXT,
+    "masulIsm" TEXT,
+    "manbaTransactionId" TEXT,
     "muddat" TIMESTAMP(3),
     "izoh" TEXT,
     "userId" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3),
+    "updatedBy" TEXT,
+    "cancelledAt" TIMESTAMP(3),
+    "cancelledBy" TEXT,
+    "cancelReason" TEXT,
 
     CONSTRAINT "Debt_pkey" PRIMARY KEY ("id")
 );
@@ -521,8 +532,13 @@ CREATE TABLE "DebtPayment" (
     "debtId" TEXT NOT NULL,
     "businessId" TEXT NOT NULL,
     "summa" INTEGER NOT NULL,
+    "sana" TIMESTAMP(3),
+    "tolovTuri" TEXT,
+    "accountId" TEXT,
+    "izoh" TEXT,
     "userId" TEXT NOT NULL,
     "transactionId" TEXT,
+    "idempotencyKey" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "DebtPayment_pkey" PRIMARY KEY ("id")
@@ -947,6 +963,9 @@ CREATE INDEX "Sale_contactId_idx" ON "Sale"("contactId");
 CREATE UNIQUE INDEX "Debt_saleId_key" ON "Debt"("saleId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Debt_manbaTransactionId_key" ON "Debt"("manbaTransactionId");
+
+-- CreateIndex
 CREATE INDEX "Debt_businessId_isYopilgan_turi_idx" ON "Debt"("businessId", "isYopilgan", "turi");
 
 -- CreateIndex
@@ -956,10 +975,19 @@ CREATE INDEX "Debt_businessId_turi_idx" ON "Debt"("businessId", "turi");
 CREATE INDEX "Debt_businessId_contactId_isYopilgan_idx" ON "Debt"("businessId", "contactId", "isYopilgan");
 
 -- CreateIndex
+CREATE INDEX "Debt_businessId_status_turi_idx" ON "Debt"("businessId", "status", "turi");
+
+-- CreateIndex
+CREATE INDEX "Debt_businessId_sana_idx" ON "Debt"("businessId", "sana");
+
+-- CreateIndex
 CREATE INDEX "Debt_productId_idx" ON "Debt"("productId");
 
 -- CreateIndex
 CREATE INDEX "Debt_contactId_idx" ON "Debt"("contactId");
+
+-- CreateIndex
+CREATE INDEX "Debt_categoryId_idx" ON "Debt"("categoryId");
 
 -- CreateIndex
 CREATE INDEX "Supplier_businessId_isActive_idx" ON "Supplier"("businessId", "isActive");
@@ -1014,6 +1042,12 @@ CREATE INDEX "DebtPayment_debtId_idx" ON "DebtPayment"("debtId");
 
 -- CreateIndex
 CREATE INDEX "DebtPayment_businessId_idx" ON "DebtPayment"("businessId");
+
+-- CreateIndex
+CREATE INDEX "DebtPayment_businessId_sana_idx" ON "DebtPayment"("businessId", "sana");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "DebtPayment_debtId_idempotencyKey_key" ON "DebtPayment"("debtId", "idempotencyKey");
 
 -- CreateIndex
 CREATE INDEX "ApprovalRule_businessId_isActive_deletedAt_idx" ON "ApprovalRule"("businessId", "isActive", "deletedAt");
@@ -1248,6 +1282,9 @@ ALTER TABLE "Debt" ADD CONSTRAINT "Debt_productId_fkey" FOREIGN KEY ("productId"
 
 -- AddForeignKey
 ALTER TABLE "Debt" ADD CONSTRAINT "Debt_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Debt" ADD CONSTRAINT "Debt_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "Category"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Supplier" ADD CONSTRAINT "Supplier_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;

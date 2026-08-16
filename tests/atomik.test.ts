@@ -20,6 +20,8 @@ import { rmSync } from "node:fs";
 let rawPrisma: any;
 let runWithTenant: any;
 let inventory: any;
+// Qarz to'lovi `inventory` dan `qarz` xizmatiga ko'chirilgan (qarz tizimi).
+let qarzSvc: any;
 
 const TENANT = "t_at";
 const BIZ = "biz_at";
@@ -37,6 +39,7 @@ before(async () => {
   ({ rawPrisma } = await import("@/lib/db/rawPrisma"));
   ({ runWithTenant } = await import("@/lib/db/tenantContext"));
   inventory = await import("@/lib/services/inventory");
+  qarzSvc = await import("@/lib/services/qarz");
 
   // SQLite'da tashqi kalitlar standart holda o'chirilgan bo'lishi mumkin —
   // atomiklik testi FK xatosiga tayangani uchun ochiq yoqamiz.
@@ -137,7 +140,7 @@ test("recordDebtPayment uzilsa qarz ham, to'lov yozuvi ham o'zgarmaydi", async (
 
   await assert.rejects(() =>
     runWithTenant(TENANT, () =>
-      inventory.recordDebtPayment({ businessId: BIZ, debtId: debt.id, summa: 400_000, userId: YOQ_USER })
+      qarzSvc.qarzTolov({ businessId: BIZ, debtId: debt.id, summa: 400_000, userId: YOQ_USER })
     )
   );
 
@@ -159,7 +162,7 @@ test("muvaffaqiyatli qarz to'lovi qarzni ham, tranzaksiyani ham yozadi", async (
   });
 
   const updated = await runWithTenant(TENANT, () =>
-    inventory.recordDebtPayment({ businessId: BIZ, debtId: debt.id, summa: 500_000, userId: USER })
+    qarzSvc.qarzTolov({ businessId: BIZ, debtId: debt.id, summa: 500_000, userId: USER })
   );
   assert.equal(updated.tolangan, 500_000);
   assert.equal(updated.isYopilgan, true);

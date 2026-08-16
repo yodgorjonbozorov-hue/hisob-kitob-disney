@@ -215,6 +215,13 @@ test("kassirning o'zi topshiriqni qabul qila olmaydi", async () => {
 });
 
 test("direktor qabul qiladi -> kassa 0, hisobotlar O'ZGARMAYDI", async () => {
+  // ⚠️ ASOSIY INVARIANT shu yerda o'lchanadi. Surat qabul qilishdan ANIQ
+  // OLDIN olinadi va keyingisi bilan solishtiriladi — ya'ni tekshiruv
+  // hech qanday arifmetikaga tayanmaydi. Ilgari bu yerda "oldingi + 1 700 000"
+  // yozilgan edi va u kirim ta'rifiga bog'lanib qolgan edi (qarz tizimi
+  // o'zgarganda test qizil bo'ldi, holbuki invariant buzilmagan edi).
+  const oldin = await asosiyKorsatkichlar();
+
   const t = await A(async () => q.listKutilayotganTopshiriqlar(tA.business.id));
   const natija = await A(async () =>
     svc.topshiriqQaror(tA.business.id, egaAktor(), t[0].id, { amal: "qabul" })
@@ -226,12 +233,17 @@ test("direktor qabul qiladi -> kassa 0, hisobotlar O'ZGARMAYDI", async () => {
   assert.equal(holat.qoldiq, 0, "FINAL TEST: kassir kassasi 0");
   assert.equal(holat.ochiq, false);
 
-  // ⚠️ ASOSIY INVARIANT — hech bir raqam o'zgarmagan.
   const keyin = await asosiyKorsatkichlar();
-  assert.equal(keyin.jamiKirim, oldingi.jamiKirim + 1_700_000, "faqat yangi yozuvlar qo'shildi");
-  assert.equal(keyin.jamiChiqim, oldingi.jamiChiqim, "topshirish CHIQIM yozmaydi");
-  assert.equal(keyin.kassalar, keyin.naqdKirim + keyin.clickKirim - keyin.jamiChiqim,
-    "biznes kassalari qoldig'i topshirishdan o'zgarmaydi");
+  assert.deepEqual(
+    keyin,
+    oldin,
+    "kassa topshirilishi Kirim/Chiqim/Naqd/Click/Sof/yozuvlar soni va biznes " +
+      "kassalari qoldig'ining BIRORTASINI o'zgartirmasligi shart"
+  );
+  // FINAL TEST (talab 25) raqamlari: 5 mln kirim − 4 mln chiqim = 1 mln sof.
+  assert.equal(oldingi.jamiKirim, 5_000_000);
+  assert.equal(keyin.jamiChiqim, 4_000_000);
+  assert.equal(keyin.sof, keyin.jamiKirim - keyin.jamiChiqim);
 });
 
 test("topshirish hech qanday Transaction yozmaydi/o'chirmaydi", async () => {

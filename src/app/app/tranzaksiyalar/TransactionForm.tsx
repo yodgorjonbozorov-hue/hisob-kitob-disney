@@ -5,6 +5,7 @@ import { formatSom, parseSomInput } from "@/lib/format";
 import { todayDateOnlyString } from "@/lib/date";
 import { Button } from "@/components/ui/Button";
 import { TOLOV_TURLARI, TOLOV_NOMI, TOLOV_BELGI, type TolovTuri } from "@/lib/validation/transaction";
+import { QarzForm, type QarzMasul } from "./QarzForm";
 import type { TransactionDTO } from "@/lib/queries/transactions";
 
 interface CategoryOption {
@@ -21,12 +22,18 @@ interface AccountOption {
 export function TransactionForm({
   categories,
   accounts,
+  masullar = [],
   onCreated,
+  onQarzCreated,
 }: {
   categories: CategoryOption[];
   /** Faol kassalar. Bitta bo'lsa tanlash maydoni KO'RSATILMAYDI — ortiqcha qadam. */
   accounts: AccountOption[];
+  /** Qarzga mas'ul qilib belgilash mumkin bo'lgan xodimlar. */
+  masullar?: QarzMasul[];
   onCreated: (t: TransactionDTO) => void;
+  /** Qarz yozilgach sahifani yangilash (qarz tranzaksiya emas). */
+  onQarzCreated?: () => void;
 }) {
   const [turi, setTuri] = useState<"kirim" | "chiqim">("kirim");
   const [tolovTuri, setTolovTuri] = useState<TolovTuri>("naqd");
@@ -97,8 +104,12 @@ export function TransactionForm({
     }
   }
 
+  const qarzRejimi = tolovTuri === "qarz";
+
   return (
-    <form onSubmit={handleSubmit} className="bg-surface rounded-2xl shadow-sm border border-line p-5 space-y-4">
+    // Tashqi element ATAYLAB `div`: qarz rejimida ichkarida QarzForm o'zining
+    // `form`ini chiqaradi va forma ichida forma yaroqsiz HTML bo'lardi.
+    <div className="bg-surface rounded-2xl shadow-sm border border-line p-5 space-y-4">
       <div className="flex gap-2">
         <button
           type="button"
@@ -148,6 +159,16 @@ export function TransactionForm({
         </div>
       </div>
 
+      {/* QARZ — butunlay boshqa forma: tranzaksiya emas, majburiyat yoziladi.
+          Shuning uchun kassa/summa maydonlari o'rniga mijoz formasi chiqadi. */}
+      {qarzRejimi ? (
+        <QarzForm
+          kategoriyalar={filteredCategories}
+          masullar={masullar}
+          onCreated={() => onQarzCreated?.()}
+        />
+      ) : (
+      <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-medium text-muted mb-1">Kategoriya</label>
@@ -219,6 +240,8 @@ export function TransactionForm({
       <Button type="submit" disabled={loading} className="w-full">
         {loading ? "Saqlanmoqda..." : "Qo'shish"}
       </Button>
-    </form>
+      </form>
+      )}
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 /**
  * AVTO REJIMI va IKKI TOMONLAMA QARZDORLIK TESTLARI.
- * createAvtoMashina (naqd/qarzga), sof foyda, createDebt, recordDebtPayment
+ * createAvtoMashina (naqd/qarzga), sof foyda, createDebt, qarzTolov
  * ikki yo'nalishda (kirim/chiqim), getDebtTotals, AVTO tarifi, tenant izolyatsiyasi.
  * Ishga tushirish: npm run test:avto
  */
@@ -16,6 +16,7 @@ let prisma: any;
 let runWithTenant: any;
 let createTenantWithOwner: any;
 let inventory: any;
+let qarz: any;
 let queries: any;
 let plans: any;
 let registry: any;
@@ -34,6 +35,7 @@ before(async () => {
   ({ runWithTenant } = await import("@/lib/db/tenantContext"));
   ({ createTenantWithOwner } = await import("@/lib/services/signup"));
   inventory = await import("@/lib/services/inventory");
+  qarz = await import("@/lib/services/qarz");
   queries = await import("@/lib/queries/inventory");
   plans = await import("@/lib/billing/plans");
   registry = await import("@/lib/modules/registry");
@@ -251,7 +253,7 @@ test("qarz to'lovi (olinadigan) kirim, (beriladigan) chiqim tranzaksiya yaratadi
     prisma.debt.findFirst({ where: { businessId: tA.business.id, turi: "olinadigan" } })
   );
   await runWithTenant(tA.tenant.id, () =>
-    inventory.recordDebtPayment({
+    qarz.qarzTolov({
       businessId: tA.business.id,
       debtId: olinadigan.id,
       summa: 35_000_000,
@@ -263,7 +265,7 @@ test("qarz to'lovi (olinadigan) kirim, (beriladigan) chiqim tranzaksiya yaratadi
     prisma.debt.findFirst({ where: { businessId: tA.business.id, turi: "beriladigan" } })
   );
   const yopilgan = await runWithTenant(tA.tenant.id, () =>
-    inventory.recordDebtPayment({
+    qarz.qarzTolov({
       businessId: tA.business.id,
       debtId: beriladigan.id,
       summa: 120_000_000,

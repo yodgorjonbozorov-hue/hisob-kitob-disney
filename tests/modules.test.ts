@@ -80,10 +80,26 @@ test("computeNav: SELLER faqat Yozuvlar ko'radi", () => {
   assert.deepEqual(items.map((i: any) => i.href), ["/app/tranzaksiyalar"]);
 });
 
-test("computeNav: CASHIER — yozuvlar, smena va (omborli bo'lsa) sotuv/qarzlar", () => {
+test("computeNav: CASHIER — yozuvlar, qarzlar, smena va (omborli bo'lsa) sotuv", () => {
   const items = registry.computeNav({ rol: "CASHIER", yoqilgan: new Set(["MOLIYA", "OMBOR", "BOSHQARUV"]), omborli: true });
   const hrefs = items.map((i: any) => i.href);
-  assert.deepEqual(hrefs, ["/app/tranzaksiyalar", "/app/sotuv", "/app/qarzlar", "/app/smena"]);
+  // "Qarzlar" MOLIYA (core) modulida — shuning uchun "Sotuv" dan OLDIN turadi.
+  assert.deepEqual(hrefs, [
+    "/app/tranzaksiyalar",
+    "/app/qarzlar",
+    "/app/kassam",
+    "/app/sotuv",
+    "/app/smena",
+  ]);
+});
+
+test("computeNav: OMBORSIZ biznesda ham Qarzlar ko'rinadi", () => {
+  // Qarz ombordan mustaqil moliyaviy majburiyat: "Kirim → Qarz" har qanday
+  // biznesda ishlaydi, demak uni ko'rsatadigan sahifa ham bo'lishi shart.
+  const items = registry.computeNav({ rol: "CASHIER", yoqilgan: new Set(["MOLIYA"]), omborli: false });
+  const hrefs = items.map((i: any) => i.href);
+  assert.ok(hrefs.includes("/app/qarzlar"));
+  assert.ok(!hrefs.includes("/app/sotuv"));
 });
 
 test("computeMobileTabs: maksimal 3 tab", () => {

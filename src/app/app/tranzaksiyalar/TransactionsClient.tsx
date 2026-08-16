@@ -24,6 +24,7 @@ export function TransactionsClient({
   pageSize,
   categories,
   accounts,
+  masullar = [],
   currentUserId,
   currentUserRol,
   hideProfit = false,
@@ -38,6 +39,8 @@ export function TransactionsClient({
   pageSize: number;
   categories: CategoryOption[];
   accounts: { id: string; nomi: string }[];
+  /** Qarzga mas'ul qilib belgilash mumkin bo'lgan xodimlar. */
+  masullar?: { id: string; ism: string }[];
   currentUserId: string;
   currentUserRol: Rol;
   hideProfit?: boolean;
@@ -50,7 +53,10 @@ export function TransactionsClient({
     clickKirim: number;
     qarzKirim: number;
   };
-  /** Kunlik hisobotdagi qarz tushumlari jami (KUNLIK moduli o'chiq bo'lsa null). */
+  /**
+   * "Qarzga berilgan" ko'rsatkichi: qarz yozuvlari + kunlik hisobotdagi qarz
+   * tushumlari. Sof balansga KIRMAYDI — u alohida ko'rsatiladi.
+   */
   qarzSumma?: number | null;
   filters: { from: string; to: string; turi: string; categoryId: string; q: string; minSumma: string; maxSumma: string };
 }) {
@@ -172,7 +178,18 @@ export function TransactionsClient({
   return (
     <div className="space-y-4">
       {importOpen && <ImportModal onClose={() => setImportOpen(false)} />}
-      <TransactionForm categories={categories} accounts={accounts} onCreated={handleCreated} />
+      <TransactionForm
+        categories={categories}
+        accounts={accounts}
+        masullar={masullar}
+        onCreated={handleCreated}
+        // Qarz tranzaksiya EMAS — ro'yxatga qo'shilmaydi, lekin "Qarzga
+        // berilgan" ko'rsatkichi serverdan qayta o'qiladi.
+        onQarzCreated={() => {
+          toast({ message: "Qarz yozildi — balans o'zgarmadi", tone: "success" });
+          router.refresh();
+        }}
+      />
 
       {moveTargets !== undefined && currentUserRol !== "CASHIER" && currentUserRol !== "SELLER" && (
         <div className="flex justify-end">
