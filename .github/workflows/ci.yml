@@ -55,7 +55,10 @@ jobs:
       - name: TypeScript tekshiruvi
         run: npx tsc --noEmit
 
+      # Tip xatosi lintni yashirmasin — ikkalasi ham alohida xabar bersin.
+      # Job baribir qizil qoladi.
       - name: Lint
+        if: ${{ !cancelled() }}
         run: npm run lint
 
   # 2-job: baza + migratsiya + testlar. Sifat jobidan mustaqil ishlaydi —
