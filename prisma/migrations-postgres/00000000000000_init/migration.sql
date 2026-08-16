@@ -15,6 +15,22 @@ CREATE TABLE "Tenant" (
 );
 
 -- CreateTable
+CREATE TABLE "Role" (
+    "id" TEXT NOT NULL,
+    "tenantId" TEXT NOT NULL,
+    "nomi" TEXT NOT NULL,
+    "izoh" TEXT,
+    "huquqlar" TEXT NOT NULL DEFAULT '[]',
+    "bazaRol" TEXT NOT NULL DEFAULT 'SELLER',
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "Role_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "TenantModule" (
     "id" TEXT NOT NULL,
     "tenantId" TEXT NOT NULL,
@@ -89,6 +105,9 @@ CREATE TABLE "User" (
     "telegramChatId" TEXT,
     "linkCode" TEXT,
     "linkCodeExpiresAt" TIMESTAMP(3),
+    "roleId" TEXT,
+    "huquqPlus" TEXT,
+    "huquqMinus" TEXT,
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
@@ -130,6 +149,7 @@ CREATE TABLE "Account" (
     "businessId" TEXT NOT NULL,
     "nomi" TEXT NOT NULL,
     "turi" TEXT NOT NULL DEFAULT 'naqd',
+    "userId" TEXT,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "tartib" INTEGER NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -144,9 +164,17 @@ CREATE TABLE "AccountTransfer" (
     "fromAccountId" TEXT NOT NULL,
     "toAccountId" TEXT NOT NULL,
     "summa" INTEGER NOT NULL,
+    "valyuta" TEXT NOT NULL DEFAULT 'UZS',
     "sana" TIMESTAMP(3) NOT NULL,
     "izoh" TEXT,
     "userId" TEXT NOT NULL,
+    "fromUserId" TEXT,
+    "fromUserIsm" TEXT,
+    "toUserId" TEXT,
+    "toUserIsm" TEXT,
+    "holat" TEXT NOT NULL DEFAULT 'bajarildi',
+    "relatedType" TEXT,
+    "relatedId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "AccountTransfer_pkey" PRIMARY KEY ("id")
@@ -172,6 +200,7 @@ CREATE TABLE "Transaction" (
     "categoryId" TEXT NOT NULL,
     "businessId" TEXT NOT NULL,
     "accountId" TEXT,
+    "tolovTuri" TEXT,
     "summa" INTEGER NOT NULL,
     "sana" TIMESTAMP(3) NOT NULL,
     "izoh" TEXT,
@@ -362,6 +391,7 @@ CREATE TABLE "Supplier" (
     "id" TEXT NOT NULL,
     "businessId" TEXT NOT NULL,
     "nomi" TEXT NOT NULL,
+    "userId" TEXT,
     "tel" TEXT,
     "manzil" TEXT,
     "izoh" TEXT,
@@ -386,6 +416,8 @@ CREATE TABLE "PurchaseOrder" (
     "userId" TEXT NOT NULL,
     "transactionId" TEXT,
     "debtId" TEXT,
+    "tolanganSumma" INTEGER NOT NULL DEFAULT 0,
+    "transferId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "PurchaseOrder_pkey" PRIMARY KEY ("id")
@@ -656,6 +688,31 @@ CREATE TABLE "DailyReportSetting" (
 );
 
 -- CreateTable
+CREATE TABLE "Smena" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "sana" TIMESTAMP(3) NOT NULL,
+    "raqam" INTEGER NOT NULL,
+    "boshlanishAt" TIMESTAMP(3) NOT NULL,
+    "tugashAt" TIMESTAMP(3) NOT NULL,
+    "yopganUserId" TEXT NOT NULL,
+    "yopganIsm" TEXT,
+    "naqd" INTEGER NOT NULL DEFAULT 0,
+    "click" INTEGER NOT NULL DEFAULT 0,
+    "qarz" INTEGER NOT NULL DEFAULT 0,
+    "naqdChiqim" INTEGER NOT NULL DEFAULT 0,
+    "boshlangichQoldiq" INTEGER NOT NULL DEFAULT 0,
+    "kutilganNaqd" INTEGER NOT NULL DEFAULT 0,
+    "sanalganNaqd" INTEGER NOT NULL DEFAULT 0,
+    "farq" INTEGER NOT NULL DEFAULT 0,
+    "qoldirilganNaqd" INTEGER NOT NULL DEFAULT 0,
+    "izoh" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Smena_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "Contract" (
     "id" TEXT NOT NULL,
     "businessId" TEXT NOT NULL,
@@ -696,11 +753,42 @@ CREATE TABLE "Attachment" (
     CONSTRAINT "Attachment_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "CashHandover" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "turi" TEXT NOT NULL DEFAULT 'topshirish',
+    "kassirId" TEXT NOT NULL,
+    "kassirIsm" TEXT,
+    "qabulId" TEXT,
+    "qabulIsm" TEXT,
+    "hisoblangan" INTEGER NOT NULL,
+    "topshirilgan" INTEGER NOT NULL,
+    "farq" INTEGER NOT NULL DEFAULT 0,
+    "holat" TEXT NOT NULL DEFAULT 'kutilmoqda',
+    "farqYopildi" BOOLEAN NOT NULL DEFAULT false,
+    "izoh" TEXT,
+    "qarorIzoh" TEXT,
+    "topshirilganAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "qabulAt" TIMESTAMP(3),
+    "radAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "CashHandover_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "Tenant_slug_key" ON "Tenant"("slug");
 
 -- CreateIndex
 CREATE INDEX "Tenant_status_idx" ON "Tenant"("status");
+
+-- CreateIndex
+CREATE INDEX "Role_tenantId_isActive_idx" ON "Role"("tenantId", "isActive");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Role_tenantId_nomi_key" ON "Role"("tenantId", "nomi");
 
 -- CreateIndex
 CREATE INDEX "TenantModule_tenantId_idx" ON "TenantModule"("tenantId");
@@ -739,6 +827,9 @@ CREATE INDEX "User_businessId_idx" ON "User"("businessId");
 CREATE INDEX "User_tenantId_idx" ON "User"("tenantId");
 
 -- CreateIndex
+CREATE INDEX "User_roleId_idx" ON "User"("roleId");
+
+-- CreateIndex
 CREATE INDEX "AiConversation_tenantId_updatedAt_idx" ON "AiConversation"("tenantId", "updatedAt");
 
 -- CreateIndex
@@ -755,6 +846,12 @@ CREATE UNIQUE INDEX "Account_businessId_nomi_key" ON "Account"("businessId", "no
 
 -- CreateIndex
 CREATE INDEX "AccountTransfer_businessId_sana_idx" ON "AccountTransfer"("businessId", "sana");
+
+-- CreateIndex
+CREATE INDEX "AccountTransfer_businessId_fromUserId_idx" ON "AccountTransfer"("businessId", "fromUserId");
+
+-- CreateIndex
+CREATE INDEX "AccountTransfer_businessId_toUserId_idx" ON "AccountTransfer"("businessId", "toUserId");
 
 -- CreateIndex
 CREATE INDEX "Category_turi_isActive_idx" ON "Category"("turi", "isActive");
@@ -1006,6 +1103,15 @@ CREATE INDEX "DailyTransaction_businessId_deletedAt_createdAt_idx" ON "DailyTran
 CREATE UNIQUE INDEX "DailyReportSetting_businessId_key" ON "DailyReportSetting"("businessId");
 
 -- CreateIndex
+CREATE INDEX "Smena_businessId_sana_idx" ON "Smena"("businessId", "sana");
+
+-- CreateIndex
+CREATE INDEX "Smena_businessId_tugashAt_idx" ON "Smena"("businessId", "tugashAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Smena_businessId_sana_raqam_key" ON "Smena"("businessId", "sana", "raqam");
+
+-- CreateIndex
 CREATE INDEX "Contract_businessId_holat_tugash_idx" ON "Contract"("businessId", "holat", "tugash");
 
 -- CreateIndex
@@ -1022,6 +1128,15 @@ CREATE INDEX "Attachment_businessId_entity_entityId_idx" ON "Attachment"("busine
 
 -- CreateIndex
 CREATE INDEX "Attachment_businessId_createdAt_idx" ON "Attachment"("businessId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "CashHandover_businessId_holat_topshirilganAt_idx" ON "CashHandover"("businessId", "holat", "topshirilganAt");
+
+-- CreateIndex
+CREATE INDEX "CashHandover_businessId_kassirId_topshirilganAt_idx" ON "CashHandover"("businessId", "kassirId", "topshirilganAt");
+
+-- AddForeignKey
+ALTER TABLE "Role" ADD CONSTRAINT "Role_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "TenantModule" ADD CONSTRAINT "TenantModule_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -1042,7 +1157,13 @@ ALTER TABLE "User" ADD CONSTRAINT "User_tenantId_fkey" FOREIGN KEY ("tenantId") 
 ALTER TABLE "User" ADD CONSTRAINT "User_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "User" ADD CONSTRAINT "User_roleId_fkey" FOREIGN KEY ("roleId") REFERENCES "Role"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Account" ADD CONSTRAINT "Account_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Account" ADD CONSTRAINT "Account_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "AccountTransfer" ADD CONSTRAINT "AccountTransfer_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -1252,6 +1373,9 @@ ALTER TABLE "DailyTransaction" ADD CONSTRAINT "DailyTransaction_reportId_fkey" F
 ALTER TABLE "DailyReportSetting" ADD CONSTRAINT "DailyReportSetting_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Smena" ADD CONSTRAINT "Smena_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Contract" ADD CONSTRAINT "Contract_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1262,6 +1386,9 @@ ALTER TABLE "Contract" ADD CONSTRAINT "Contract_supplierId_fkey" FOREIGN KEY ("s
 
 -- AddForeignKey
 ALTER TABLE "Attachment" ADD CONSTRAINT "Attachment_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "CashHandover" ADD CONSTRAINT "CashHandover_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 
 -- ---------------------------------------------------------------------------

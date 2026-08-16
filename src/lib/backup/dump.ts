@@ -80,6 +80,9 @@ export const ZAXIRA_JADVALLARI = [
   "dailyReportSetting",
   // Smena yakuni — faqat Business'ga FK bilan bog'liq (undan keyin tursa yetarli).
   "smena",
+  // Kassa topshirig'i — faqat Business'ga FK bilan bog'liq (kassir/qabul
+  // qiluvchi ataylab FK'siz: foydalanuvchi o'chirilsa ham tarix qolsin).
+  "cashHandover",
 ] as const;
 
 export type ZaxiraJadval = (typeof ZAXIRA_JADVALLARI)[number];

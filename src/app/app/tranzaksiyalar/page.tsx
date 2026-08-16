@@ -10,6 +10,8 @@ import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { isModuleOnForTenant } from "@/lib/modules/guard";
 import { TransactionsClient } from "./TransactionsClient";
 import { listAccounts } from "@/lib/queries/accounts";
+import { getKassaHolat } from "@/lib/queries/kassirKassa";
+import { KassamKartasi } from "@/components/kassa/KassamKartasi";
 import type { Prisma } from "@prisma/client";
 
 interface SearchParams {
@@ -44,7 +46,7 @@ export default async function TranzaksiyalarPage({
     );
   }
 
-  const [result, categories, accounts] = await Promise.all([
+  const [result, categories, accounts, kassaHolat] = await Promise.all([
     listTransactions({
       businessId,
       // Xodim faqat o'zi kiritgan yozuvlarni ko'radi, direktor — barchasini.
@@ -64,6 +66,9 @@ export default async function TranzaksiyalarPage({
     }),
     // Faol kassalar — formada tanlash uchun (bitta bo'lsa qadam yashiriladi).
     listAccounts(businessId, true),
+    // KASSIR KASSASI: foydalanuvchining QO'LIDAGI naqd. Yuqoridagi
+    // Naqd/Click/Qarz/Sof raqamlariga hech qanday ta'siri yo'q.
+    getKassaHolat(businessId, { id: session.userId, ism: session.ism }),
   ]);
 
   // QARZ bo'limi jami — yozuvlardagi qarz tranzaksiyalari (totals.qarzKirim)
@@ -130,6 +135,8 @@ export default async function TranzaksiyalarPage({
           maxSumma: searchParams.maxSumma ? formatSom(parseInt(searchParams.maxSumma, 10)) : "",
         }}
       />
+      {/* Asosiy moliyaviy blokdan ALOHIDA karta — kassirning real kassasi. */}
+      <KassamKartasi holat={kassaHolat} />
     </div>
   );
   });

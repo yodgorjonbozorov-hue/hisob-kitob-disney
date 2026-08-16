@@ -115,6 +115,23 @@ export function formatDateUZ(date: Date): string {
   return `${d}.${m}.${y}`;
 }
 
+/**
+ * TO'LIQ PAYT (instant) — "16.08.2026 19:42", Asia/Tashkent (UTC+5, DSTsiz).
+ *
+ * `formatDateUZ` dan farqi: u DateOnly (UTC-yarim tun) qiymatlar uchun,
+ * bu esa haqiqiy vaqt nuqtasi uchun (kassa topshirig'i, qaror payti).
+ * Toshkent siljishi QO'LDA qo'shiladi — server UTC'da ishlaydi va
+ * `toLocaleString` mintaqasi muhitga qarab o'zgarib ketishi mumkin.
+ */
+export function formatToshkentVaqt(date: Date): string {
+  const t = new Date(date.getTime() + 5 * 60 * 60 * 1000);
+  const d = t.getUTCDate().toString().padStart(2, "0");
+  const m = (t.getUTCMonth() + 1).toString().padStart(2, "0");
+  const soat = t.getUTCHours().toString().padStart(2, "0");
+  const daq = t.getUTCMinutes().toString().padStart(2, "0");
+  return `${d}.${m}.${t.getUTCFullYear()} ${soat}:${daq}`;
+}
+
 /** Sana + oy nomi bilan: "24 Iyul 2026". DateOnly (UTC) qiymat uchun. */
 export function formatDate(date: Date): string {
   const d = date.getUTCDate();

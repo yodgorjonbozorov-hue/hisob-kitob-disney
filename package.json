@@ -32,6 +32,7 @@
     "test:agregat": "node -r ts-node/register tests/agregat.test.ts",
     "test:audit": "node -r ts-node/register tests/audit.test.ts",
     "test:kassa": "node -r ts-node/register tests/kassa.test.ts",
+    "test:kassir-kassa": "node -r ts-node/register tests/kassir-kassa.test.ts",
     "test:kunlik": "node -r ts-node/register tests/kunlik.test.ts",
     "test:smena": "node -r ts-node/register tests/smena.test.ts",
     "test:sotuv-bekor": "node -r ts-node/register tests/sotuv-bekor.test.ts",
