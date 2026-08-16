@@ -52,6 +52,8 @@ const HAMMASI = arg("all") === true;
 const ID = arg("id");
 const REJIM = arg("mode", "light");
 const MATERIAL = arg("material", "glass");
+// Dynamic Type: xs | large (standart) | xxxl — FAZA 8 auditi uchun.
+const TYPE = arg("type", "large");
 const INDEKS = arg("index") === true;
 
 /** `screens/` dagi HTML fayllar (BAL-NNN-nom.html). */
@@ -80,7 +82,7 @@ function tanlanganlar() {
 /** Chiqish fayl nomi: BAL-003-home[-dark][-solid].png */
 function chiqishNomi(htmlFayl, mode, material) {
   const asos = basename(htmlFayl, ".html");
-  const qoshimcha = [mode === "dark" ? "dark" : null, material === "solid" ? "solid" : null]
+  const qoshimcha = [mode === "dark" ? "dark" : null, material === "solid" ? "solid" : null, TYPE !== "large" ? TYPE : null]
     .filter(Boolean)
     .join("-");
   return qoshimcha ? `${asos}-${qoshimcha}.png` : `${asos}.png`;
@@ -119,11 +121,12 @@ async function main() {
       // Rejim va material HTML ichida emas, RENDER paytida beriladi —
       // shuning uchun bitta HTML to'rtala variantni bera oladi.
       await page.evaluate(
-        ([m, mat]) => {
+        ([m, mat, t]) => {
           document.documentElement.dataset.mode = m;
           document.documentElement.dataset.material = mat;
+          if (t && t !== "large") document.documentElement.dataset.type = t;
         },
-        [rejim, MATERIAL],
+        [rejim, MATERIAL, TYPE],
       );
 
       // FAIL-CLOSED tekshiruv. Viewport tegi yo'q bo'lsa render JIMGINA

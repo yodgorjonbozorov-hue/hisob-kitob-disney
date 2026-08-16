@@ -301,3 +301,31 @@
   --mat-saturate: 100%;
   --mat-highlight: transparent;
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   XXXL LAYOUT QOIDALARI
+   DESIGN-SYSTEM.md E.2 da yozilgan, lekin FAZA 8 auditida amalda
+   QO'LLANMAGANI aniqlandi — quyida amalga oshirildi.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Yon-yon ikki stat karta XXXL da sig'maydi → vertikal stack. */
+[data-type="xxxl"] .row:has(> .stat) {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+/* Tab yorlig'i XXXL da sig'maydi → faqat ikona qoladi.
+   Tegish maydoni o'zgarmaydi (--tap-min allaqachon 52px). */
+[data-type="xxxl"] .tab__label {
+  display: none;
+}
+
+/* Biznes almashtirgich XXXL da kengroq joy oladi. */
+[data-type="xxxl"] .biz-switch {
+  max-width: 100%;
+}
+
+/* Pul summasi sig'masa kichrayadi, KESILMAYDI. */
+[data-type="xxxl"] .amount--xl {
+  font-size: clamp(28px, 9vw, var(--t-amount-xl));
+}
