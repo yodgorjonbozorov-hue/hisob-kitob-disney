@@ -1,7 +1,7 @@
 import { requestCache } from "@/lib/requestCache";
 import { NextRequest, NextResponse } from "next/server";
 import { redirect } from "next/navigation";
-import { getCurrentUser, requireUser, type SessionData } from "./session";
+import { getCurrentUser, requireUser, destroySession, type SessionData } from "./session";
 import { handleApiError, UnauthorizedError, ForbiddenError } from "./guard";
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { runWithTenant } from "@/lib/db/tenantContext";
@@ -56,7 +56,7 @@ const tenantByIdCached = requestCache(async (tenantId: string): Promise<TenantIn
   })
 );
 
-const userTenantIdCached = requestCache(async (userId: string) =>
+const userCached = requestCache(async (userId: string) =>
   rawPrisma.user.findUnique({
     where: { id: userId },
     select: { tenantId: true, isActive: true },
@@ -64,21 +64,52 @@ const userTenantIdCached = requestCache(async (userId: string) =>
 );
 
 /**
+ * Sessiya egasi HALI HAM kirishga haqlimi — har so'rovda BAZADAN tekshiriladi.
+ *
+ * Sessiyadagi ma'lumotga ishonib bo'lmaydi: cookie 7 kun yashaydi, ya'ni
+ * o'chirilgan yoki deaktiv qilingan xodim shu muddat davomida ishlashda davom
+ * etardi (audit: Critical #1). `superadmin.ts` dagi `verifySuperadmin` xuddi
+ * shu yondashuvni SUPERADMIN uchun allaqachon qo'llaydi — bu esa uni oddiy
+ * foydalanuvchilarga ham yoyadi. O'sha fayl o'zgarmadi.
+ *
+ * Rad etish sabablari:
+ *   - foydalanuvchi umuman yo'q (akkaunt o'chirilgan);
+ *   - `isActive: false` (deaktiv qilingan).
+ *
+ * IZOH: `User` modelida `deletedAt` maydoni yo'q — foydalanuvchi butunlay
+ * o'chiriladi (`/api/users/[id]` DELETE) yoki deaktiv qilinadi. Ikkala holat
+ * ham yuqorida qamrab olingan. Modelga soft-delete qo'shilsa, shu yerga
+ * `deletedAt: null` sharti QO'SHILISHI SHART.
+ *
+ * @returns null — sessiya yaroqsiz; aks holda foydalanuvchining bazadagi tenanti.
+ */
+export async function verifyUser(userId: string): Promise<{ tenantId: string | null } | null> {
+  const user = await userCached(userId);
+  if (!user || !user.isActive) return null;
+  return { tenantId: user.tenantId };
+}
+
+/**
  * Sessiyadan tenantni yuklaydi. Eski (migratsiyagacha ochilgan) sessiyalarda
  * tenantId bo'lmaydi — bazadan o'qiladi (fail-closed: topilmasa null).
  */
 async function loadTenant(session: Required<SessionData>): Promise<TenantInfo | null> {
-  let tenantId = session.tenantId ?? null;
-  if (!tenantId) {
-    const user = await userTenantIdCached(session.userId);
-    if (!user || !user.isActive) return null;
-    tenantId = user.tenantId;
-  }
+  // Avval foydalanuvchining o'zi tekshiriladi — sessiyada tenantId bo'lsa ham.
+  const user = await verifyUser(session.userId);
+  if (!user) return null;
+  const tenantId = session.tenantId ?? user.tenantId;
   if (!tenantId) return null;
   return tenantByIdCached(tenantId);
 }
 
-async function buildContext(session: Required<SessionData>): Promise<TenantContext | null> {
+/**
+ * Sessiyadan to'liq tenant kontekstini quradi. null = kirish yopiq
+ * (yaroqsiz sessiya yoki topilmagan tenant) — chaqiruvchi guard uni
+ * 401/redirect ga aylantiradi.
+ */
+export async function buildTenantContext(
+  session: Required<SessionData>
+): Promise<TenantContext | null> {
   const tenant = await loadTenant(session);
   if (!tenant) return null;
   return { session, tenantId: tenant.id, tenant, access: computeAccess(tenant) };
@@ -88,7 +119,13 @@ async function buildContext(session: Required<SessionData>): Promise<TenantConte
 export async function requireTenantApi(): Promise<TenantContext> {
   const session = await getCurrentUser();
   if (!session) throw new UnauthorizedError();
-  const ctx = await buildContext(session);
+  // Akkaunt o'chirilgan/deaktiv bo'lsa — sessiya bekor qilinadi va 401 qaytadi
+  // (frontend 401'da /login ga olib boradi). Tenant yo'qligidan (403) farqli.
+  if (!(await verifyUser(session.userId))) {
+    await destroySession();
+    throw new UnauthorizedError("Sessiya bekor qilindi — qaytadan tizimga kiring");
+  }
+  const ctx = await buildTenantContext(session);
   if (!ctx) {
     // SUPERADMIN (tenantsiz) oddiy tenant-API'laridan foydalana olmaydi — FAZA 5'da alohida panel.
     throw new ForbiddenError("Kompaniya aniqlanmadi — qaytadan tizimga kiring");
@@ -107,7 +144,12 @@ export async function requireTenantPage(): Promise<TenantContext> {
   if (session.rol === "SUPERADMIN") {
     redirect("/superadmin");
   }
-  const ctx = await buildContext(session);
+  // Akkaunt o'chirilgan/deaktiv bo'lsa — sessiya bekor va /login.
+  if (!(await verifyUser(session.userId))) {
+    await destroySession();
+    redirect("/login");
+  }
+  const ctx = await buildTenantContext(session);
   if (!ctx) {
     redirect("/login");
   }
@@ -123,7 +165,13 @@ export async function requireBillingPage(): Promise<TenantContext> {
   if (session.rol === "SUPERADMIN") {
     redirect("/superadmin");
   }
-  const ctx = await buildContext(session);
+  // To'lov sahifasi obuna holatini tekshirmaydi, lekin akkaunt haqiqiyligini —
+  // TEKSHIRADI: o'chirilgan xodim bu yerdan ham ichkariga kira olmaydi.
+  if (!(await verifyUser(session.userId))) {
+    await destroySession();
+    redirect("/login");
+  }
+  const ctx = await buildTenantContext(session);
   if (!ctx) {
     redirect("/login");
   }

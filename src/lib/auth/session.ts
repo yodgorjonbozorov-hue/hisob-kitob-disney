@@ -40,6 +40,26 @@ export async function getSession(): Promise<IronSession<SessionData>> {
   return getIronSession<SessionData>(await cookies(), sessionOptions);
 }
 
+/**
+ * Sessiya cookie'sini o'chiradi (guard foydalanuvchini rad etganda chaqiriladi:
+ * o'chirilgan/deaktiv akkaunt cookie'si diskda qolib ketmasin).
+ *
+ * Next.js cookie'ni FAQAT Route Handler va Server Action ichida yozishga ruxsat
+ * beradi — Server Component'da `destroy()` xato tashlaydi. Shuning uchun xato
+ * yutiladi: u yerda kirishni redirect yopadi va cookie keyingi API so'rovida
+ * (yoki logout'da) o'chadi. Sessiyani yaroqsiz deb hisoblash qarori HAR DOIM
+ * bazadagi holatga qarab chiqariladi, cookie borligiga emas — ya'ni cookie
+ * o'chmay qolishi kirish ochiq qolishini ANGLATMAYDI.
+ */
+export async function destroySession(): Promise<void> {
+  try {
+    const session = await getSession();
+    session.destroy();
+  } catch {
+    // Server Component konteksti (yoki request'siz muhit) — cookie'ga yozib bo'lmaydi.
+  }
+}
+
 /** Sessiyada userId yo'q bo'lsa, /login sahifasiga redirect qiladi. Server Component/layout uchun. */
 export async function requireUser(): Promise<Required<SessionData>> {
   const session = await getSession();
