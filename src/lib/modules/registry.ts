@@ -56,6 +56,10 @@ export const MODULLAR: ModulTarifi[] = [
       { href: "/app/hisobot", label: "Oylik hisobot", icon: "report", tartib: 12, rollar: BOSHQARUVCHILAR },
       { href: "/app/byudjet", label: "Budjet", icon: "budget", tartib: 13, rollar: BOSHQARUVCHILAR },
       { href: "/app/kassa", label: "Kassalar", icon: "wallet", tartib: 14, rollar: BOSHQARUVCHILAR },
+      // QARZLAR — MOLIYA ichida, OMBOR emas. Qarz ombordan mustaqil moliyaviy
+      // majburiyat: ombori yo'q biznes ham "Kirim → Qarz" yozadi va uni
+      // ko'radigan joyi bo'lishi shart.
+      { href: "/app/qarzlar", label: "Qarzlar", icon: "debt", tartib: 16, rollar: ["OWNER", "ADMIN", "CASHIER"] },
       { href: "/app/takroriy", label: "Takroriy", icon: "repeat", tartib: 40, rollar: BOSHQARUVCHILAR },
       { href: "/app/smena", label: "Kun yakuni", icon: "shift", tartib: 41, rollar: ["OWNER", "ADMIN", "CASHIER"] },
     ],
@@ -83,7 +87,8 @@ export const MODULLAR: ModulTarifi[] = [
     nav: [
       { href: "/app/ombor", label: "Ombor", icon: "package", tartib: 20, rollar: BOSHQARUVCHILAR },
       { href: "/app/sotuv", label: "Sotuv", icon: "cart", tartib: 21, rollar: ["OWNER", "ADMIN", "CASHIER"] },
-      { href: "/app/qarzlar", label: "Qarzlar", icon: "debt", tartib: 22, rollar: ["OWNER", "ADMIN", "CASHIER"] },
+      // "Qarzlar" ataylab bu yerda EMAS — u MOLIYA (core) modulida, chunki
+      // qarz ombori yo'q bizneslarda ham yuritiladi.
     ],
   },
   {

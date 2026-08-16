@@ -359,6 +359,7 @@ model Category {
   recurrings       RecurringTransaction[]
   approvalRules    ApprovalRule[]
   approvalRequests ApprovalRequest[]
+  debts            Debt[]
 
   @@unique([nomi, turi, businessId])
   @@index([turi, isActive])
@@ -648,19 +649,52 @@ model Debt {
   mijozTel   String?
   jamiSumma  Int
   tolangan   Int           @default(0)
+  /// TARIXIY BAYROQ. `status` bilan har doim sinxron yuritiladi
+  /// (PAID va CANCELLED — ikkalasi ham `true`), chunki ochiq qarz jamlari
+  /// va mijoz limiti shu ustun bo'yicha hisoblanadi.
   isYopilgan Boolean       @default(false)
+  /// HOLAT: "OPEN" | "PARTIALLY_PAID" | "PAID" | "CANCELLED".
+  /// `isYopilgan` faqat "yopiqmi" degan savolga javob berardi — qisman
+  /// to'langan qarzni ochiqdan ajratib bo'lmasdi va bekor qilish yo'q edi.
+  status     String        @default("OPEN")
+  /// QARZ BERILGAN SANA (kun aniqligida, UTC-yarim tun). Eski yozuvlarda
+  /// migratsiya uni `createdAt` dan to'ldiradi. Kirim sanasi bu EMAS —
+  /// kirim faqat to'lov sanasi bilan yoziladi (lib/services/qarz.ts).
+  sana       DateTime?
+  /// Qaysi kategoriya hisobiga qarzga savdo yozildi (hisobot uchun, ixtiyoriy).
+  categoryId String?
+  category   Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  /// MAS'UL SOTUVCHI/OPERATOR. FK ataylab yo'q (DailyReportSetting.direktorId
+  /// uslubi) — xodim o'chirilsa qarz tarixi buzilmasin; ism snapshot sifatida
+  /// saqlanadi. Tenant tekshiruvi xizmat qatlamida.
+  masulId    String?
+  masulIsm   String?
+  /// ESKI YOZUVLAR KO'PRIGI: `tolovTuri = "qarz"` bilan yozilgan kirim
+  /// tranzaksiyasidan ko'chirilgan qarz (scripts/qarz-migratsiya.ts).
+  /// @unique — bitta tranzaksiya ikki marta ko'chirilmaydi (idempotentlik).
+  /// FK yo'q: tranzaksiya yumshoq o'chirilsa ham bog'lanish o'qiladigan qoladi.
+  manbaTransactionId String? @unique
   /// Kelishilgan to'lov muddati (ixtiyoriy).
   muddat     DateTime?
   izoh       String?
   userId     String
   createdAt  DateTime      @default(now())
+  /// AUDIT: oxirgi o'zgarish. Eski yozuvlarda null.
+  updatedAt  DateTime?     @updatedAt
+  updatedBy  String?
+  cancelledAt   DateTime?
+  cancelledBy   String?
+  cancelReason  String?
   payments   DebtPayment[]
 
   @@index([businessId, isYopilgan, turi])
   @@index([businessId, turi])
   @@index([businessId, contactId, isYopilgan])
+  @@index([businessId, status, turi])
+  @@index([businessId, sana])
   @@index([productId])
   @@index([contactId])
+  @@index([categoryId])
 }
 
 // ==== XARID moduli (Faza 6.1) ====
@@ -871,12 +905,27 @@ model DebtPayment {
   businessId    String
   business      Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
   summa         Int
+  /// TO'LOV SANASI — pul HAQIQATDA kelgan kun. Kirim tranzaksiyasi aynan shu
+  /// sana bilan yoziladi, qarz berilgan sana bilan EMAS. Eski yozuvlarda
+  /// migratsiya uni `createdAt` dan to'ldiradi.
+  sana          DateTime?
+  /// Qaysi usulda to'landi: "naqd" | "click" | "bank". Eski yozuvlarda null.
+  tolovTuri     String?
+  /// Qaysi kassaga tushdi. Kirim tranzaksiyasi ham shu kassaga bog'lanadi.
+  accountId     String?
+  izoh          String?
   userId        String
   transactionId String?
+  /// TAKROR TO'LOVDAN HIMOYA: klient har to'lov uchun bir martalik kalit
+  /// yuboradi. Tugma ikki marta bosilsa ikkinchi so'rov shu unique cheklovga
+  /// uriladi va mavjud to'lov qaytariladi — balans ikki marta oshmaydi.
+  idempotencyKey String?
   createdAt     DateTime @default(now())
 
+  @@unique([debtId, idempotencyKey])
   @@index([debtId])
   @@index([businessId])
+  @@index([businessId, sana])
 }
 
 /// TASDIQLASH QOIDASI — qaysi chiqim rahbar tasdig'isiz o'tmaydi.

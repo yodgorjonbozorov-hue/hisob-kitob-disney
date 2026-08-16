@@ -1,9 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
+import { QARZ_EMAS } from "@/lib/qarzFiltr";
 
 /**
  * Berilgan kun uchun kutilgan naqd = o'sha kundagi kirim (deletedAt=null) jami.
  * `userId` berilsa — faqat shu xodim kiritgan kirim (o'z smenasi bo'yicha yakun).
+ *
+ * Qarzga yozilgan savdo bu yerda YO'Q: kassada u pul yotmaydi, aks holda
+ * kassir har kuni qarz summasicha kam pul topshirgandek ko'rinardi.
  */
 export async function getExpectedCash(
   businessId: string,
@@ -13,7 +17,14 @@ export async function getExpectedCash(
   const from = dateOnlyStringToUTCDate(dateStr);
   const to = new Date(from.getTime() + 24 * 60 * 60 * 1000);
   const res = await prisma.transaction.aggregate({
-    where: { businessId, turi: "kirim", deletedAt: null, sana: { gte: from, lt: to }, ...(userId ? { userId } : {}) },
+    where: {
+      businessId,
+      turi: "kirim",
+      deletedAt: null,
+      sana: { gte: from, lt: to },
+      ...QARZ_EMAS,
+      ...(userId ? { userId } : {}),
+    },
     _sum: { summa: true },
   });
   return res._sum.summa ?? 0;
@@ -32,7 +43,13 @@ export async function getTodayTotals(
   const to = new Date(from.getTime() + 24 * 60 * 60 * 1000);
   const rows = await prisma.transaction.groupBy({
     by: ["turi"],
-    where: { businessId, deletedAt: null, sana: { gte: from, lt: to }, ...(userId ? { userId } : {}) },
+    where: {
+      businessId,
+      deletedAt: null,
+      sana: { gte: from, lt: to },
+      ...QARZ_EMAS,
+      ...(userId ? { userId } : {}),
+    },
     _sum: { summa: true },
   });
   return {

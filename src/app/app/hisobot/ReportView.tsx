@@ -71,6 +71,36 @@ export function ReportView({ report }: { report: MonthlyReport }) {
         </Card>
       </div>
 
+      {/* QARZ — real pul harakatidan ALOHIDA blok. Yuqoridagi "Jami kirim" va
+          "Sof foyda" ichida qarzga berilgan savdo YO'Q; qarzdan tushgan pul
+          esa bor (u haqiqatan kelgan pul). */}
+      <Card>
+        <p className="text-muted text-sm mb-3">
+          Qarz harakati <span className="text-faint">— sof foydaga qo&apos;shilmaydi</span>
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <p className="text-xs text-faint mb-0.5">Qarzga berilgan</p>
+            <p className="text-lg font-semibold text-debt tnum">
+              {formatSomLabel(report.qarz.berilgan)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-faint mb-0.5">Qarzdan tushgan pul</p>
+            <p className="text-lg font-semibold text-income tnum">
+              {formatSomLabel(report.qarz.tushgan)}
+            </p>
+            <p className="text-2xs text-faint mt-0.5">Jami kirim ichida</p>
+          </div>
+          <div>
+            <p className="text-xs text-faint mb-0.5">Ochiq qarz qoldig&apos;i</p>
+            <p className="text-lg font-semibold text-fg tnum">
+              {formatSomLabel(report.qarz.ochiqQoldiq)}
+            </p>
+          </div>
+        </div>
+      </Card>
+
       {/* Avto rejimi: oy davomida sotilgan har mashina bo'yicha sof foyda. */}
       {report.avto && report.avto.qatorlar.length > 0 && <AvtoJadval yakun={report.avto} />}
 

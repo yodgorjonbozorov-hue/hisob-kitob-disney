@@ -44,7 +44,7 @@ export default async function TranzaksiyalarPage({
     );
   }
 
-  const [result, categories, accounts] = await Promise.all([
+  const [result, categories, accounts, masullar] = await Promise.all([
     listTransactions({
       businessId,
       // Xodim faqat o'zi kiritgan yozuvlarni ko'radi, direktor — barchasini.
@@ -64,12 +64,44 @@ export default async function TranzaksiyalarPage({
     }),
     // Faol kassalar — formada tanlash uchun (bitta bo'lsa qadam yashiriladi).
     listAccounts(businessId, true),
+    // Qarzga mas'ul sotuvchi/operator tanlash uchun (bitta bo'lsa yashiriladi).
+    prisma.user.findMany({
+      where: { isActive: true },
+      select: { id: true, ism: true },
+      orderBy: { ism: "asc" },
+      take: 100,
+    }),
   ]);
 
-  // QARZ bo'limi jami — yozuvlardagi qarz tranzaksiyalari (totals.qarzKirim)
-  // USTIGA kunlik hisobotda qo'lda kiritilgan qarz tushumlari qo'shiladi
-  // (KUNLIK moduli yoqiq bo'lsa). Yozuvlardan avto-ulangan tushumlar
-  // (transactionId bor) sanalmaydi — ular totals.qarzKirim'da allaqachon bor.
+  // QARZ bo'limi jami — uchta manba qo'shiladi:
+  //  1) `Debt` yozuvlari — yangi qarzlar shu yerga tushadi (asosiy manba);
+  //  2) `totals.qarzKirim` — ESKI `tolovTuri="qarz"` tranzaksiyalari
+  //     (scripts/qarz-migratsiya.ts ko'chirmaguncha);
+  //  3) kunlik hisobotdagi qo'lda kiritilgan qarz tushumlari.
+  // MUHIM: bu ko'rsatkich `totals.sof` ga KIRMAYDI — qarz real pul emas.
+  const qarzWhereDebt: Prisma.DebtWhereInput = {
+    businessId,
+    turi: "olinadigan",
+    status: { not: "CANCELLED" },
+    // Eski tranzaksiyadan ko'chirilgan qarz ikki marta sanalmasin: uning
+    // summasi `totals.qarzKirim` da allaqachon bor.
+    manbaTransactionId: null,
+  };
+  {
+    const scopeUserId = transactionScopeUserId(session);
+    if (scopeUserId) qarzWhereDebt.userId = scopeUserId;
+    if (searchParams.from || searchParams.to) {
+      const sana: Prisma.DateTimeFilter = {};
+      if (searchParams.from) sana.gte = dateOnlyStringToUTCDate(searchParams.from);
+      if (searchParams.to) {
+        sana.lt = new Date(dateOnlyStringToUTCDate(searchParams.to).getTime() + 24 * 60 * 60 * 1000);
+      }
+      qarzWhereDebt.sana = sana;
+    }
+  }
+  const qarzYozuvlari =
+    (await prisma.debt.aggregate({ _sum: { jamiSumma: true }, where: qarzWhereDebt }))._sum.jamiSumma ?? 0;
+
   let qarzSumma: number | null = null;
   if (await isModuleOnForTenant(tenantId, "KUNLIK")) {
     const qarzWhere: Prisma.DailyTransactionWhereInput = {
@@ -110,15 +142,16 @@ export default async function TranzaksiyalarPage({
         pageSize={result.pageSize}
         categories={categories}
         accounts={accounts}
+        masullar={masullar}
         currentUserId={session.userId}
         currentUserRol={session.rol}
         hideProfit={hideProfit}
         moveTargets={moveTargets}
         totals={result.totals}
         qarzSumma={
-          qarzSumma === null && result.totals.qarzKirim === 0
+          qarzSumma === null && result.totals.qarzKirim === 0 && qarzYozuvlari === 0
             ? null
-            : (qarzSumma ?? 0) + result.totals.qarzKirim
+            : (qarzSumma ?? 0) + result.totals.qarzKirim + qarzYozuvlari
         }
         filters={{
           from: searchParams.from ?? "",

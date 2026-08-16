@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { qidiruvRejimi } from "@/lib/db/dialect";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
+import { qarzsiz } from "@/lib/qarzFiltr";
 import type { Prisma } from "@prisma/client";
 
 export interface TransactionListParams {
@@ -61,9 +62,11 @@ export async function listTransactions(params: TransactionListParams) {
     }),
     prisma.transaction.count({ where }),
     // Filtrlangan to'plam bo'yicha jami (butun natija, faqat sahifa emas).
+    // QARZ CHIQARIB TASHLANADI: `jamiKirim` va `sof` — REAL pul harakati.
+    // Qarzga yozilgan yozuv `qarzKirim` da alohida ko'rsatiladi.
     prisma.transaction.groupBy({
       by: ["turi"],
-      where,
+      where: qarzsiz(where),
       _sum: { summa: true },
     }),
     // KIRIMNING to'lov bo'limlari taqsimoti — pastdagi "Naqd / Click / Qarz"
@@ -79,6 +82,8 @@ export async function listTransactions(params: TransactionListParams) {
     }),
   ]);
 
+  // Ikkalasi ham QARZSIZ to'plamdan — "Sof balans" qarzga berilgan savdo
+  // hisobiga oshib ketmasligi shart (lib/qarzFiltr.ts).
   const jamiKirim = sums.find((s) => s.turi === "kirim")?._sum.summa ?? 0;
   const jamiChiqim = sums.find((s) => s.turi === "chiqim")?._sum.summa ?? 0;
 

@@ -23,6 +23,7 @@ let rawPrisma: any;
 let runWithTenant: any;
 let xarid: any;
 let inventory: any;
+let qarz: any;
 let rollar: any;
 let userKassa: any;
 let accounts: any;
@@ -58,6 +59,7 @@ before(async () => {
   ({ runWithTenant } = await import("@/lib/db/tenantContext"));
   xarid = await import("@/lib/services/xarid");
   inventory = await import("@/lib/services/inventory");
+  qarz = await import("@/lib/services/qarz");
   rollar = await import("@/lib/services/rollar");
   userKassa = await import("@/lib/services/userKassa");
   accounts = await import("@/lib/queries/accounts");
@@ -264,7 +266,7 @@ test("qisman to'lov: 500k → Murod −500k, Baxtiyor +500k, qarz 300k", async (
 
 test("qarz to'lovi 300k → qarz yopiladi, pul transfer bilan o'tadi", async () => {
   const debt = await T(async () =>
-    inventory.recordDebtPayment({
+    qarz.qarzTolov({
       businessId: t.business.id,
       debtId: qarzId,
       summa: 300_000,
@@ -291,7 +293,7 @@ test("takroriy to'lov (duplicate payment) rad etiladi", async () => {
   await assert.rejects(
     () =>
       T(async () =>
-        inventory.recordDebtPayment({
+        qarz.qarzTolov({
           businessId: t.business.id,
           debtId: qarzId,
           summa: 300_000,

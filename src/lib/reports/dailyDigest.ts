@@ -4,6 +4,7 @@ import { runWithTenant } from "@/lib/db/tenantContext";
 import { MANAGER_ROLLAR } from "@/lib/auth/roles";
 import { formatSomLabel } from "@/lib/format";
 import { BRAND } from "@/lib/brand";
+import { QARZ_EMAS } from "@/lib/qarzFiltr";
 
 /**
  * KUNLIK XULOSA (BOS-5): har ertalab (kunlik cron) kechagi kirim/chiqim/sof
@@ -41,7 +42,13 @@ export async function sendDailyDigest(botApi: {
         for (const b of businesses) {
           const agg = await prisma.transaction.groupBy({
             by: ["turi"],
-            where: { businessId: b.id, deletedAt: null, sana: { gte: kechaBosh, lt: kechaOxir } },
+            // Qarzga berilgan savdo real pul harakati emas — xulosaga kirmaydi.
+            where: {
+              businessId: b.id,
+              deletedAt: null,
+              sana: { gte: kechaBosh, lt: kechaOxir },
+              ...QARZ_EMAS,
+            },
             _sum: { summa: true },
           });
           const kirim = agg.find((a) => a.turi === "kirim")?._sum.summa ?? 0;

@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { businessQueryRaw, businessScope, sanaKalit, songa } from "@/lib/db/businessRaw";
 import { monthRangeUTC, shiftMonthString, currentMonthString } from "@/lib/date";
+import { qarzEmasSql, QARZ_EMAS } from "@/lib/qarzFiltr";
 
 export interface MonthTotals {
   jamiKirim: number;
@@ -44,6 +45,7 @@ async function monthlyTotals(
     JOIN "Business" b ON b."id" = t."businessId"
     WHERE ${businessScope("t", businessId)}
       AND t."deletedAt" IS NULL
+      AND ${qarzEmasSql("t")}
       AND t."sana" >= ${from}
       AND t."sana" < ${to}
     GROUP BY kalit, t."turi"
@@ -105,7 +107,8 @@ export async function getCategoryBreakdown(
   const { from, to } = monthRangeUTC(monthStr);
   const grouped = await prisma.transaction.groupBy({
     by: ["categoryId"],
-    where: { businessId, turi, deletedAt: null, sana: { gte: from, lt: to } },
+    // Qarzga yozilgan kirim daromad emas — kategoriya taqsimotida ham yo'q.
+    where: { businessId, turi, deletedAt: null, sana: { gte: from, lt: to }, ...QARZ_EMAS },
     _sum: { summa: true },
   });
 
@@ -174,6 +177,7 @@ export async function getDailyDynamics(
     JOIN "Business" b ON b."id" = t."businessId"
     WHERE ${businessScope("t", businessId)}
       AND t."deletedAt" IS NULL
+      AND ${qarzEmasSql("t")}
       AND t."sana" >= ${from}
       AND t."sana" < ${to}
     GROUP BY kalit, t."turi"
