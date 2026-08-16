@@ -29,6 +29,8 @@ import { createServer, type Server } from "node:http";
 import { readdirSync, readFileSync, existsSync, rmSync, writeFileSync, mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+// Faqat tip (runtime'da o'chib ketadi) — `c.execute` argumentlari uchun.
+import type { InArgs } from "@libsql/client";
 
 const ESKI_DB = "prisma/test-launch-eski.db";
 const YANGI_DB = "prisma/test-launch-yangi.db";
@@ -155,7 +157,7 @@ async function eskiBazaniQur() {
     await c.execute({ sql: "INSERT INTO _applied_migrations (name) VALUES (?)", args: [d] });
   }
   const iso = (s: string) => new Date(s).toISOString();
-  const q = (sql: string, args: unknown[] = []) => c.execute({ sql, args });
+  const q = (sql: string, args: InArgs = []) => c.execute({ sql, args });
   await q(
     `INSERT INTO "Tenant" ("id","name","slug","status","plan","createdAt","updatedAt")
      VALUES ('T1','Alfa','alfa','ACTIVE','PRO',?,?)`,
