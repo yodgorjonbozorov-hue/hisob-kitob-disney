@@ -127,7 +127,8 @@ table,
 
 .homebar {
   position: relative;
-  z-index: 40;
+  /* Home indicator HAR DOIM eng ustida — sheet va alert ham uni bekitmaydi. */
+  z-index: 70;
   height: var(--safe-bottom);
   flex: 0 0 var(--safe-bottom);
   display: flex;

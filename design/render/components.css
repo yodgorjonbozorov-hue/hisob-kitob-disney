@@ -164,7 +164,7 @@
 /* ───────────────────── 3. BOTTOM SHEET ───────────────────── */
 
 .sheet {
-  position: absolute;
+  position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
@@ -209,7 +209,7 @@
 
 /* Sheet ortidagi qorong'i qatlam */
 .scrim {
-  position: absolute;
+  position: fixed;
   inset: 0;
   z-index: 45;
   background: rgba(0, 0, 0, 0.35);
@@ -683,7 +683,7 @@
 /* ───────────────────── 16. TOAST / BANNER ───────────────────── */
 
 .toast {
-  position: absolute;
+  position: fixed;
   left: var(--sp-4);
   right: var(--sp-4);
   bottom: calc(var(--sp-4) + 56px);
@@ -715,7 +715,7 @@
 /* ───────────────────── 17. ALERT / ACTION SHEET ───────────────────── */
 
 .alert {
-  position: absolute;
+  position: fixed;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
@@ -754,7 +754,7 @@
 .alert__act--destructive { color: var(--expense); font-weight: 620; }
 
 .action-sheet {
-  position: absolute;
+  position: fixed;
   left: var(--sp-2);
   right: var(--sp-2);
   bottom: var(--sp-2);
