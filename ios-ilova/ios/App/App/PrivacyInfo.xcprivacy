@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Maxfiylik manifesti (Apple 2024-yil may'dan majburiy).
+
+  MUHIM: Capacitor yadrosi bo'sh manifest bilan keladi, lekin ishlatilayotgan
+  plaginlar "required reason API" larga murojaat qiladi va ULAR uchun manifest
+  YO'Q. Shuning uchun quyidagilar shu yerda — ilova darajasida — e'lon qilinadi:
+    - @capacitor/preferences  → UserDefaults        (CA92.1)
+    - @capacitor/filesystem   → fayl vaqt belgisi   (C617.1)
+    - @capacitor/filesystem   → disk bo'sh joyi     (E174.1)
+  E'lon qilinmasa App Store Connect yuklashdan keyin ogohlantirish yuboradi
+  va keyingi versiyalarda yuklash rad etiladi.
+
+  Yig'iladigan ma'lumot ro'yxati App Store Connect'dagi "App Privacy"
+  javoblari bilan BIR XIL bo'lishi shart (docs/IOS-APP-STORE.md).
+-->
+<plist version="1.0">
+<dict>
+	<!-- Reklama/kuzatuv yo'q: uchinchi tomon SDK, analitika, tracking ishlatilmaydi. -->
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array>
+		<!-- Ism — foydalanuvchi profili (kim yozuv kiritgani ko'rinishi uchun). -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeName</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<!-- Telefon raqami — login sifatida ishlatiladi. -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypePhoneNumber</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<!-- Biznesning moliyaviy yozuvlari (kirim-chiqim, qarz, ombor). -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherFinancialInfo</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<!-- Foydalanuvchi kiritgan boshqa kontent: izohlar, hujjatlar, mijoz kartochkalari. -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+	</array>
+
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<!-- UserDefaults: ilova o'z sozlamalarini saqlaydi (qulf yoqilganmi va h.k.). -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+		<!-- Fayl vaqt belgisi: faqat ilovaning O'ZI yaratgan eksport fayllari. -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>C617.1</string>
+			</array>
+		</dict>
+		<!-- Disk hajmi: hisobot faylini saqlashdan oldin joy yetarliligini tekshirish. -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryDiskSpace</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>E174.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

@@ -19,6 +19,10 @@ scratch-*
 # Baza zaxiralari — MIJOZ MA'LUMOTI, hech qachon repoga tushmaydi
 prisma/backups/
 
+# App Store skrinshotlari — haqiqiy hisobdan olinadi, ya'ni MIJOZ MOLIYAVIY
+# MA'LUMOTI bo'ladi. App Store Connect'ga to'g'ridan-to'g'ri yuklanadi.
+ios-ilova/app-store/skrinshot/
+
 # Faqat mahalliy Windows muhitida npm o'rniga pnpm ishlatilgani uchun (README'ga qarang) —
 # Vercel'ning o'z (Linux) muhitida standart npm bilan o'rnatilishi uchun bularni commit qilmaymiz.
 pnpm-lock.yaml

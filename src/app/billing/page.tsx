@@ -8,6 +8,7 @@ import { formatDateUZ } from "@/lib/format";
 import { Logo } from "@/components/Logo";
 import { BillingClient } from "./BillingClient";
 import { mavjudProviderlar } from "@/lib/billing/provider";
+import { iosIlovadanMi } from "@/lib/native/server";
 
 export const metadata = { title: "Obuna va to'lov" };
 
@@ -31,6 +32,9 @@ export default async function BillingPage() {
     const manager = isManager(session.rol);
     // Onlayn to'lov usullari faqat env sozlangan bo'lsa ko'rinadi.
     const providerlar = mavjudProviderlar();
+    // App Store 3.1.1: iOS ilovasi ichida tashqi to'lov (Payme/Click) taklif
+    // qilinmaydi — faqat obuna HOLATI ko'rsatiladi. Veb va Android o'zgarmaydi.
+    const iosIlova = iosIlovadanMi();
 
     return (
       <div className="min-h-screen bg-app px-4 py-10">
@@ -76,8 +80,23 @@ export default async function BillingPage() {
             )}
           </div>
 
+          {/* iOS ilovasida tarif kartochkalari va to'lov tugmalari BERKITILADI
+              (App Store 3.1.1). Holat yuqorida ko'rsatilgan — bu yerda faqat
+              qisqa izoh, hech qanday tashqi to'lov havolasi yo'q. */}
+          {iosIlova && !tenant.bepul && (
+            <div className="bg-surface rounded-2xl border border-line shadow-card p-6">
+              <h2 className="font-semibold text-fg">Obuna</h2>
+              <p className="text-sm text-muted mt-2">
+                Obunangiz holati va muddati yuqorida ko&apos;rsatilgan. Tarifni
+                o&apos;zgartirish yoki obunani yangilash bo&apos;yicha savollar uchun
+                qo&apos;llab-quvvatlash xizmatiga murojaat qiling.
+              </p>
+            </div>
+          )}
+
           {/* Tariflar + to'lov — doimiy bepul mijozga ko'rsatilmaydi. */}
-          {!tenant.bepul &&
+          {!iosIlova &&
+            !tenant.bepul &&
             PLANLAR.map((plan) => (
             <div key={plan.code} className="bg-surface rounded-2xl border border-line shadow-card p-6">
               <div className="flex items-start justify-between gap-4 flex-wrap">

@@ -22,7 +22,17 @@ const HUQUQ_LABEL = new Map(HUQUQLAR.map((h) => [h.code, h.label]));
  * granular huquqlarni belgilaydi. Rollar keyin Foydalanuvchilar bo'limida
  * tayinlanadi.
  */
-export function RollarClient({ pro, initialRoles }: { pro: boolean; initialRoles: RolDTO[] }) {
+export function RollarClient({
+  pro,
+  initialRoles,
+  // App Store 3.1.1: iOS ilovasi ichida tarifni yangilashga (tashqi to'lovga)
+  // yo'naltirish taqiqlanadi — imkoniyat tavsifi qoladi, havola olib tashlanadi.
+  iosIlova = false,
+}: {
+  pro: boolean;
+  initialRoles: RolDTO[];
+  iosIlova?: boolean;
+}) {
   const [roles, setRoles] = useState(initialRoles);
   const [modal, setModal] = useState<"yopiq" | "yangi" | RolDTO>("yopiq");
 
@@ -33,11 +43,14 @@ export function RollarClient({ pro, initialRoles }: { pro: boolean; initialRoles
           <p className="text-fg font-medium">Maxsus rollar — PRO tarif imkoniyati</p>
           <p className="text-sm text-muted">
             Istalgan nomdagi rol (Taminotchi, Omborchi, Haydovchi...) yarating va unga aniq
-            huquqlarni belgilang. Tarifni «Obuna va to'lov» bo'limida yangilang.
+            huquqlarni belgilang.
+            {!iosIlova && " Tarifni «Obuna va to'lov» bo'limida yangilang."}
           </p>
-          <a href="/billing" className="inline-block text-sm font-medium text-brand hover:underline">
-            Obuna va to'lov →
-          </a>
+          {!iosIlova && (
+            <a href="/billing" className="inline-block text-sm font-medium text-brand hover:underline">
+              Obuna va to&apos;lov →
+            </a>
+          )}
         </div>
       </Card>
     );

@@ -2671,3 +2671,105 @@ mijozlar 15/15 · agregat 7/7 · soft-delete 8/8 · audit-qoldiq 10/10 ·
 inventarizatsiya 11/11 · tolov 14/14 · hr 19/19 · hujjatlar 20/20 ·
 tasdiqlash 20/20 · visibility 10/10 · kochirish 8/8 · csv-import 13/13 ·
 crm 7/7 · ai 6/6 · automation 3/3.
+
+---
+
+## 2026-08-16 — iOS ilovasi (App Store) — `claude/ios-app-publish-2jbxks`
+
+**Boshlang'ich holat:** iOS ilovasi umuman YO'Q edi. Repoda faqat Android TWA
+(`twa/`) bor edi; branch `main` bilan bir xil turgan.
+
+**Qo'shildi — `ios-ilova/` (Capacitor 8, SPM):**
+
+- `capacitor.config.js` — ilova `balansa.uz/app` ni ochadi (bosh sahifa EMAS:
+  u yerda tarif narxlari bor, App Store 3.1.1 ga ziyon). Ulanish uzilsa
+  lokal `www/oflayn.html` ko'rsatiladi — oq ekran rad javobiga olib keladi.
+- Xcode loyihasi Linux'da generatsiya qilindi (Capacitor 8 CocoaPods emas,
+  SPM ishlatadi — CI'da `pod install` kerak emas).
+- `Info.plist`: `NSFaceIDUsageDescription`, `ITSAppUsesNonExemptEncryption=false`
+  (har yuklashda eksport savoli berilmaydi), `armv7` → `arm64`, faqat portret,
+  iPhone-only (`TARGETED_DEVICE_FAMILY=1` — iPad skrinshotlari kerak emas).
+- `PrivacyInfo.xcprivacy` — Apple 2024-may talabi. Capacitor yadrosi BO'SH
+  manifest bilan keladi, ishlatilayotgan plaginlar (Preferences→UserDefaults
+  CA92.1, Filesystem→C617.1/E174.1) uchun manifest YO'Q, shuning uchun ilova
+  darajasida e'lon qilindi. `project.pbxproj` ga Resources bosqichiga ulandi.
+- Ikonka/splash brend SVG'sidan generatsiya qilinadi (`npm run ikonka`),
+  ALFASIZ (RGB) — shaffoflik bo'lsa ITMS-90717 xatosi keladi.
+
+**Native qatlam (App Store 4.2 — "sof veb-o'ram" rad javobiga qarshi):**
+
+`src/lib/native/kopruk.ts` — `@capacitor/*` paketlari veb ilovaga
+QO'SHILMADI. Capacitor WKWebView ichiga `window.Capacitor` ni o'zi joylaydi
+va `nativePromise(plagin, metod, sozlama)` beradi; plagin JS paketlari faqat
+shuning tipli o'ramchisi. O'ramchi o'zimizda yozildi → veb bundle
+o'zgarmadi, brauzerda har chaqiruv `null` qaytaradi.
+
+Qo'shilgan native imkoniyatlar: Face ID/Touch ID bilan **ilova qulfi**
+(`IlovaQulfi.tsx` — fondan qaytganda 1 daqiqadan keyin qayta so'raydi;
+biometrika ishlamay qolsa qulf O'ZI ochiladi, aks holda foydalanuvchi
+ilovaga kira olmay qoladi), haptika, native ulashish, status bar mavzuga
+moslashishi, tashqi havolalar SFSafariViewController'da.
+
+**App Store 3.1.1 — iOS ichida tashqi to'lov YO'Q:**
+
+Aniqlash: WKWebView User-Agent oxiriga `BalansaIOS` qo'shiladi; server
+`lib/native/server.ts` orqali o'qiydi (klient emas — sahifa serverda render
+bo'ladi, aks holda to'lov tugmasi bir lahza ko'rinib ketardi).
+Berkitiladi: `/billing` tarif kartochkalari, `BillingBanner` havolasi,
+menyudagi "Obuna va to'lov" (`NavItem.vebda`), PRO upsell havolasi.
+**Veb va Android O'ZGARMADI** — test bilan qo'riqlanadi.
+
+> Natijasi: muddati tugagan direktor iOS'dan to'lay olmaydi (veb kerak).
+> Bu Apple qoidasining narxi; muqobil — IAP, komissiyasi 15–30%.
+
+**App Store 5.1.1(v) — ilova ichida hisobni o'chirish:**
+
+Ro'yxatdan o'tish bor ekan, o'chirish ham ilova ichidan bo'lishi SHART.
+Yangi: `Sozlamalar → Hisobni o'chirish` (faqat OWNER, tasdiq uchun kompaniya
+nomi qo'lda yoziladi) → kirish darhol yopiladi → 30 kun bekor qilish oynasi
+(`/hisob-ochirilmoqda`) → `/api/cron/hisob-ochirish` butunlay o'chiradi.
+
+O'chirish tartibi `ZAXIRA_JADVALLARI` ning TESKARISI: zaxira ro'yxati
+bog'liqlik tartibida saqlanadi (jadval o'zi murojaat qiladiganlardan keyin),
+demak teskarisi — murojaat qiluvchi avval o'chadi, FK buzilmaydi. Mavjud
+invariant qayta ishlatildi, yangi ro'yxat yaratilmadi.
+
+**FAIL-CLOSED:** zaxira ro'yxatidagi jadval `ochirishUsuli()` da
+tasniflanmasa o'chirish umuman BOSHLANMAYDI (yarim o'chirilgan kompaniya
+yoki bazada qolib ketgan mijoz ma'lumotidan ko'ra to'xtagan yaxshi).
+`tests/hisob-ochirish.test.ts` buni majburlaydi.
+
+Maxfiylik siyosati matni ham yangilandi (endi "bizga yozing" emas —
+ilova ichidagi yo'l ko'rsatilgan).
+
+**Migratsiya:** `20260816150000_hisob_ochirish` — faqat 2 ta NULLABLE ustun
+(`Tenant.deletionRequestedAt`, `deletionRequestedBy`). Jadval qayta
+qurilmaydi, mavjud qatorlar o'zgarmaydi. `migrations-postgres` qayta
+generatsiya qilindi (`npm run pg:migratsiya`).
+
+**Chiqarish (Mac SHART EMAS):** `.github/workflows/ios-build.yml` —
+GitHub macOS runner'ida quriladi, sertifikat App Store Connect API kaliti
+bilan avtomatik yaratiladi (`-allowProvisioningUpdates`), vaqtinchalik
+kalit zanjirida turadi va ish oxirida o'chiriladi. Build raqami
+`github.run_number` dan (takrorlanmaydi).
+
+`ios-ilova/app-store/metadata.md` — do'kon matnlari tayyor. **App Store
+sahifasida o'zbek tili YO'Q**, shuning uchun sahifa inglizcha/ruscha, ilova
+o'zi o'zbekcha qoladi; App Review Notes'da har ekran inglizcha izohlangan
+(aks holda tekshiruvchi tilni tushunmay rad etishi mumkin).
+
+`ios-ilova/scripts/skrinshot.mjs` — 1320x2868 skrinshotlar (native bilan bir
+xil User-Agent). Natija `.gitignore` da: haqiqiy hisobdan olinsa MIJOZ
+MOLIYAVIY MA'LUMOTI bo'ladi.
+
+**Tekshirildi:** build ✅ · smoke (brauzer) 7/7 · hisob-ochirish 11/11 (YANGI)
+· modules 16/16 (YANGI: iOS'da to'lov havolasi berkitilishi) · billing 22/22 ·
+isolation 22/22 · izolyatsiya-royxati 9/9 · backup 6/6 · postgres 2/2 ·
+migratsiya 10/10 · superadmin 10/10 · signup 11/11 · visibility 10/10 ·
+pro 22/22 · kassa 11/11 · qarz 16/16 · kunlik 27/27 · smena 14/14 ·
+tolov 14/14 · audit 12/12 · soft-delete 8/8 · atomik 6/6.
+
+**QOLGAN QADAMLAR (loyiha egasi bajaradi — kod tomondan hammasi tayyor):**
+Apple Developer obunasi ($99/yil), 4 ta GitHub secret, App Store Connect'da
+ilova yozuvi + demo hisob, skrinshotlar, "Submit". Batafsil:
+`docs/IOS-APP-STORE.md`.

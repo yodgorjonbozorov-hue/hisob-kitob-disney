@@ -75,9 +75,11 @@ test("computeNav: aktiv biznes omborli bo'lmasa ham ombor ko'rinmaydi", () => {
   assert.ok(!items.some((i: any) => i.href === "/app/sotuv"));
 });
 
-test("computeNav: SELLER faqat Yozuvlar ko'radi", () => {
+test("computeNav: SELLER faqat Yozuvlar (va Sozlamalar) ko'radi", () => {
   const items = registry.computeNav({ rol: "SELLER", yoqilgan: new Set(["MOLIYA", "OMBOR", "BOSHQARUV"]), omborli: true });
-  assert.deepEqual(items.map((i: any) => i.href), ["/app/tranzaksiyalar"]);
+  // "Sozlamalar" HAR rolda bor: ilova qulfi qurilmaga tegishli, hisobni
+  // o'chirish esa App Store 5.1.1(v) talabi — ikkalasi ham topilishi oson bo'lishi kerak.
+  assert.deepEqual(items.map((i: any) => i.href), ["/app/tranzaksiyalar", "/app/sozlamalar"]);
 });
 
 test("computeNav: CASHIER — yozuvlar, qarzlar, smena va (omborli bo'lsa) sotuv", () => {
@@ -90,6 +92,7 @@ test("computeNav: CASHIER — yozuvlar, qarzlar, smena va (omborli bo'lsa) sotuv
     "/app/kassam",
     "/app/sotuv",
     "/app/smena",
+    "/app/sozlamalar",
   ]);
 });
 
@@ -100,6 +103,20 @@ test("computeNav: OMBORSIZ biznesda ham Qarzlar ko'rinadi", () => {
   const hrefs = items.map((i: any) => i.href);
   assert.ok(hrefs.includes("/app/qarzlar"));
   assert.ok(!hrefs.includes("/app/sotuv"));
+});
+
+test("computeNav: iOS ilovasida 'Obuna va to'lov' menyuda ko'rinmaydi (App Store 3.1.1)", () => {
+  const holat = { rol: "OWNER" as const, yoqilgan: new Set(["MOLIYA", "BOSHQARUV"]), omborli: false };
+
+  // Veb / Android — havola joyida.
+  const veb = registry.computeNav(holat).map((i: any) => i.href);
+  assert.ok(veb.includes("/billing"), "veb'da to'lov havolasi qolishi kerak");
+
+  // iOS ilovasi — tashqi to'lovga yo'naltirish taqiqlanadi.
+  const ios = registry.computeNav({ ...holat, iosIlova: true }).map((i: any) => i.href);
+  assert.ok(!ios.includes("/billing"), "iOS ilovasida to'lov havolasi bo'lmasligi kerak");
+  // Qolgan menyu O'ZGARMAYDI — faqat bitta havola olib tashlanadi.
+  assert.deepEqual(ios, veb.filter((h: string) => h !== "/billing"));
 });
 
 test("computeMobileTabs: maksimal 3 tab", () => {

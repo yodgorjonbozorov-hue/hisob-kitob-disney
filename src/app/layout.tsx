@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Manrope, Poppins } from "next/font/google";
 import { BRAND } from "@/lib/brand";
 import { PwaSetup } from "@/components/PwaSetup";
+import { NativeSetup } from "@/components/native/NativeSetup";
 import "./globals.css";
 
 const inter = Inter({
@@ -90,6 +91,8 @@ export default function RootLayout({
       <body>
         {children}
         <PwaSetup />
+        {/* Native iOS ilovasi ichida ishlaydi; brauzerda hech narsa qilmaydi. */}
+        <NativeSetup />
       </body>
     </html>
   );

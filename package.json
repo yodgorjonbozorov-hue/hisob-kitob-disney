@@ -44,6 +44,7 @@
     "test:visibility": "node -r ts-node/register tests/visibility.test.ts",
     "test:signup": "node -r ts-node/register tests/signup.test.ts",
     "test:billing": "node -r ts-node/register tests/billing.test.ts",
+    "test:hisob-ochirish": "node -r ts-node/register tests/hisob-ochirish.test.ts",
     "test:superadmin": "node -r ts-node/register tests/superadmin.test.ts",
     "test:modules": "node -r ts-node/register tests/modules.test.ts",
     "test:crm": "node -r ts-node/register tests/crm.test.ts",

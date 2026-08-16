@@ -25,6 +25,13 @@ export interface NavItem {
   rollar: Rol[];
   /** Faqat PRO tarifda ko'rinadi — boshqa mijozlar menyusi O'ZGARMAYDI. */
   faqatPro?: boolean;
+  /**
+   * iOS ilovasida KO'RSATILMAYDI. App Store 3.1.1: raqamli obunani ilovadan
+   * tashqarida to'lashga yo'naltirish taqiqlanadi, shuning uchun "Obuna va
+   * to'lov" havolasi native ilovada menyudan olib tashlanadi. Veb va Android
+   * o'zgarmaydi.
+   */
+  vebda?: boolean;
 }
 
 export interface ModulTarifi {
@@ -67,6 +74,10 @@ export const MODULLAR: ModulTarifi[] = [
       { href: "/app/kassam", label: "Mening kassam", icon: "cash", tartib: 17, rollar: ["OWNER", "ADMIN", "CASHIER"] },
       { href: "/app/takroriy", label: "Takroriy", icon: "repeat", tartib: 40, rollar: BOSHQARUVCHILAR },
       { href: "/app/smena", label: "Kun yakuni", icon: "shift", tartib: 41, rollar: ["OWNER", "ADMIN", "CASHIER"] },
+      // Shaxsiy sozlamalar (ilova qulfi) va hisobni o'chirish. HAR rol ko'radi:
+      // qulf qurilmaga tegishli, o'chirish esa App Store 5.1.1(v) talabi —
+      // topish oson bo'lishi kerak.
+      { href: "/app/sozlamalar", label: "Sozlamalar", icon: "settings", tartib: 57, rollar: HAMMA },
     ],
   },
   {
@@ -204,7 +215,7 @@ export const MODULLAR: ModulTarifi[] = [
       { href: "/app/admin/ochirilganlar", label: "O'chirilganlar", icon: "trash", tartib: 53, rollar: BOSHQARUVCHILAR },
       { href: "/app/admin/audit", label: "Audit jurnali", icon: "audit", tartib: 54, rollar: BOSHQARUVCHILAR },
       { href: "/app/sozlamalar/modullar", label: "Modullar", icon: "modules", tartib: 55, rollar: ["OWNER"] },
-      { href: "/billing", label: "Obuna va to'lov", icon: "billing", tartib: 56, rollar: BOSHQARUVCHILAR },
+      { href: "/billing", label: "Obuna va to'lov", icon: "billing", tartib: 56, rollar: BOSHQARUVCHILAR, vebda: true },
     ],
   },
 ];
@@ -232,6 +243,8 @@ export interface NavHolati {
   avto?: boolean;
   /** Tenant PRO tarifdami — `faqatPro` havolalar faqat shunda ko'rinadi. */
   pro?: boolean;
+  /** So'rov iOS ilovasidan kelganmi — `vebda` havolalar berkitiladi (3.1.1). */
+  iosIlova?: boolean;
 }
 
 /** Avto rejimidagi biznes uchun OMBOR moduli yorliqlari (lib/biznesTuri.ts bilan mos). */
@@ -241,7 +254,14 @@ const AVTO_YORLIQLAR: Record<string, string> = {
 };
 
 /** Sidebar/menyu uchun tartiblangan havolalar ro'yxati. */
-export function computeNav({ rol, yoqilgan, omborli, avto = false, pro = false }: NavHolati): NavItem[] {
+export function computeNav({
+  rol,
+  yoqilgan,
+  omborli,
+  avto = false,
+  pro = false,
+  iosIlova = false,
+}: NavHolati): NavItem[] {
   const items: NavItem[] = [];
   for (const m of MODULLAR) {
     if (!m.core && !yoqilgan.has(m.code)) continue;
@@ -250,6 +270,7 @@ export function computeNav({ rol, yoqilgan, omborli, avto = false, pro = false }
     for (const item of m.nav) {
       if (!item.rollar.includes(rol)) continue;
       if (item.faqatPro && !pro) continue;
+      if (item.vebda && iosIlova) continue;
       const label = avto ? AVTO_YORLIQLAR[item.href] ?? item.label : item.label;
       items.push(label === item.label ? item : { ...item, label });
     }

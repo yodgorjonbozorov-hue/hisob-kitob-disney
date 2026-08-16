@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CAPACITOR_DEBUG</key>
+	<string>$(CAPACITOR_DEBUG)</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>uz</string>
+	<!-- Ilova interfeysi o'zbekcha. App Store sahifasi tili alohida (u yerda
+	     o'zbek yo'q — sahifa inglizcha/ruscha to'ldiriladi). -->
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>uz</string>
+	</array>
+	<key>CFBundleDisplayName</key>
+	<string>Balansa</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
+
+	<!-- Face ID / Touch ID: ilovani qulflash uchun. Bu matn foydalanuvchiga
+	     tizim oynasida ko'rinadi. Bo'lmasa ilova Face ID chaqirilganda
+	     yiqiladi va App Store rad etadi. -->
+	<key>NSFaceIDUsageDescription</key>
+	<string>Balansa moliyaviy ma'lumotlaringizni himoyalash uchun ilovani ochishda Face ID so'raydi.</string>
+
+	<!-- Eksport shifrlash: faqat standart HTTPS ishlatiladi. `false` bo'lsa
+	     har yuklashda savol berilmaydi (publish tezlashadi). -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Default Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+					<key>UISceneStoryboardFile</key>
+					<string>Main</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<!-- arm64: Capacitor shabloni `armv7` (32-bit, eskirgan) bilan keladi —
+	     u bilan App Store validatsiyasi ogohlantirish beradi. -->
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+	</array>
+	<!-- Interfeys telefon uchun tik holatda loyihalangan (PWA manifestida ham
+	     `portrait`). Yotiq holat qo'llab-quvvatlanmaydi. -->
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<true/>
+</dict>
+</plist>

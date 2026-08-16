@@ -13,6 +13,7 @@ import { ToastProvider } from "@/components/ui/Toast";
 import { CommandPalette } from "@/components/CommandPalette";
 import { BillingBanner } from "@/components/BillingBanner";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
+import { iosIlovadanMi } from "@/lib/native/server";
 
 export default async function ProtectedLayout({
   children,
@@ -48,6 +49,8 @@ export default async function ProtectedLayout({
     avto: activeAvto,
     // PRO havolalar (Rollar va huquqlar) faqat PRO mijozda — boshqalar menyusi o'zgarmaydi.
     pro: isPro(ctx.tenant.plan),
+    // iOS ilovasida "Obuna va to'lov" menyudan olib tashlanadi (App Store 3.1.1).
+    iosIlova: iosIlovadanMi(),
   };
   const navItems = computeNav(navHolati);
   const mobileTabs = computeMobileTabs(navHolati);
@@ -72,7 +75,7 @@ export default async function ProtectedLayout({
         />
         <main className="flex-1 p-4 md:p-8 pb-24 lg:pb-8">
           {session.impersonatedBy && <ImpersonationBanner ism={session.ism} />}
-          <BillingBanner access={access} />
+          <BillingBanner access={access} iosIlova={iosIlovadanMi()} />
           {children}
         </main>
         <BottomNav ism={session.ism} rol={session.rol} tabs={mobileTabs} menyu={menyu} />

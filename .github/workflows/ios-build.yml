@@ -1,0 +1,155 @@
+# iOS ilovasini qurish va App Store Connect'ga (TestFlight) yuklash.
+#
+# NEGA BULUTDA: iOS ilovasini faqat macOS + Xcode qura oladi. GitHub'ning
+# macOS runner'i shuni beradi — Mac sotib olish shart emas.
+#
+# IMZOLASH: sertifikat va profil repoga QO'YILMAYDI. Xcode ularni App Store
+# Connect API kaliti bilan o'zi yaratadi/yuklaydi (`-allowProvisioningUpdates`).
+# Kalit — GitHub Secrets'da, faqat shu ish davomida vaqtinchalik faylga yoziladi.
+#
+# KERAKLI SECRETS (Settings → Secrets and variables → Actions):
+#   APPSTORE_KEY_ID      — App Store Connect API kaliti ID (masalan ABC123XYZ)
+#   APPSTORE_ISSUER_ID   — Issuer ID (UUID ko'rinishida)
+#   APPSTORE_PRIVATE_KEY — .p8 faylning TO'LIQ matni (BEGIN/END qatorlari bilan)
+#   APPLE_TEAM_ID        — Developer hisobidagi Team ID (10 belgi)
+# Kalit roli kamida "App Manager" bo'lsin — pastroq rol sertifikat yarata olmaydi.
+#
+# Batafsil qo'llanma: docs/IOS-APP-STORE.md
+name: iOS qurilishi
+
+on:
+  push:
+    branches: [main]
+    paths: ["ios-ilova/**", ".github/workflows/ios-build.yml"]
+  workflow_dispatch:
+    inputs:
+      yuklash:
+        description: "App Store Connect'ga yuklansinmi? (yo'q — faqat quriladi)"
+        type: boolean
+        default: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: ios-ilova/package-lock.json
+
+      - name: Bog'liqliklar
+        working-directory: ios-ilova
+        run: npm ci
+
+      - name: Capacitor sinxronizatsiyasi
+        working-directory: ios-ilova
+        # `cap sync` generatsiya qilinadigan fayllarni (public/, capacitor.config.json,
+        # Package.swift) yangilaydi — ular repoda saqlanmaydi.
+        run: npx cap sync ios
+
+      - name: Build raqami
+        # Har yuklash UNIKAL build raqamiga ega bo'lishi shart, aks holda App Store
+        # Connect rad etadi. `run_number` monoton o'sadi va takrorlanmaydi.
+        run: echo "BUILD_RAQAMI=${{ github.run_number }}" >> "$GITHUB_ENV"
+
+      - name: API kalitini tayyorlash
+        env:
+          KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
+          KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+        run: |
+          if [ -z "$KEY" ] || [ -z "$KEY_ID" ]; then
+            echo "::error::APPSTORE_PRIVATE_KEY yoki APPSTORE_KEY_ID secret'i yo'q. docs/IOS-APP-STORE.md ga qarang."
+            exit 1
+          fi
+          # Kalit ish tugashi bilan yo'q bo'ladigan vaqtinchalik papkada turadi.
+          mkdir -p "$RUNNER_TEMP/private_keys"
+          printf '%s\n' "$KEY" > "$RUNNER_TEMP/private_keys/AuthKey_${KEY_ID}.p8"
+          chmod 600 "$RUNNER_TEMP/private_keys/AuthKey_${KEY_ID}.p8"
+
+      - name: Vaqtinchalik kalit zanjiri
+        # Xcode yaratgan imzolash sertifikati shu zanjirga tushadi. Runner'ning
+        # asosiy zanjiriga tegmaymiz — ish tugashi bilan hammasi yo'qoladi.
+        run: |
+          PAROL="$(uuidgen)"
+          ZANJIR="$RUNNER_TEMP/balansa.keychain-db"
+          security create-keychain -p "$PAROL" "$ZANJIR"
+          security set-keychain-settings -lut 21600 "$ZANJIR"
+          security unlock-keychain -p "$PAROL" "$ZANJIR"
+          security list-keychains -d user -s "$ZANJIR" $(security list-keychains -d user | tr -d '"')
+          echo "ZANJIR=$ZANJIR" >> "$GITHUB_ENV"
+
+      - name: Arxiv (xcodebuild archive)
+        working-directory: ios-ilova/ios/App
+        env:
+          KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          xcodebuild archive \
+            -project App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath "$RUNNER_TEMP/Balansa.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/private_keys/AuthKey_${KEY_ID}.p8" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            CURRENT_PROJECT_VERSION="$BUILD_RAQAMI" \
+            OTHER_CODE_SIGN_FLAGS="--keychain $ZANJIR"
+
+      - name: Eksport sozlamalari
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>teamID</key><string>${{ secrets.APPLE_TEAM_ID }}</string>
+            <key>uploadSymbols</key><true/>
+            <key>signingStyle</key><string>automatic</string>
+            <key>destination</key><string>${{ (github.event_name == 'workflow_dispatch' && !inputs.yuklash) && 'export' || 'upload' }}</string>
+          </dict>
+          </plist>
+          PLIST
+          cat "$RUNNER_TEMP/ExportOptions.plist"
+
+      - name: Eksport va yuklash
+        env:
+          KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+        run: |
+          # `destination=upload` bo'lsa shu qadamning O'ZI App Store Connect'ga
+          # yuboradi — alohida altool chaqiruvi kerak emas.
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Balansa.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/chiqish" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/private_keys/AuthKey_${KEY_ID}.p8" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER_ID"
+
+      - name: IPA'ni artefakt sifatida saqlash
+        # Yuklash rejimida ham foydali: qanday build yuborilgani qoladi.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: balansa-ios-${{ github.run_number }}
+          path: ${{ runner.temp }}/chiqish
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Kalitlarni tozalash
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/private_keys"
+          security delete-keychain "$ZANJIR" || true

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { X, Share, PlusSquare } from "lucide-react";
+import { nativeMi } from "@/lib/native/kopruk";
 
 /** Chrome/Edge beruvchi o'rnatish hodisasi (standart tipda yo'q). */
 interface BeforeInstallPromptEvent extends Event {
@@ -44,7 +45,9 @@ export function PwaSetup() {
       window.matchMedia("(display-mode: standalone)").matches ||
       // Eski iOS Safari'da standalone alohida maydonda.
       ("standalone" in navigator && (navigator as { standalone?: boolean }).standalone === true);
-    if (standalone || radEtilganmi()) return;
+    // App Store ilovasi ICHIDA "ilovani o'rnating" taklifi ma'nosiz —
+    // foydalanuvchi allaqachon ilovada (App Store buni ham rad sababi qiladi).
+    if (standalone || nativeMi() || radEtilganmi()) return;
 
     const mobil = window.matchMedia("(max-width: 1024px)").matches;
     if (!mobil) return;

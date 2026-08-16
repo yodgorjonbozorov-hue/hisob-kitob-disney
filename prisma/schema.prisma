@@ -26,6 +26,16 @@ model Tenant {
   /// talab qilinmaydi: obuna tugasa ham kirish yopilmaydi, eslatma yuborilmaydi.
   /// Bloklash bundan ustun turadi.
   bepul            Boolean        @default(false)
+  /// HISOBNI O'CHIRISH so'ralgan vaqt (App Store 5.1.1(v) — ilova ichidan
+  /// o'chirish majburiy). null — so'ralmagan.
+  ///
+  /// So'ralgandan keyin kirish DARHOL yopiladi, ma'lumot esa 30 kun saqlanadi:
+  /// shu muddat ichida egasi fikridan qaytsa tiklay oladi. Muddat o'tgach cron
+  /// (`/api/cron/hisob-ochirish`) tenantni butunlay o'chiradi.
+  deletionRequestedAt DateTime?
+  /// Kim so'ragan (User.id) — audit uchun. FK ATAYLAB yo'q: foydalanuvchi
+  /// tenant bilan birga o'chiriladi, bog'lanish o'chirishni to'sib qo'ymasin.
+  deletionRequestedBy String?
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   businesses       Business[]

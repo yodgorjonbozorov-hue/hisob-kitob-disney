@@ -8,6 +8,8 @@ CREATE TABLE "Tenant" (
     "currentPeriodEnd" TIMESTAMP(3),
     "plan" TEXT NOT NULL DEFAULT 'STANDARD',
     "bepul" BOOLEAN NOT NULL DEFAULT false,
+    "deletionRequestedAt" TIMESTAMP(3),
+    "deletionRequestedBy" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 

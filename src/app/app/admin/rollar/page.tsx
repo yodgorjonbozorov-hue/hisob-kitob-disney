@@ -5,6 +5,7 @@ import { runWithTenant } from "@/lib/db/tenantContext";
 import { isManager } from "@/lib/auth/roles";
 import { isPro } from "@/lib/billing/pro";
 import { RollarClient } from "./RollarClient";
+import { iosIlovadanMi } from "@/lib/native/server";
 
 export default async function RollarPage() {
   const { session, tenantId, tenant } = await requireTenantPage();
@@ -35,6 +36,7 @@ export default async function RollarPage() {
         <h1 className="text-2xl font-bold text-fg">Rollar va huquqlar</h1>
         <RollarClient
           pro={pro}
+          iosIlova={iosIlovadanMi()}
           initialRoles={roles.map((r) => ({
             id: r.id,
             nomi: r.nomi,

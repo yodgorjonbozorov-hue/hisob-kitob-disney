@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Receipt, FileText, PiggyBank, Bell, CalendarCheck, Repeat, Wallet, Banknote,
   Package, ShoppingCart, HandCoins, Truck, Factory, Building2, Tags, Users, Trash2, ScrollText,
   BadgeCheck, Gavel, Contact2, IdCard, CalendarDays, FileSignature, ClipboardList,
-  LogOut, KeyRound, CreditCard, Blocks, Handshake, BookUser, ListChecks, Sparkles, ShieldCheck, type LucideIcon,
+  LogOut, KeyRound, CreditCard, Blocks, Handshake, BookUser, ListChecks, Sparkles, ShieldCheck, Settings, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ROL_LABEL, type Rol } from "@/lib/auth/roles";
@@ -61,6 +61,7 @@ const IKONLAR: Record<string, LucideIcon> = {
   contacts: BookUser,
   tasks: ListChecks,
   ai: Sparkles,
+  settings: Settings,
 };
 
 export default function Sidebar({ ism, rol, businesses, activeBusinessId, navItems }: Props) {

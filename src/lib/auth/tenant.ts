@@ -26,6 +26,12 @@ export interface TenantInfo {
   plan: string;
   /** Doimiy bepul mijoz — obuna guard'i qo'llanmaydi. */
   bepul: boolean;
+  /**
+   * Hisobni o'chirish so'ralgan vaqt. null bo'lmasa kirish YOPIQ —
+   * foydalanuvchi faqat "o'chirilmoqda" sahifasini ko'radi va u yerdan
+   * bekor qila oladi (lib/db/hisobOchirish.ts).
+   */
+  deletionRequestedAt: Date | null;
 }
 
 /** Joriy so'rovning tenant konteksti: sessiya + tenant + hisoblangan kirish rejimi. */
@@ -52,6 +58,7 @@ const tenantByIdCached = requestCache(async (tenantId: string): Promise<TenantIn
       currentPeriodEnd: true,
       plan: true,
       bepul: true,
+      deletionRequestedAt: true,
     },
   })
 );
@@ -111,6 +118,11 @@ export async function requireTenantPage(): Promise<TenantContext> {
   if (!ctx) {
     redirect("/login");
   }
+  // O'chirish so'ralgan bo'lsa ish ekranlari YOPIQ — obuna tekshiruvidan ham
+  // oldin, chunki o'chirilayotgan kompaniyani /billing ga yuborishning ma'nosi yo'q.
+  if (ctx.tenant.deletionRequestedAt) {
+    redirect(OCHIRISH_SAHIFASI);
+  }
   if (ctx.access.mode === "BILLING_ONLY") {
     redirect("/billing");
   }
@@ -127,6 +139,31 @@ export async function requireBillingPage(): Promise<TenantContext> {
   if (!ctx) {
     redirect("/login");
   }
+  if (ctx.tenant.deletionRequestedAt) {
+    redirect(OCHIRISH_SAHIFASI);
+  }
+  return ctx;
+}
+
+/** "Hisob o'chirilmoqda" sahifasi — yagona manba (redirect halqasi bo'lmasin). */
+const OCHIRISH_SAHIFASI = "/hisob-ochirilmoqda";
+
+/**
+ * "Hisob o'chirilmoqda" sahifasining O'ZI uchun: obuna ham, o'chirish ham
+ * tekshirilmaydi. O'chirish so'ralmagan bo'lsa ilovaga qaytariladi.
+ */
+export async function requireOchirishPage(): Promise<TenantContext> {
+  const session = await requireUser();
+  if (session.rol === "SUPERADMIN") {
+    redirect("/superadmin");
+  }
+  const ctx = await buildContext(session);
+  if (!ctx) {
+    redirect("/login");
+  }
+  if (!ctx.tenant.deletionRequestedAt) {
+    redirect("/app");
+  }
   return ctx;
 }
 
@@ -141,6 +178,12 @@ export interface WithTenantOptions {
   readonlyOk?: boolean;
   /** Modul kodi (masalan "OMBOR") — yoqilmagan/rol ruxsatsiz bo'lsa 403. */
   module?: string;
+  /**
+   * true bo'lsa hisob o'chirilayotgan bo'lsa ham route ishlaydi.
+   * FAQAT o'chirishni BEKOR QILISH endpointi uchun — aks holda foydalanuvchi
+   * fikridan qaytolmay qoladi.
+   */
+  ochirishOk?: boolean;
 }
 
 type RouteHandler<Ctx> = (
@@ -158,6 +201,14 @@ export function withTenant<Ctx = unknown>(handler: RouteHandler<Ctx>, opts: With
   return async (request: NextRequest, routeCtx: Ctx): Promise<NextResponse | Response> => {
     try {
       const ctx = await requireTenantApi();
+
+      // Hisob o'chirilmoqda — barcha amallar yopiq (bekor qilishdan tashqari).
+      if (ctx.tenant.deletionRequestedAt && !opts.ochirishOk) {
+        return NextResponse.json(
+          { error: "Hisob o'chirilmoqda — amallar vaqtincha yopilgan.", ochirilmoqda: true },
+          { status: 403 },
+        );
+      }
 
       if (!opts.billing) {
         if (ctx.access.mode === "BILLING_ONLY") {

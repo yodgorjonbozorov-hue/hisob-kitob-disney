@@ -18,7 +18,7 @@ export default function MaxfiylikPage() {
     <div className="max-w-2xl mx-auto px-5 py-10 space-y-6 text-sm text-fg leading-relaxed">
       <Logo variant="full" height={32} />
       <h1 className="text-2xl font-bold">Maxfiylik siyosati</h1>
-      <p className="text-muted">Oxirgi yangilanish: 2026-yil 11-avgust</p>
+      <p className="text-muted">Oxirgi yangilanish: 2026-yil 16-avgust</p>
 
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">Qanday ma&apos;lumot yig&apos;amiz</h2>
@@ -53,8 +53,17 @@ export default function MaxfiylikPage() {
       <section className="space-y-2">
         <h2 className="text-lg font-semibold">Ma&apos;lumotni o&apos;chirish</h2>
         <p>
-          Hisobingiz va unga tegishli barcha ma&apos;lumotlarni o&apos;chirishni istasangiz,
-          quyidagi manzil orqali murojaat qiling — so&apos;rov 30 kun ichida bajariladi.
+          Hisobni o&apos;chirishni <span className="font-medium">ilovaning o&apos;zidan</span>{" "}
+          boshlashingiz mumkin: <span className="font-medium">Sozlamalar → Hisobni
+          o&apos;chirish</span>. Buni kompaniya egasi bajaradi va tasdiq uchun kompaniya
+          nomi yoziladi.
+        </p>
+        <p>
+          So&apos;rovdan keyin ilovaga kirish darhol yopiladi. Ma&apos;lumotlar 30 kun
+          saqlanadi — shu muddat ichida o&apos;chirishni bekor qilib, hamma narsani
+          tiklash mumkin. 30 kun o&apos;tgach kompaniyaga tegishli barcha ma&apos;lumot —
+          yozuvlar, ombor, qarzlar, hisobotlar, xodimlar hisoblari va foydalanuvchi
+          profillari — bazadan butunlay o&apos;chiriladi va tiklab bo&apos;lmaydi.
         </p>
       </section>
 
