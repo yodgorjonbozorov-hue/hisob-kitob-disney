@@ -106,6 +106,54 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   DYNAMIC TYPE — foydalanuvchi tizim shriftini o'zgartirsa.
+   Render uchun: `[data-type="xs"]` va `[data-type="xxxl"]`.
+
+   XXXL — eng og'ir sinov: 60 yoshli do'kon egasi shrift o'lchamini
+   oxirigacha kattalashtiradi. Layout BUZILMASLIGI shart (FAZA 8 da
+   har ekran shu rejimda tekshiriladi).
+   ═══════════════════════════════════════════════════════════════════ */
+
+[data-type="xs"] {
+  --t-large-title: 31px;   --lh-large-title: 38px;
+  --t-title-1: 25px;       --lh-title-1: 31px;
+  --t-title-2: 19px;       --lh-title-2: 24px;
+  --t-title-3: 17px;       --lh-title-3: 22px;
+  --t-headline: 14px;      --lh-headline: 19px;
+  --t-body: 14px;          --lh-body: 19px;
+  --t-callout: 13px;       --lh-callout: 18px;
+  --t-subheadline: 12px;   --lh-subheadline: 16px;
+  --t-footnote: 12px;      --lh-footnote: 16px;
+  --t-caption-1: 11px;     --lh-caption-1: 13px;
+  --t-caption-2: 11px;     --lh-caption-2: 13px;
+  --t-amount-xl: 32px;     --lh-amount-xl: 36px;
+  --t-amount-lg: 24px;     --lh-amount-lg: 28px;
+  --t-amount-md: 17px;     --lh-amount-md: 22px;
+}
+
+[data-type="xxxl"] {
+  --t-large-title: 44px;   --lh-large-title: 52px;
+  --t-title-1: 38px;       --lh-title-1: 46px;
+  --t-title-2: 34px;       --lh-title-2: 41px;
+  --t-title-3: 31px;       --lh-title-3: 38px;
+  --t-headline: 28px;      --lh-headline: 34px;
+  --t-body: 28px;          --lh-body: 34px;
+  --t-callout: 26px;       --lh-callout: 32px;
+  --t-subheadline: 25px;   --lh-subheadline: 31px;
+  --t-footnote: 23px;      --lh-footnote: 29px;
+  --t-caption-1: 22px;     --lh-caption-1: 28px;
+  --t-caption-2: 20px;     --lh-caption-2: 25px;
+  /* Pul summasi XXXL da ham EKRANGA SIG'ISHI kerak — shuning uchun u
+     boshqalar bilan bir xil nisbatda o'smaydi (Apple ham `largeTitle`
+     ni cheklaydi). Sig'masa raqam kichrayadi, kesilmaydi. */
+  --t-amount-xl: 44px;     --lh-amount-xl: 50px;
+  --t-amount-lg: 34px;     --lh-amount-lg: 40px;
+  --t-amount-md: 26px;     --lh-amount-md: 32px;
+  /* Tegish maydoni ham o'sadi */
+  --tap-min: 52px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    LIGHT — standart
    ═══════════════════════════════════════════════════════════════════ */
 :root,
@@ -119,10 +167,11 @@
   --bg-sunk: #e6ecf2;        /* input, progress trek */
 
   /* Matn — iOS label ierarxiyasi */
-  --label-1: #0f172a;        /* asosiy */
-  --label-2: #475569;        /* ikkilamchi */
-  --label-3: #64748b;        /* uchlamchi */
-  --label-4: #94a3b8;        /* placeholder / o'chirilgan */
+  --label-1: #0f172a;        /* asosiy        — 17.85:1 oq kartada */
+  --label-2: #475569;        /* ikkilamchi    — 7.58:1 */
+  --label-3: #64748b;        /* uchlamchi     — 4.76:1 */
+  /* TUZATILDI: web'dagi #94a3b8 oq fonda 2.56:1 — AA dan o'tmasdi. */
+  --label-4: #78899e;        /* placeholder   — 3.58:1 (dekorativ chegara 3.0) */
 
   --separator: rgba(15, 23, 42, 0.1);
   --separator-strong: rgba(15, 23, 42, 0.18);
@@ -136,18 +185,30 @@
   --accent-on: #ffffff;
   --accent-mint: #5eead4;    /* logo akssenti, grafik nuqtasi */
 
-  /* Moliyaviy semantika — brend rangi bilan HECH QACHON almashmaydi */
-  --income: #16a34a;
+  /* Moliyaviy semantika — brend rangi bilan HECH QACHON almashmaydi.
+     TUZATILDI (kontrast auditi, design/render/kontrast.mjs):
+       income  #16a34a → 3.30:1 oq fonda, AA dan O'TMASDI → #15803d (5.02:1)
+       debt    #d97706 → 3.19:1                          → #b45309 (5.02:1)
+     Bu ranglar PUL SUMMASINI ko'rsatadi — o'qilmasa ilova ishlamaydi. */
+  --income: #15803d;
   --income-soft: #dcfce7;
   --income-on: #15803d;
   --expense: #dc2626;
   --expense-soft: #fee2e2;
   --expense-on: #b91c1c;
-  --debt: #d97706;
+  --debt: #b45309;
   --debt-soft: #fef3c7;
   --debt-on: #b45309;
-  --warning: #f59e0b;
-  --info: #0ea5e9;
+  --warning: #b45309;
+  --info: #0369a1;
+
+  /* Grafik palitrasi — MATN EMAS, shuning uchun 3:1 yetarli.
+     Brend teal'dan boshlanadi, kategoriyaga doimiy biriktiriladi. */
+  --chart-1: #0f766e;
+  --chart-2: #2f6f91;
+  --chart-3: #b06a4a;
+  --chart-4: #6e7f52;
+  --chart-5: #7a5c82;
 
   /* Material — Liquid Glass (shaffof qatlam) */
   --mat-bg: rgba(255, 255, 255, 0.72);
@@ -179,10 +240,11 @@
   --bg-elevated-2: #132d2b;
   --bg-sunk: #041010;
 
-  --label-1: #e2f0ee;
-  --label-2: #94aca8;
-  --label-3: #688480;
-  --label-4: #4a625e;
+  --label-1: #e2f0ee;        /* 14.30:1 elevated ustida */
+  --label-2: #94aca8;        /*  6.96:1 */
+  /* TUZATILDI: #688480 → 4.15:1 (AA dan o'tmasdi), #4a625e → 2.55:1 */
+  --label-3: #7b9a95;        /*  5.50:1 */
+  --label-4: #5b756f;        /*  3.36:1 (dekorativ) */
 
   --separator: rgba(226, 240, 238, 0.14);
   --separator-strong: rgba(226, 240, 238, 0.24);
@@ -207,6 +269,13 @@
   --debt-on: #fde047;
   --warning: #fbbf24;
   --info: #38bdf8;
+
+  /* Qorong'i fonda grafik ranglari yorqinlashadi */
+  --chart-1: #2dd4bf;
+  --chart-2: #7cb8dc;
+  --chart-3: #e5a184;
+  --chart-4: #a8bd8a;
+  --chart-5: #bfa3c7;
 
   --mat-bg: rgba(19, 45, 43, 0.72);
   --mat-blur: 28px;

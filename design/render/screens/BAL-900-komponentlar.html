@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BAL-900 — Komponent kutubxonasi</title>
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="../base.css">
+<link rel="stylesheet" href="../components.css">
+<style>
+  /* Faqat SHU spesifikatsiya varag'i uchun — ekranlarda ishlatilmaydi. */
+  html, body { height: auto; overflow: visible; }
+  body { background: var(--bg-base); padding-bottom: var(--sp-10); }
+  .bal-head { padding: var(--sp-6) var(--sp-4) var(--sp-2); }
+  .bal-head h1 { font-family: var(--font-display); font-size: 28px; font-weight: 700; color: var(--label-1); }
+  .bal-head p { font-size: var(--t-footnote); color: var(--label-2); margin-top: 4px; }
+  .bal-sec { padding: var(--sp-5) 0 var(--sp-2); }
+  .bal-sec__head { padding: 0 var(--sp-4) var(--sp-3); }
+  .bal-sec__title { font-size: var(--t-headline); font-weight: 620; color: var(--label-1); }
+  .bal-sec__note { font-size: var(--t-caption-1); color: var(--label-3); margin-top: 2px; }
+  .bal-frame { background: var(--bg-base); border-top: 1px solid var(--separator);
+               border-bottom: 1px solid var(--separator); margin-bottom: var(--sp-3); }
+  .bal-frame--pad { padding: var(--sp-4); }
+  .bal-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); align-items: center; }
+</style>
+</head>
+<body data-tall>
+  <div class="bal-head">
+    <h1>Balansa iOS — komponentlar</h1>
+    <p>BAL-900 · 16 guruh · barcha holat · light va dark</p>
+  </div>
+  
+
+<section class="bal-sec">
+  <div class="bal-sec__head">
+    <h2 class="bal-sec__title">1 · Navigation bar</h2>
+    <p class="bal-sec__note">Katta sarlavha → skrollda inline'ga o'tadi</p>
+  </div>
+  <div class="bal-sec__body">
+  <div class="bal-frame"><div class="navbar-large row-between">
+  <div class="navbar-large__title">Yozuvlar</div>
+  <div class="row gap-1"><div class="icon-btn"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M16 16l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="icon-btn"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
+</div></div>
+  <div class="bal-frame"><div class="navbar">
+  <div class="navbar__back"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Orqaga</span></div>
+  <div class="navbar__title truncate">Yozuv tafsiloti</div>
+  <div class="row" style="min-width:64px;justify-content:flex-end"><div class="icon-btn icon-btn--accent"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19h3l9.5-9.5a2.1 2.1 0 0 0-3-3L5 16v3Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
+</div></div>
+  <div class="bal-frame"><div class="navbar">
+  <div class="biz-switch">
+    <div class="biz-switch__logo">C</div>
+    <div class="grow col" style="gap:1px">
+      <div class="t-subheadline truncate" style="font-weight:620">Chorsu Savdo</div>
+      <div class="t-caption-2 c-3">Direktor</div>
+    </div>
+    <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9l7 7 7-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </div>
+  <div class="icon-btn"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a5.5 5.5 0 0 0-5.5 5.5v3.2L5 15.1h14l-1.5-3.4V8.5A5.5 5.5 0 0 0 12 3Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.9 17.4a2.2 2.2 0 0 0 4.2 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="icon-btn__dot"></span></div>
+</div></div>
+</div>
+</section>
+
+
+<section class="bal-sec">
+  <div class="bal-sec__head">
+    <h2 class="bal-sec__title">2 · Tab bar</h2>
+    <p class="bal-sec__note">Rolga qarab quriladi. O'rtada FAB — bosh barmoq zonasining markazi.</p>
+  </div>
+  <div class="bal-sec__body">
+  <div class="bal-frame"><div class="tabbar glass--bar">
+<div class="tab tab--active">
+    <div style="position:relative"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1v-8.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <span class="tab__label">Asosiy</span>
+  </div><div class="tab">
+    <div style="position:relative"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 6.5h15M4.5 12h15M4.5 17.5h9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <span class="tab__label">Yozuvlar</span>
+  </div>
+<div class="tab-fab"><svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+<div class="tab">
+    <div style="position:relative"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7.5v5M12 16h.01" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><span class="tab__badge">3</span></div>
+    <span class="tab__label">Qarzlar</span>
+  </div><div class="tab">
+    <div style="position:relative"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="18" cy="12" r="1.7"/></svg></div>
+    <span class="tab__label">Yana</span>
+  </div>
+</div></div>
+  <div class="bal-frame"><div class="tabbar glass--bar">
+<div class="tab tab--active">
+    <div style="position:relative"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 6.5h15M4.5 12h15M4.5 17.5h9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <span class="tab__label">Yozuvlar</span>
+  </div>
+<div class="tab-fab"><svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+<div class="tab">
+    <div style="position:relative"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 3v2.2M12 18.8V21M4.2 7.5l1.9 1.1M17.9 15.4l1.9 1.1M4.2 16.5l1.9-1.1M17.9 8.6l1.9-1.1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <span class="tab__label">Profil</span>
+  </div>
+</div></div>
+</div>
+</section>
+
+
+<section class="bal-sec">
+  <div class="bal-sec__head">
+    <h2 class="bal-sec__title">3 · Tugmalar</h2>
+    <p class="bal-sec__note">Barcha holat: default · pressed · disabled · loading</p>
+  </div>
+  <div class="bal-sec__body">
+  <div class="bal-row"><div class="btn btn--primary">Saqlash</div><div class="btn btn--primary is-pressed">Saqlash</div><div class="btn btn--primary is-disabled">Saqlash</div></div>
+  <div class="bal-row"><div class="btn btn--primary"><span class="btn__spinner"></span></div><div class="btn btn--secondary">Bekor qilish</div><div class="btn btn--tertiary">Batafsil</div></div>
+  <div class="bal-row"><div class="btn btn--destructive">Oʻchirish</div><div class="btn btn--destructive-soft">Sotuvni bekor qilish</div></div>
+</div>
+</section>
+
+
+<section class="bal-sec">
+  <div class="bal-sec__head">
+    <h2 class="bal-sec__title">4 · Kartalar va statistika</h2>
+    <p class="bal-sec__note">Rangga tayanmaydi — ikona va ishora ham bor</p>
+  </div>
+  <div class="bal-sec__body">
+  <div class="bal-frame bal-frame--pad">
+    <div class="row gap-2">
+      <div class="stat">
+  <div class="stat__head">
+    <div class="stat__icon stat__icon--income"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <span class="t-footnote">Kirdi</span>
+  </div>
+  <div class="stat__value amount amount--md c-1">47 250 000</div>
+</div>
+      <div class="stat">
+  <div class="stat__head">
+    <div class="stat__icon stat__icon--expense"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <span class="t-footnote">Chiqdi</span>
+  </div>
+  <div class="stat__value amount amount--md c-1">34 770 000</div>
+</div>
+    </div>
+    <div class="row gap-2 mt-2">
+      <div class="stat">
+  <div class="stat__head">
+    <div class="stat__icon stat__icon--debt"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7.5v5M12 16h.01" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></div>
+    <span class="t-footnote">Ochiq qarz</span>
+  </div>
+  <div class="stat__value amount amount--md c-1">18 400 000</div>
+</div>
+      <div class="stat">
+  <div class="stat__head">
+    <div class="stat__icon stat__icon--accent"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5.5A2.5 2.5 0 0 1 3 16.5v-8Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M16.5 12.5h.01" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <span class="t-footnote">Kassa</span>
+  </div>
+  <div class="stat__value amount amount--md c-1">3 450 000</div>
+</div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<section class="bal-sec">
+  <div class="bal-sec__head">
+    <h2 class="bal-sec__title">5 · Ro'yxat qatori</h2>
+    <p class="bal-sec__note">Ajratkich matndan boshlanadi (iOS naqshi). Swipe amallari o'ngda.</p>
+  </div>
+  <div class="bal-sec__body">
+  <div class="bal-frame bal-frame--pad">
+    <div class="list"><div class="list-row">
+  <div class="list-row__icon list-row__icon--income"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+  <div class="grow col" style="gap:1px">
+    <span class="t-callout c-1 truncate" style="font-weight:550">Karim aka — qarz toʻlovi</span>
+    <span class="t-caption-1 c-3 truncate">Naqd · 14:20</span>
+  </div>
+  <div class="col" style="align-items:flex-end;gap:1px">
+         <span class="amount amount--md c-income">+2 400 000</span>
+         
+       </div>
+  
+</div><div class="list-row">
+  <div class="list-row__icon list-row__icon--income"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 3.5h2.2l2 8.6h8.4l1.8-6.2H5.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8" cy="19" r="1.5"/><circle cx="16" cy="19" r="1.5"/></svg></div>
+  <div class="grow col" style="gap:1px">
+    <span class="t-callout c-1 truncate" style="font-weight:550">Coca-Cola 1L × 24</span>
+    <span class="t-caption-1 c-3 truncate">Click · 13:05</span>
+  </div>
+  <div class="col" style="align-items:flex-end;gap:1px">
+         <span class="amount amount--md c-income">+336 000</span>
+         
+       </div>
+  
+</div><div class="list-row">
+  <div class="list-row__icon list-row__icon--expense"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+  <div class="grow col" style="gap:1px">
+    <span class="t-callout c-1 truncate" style="font-weight:550">Doʻkon ijarasi — avgust</span>
+    <span class="t-caption-1 c-3 truncate">Naqd · 11:40</span>
+  </div>
+  <div class="col" style="align-items:flex-end;gap:1px">
+         <span class="amount amount--md c-expense">−4 500 000</span>
+         
+       </div>
+  
+</div><div class="list-row">
+  <div class="avatar">D</div>
+  <div class="grow col" style="gap:1px">
+    <span class="t-callout c-1 truncate" style="font-weight:550">Dilshod aka</span>
+    <span class="t-caption-1 c-3 truncate">3 ta ochiq qarz</span>
+  </div>
+  <div class="col" style="align-items:flex-end;gap:1px">
+         <span class="amount amount--md c-debt">1 850 000</span>
+         
+       </div>
+  <span class="chevron"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+</div></div>
+  </div>
+  <div class="bal-frame bal-frame--pad">
+    <div class="list" style="position:relative">
+      <div class="list-row">
+  <div class="list-row__icon list-row__icon--income"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+  <div class="grow col" style="gap:1px">
+    <span class="t-callout c-1 truncate" style="font-weight:550">Chapga surilgan qator</span>
+    <span class="t-caption-1 c-3 truncate">swipe amallari</span>
+  </div>
+  <div class="col" style="align-items:flex-end;gap:1px">
+         <span class="amount amount--md c-income">+120 000</span>
+         
+       </div>
+  
+</div>
+      <div class="swipe">
+        <div class="swipe__act swipe__act--edit"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19h3l9.5-9.5a2.1 2.1 0 0 0-3-3L5 16v3Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Tahrir</div>
+        <div class="swipe__act swipe__act--delete"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 6.5h15M9 6.5V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1.5M6.5 6.5 7.5 20h9l1-13.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Oʻchirish</div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<section class="bal-sec">
+  <div class="bal-sec__head">
+    <h2 class="bal-sec__title">6 · Maydonlar</h2>
+    <p class="bal-sec__note">Tegish maydoni 44pt. Xato maydon ostida, qizil chegara bilan.</p>
+  </div>
+  <div class="bal-sec__body">
+  <div class="bal-frame bal-frame--pad">
+    <div class="field">
+  <span class="field__label">Izoh</span>
+  <div class="input"><span class="input__placeholder">Masalan: ijara toʻlovi</span></div>
+</div>
+    <div class="field">
+  <span class="field__label">Mijoz</span>
+  <div class="input input--focus"><span class="">Karim aka</span></div>
+</div>
+    <div class="field">
+      <span class="field__label">Summa</span>
+      <div class="input input--error"><span>0</span></div>
+      <div class="field__error">Summa 0 dan katta boʻlishi kerak</div>
+    </div>
+    <div class="search"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M16 16l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="search__input">Mahsulot yoki mijoz</span></div>
+  </div>
+</div>
+</section>
+
+
+<section class="bal-sec">
+  <div class="bal-sec__head">
+    <h2 class="bal-sec__title">7 · Summa kiritish</h2>
+    <p class="bal-sec__note">Ekranning bosh elementi — 40px, tabular, rang segmentga bog'liq</p>
+  </div>
+  <div class="bal-sec__body">
+  <div class="bal-frame bal-frame--pad">
+    <div class="segmented"><div class="segmented__item segmented__item--active segmented__item--income">Kirim</div><div class="segmented__item segmented__item--income">Chiqim</div></div>
+    <div class="amount-input">
+      <span class="amount-input__value amount-input__value--income">250 000</span><span class="amount-input__caret"></span>
+      <span class="amount-input__unit">soʻm</span>
+    </div>
+  </div>
+  <div class="bal-frame bal-frame--pad">
+    <div class="segmented"><div class="segmented__item segmented__item--expense">Kirim</div><div class="segmented__item segmented__item--active segmented__item--expense">Chiqim</div></div>
+    <div class="amount-input">
+      <span class="amount-input__value amount-input__value--expense">4 500 000</span>
+      <span class="amount-input__unit">soʻm</span>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<section class="bal-sec">
+  <div class="bal-sec__head">
+    <h2 class="bal-sec__title">8 · Stepper (kasr qo'llab-quvvatlaydi)</h2>
+    <p class="bal-sec__note">1.5 kg — MISSING backend'da, lekin komponent tayyor</p>
+  </div>
+  <div class="bal-sec__body">
+  <div class="bal-row"><div class="stepper">
+  <div class="stepper__btn"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+  <div class="stepper__value">3<span class="stepper__unit"> dona</span></div>
+  <div class="stepper__btn"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+</div><div class="stepper">
+  <div class="stepper__btn"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+  <div class="stepper__value">1.5<span class="stepper__unit"> kg</span></div>
+  <div class="stepper__btn"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+</div><div class="stepper">
+  <div class="stepper__btn"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+  <div class="stepper__value">0.75<span class="stepper__unit"> litr</span></div>
+  <div class="stepper__btn"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+</div></div>
+</div>
+</section>
+
+
+<section class="bal-sec">
+  <div class="bal-sec__head">
+    <h2 class="bal-sec__title">9 · Segmented va chiplar</h2>
+    
+  </div>
+  <div class="bal-sec__body">
+  <div class="bal-frame bal-frame--pad">
+    <div class="segmented"><div class="segmented__item segmented__item--active">Hammasi</div><div class="segmented__item">Kirim</div><div class="segmented__item">Chiqim</div></div>
+    <div class="row gap-2 mt-3" style="flex-wrap:wrap">
+      <span class="chip chip--accent">Bu oy</span><span class="chip chip--income">Kirim</span><span class="chip chip--expense">Chiqim</span><span class="chip chip--debt">Qarz</span><span class="chip">Naqd</span><span class="chip chip--selected">Tanlangan</span>
+    </div>
+    <div class="row gap-2 mt-3" style="flex-wrap:wrap">
+      <span class="chip chip--tap">Ijara</span><span class="chip chip--tap">Maosh</span><span class="chip chip--tap">Tovar</span>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<section class="bal-sec">
+  <div class="bal-sec__head">
+    <h2 class="bal-sec__title">10 · Progress va aging</h2>
+    <p class="bal-sec__note">Qarz yoshi — 4 pog'ona (backend PARTIAL)</p>
+  </div>
+  <div class="bal-sec__body">
+  <div class="bal-frame bal-frame--pad">
+    <div class="bar"><div class="bar__seg" style="width:34%;background:var(--income)"></div><div class="bar__seg" style="width:28%;background:var(--debt)"></div><div class="bar__seg" style="width:22%;background:var(--warning)"></div><div class="bar__seg" style="width:16%;background:var(--expense)"></div></div>
+    <div class="aging-legend">
+      <span class="aging-legend__item"><span class="aging-legend__dot" style="background:var(--income)"></span>1–7 kun</span>
+      <span class="aging-legend__item"><span class="aging-legend__dot" style="background:var(--debt)"></span>7–30</span>
+      <span class="aging-legend__item"><span class="aging-legend__dot" style="background:var(--warning)"></span>30–60</span>
+      <span class="aging-legend__item"><span class="aging-legend__dot" style="background:var(--expense)"></span>60+</span>
+    </div>
+    <div class="mt-4"><div class="bar bar--thin"><div class="bar__seg" style="width:84%;background:var(--debt)"></div></div></div>
+    <div class="t-caption-1 c-3 mt-2">Qarz limiti: 4 200 000 / 5 000 000 (84%)</div>
+  </div>
+</div>
+</section>
+
+
+<section class="bal-sec">
+  <div class="bal-sec__head">
+    <h2 class="bal-sec__title">11 · Grafiklar</h2>
+    <p class="bal-sec__note">Kategoriya rangi doimiy biriktiriladi (chart-1…5)</p>
+  </div>
+  <div class="bal-sec__body">
+  <div class="bal-frame bal-frame--pad">
+    <div class="chart">
+  <div class="chart__bar chart__bar--muted" style="height:42%"></div><div class="chart__bar chart__bar--muted" style="height:55.00000000000001%"></div><div class="chart__bar chart__bar--muted" style="height:38%"></div><div class="chart__bar chart__bar--muted" style="height:71%"></div><div class="chart__bar chart__bar--muted" style="height:62%"></div><div class="chart__bar" style="height:88%"></div>
+</div>
+<div class="chart__labels"><div class="chart__label">Mar</div><div class="chart__label">Apr</div><div class="chart__label">May</div><div class="chart__label">Iyn</div><div class="chart__label">Iyl</div><div class="chart__label">Avg</div></div>
+  </div>
+  <div class="bal-frame bal-frame--pad">
+    <div class="row gap-4">
+      <div class="donut" style="background:conic-gradient(var(--chart-1) 0% 38%, var(--chart-2) 38% 64%, var(--chart-3) 64% 82%, var(--chart-4) 82% 100%)">
+    <div class="donut__hole">
+      <div class="t-caption-1 c-3">Chiqim</div>
+      <div class="amount amount--md c-1">34 770 000</div>
+    </div>
+  </div>
+      <div class="grow col gap-2">
+        <span class="t-footnote c-2">Tovar · 38%</span>
+        <span class="t-footnote c-2">Ijara · 26%</span>
+        <span class="t-footnote c-2">Maosh · 18%</span>
+        <span class="t-footnote c-2">Boshqa · 18%</span>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<section class="bal-sec">
+  <div class="bal-sec__head">
+    <h2 class="bal-sec__title">12 · Yuklanmoqda (skeleton)</h2>
+    <p class="bal-sec__note">Spinner EMAS: ro'yxat shakli oldindan ko'rinadi — sakrash bo'lmaydi</p>
+  </div>
+  <div class="bal-sec__body">
+  <div class="bal-frame bal-frame--pad">
+    <div class="list"><div class="list-row">
+  <div class="skel skel--circle" style="width:38px;height:38px;flex:0 0 auto"></div>
+  <div class="grow col gap-2">
+    <div class="skel skel--title" style="width:62%"></div>
+    <div class="skel skel--text" style="width:38%"></div>
+  </div>
+  <div class="skel skel--amount" style="width:76px"></div>
+</div><div class="list-row">
+  <div class="skel skel--circle" style="width:38px;height:38px;flex:0 0 auto"></div>
+  <div class="grow col gap-2">
+    <div class="skel skel--title" style="width:62%"></div>
+    <div class="skel skel--text" style="width:38%"></div>
+  </div>
+  <div class="skel skel--amount" style="width:76px"></div>
+</div><div class="list-row">
+  <div class="skel skel--circle" style="width:38px;height:38px;flex:0 0 auto"></div>
+  <div class="grow col gap-2">
+    <div class="skel skel--title" style="width:62%"></div>
+    <div class="skel skel--text" style="width:38%"></div>
+  </div>
+  <div class="skel skel--amount" style="width:76px"></div>
+</div></div>
+  </div>
+</div>
+</section>
+
+
+<section class="bal-sec">
+  <div class="bal-sec__head">
+    <h2 class="bal-sec__title">13 · Bo'sh va xato holatlar</h2>
+    <p class="bal-sec__note">Har biri: ikona + sarlavha + izoh + amal</p>
+  </div>
+  <div class="bal-sec__body">
+  <div class="bal-frame" style="height:300px;display:flex">
+    <div class="state">
+  <div class="state__icon state__icon--accent"><svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 6.5h15M4.5 12h15M4.5 17.5h9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+  <div class="state__title">Bu oyda hali yozuv yoʻq</div>
+  <div class="state__text">Birinchi kirim yoki chiqimni qoʻshing — hisobot oʻzi shakllanadi.</div>
+  <div style="margin-top:var(--sp-4);width:100%;max-width:240px"><div class="btn btn--primary btn--block">Yozuv qoʻshish</div></div>
+</div>
+  </div>
+  <div class="bal-frame" style="height:300px;display:flex">
+    <div class="state">
+  <div class="state__icon"><svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.5 15.5a5 5 0 0 1 7 0M5 12a10 10 0 0 1 4-2.5M19 12a10 10 0 0 0-3-2.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+  <div class="state__title">Internet yoʻq</div>
+  <div class="state__text">Yozuvlaringiz navbatda saqlanmoqda va ulanish tiklanishi bilan yuboriladi.</div>
+  
+</div>
+  </div>
+  <div class="bal-frame" style="height:300px;display:flex">
+    <div class="state">
+  <div class="state__icon state__icon--expense"><svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 2.5 20h19L12 4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 10v4M12 17.5h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+  <div class="state__title">Nimadir notoʻgʻri ketdi</div>
+  <div class="state__text">Serverga ulanib boʻlmadi. Bir ozdan keyin qayta urinib koʻring.</div>
+  <div style="margin-top:var(--sp-4);width:100%;max-width:240px"><div class="btn btn--secondary btn--block">Qayta urinish</div></div>
+</div>
+  </div>
+</div>
+</section>
+
+
+<section class="bal-sec">
+  <div class="bal-sec__head">
+    <h2 class="bal-sec__title">14 · Bannerlar va toast</h2>
+    
+  </div>
+  <div class="bal-sec__body">
+  <div class="bal-frame"><div class="banner banner--offline"><svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.5 15.5a5 5 0 0 1 7 0M5 12a10 10 0 0 1 4-2.5M19 12a10 10 0 0 0-3-2.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="grow">Internet yoʻq · 3 ta yozuv navbatda</span></div></div>
+  <div class="bal-frame"><div class="banner banner--sync"><svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 8a8 8 0 0 0-14.5-2M4 16a8 8 0 0 0 14.5 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 4v4h4M20 20v-4h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="grow">Sinxronlanmoqda · 2 / 3</span></div></div>
+  <div class="bal-frame"><div class="banner banner--readonly"><svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 2.5 20h19L12 4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 10v4M12 17.5h.01" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="grow">Obuna muddati tugagan — faqat oʻqish mumkin</span></div></div>
+  <div class="bal-frame" style="height:90px;position:relative">
+    <div style="position:absolute;left:16px;right:16px;bottom:16px"><div class="toast" style="position:static;left:auto;right:auto;bottom:auto"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5 9.5 17.5 19.5 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Yozuv saqlandi</span></div></div>
+  </div>
+</div>
+</section>
+
+
+<section class="bal-sec">
+  <div class="bal-sec__head">
+    <h2 class="bal-sec__title">15 · To'lov usuli</h2>
+    <p class="bal-sec__note">Aralash to'lov — MISSING backend'da</p>
+  </div>
+  <div class="bal-sec__body">
+  <div class="bal-frame bal-frame--pad">
+    <div class="pay-grid">
+      <div class="pay-opt pay-opt--selected"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 7.5h19v9h-19z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><span class="t-subheadline">Naqd</span></div>
+      <div class="pay-opt"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 7.5h19v9h-19zM2.5 11h19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="t-subheadline">Karta</span></div>
+      <div class="pay-opt"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7.5v5M12 16h.01" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><span class="t-subheadline">Qarz</span></div>
+      <div class="pay-opt"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h13l-3-3M20 16H7l3 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="t-subheadline">Aralash</span></div>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<section class="bal-sec">
+  <div class="bal-sec__head">
+    <h2 class="bal-sec__title">16 · Savat qatori (POS)</h2>
+    <p class="bal-sec__note">MISSING — backend bitta mahsulot saqlaydi</p>
+  </div>
+  <div class="bal-sec__body">
+  <div class="bal-frame bal-frame--pad">
+    <div class="list card--flush">
+      <div class="cart-row">
+        <div class="list-row__icon list-row__icon--fill"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.2 12 4l8 4.2v7.6L12 20l-8-4.2V8.2Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 8.2 12 12.4l8-4.2M12 12.4V20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="grow col" style="gap:2px">
+          <span class="t-callout c-1" style="font-weight:550">Coca-Cola 1L</span>
+          <span class="t-caption-1 c-3">14 000 × 3</span>
+        </div>
+        <div class="stepper">
+  <div class="stepper__btn"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+  <div class="stepper__value">3<span class="stepper__unit"> dona</span></div>
+  <div class="stepper__btn"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+</div>
+      </div>
+      <div class="cart-row">
+        <div class="list-row__icon list-row__icon--fill"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.2 12 4l8 4.2v7.6L12 20l-8-4.2V8.2Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 8.2 12 12.4l8-4.2M12 12.4V20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="grow col" style="gap:2px">
+          <span class="t-callout c-1" style="font-weight:550">Guruch (Loser)</span>
+          <span class="t-caption-1 c-3">18 000 × 1.5</span>
+        </div>
+        <div class="stepper">
+  <div class="stepper__btn"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+  <div class="stepper__value">1.5<span class="stepper__unit"> kg</span></div>
+  <div class="stepper__btn"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+</div>
+      </div>
+      <div class="cart-total">
+        <span class="t-headline c-1">Jami</span>
+        <span class="amount amount--lg c-1">69 000</span>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+</body>
+</html>

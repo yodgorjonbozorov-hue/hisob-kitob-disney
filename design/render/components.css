@@ -1,13 +1,11 @@
 /* ═══════════════════════════════════════════════════════════════════
    BALANSA iOS — KOMPONENT KUTUBXONASI
    ═══════════════════════════════════════════════════════════════════
-   FAZA 0 da minimal to'plam (test ekran uchun yetarli).
-   To'liq kutubxona FAZA 5 da quriladi va BAL-900 da ko'rsatiladi.
    Qat'iy qoida: bu yerda rang/o'lcham QIYMATI yozilmaydi — faqat token.
+   Har komponent BAL-900 varag'ida ko'rsatilgan.
    ═══════════════════════════════════════════════════════════════════ */
 
-/* ───────────────────── Navigation bar ─────────────────────
-   Ekran ustida suzadi (Liquid Glass), skroll ostidan o'tadi. */
+/* ───────────────────── 1. NAVIGATION BAR ───────────────────── */
 
 .navbar {
   position: relative;
@@ -21,7 +19,64 @@
   padding: var(--sp-1) var(--sp-4) var(--sp-2);
 }
 
-/* Biznes almashtirgich — navbar chapida, tegish maydoni to'liq */
+/* Katta sarlavha (skroll tepasida) — inline'ga o'tganda .navbar__title qoladi */
+.navbar-large {
+  padding: var(--sp-1) var(--sp-4) var(--sp-2);
+}
+.navbar-large__title {
+  font-family: var(--font-display);
+  font-size: var(--t-large-title);
+  line-height: var(--lh-large-title);
+  letter-spacing: var(--ls-large-title);
+  font-weight: 700;
+  color: var(--label-1);
+}
+.navbar__title {
+  font-size: var(--t-headline);
+  line-height: var(--lh-headline);
+  font-weight: 620;
+  color: var(--label-1);
+  text-align: center;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Orqaga tugmasi */
+.navbar__back {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: var(--tap-min);
+  color: var(--accent);
+  font-size: var(--t-body);
+  flex: 0 0 auto;
+}
+
+.icon-btn {
+  width: var(--tap-min);
+  height: var(--tap-min);
+  border-radius: var(--r-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--label-1);
+  position: relative;
+  flex: 0 0 auto;
+}
+.icon-btn--accent { color: var(--accent); }
+
+.icon-btn__dot {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 9px;
+  height: 9px;
+  border-radius: var(--r-full);
+  background: var(--expense);
+  border: 2px solid var(--bg-base);
+}
+
+/* Biznes almashtirgich */
 .biz-switch {
   display: flex;
   align-items: center;
@@ -32,7 +87,6 @@
   background: var(--fill);
   max-width: 240px;
 }
-
 .biz-switch__logo {
   width: 30px;
   height: 30px;
@@ -48,186 +102,7 @@
   flex: 0 0 auto;
 }
 
-/* Ikonka tugmasi (bildirishnoma, qidiruv) */
-.icon-btn {
-  width: var(--tap-min);
-  height: var(--tap-min);
-  border-radius: var(--r-full);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--label-1);
-  position: relative;
-  flex: 0 0 auto;
-}
-
-.icon-btn__dot {
-  position: absolute;
-  top: 9px;
-  right: 9px;
-  width: 9px;
-  height: 9px;
-  border-radius: var(--r-full);
-  background: var(--expense);
-  border: 2px solid var(--bg-base);
-}
-
-/* ───────────────────── Karta ───────────────────── */
-
-.card {
-  background: var(--bg-elevated);
-  border: 1px solid var(--card-border);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-card);
-  padding: var(--sp-4);
-}
-
-.card--flush { padding: 0; overflow: hidden; }
-
-/* ───────────────────── Statistika kartasi ─────────────────────
-   Rangga TAYANMAYDI: har birida ikona + ishora (↑/↓) ham bor —
-   rang ko'rmaydiganlar uchun (FAZA 4 accessibility qoidasi). */
-
-.stat {
-  flex: 1;
-  min-width: 0;
-  background: var(--bg-elevated);
-  border: 1px solid var(--card-border);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-card);
-  padding: var(--sp-3) var(--sp-3) var(--sp-4);
-}
-
-.stat__head {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-1);
-  color: var(--label-2);
-}
-
-.stat__icon {
-  width: 18px;
-  height: 18px;
-  border-radius: var(--r-xs);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-}
-.stat__icon--income { background: var(--income-soft); color: var(--income-on); }
-.stat__icon--expense { background: var(--expense-soft); color: var(--expense-on); }
-
-.stat__value { margin-top: var(--sp-2); }
-
-/* ───────────────────── Tez amal tugmalari ───────────────────── */
-
-.quick {
-  display: flex;
-  gap: var(--sp-2);
-}
-
-.quick__item {
-  flex: 1;
-  min-height: 74px;
-  border-radius: var(--r-md);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--sp-1);
-  padding: var(--sp-2);
-  background: var(--bg-elevated);
-  border: 1px solid var(--card-border);
-  box-shadow: var(--shadow-card);
-  text-align: center;
-}
-
-.quick__icon {
-  width: 30px;
-  height: 30px;
-  border-radius: var(--r-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-}
-.quick__icon--income { background: var(--income-soft); color: var(--income-on); }
-.quick__icon--expense { background: var(--expense-soft); color: var(--expense-on); }
-.quick__icon--sale { background: var(--accent-wash); color: var(--accent); }
-
-/* ───────────────────── Ro'yxat ───────────────────── */
-
-.section-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  padding: 0 var(--sp-1) var(--sp-2);
-}
-
-.list {
-  background: var(--bg-elevated);
-  border: 1px solid var(--card-border);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-card);
-  overflow: hidden;
-}
-
-.list-row {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  min-height: 56px;
-  padding: var(--sp-2) var(--sp-4);
-  position: relative;
-}
-
-/* Ajratkich matndan boshlanadi (iOS naqshi), butun kenglikda emas */
-.list-row + .list-row::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: calc(var(--sp-4) + 38px + var(--sp-3));
-  right: 0;
-  height: 1px;
-  background: var(--separator);
-}
-
-.list-row__icon {
-  width: 38px;
-  height: 38px;
-  border-radius: var(--r-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-}
-.list-row__icon--income { background: var(--income-soft); color: var(--income-on); }
-.list-row__icon--expense { background: var(--expense-soft); color: var(--expense-on); }
-.list-row__icon--debt { background: var(--debt-soft); color: var(--debt-on); }
-
-/* ───────────────────── Chip / Badge ───────────────────── */
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
-  height: 24px;
-  padding: 0 var(--sp-2);
-  border-radius: var(--r-full);
-  background: var(--fill);
-  color: var(--label-2);
-  font-size: var(--t-caption-1);
-  line-height: 1;
-  font-weight: 500;
-}
-.chip--income { background: var(--income-soft); color: var(--income-on); }
-.chip--expense { background: var(--expense-soft); color: var(--expense-on); }
-.chip--debt { background: var(--debt-soft); color: var(--debt-on); }
-.chip--accent { background: var(--accent-wash); color: var(--accent); }
-
-/* ───────────────────── Tab bar ─────────────────────
-   Liquid Glass qatlam — ostidagi mazmun ko'rinib turadi.
-   O'rtada FAB (yangi yozuv) — bosh barmoq zonasining markazida. */
+/* ───────────────────── 2. TAB BAR ───────────────────── */
 
 .tabbar {
   position: relative;
@@ -251,15 +126,27 @@
   color: var(--label-3);
 }
 .tab--active { color: var(--accent); }
-
 .tab__label {
   font-size: 10px;
   line-height: 12px;
   font-weight: 550;
   letter-spacing: 0.05px;
 }
+.tab__badge {
+  position: absolute;
+  transform: translate(14px, -10px);
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: var(--r-full);
+  background: var(--expense);
+  color: #fff;
+  font-size: 10px;
+  line-height: 17px;
+  font-weight: 700;
+  text-align: center;
+}
 
-/* Markaziy amal tugmasi */
 .tab-fab {
   flex: 0 0 auto;
   width: 52px;
@@ -274,13 +161,732 @@
   box-shadow: 0 6px 16px rgba(15, 118, 110, 0.35);
 }
 
-/* ───────────────────── Progress / Aging bar ───────────────────── */
+/* ───────────────────── 3. BOTTOM SHEET ───────────────────── */
+
+.sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--card-border);
+  box-shadow: var(--shadow-raised);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.sheet--medium { height: 52%; }
+.sheet--large { height: 88%; }
+.sheet--small { height: 34%; }
+
+.sheet__grabber {
+  width: 36px;
+  height: 5px;
+  border-radius: var(--r-full);
+  background: var(--separator-strong);
+  margin: var(--sp-2) auto var(--sp-1);
+  flex: 0 0 auto;
+}
+.sheet__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-2) var(--sp-4) var(--sp-3);
+  flex: 0 0 auto;
+}
+.sheet__body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0 var(--sp-4);
+}
+.sheet__foot {
+  flex: 0 0 auto;
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+}
+
+/* Sheet ortidagi qorong'i qatlam */
+.scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 45;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+/* ───────────────────── 4. KARTA ───────────────────── */
+
+.card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--sp-4);
+}
+.card--flush { padding: 0; overflow: hidden; }
+.card--accent {
+  background: var(--accent-wash);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* ───────────────────── 5. STAT KARTA ───────────────────── */
+
+.stat {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--sp-3) var(--sp-3) var(--sp-4);
+}
+.stat__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  color: var(--label-2);
+}
+.stat__icon {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--r-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+.stat__icon--income { background: var(--income-soft); color: var(--income-on); }
+.stat__icon--expense { background: var(--expense-soft); color: var(--expense-on); }
+.stat__icon--debt { background: var(--debt-soft); color: var(--debt-on); }
+.stat__icon--accent { background: var(--accent-wash); color: var(--accent); }
+.stat__value { margin-top: var(--sp-2); }
+
+/* ───────────────────── 6. RO'YXAT ───────────────────── */
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 var(--sp-1) var(--sp-2);
+}
+/* Guruh sarlavhasi (kun, harf) — yopishqoq */
+.list-group-head {
+  padding: var(--sp-4) var(--sp-1) var(--sp-2);
+  font-size: var(--t-footnote);
+  line-height: var(--lh-footnote);
+  font-weight: 600;
+  color: var(--label-2);
+  text-transform: none;
+}
+
+.list {
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 56px;
+  padding: var(--sp-2) var(--sp-4);
+  position: relative;
+}
+.list-row + .list-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: calc(var(--sp-4) + 38px + var(--sp-3));
+  right: 0;
+  height: 1px;
+  background: var(--separator);
+}
+/* Ikonasiz ro'yxatda ajratkich matndan boshlanadi */
+.list--plain .list-row + .list-row::before { left: var(--sp-4); }
+.list-row--pressed { background: var(--fill); }
+
+.list-row__icon {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--r-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+.list-row__icon--income { background: var(--income-soft); color: var(--income-on); }
+.list-row__icon--expense { background: var(--expense-soft); color: var(--expense-on); }
+.list-row__icon--debt { background: var(--debt-soft); color: var(--debt-on); }
+.list-row__icon--accent { background: var(--accent-wash); color: var(--accent); }
+.list-row__icon--fill { background: var(--fill); color: var(--label-2); }
+
+.chevron { color: var(--label-4); flex: 0 0 auto; }
+
+/* Swipe amali — qator chapga surilganda ochiladi */
+.swipe {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  display: flex;
+}
+.swipe__act {
+  width: 76px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: #fff;
+  font-size: var(--t-caption-2);
+  font-weight: 600;
+}
+.swipe__act--delete { background: var(--expense); }
+.swipe__act--edit { background: var(--label-3); }
+.swipe__act--pay { background: var(--income); }
+
+/* ───────────────────── 7. TUGMALAR ───────────────────── */
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-height: var(--tap-min);
+  padding: var(--sp-3) var(--sp-5);
+  border-radius: var(--r-md);
+  font-size: var(--t-headline);
+  line-height: var(--lh-headline);
+  font-weight: 620;
+  text-align: center;
+}
+.btn--block { width: 100%; }
+
+.btn--primary { background: var(--accent); color: var(--accent-on); }
+.btn--primary.is-pressed { background: var(--accent-pressed); }
+.btn--secondary { background: var(--fill); color: var(--label-1); }
+.btn--tertiary { background: transparent; color: var(--accent); min-height: var(--tap-min); }
+.btn--destructive { background: var(--expense); color: #fff; }
+.btn--destructive-soft { background: var(--expense-soft); color: var(--expense-on); }
+.btn.is-disabled { opacity: 0.38; }
+
+/* Yuklanmoqda holati — matn o'rnida spinner, kenglik o'zgarmaydi */
+.btn__spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--r-full);
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  opacity: 0.9;
+}
+
+/* ───────────────────── 8. MAYDONLAR ───────────────────── */
+
+.field { margin-bottom: var(--sp-3); }
+.field__label {
+  display: block;
+  font-size: var(--t-footnote);
+  line-height: var(--lh-footnote);
+  color: var(--label-2);
+  margin-bottom: var(--sp-1);
+}
+.input {
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: var(--sp-3);
+  border-radius: var(--r-md);
+  background: var(--bg-sunk);
+  border: 1px solid transparent;
+  color: var(--label-1);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  display: flex;
+  align-items: center;
+}
+.input--focus { border-color: var(--accent); background: var(--bg-elevated); }
+.input--error { border-color: var(--expense); }
+.input__placeholder { color: var(--label-4); }
+.field__error {
+  margin-top: var(--sp-1);
+  font-size: var(--t-footnote);
+  color: var(--expense-on);
+}
+
+/* Summa kiritish — ekranning bosh elementi, juda katta */
+.amount-input {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: var(--sp-6) 0 var(--sp-4);
+}
+.amount-input__value {
+  font-family: var(--font-display);
+  font-size: var(--t-amount-xl);
+  line-height: var(--lh-amount-xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.5px;
+}
+.amount-input__value--income { color: var(--income); }
+.amount-input__value--expense { color: var(--expense); }
+.amount-input__unit { font-size: var(--t-callout); color: var(--label-3); }
+.amount-input__caret {
+  display: inline-block;
+  width: 2px;
+  height: 34px;
+  background: var(--accent);
+  transform: translateY(4px);
+}
+
+/* Raqam klaviaturasi (ekranda ko'rsatish uchun) */
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3) var(--sp-3);
+  background: var(--bg-sunk);
+}
+.keypad__key {
+  min-height: 48px;
+  border-radius: var(--r-sm);
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 500;
+  color: var(--label-1);
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.12);
+}
+.keypad__key--plain { background: transparent; box-shadow: none; }
+
+/* ───────────────────── 9. STEPPER (kasr qo'llab-quvvatlaydi) ───────────────────── */
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  background: var(--fill);
+  border-radius: var(--r-md);
+  padding: 3px;
+}
+.stepper__btn {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--r-sm);
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--label-1);
+  font-size: 20px;
+  font-weight: 500;
+}
+.stepper__value {
+  min-width: 68px;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: var(--t-callout);
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+  color: var(--label-1);
+}
+.stepper__unit {
+  font-size: var(--t-caption-1);
+  color: var(--label-3);
+  font-weight: 400;
+}
+
+/* ───────────────────── 10. SEGMENTED CONTROL ───────────────────── */
+
+.segmented {
+  display: flex;
+  background: var(--fill);
+  border-radius: var(--r-sm);
+  padding: 2px;
+  gap: 2px;
+}
+.segmented__item {
+  flex: 1;
+  min-height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--t-subheadline);
+  font-weight: 550;
+  color: var(--label-2);
+}
+.segmented__item--active {
+  background: var(--bg-elevated);
+  color: var(--label-1);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+.segmented__item--income.segmented__item--active { color: var(--income); }
+.segmented__item--expense.segmented__item--active { color: var(--expense); }
+
+/* ───────────────────── 11. QIDIRUV ───────────────────── */
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--tap-min);
+  padding: 0 var(--sp-3);
+  border-radius: var(--r-sm);
+  background: var(--fill);
+  color: var(--label-4);
+}
+.search__input { flex: 1; font-size: var(--t-body); }
+
+/* ───────────────────── 12. CHIP / BADGE ───────────────────── */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  height: 26px;
+  padding: 0 var(--sp-2);
+  border-radius: var(--r-full);
+  background: var(--fill);
+  color: var(--label-2);
+  font-size: var(--t-caption-1);
+  line-height: 1;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.chip--income { background: var(--income-soft); color: var(--income-on); }
+.chip--expense { background: var(--expense-soft); color: var(--expense-on); }
+.chip--debt { background: var(--debt-soft); color: var(--debt-on); }
+.chip--accent { background: var(--accent-wash); color: var(--accent); }
+.chip--selected { background: var(--accent); color: var(--accent-on); }
+/* Tanlanadigan chip (filtr, kategoriya) tegish maydonini oladi */
+.chip--tap { height: var(--tap-min); padding: 0 var(--sp-3); font-size: var(--t-subheadline); }
+
+.badge {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--r-full);
+  background: var(--expense);
+  color: #fff;
+  font-size: var(--t-caption-2);
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--r-full);
+  background: var(--accent-wash);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--t-subheadline);
+  flex: 0 0 auto;
+}
+
+/* ───────────────────── 13. PROGRESS / AGING ───────────────────── */
 
 .bar {
-  height: 6px;
+  height: 8px;
   border-radius: var(--r-full);
   background: var(--bg-sunk);
   overflow: hidden;
   display: flex;
 }
 .bar__seg { height: 100%; }
+.bar--thin { height: 6px; }
+
+.aging-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-top: var(--sp-2);
+}
+.aging-legend__item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--t-caption-1);
+  color: var(--label-2);
+}
+.aging-legend__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-full);
+  flex: 0 0 auto;
+}
+
+/* ───────────────────── 14. SKELETON ───────────────────── */
+
+.skel {
+  background: var(--fill);
+  border-radius: var(--r-xs);
+}
+.skel--text { height: 12px; }
+.skel--title { height: 18px; }
+.skel--amount { height: 22px; }
+.skel--circle { border-radius: var(--r-full); }
+
+/* ───────────────────── 15. BO'SH VA XATO HOLAT ───────────────────── */
+
+.state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--sp-8) var(--sp-6);
+  gap: var(--sp-2);
+}
+.state__icon {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--r-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--sp-2);
+  background: var(--fill);
+  color: var(--label-3);
+}
+.state__icon--accent { background: var(--accent-wash); color: var(--accent); }
+.state__icon--expense { background: var(--expense-soft); color: var(--expense-on); }
+.state__title {
+  font-size: var(--t-title-3);
+  line-height: var(--lh-title-3);
+  font-weight: 620;
+  color: var(--label-1);
+}
+.state__text {
+  font-size: var(--t-subheadline);
+  line-height: var(--lh-subheadline);
+  color: var(--label-2);
+  max-width: 260px;
+}
+
+/* ───────────────────── 16. TOAST / BANNER ───────────────────── */
+
+.toast {
+  position: absolute;
+  left: var(--sp-4);
+  right: var(--sp-4);
+  bottom: calc(var(--sp-4) + 56px);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--label-1);
+  color: var(--bg-elevated);
+  box-shadow: var(--shadow-raised);
+  font-size: var(--t-subheadline);
+}
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4);
+  font-size: var(--t-footnote);
+  line-height: var(--lh-footnote);
+}
+.banner--offline { background: var(--debt-soft); color: var(--debt-on); }
+.banner--sync { background: var(--accent-wash); color: var(--accent); }
+.banner--error { background: var(--expense-soft); color: var(--expense-on); }
+.banner--readonly { background: var(--debt-soft); color: var(--debt-on); }
+
+/* ───────────────────── 17. ALERT / ACTION SHEET ───────────────────── */
+
+.alert {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 60;
+  width: 270px;
+  border-radius: var(--r-md);
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--shadow-raised);
+  overflow: hidden;
+  text-align: center;
+}
+.alert__body { padding: var(--sp-5) var(--sp-4) var(--sp-4); }
+.alert__title {
+  font-size: var(--t-headline);
+  font-weight: 620;
+  color: var(--label-1);
+}
+.alert__text {
+  margin-top: var(--sp-1);
+  font-size: var(--t-footnote);
+  line-height: var(--lh-footnote);
+  color: var(--label-2);
+}
+.alert__acts { display: flex; border-top: 1px solid var(--separator); }
+.alert__act {
+  flex: 1;
+  min-height: var(--tap-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--t-body);
+  color: var(--accent);
+}
+.alert__act + .alert__act { border-left: 1px solid var(--separator); }
+.alert__act--destructive { color: var(--expense); font-weight: 620; }
+
+.action-sheet {
+  position: absolute;
+  left: var(--sp-2);
+  right: var(--sp-2);
+  bottom: var(--sp-2);
+  z-index: 60;
+}
+.action-sheet__group {
+  border-radius: var(--r-md);
+  background: var(--bg-elevated);
+  overflow: hidden;
+  margin-bottom: var(--sp-2);
+}
+.action-sheet__item {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  font-size: var(--t-body);
+  color: var(--accent);
+}
+.action-sheet__item + .action-sheet__item { border-top: 1px solid var(--separator); }
+.action-sheet__item--destructive { color: var(--expense); }
+.action-sheet__item--cancel { font-weight: 620; }
+
+/* ───────────────────── 18. GRAFIK ───────────────────── */
+
+.chart {
+  height: 132px;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-2);
+  padding-top: var(--sp-2);
+}
+.chart__bar {
+  flex: 1;
+  border-radius: var(--r-xs) var(--r-xs) 0 0;
+  background: var(--accent);
+  min-height: 4px;
+}
+.chart__bar--muted { background: var(--fill-strong); }
+.chart__labels {
+  display: flex;
+  gap: var(--sp-2);
+  margin-top: var(--sp-1);
+}
+.chart__label {
+  flex: 1;
+  text-align: center;
+  font-size: var(--t-caption-2);
+  color: var(--label-3);
+}
+
+/* Donut — conic-gradient bilan, SVG'siz */
+.donut {
+  width: 128px;
+  height: 128px;
+  border-radius: var(--r-full);
+  flex: 0 0 auto;
+  position: relative;
+}
+.donut__hole {
+  position: absolute;
+  inset: 26px;
+  border-radius: var(--r-full);
+  background: var(--bg-elevated);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Chiziqli grafik (sparkline) */
+.spark { height: 56px; width: 100%; display: block; }
+
+/* ───────────────────── 19. SAVAT (POS) ───────────────────── */
+
+.cart-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  position: relative;
+}
+.cart-row + .cart-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: var(--sp-4);
+  right: var(--sp-4);
+  height: 1px;
+  background: var(--separator);
+}
+.cart-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--bg-elevated-2);
+}
+
+/* To'lov usuli tanlash */
+.pay-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--sp-2);
+}
+.pay-opt {
+  min-height: 72px;
+  border-radius: var(--r-md);
+  border: 1.5px solid var(--separator);
+  background: var(--bg-elevated);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  color: var(--label-1);
+}
+.pay-opt--selected {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+
+/* ───────────────────── 20. PULL TO REFRESH ───────────────────── */
+
+.ptr {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  height: 44px;
+  color: var(--label-3);
+  font-size: var(--t-footnote);
+}

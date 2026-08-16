@@ -144,12 +144,16 @@ async function main() {
       await page.waitForTimeout(120);
 
       // Aniq qirqim: `clip`siz Chromium ba'zan 1px kam beradi (852*3=2556
-       // o'rniga 2555) — sub-piksel yaxlitlash. Bu esa PNG'larni
-       // bir-biriga mos kelmaydigan qiladi.
+      // o'rniga 2555) — sub-piksel yaxlitlash. Bu esa PNG'larni
+      // bir-biriga mos kelmaydigan qiladi.
+      //
+      // Istisno: `<body data-tall>` — spesifikatsiya varag'i (BAL-900),
+      // u qurilma balandligiga sig'maydi va to'liq sahifa olinadi.
+      const uzun = await page.evaluate(() => document.body.hasAttribute("data-tall"));
       const nom = chiqishNomi(fayl, rejim, MATERIAL);
       await page.screenshot({
         path: join(CHIQISH, nom),
-        clip: { x: 0, y: 0, width: EN, height: BOY },
+        ...(uzun ? { fullPage: true } : { clip: { x: 0, y: 0, width: EN, height: BOY } }),
       });
       olingan.push(nom);
       console.log(`  ${nom}`);
