@@ -4,6 +4,8 @@ import { Fragment, useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { PLANLAR } from "@/lib/billing/plans";
 import { BIZNES_TURLARI } from "@/lib/biznesTuri";
+import { KassaMetrikalari } from "./KassaMetrikalari";
+import type { KassaMetrikalari as KassaMetrikaTuri } from "@/lib/superadmin/kassa";
 
 interface Metrics {
   jamiTenant: number;
@@ -61,12 +63,15 @@ function sana(iso: string | null): string {
 export function SuperadminClient({
   superadminIsm,
   metrics,
+  kassaMetrics,
   tenants,
   pendingPayments,
   users,
 }: {
   superadminIsm: string;
   metrics: Metrics;
+  /** Kassir kassalari kesimi — biznes hisobotlaridan alohida (talab 18). */
+  kassaMetrics: KassaMetrikaTuri;
   tenants: TenantRow[];
   pendingPayments: PaymentRow[];
   users: UserRow[];
@@ -223,6 +228,9 @@ export function SuperadminClient({
             </div>
           ))}
         </div>
+
+        {/* Kassir kassalari — barcha tenantlar bo'ylab */}
+        <KassaMetrikalari m={kassaMetrics} />
 
         {/* Kutilayotgan to'lovlar */}
         <div className="bg-surface rounded-2xl border border-line shadow-card p-5">

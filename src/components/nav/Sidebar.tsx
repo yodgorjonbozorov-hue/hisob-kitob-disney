@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard, Receipt, FileText, PiggyBank, Bell, CalendarCheck, Repeat, Wallet,
+  LayoutDashboard, Receipt, FileText, PiggyBank, Bell, CalendarCheck, Repeat, Wallet, Banknote,
   Package, ShoppingCart, HandCoins, Truck, Factory, Building2, Tags, Users, Trash2, ScrollText,
   BadgeCheck, Gavel, Contact2, IdCard, CalendarDays, FileSignature, ClipboardList,
   LogOut, KeyRound, CreditCard, Blocks, Handshake, BookUser, ListChecks, Sparkles, ShieldCheck, type LucideIcon,
@@ -34,6 +34,7 @@ const IKONLAR: Record<string, LucideIcon> = {
   report: FileText,
   budget: PiggyBank,
   wallet: Wallet,
+  cash: Banknote,
   purchase: Truck,
   supplier: Factory,
   approval: BadgeCheck,

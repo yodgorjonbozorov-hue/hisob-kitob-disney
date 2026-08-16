@@ -179,6 +179,7 @@ model Business {
   dailyTransactions  DailyTransaction[]
   dailyReportSetting DailyReportSetting?
   smenalar           Smena[]
+  kassaTopshiriqlar  CashHandover[]
 
   @@index([tenantId])
 }
@@ -214,8 +215,8 @@ model User {
 
   // MAXSUS ROL (PRO): tayinlangan bo'lsa granular huquqlar shu roldan olinadi,
   // `rol` esa rol.bazaRol bilan sinxron saqlanadi (nav/modul skeleti uchun).
-  roleId String?
-  role   Role?   @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  roleId     String?
+  role       Role?   @relation(fields: [roleId], references: [id], onDelete: SetNull)
   /// Foydalanuvchiga ALOHIDA berilgan qo'shimcha huquqlar (JSON massiv).
   huquqPlus  String?
   /// Foydalanuvchidan ALOHIDA olib qo'yilgan huquqlar (JSON massiv).
@@ -1130,25 +1131,25 @@ model DailyReport {
 /// `userIsm` — kiritgan xodim ismining snapshot'i (ShiftClose uslubi):
 /// User'ga FK yo'q, xodim o'chirilsa ham "kim kiritgani" tarixda qoladi.
 model DailyTransaction {
-  id         String      @id @default(cuid())
-  businessId String
-  business   Business    @relation(fields: [businessId], references: [id], onDelete: Restrict)
-  reportId   String
-  report     DailyReport @relation(fields: [reportId], references: [id], onDelete: Restrict)
-  summa      Int
-  tolovTuri  String
-  izoh       String?
-  userId     String
-  userIsm    String?
+  id            String      @id @default(cuid())
+  businessId    String
+  business      Business    @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  reportId      String
+  report        DailyReport @relation(fields: [reportId], references: [id], onDelete: Restrict)
+  summa         Int
+  tolovTuri     String
+  izoh          String?
+  userId        String
+  userIsm       String?
   /// Yozuvlar (Transaction) dan AVTOMATIK ulangan bo'lsa — o'sha yozuv IDsi.
   /// Bugungi sanali kirim tranzaksiyasi kunlikka o'zi tushadi (kunlikSinxron);
   /// boshqa sana tanlangan yozuv tushmaydi. FK ataylab yo'q — tranzaksiyani
   /// butunlay o'chirishni to'sib qo'ymasin; sinxron xizmat qatlamida.
-  transactionId String? @unique
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
+  transactionId String?     @unique
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
   /// Yumshoq o'chirish — o'chirilgan tushum jamiga kirmaydi, tarixda qoladi.
-  deletedAt  DateTime?
+  deletedAt     DateTime?
 
   @@index([reportId, deletedAt])
   @@index([businessId, deletedAt, createdAt])
@@ -1299,4 +1300,74 @@ model Attachment {
 
   @@index([businessId, entity, entityId])
   @@index([businessId, createdAt])
+}
+
+// ==== KASSIR KASSASI (kassa topshirish tizimi) ====
+
+/// KASSA TOPSHIRIG'I — kassir qo'lidagi REAL naqd pulning ichki harakati.
+///
+/// Nega alohida jadval: biznes hisoboti (Kirim/Chiqim/Sof) va kassirning
+/// qo'lidagi pul — IKKI BOSHQA narsa. Kassir pulni direktorga topshirsa,
+/// biznesning kirimi ham, chiqimi ham, sof balansi ham O'ZGARMASLIGI kerak:
+/// pul biznesdan chiqmadi, faqat egasi almashdi. Shuning uchun bu yerda
+/// hech qanday `Transaction` YOZILMAYDI va `Account`/`AccountTransfer`
+/// (biznes kassalari ledgeri) ham qo'zg'atilmaydi — ular avvalgidek qoladi.
+///
+/// Kassir qoldig'i BAZADA SAQLANMAYDI, u har doim hisoblanadi
+/// (`lib/services/kassirKassa.ts`):
+///   qoldiq = naqd kirim(kassir) − naqd chiqim(kassir)
+///          + qabul qilingan "berish"lar − qabul qilingan "topshirish"lar.
+/// Saqlangan `currentBalance` ustuni ataylab YO'Q: ikkita haqiqat manbai
+/// bo'lsa ular ertami-kechmi ajralib ketadi va qaysi biri to'g'ri ekani
+/// bilinmay qoladi.
+///
+/// Ikki yo'nalish bitta jadvalda (`turi`):
+///  - "topshirish" — kassir → qabul qiluvchi (direktor tasdig'ini kutadi);
+///  - "berish"     — direktor → kassirga boshlang'ich/qaytim puli
+///                   (tasdiq talab qilmaydi, darhol "qabul").
+///
+/// Ismlar snapshot (ShiftClose uslubi): foydalanuvchi keyin o'chirilsa ham
+/// kim kimga topshirgani tarixda o'qiladigan bo'lib qoladi.
+model CashHandover {
+  id             String    @id @default(cuid())
+  businessId     String
+  business       Business  @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  /// "topshirish" | "berish"
+  turi           String    @default("topshirish")
+  /// Pul kimning kassasidan chiqadi (topshirish) yoki kimga beriladi (berish).
+  kassirId       String
+  kassirIsm      String?
+  /// Qabul qilgan/bergan boshqaruvchi. Topshirishda qaror paytida to'ladi.
+  qabulId        String?
+  qabulIsm       String?
+  /// TIZIM hisoblagan kassa qoldig'i — topshirish paytida MUZLATILADI.
+  /// Kassir bu raqamni o'zgartira olmaydi (aldashning oldini olish).
+  /// "berish"da 0.
+  hisoblangan    Int
+  /// Haqiqatda topshirilgan (yoki berilgan) naqd.
+  topshirilgan   Int
+  /// topshirilgan − hisoblangan. Manfiy = KAMOMAD, musbat = ORTIQCHA.
+  /// Nol bo'lmagan farq direktor tasdig'isiz yakunlanmaydi.
+  farq           Int       @default(0)
+  /// "kutilmoqda" | "qabul" | "rad" | "bekor".
+  /// Sxemada alohida "kelishmovchilik" holati ATAYLAB yo'q — u `farq != 0`
+  /// dan kelib chiqadi va UI'da "Kamomad"/"Ortiqcha" deb ko'rsatiladi.
+  /// Ikkinchi haqiqat manbai bo'lmasin.
+  holat          String    @default("kutilmoqda")
+  /// Farq kassir hisobidan CHIQARILDIMI (direktor qarori).
+  /// false — kamomad kassirda ochiq qoladi (u hali ham qarzdor).
+  /// Ortiqchada har doim true: manfiy kassa qoldig'ining ma'nosi yo'q.
+  farqYopildi    Boolean   @default(false)
+  /// Kassirning izohi (topshirish paytida).
+  izoh           String?
+  /// Direktor qarorining izohi (ayniqsa rad etishda).
+  qarorIzoh      String?
+  topshirilganAt DateTime  @default(now())
+  qabulAt        DateTime?
+  radAt          DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([businessId, holat, topshirilganAt])
+  @@index([businessId, kassirId, topshirilganAt])
 }

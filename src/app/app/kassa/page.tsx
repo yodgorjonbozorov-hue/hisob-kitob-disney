@@ -6,6 +6,14 @@ import { isManager } from "@/lib/auth/roles";
 import { isPro } from "@/lib/billing/pro";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import { getAccountBalances, listTransfers } from "@/lib/queries/accounts";
+import {
+  listKassirQoldiqlari,
+  listKutilayotganTopshiriqlar,
+  listTopshiriqlar,
+} from "@/lib/queries/kassirKassa";
+import { KassirlarPaneli } from "@/components/kassa/KassirlarPaneli";
+import { TopshiriqlarPaneli } from "@/components/kassa/TopshiriqlarPaneli";
+import { KassaTarix } from "@/components/kassa/KassaTarix";
 import { KassaClient } from "./KassaClient";
 
 /**
@@ -31,18 +39,23 @@ export default async function KassaPage() {
     }
 
     const pro = isPro(tenant.plan);
-    const [qoldiqlar, transferlar, userlar] = await Promise.all([
-      getAccountBalances(businessId),
-      listTransfers(businessId, 30),
-      // Foydalanuvchiga pul o'tkazish (PRO) uchun qabul qiluvchilar ro'yxati.
-      pro
-        ? prisma.user.findMany({
-            where: { isActive: true },
-            select: { id: true, ism: true },
-            orderBy: { ism: "asc" },
-          })
-        : Promise.resolve([]),
-    ]);
+    const [qoldiqlar, transferlar, barchaUserlar, kassirlar, kutilayotganlar, topshiriqTarix] =
+      await Promise.all([
+        getAccountBalances(businessId),
+        listTransfers(businessId, 30),
+        prisma.user.findMany({
+          where: { isActive: true },
+          select: { id: true, ism: true },
+          orderBy: { ism: "asc" },
+        }),
+        // KASSIR KASSASI (kassa topshirish) — biznes kassalaridan ALOHIDA
+        // ko'rsatkich: pul qaysi hisobda emas, KIMNING qo'lida ekani.
+        listKassirQoldiqlari(businessId),
+        listKutilayotganTopshiriqlar(businessId),
+        listTopshiriqlar(businessId, 20),
+      ]);
+    // Foydalanuvchiga pul o'tkazish (PRO) uchun qabul qiluvchilar ro'yxati.
+    const userlar = pro ? barchaUserlar : [];
 
     return (
       <div className="space-y-6">
@@ -58,6 +71,16 @@ export default async function KassaPage() {
           transferlar={transferlar}
           userlar={userlar.filter((u) => u.id !== session.userId)}
           pro={pro}
+        />
+
+        {/* KASSA TOPSHIRISH — biznes kassalaridan ATAYLAB alohida blok.
+            Bu yerdagi qarorlar kirim/chiqim/sof raqamlariga tegmaydi. */}
+        <TopshiriqlarPaneli topshiriqlar={kutilayotganlar} />
+        <KassirlarPaneli kassirlar={kassirlar} userlar={barchaUserlar} />
+        <KassaTarix
+          tarix={topshiriqTarix}
+          sarlavha="Kassa topshiriqlari tarixi"
+          kassirKorsatilsin
         />
       </div>
     );

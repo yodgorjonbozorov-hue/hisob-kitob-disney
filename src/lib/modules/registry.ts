@@ -56,6 +56,9 @@ export const MODULLAR: ModulTarifi[] = [
       { href: "/app/hisobot", label: "Oylik hisobot", icon: "report", tartib: 12, rollar: BOSHQARUVCHILAR },
       { href: "/app/byudjet", label: "Budjet", icon: "budget", tartib: 13, rollar: BOSHQARUVCHILAR },
       { href: "/app/kassa", label: "Kassalar", icon: "wallet", tartib: 14, rollar: BOSHQARUVCHILAR },
+      // "Mening kassam" — HAR ROL uchun: direktor ham yozuv kiritadi va
+      // uning qo'lida ham naqd qolishi mumkin.
+      { href: "/app/kassam", label: "Mening kassam", icon: "cash", tartib: 16, rollar: HAMMA },
       { href: "/app/takroriy", label: "Takroriy", icon: "repeat", tartib: 40, rollar: BOSHQARUVCHILAR },
       { href: "/app/smena", label: "Kun yakuni", icon: "shift", tartib: 41, rollar: ["OWNER", "ADMIN", "CASHIER"] },
     ],

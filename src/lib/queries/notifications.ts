@@ -68,6 +68,54 @@ export async function getNotifications(
     }
   }
 
+  // KASSIR KASSASI. Ikki tomonlama eslatma:
+  //  - xodimga: kassangizda pul qoldi, kunni topshirmasdan yakunlamang;
+  //  - direktorga: tasdiq kutayotgan topshiriqlar bor.
+  // Hech biri kirim/chiqim raqamlariga bog'liq emas (lib/services/kassirKassa.ts).
+  if (opts.userId) {
+    // Yengil yo'l: to'liq `getKassaHolat` emas (u 7 so'rov qiladi va bu blok
+    // HAR sahifa yuklanishida nav badge uchun chaqiriladi).
+    const { kassaQoldiq } = await import("@/lib/services/kassirKassa");
+    const { listKutilayotganTopshiriqlar } = await import("@/lib/queries/kassirKassa");
+    const [qoldiq, ozKutayotgani] = await Promise.all([
+      kassaQoldiq(businessId, opts.userId),
+      prisma.cashHandover.count({
+        where: { businessId, kassirId: opts.userId, holat: "kutilmoqda" },
+      }),
+    ]);
+    if (qoldiq > 0 && ozKutayotgani === 0) {
+      out.push({
+        severity: "warning",
+        title: "Kassangiz topshirilmagan",
+        message: `Kassangizda ${qoldiq.toLocaleString("ru-RU")} so'm bor — direktor/qabul qiluvchiga topshiring`,
+        href: "/app/kassam",
+      });
+    } else if (qoldiq < 0) {
+      out.push({
+        severity: "danger",
+        title: "Kassangizda kamomad",
+        message: `${Math.abs(qoldiq).toLocaleString("ru-RU")} so'm yetishmaydi — direktor bilan bog'laning`,
+        href: "/app/kassam",
+      });
+    }
+
+    if (isManager(opts.rol)) {
+      const kutilayotganlar = await listKutilayotganTopshiriqlar(businessId, 20);
+      if (kutilayotganlar.length > 0) {
+        const jami = kutilayotganlar.reduce((a, t) => a + t.topshirilgan, 0);
+        const farqli = kutilayotganlar.filter((t) => t.farq !== 0).length;
+        out.push({
+          severity: farqli > 0 ? "danger" : "info",
+          title: "Kassa topshiriqlari kutilmoqda",
+          message:
+            `${kutilayotganlar.length} ta topshiriq, jami ${jami.toLocaleString("ru-RU")} so'm` +
+            (farqli > 0 ? ` — ${farqli} tasida kamomad/ortiqcha bor` : ""),
+          href: "/app/kassa",
+        });
+      }
+    }
+  }
+
   // Budjet oshishi (faqat admin)
   if (isManager(opts.rol)) {
     const budgets = await getBudgetsWithSpend(businessId, month);

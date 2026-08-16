@@ -1,5 +1,6 @@
 import { requireSuperadminPage } from "@/lib/auth/superadmin";
 import { listTenantsOverview, getMetrics } from "@/lib/superadmin/service";
+import { getKassaMetrikalari } from "@/lib/superadmin/kassa";
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { SuperadminClient } from "./SuperadminClient";
 
@@ -9,8 +10,9 @@ export const metadata = { title: "SUPERADMIN — Balansa platforma boshqaruvi" }
 export default async function SuperadminPage() {
   const session = await requireSuperadminPage();
 
-  const [metrics, tenants, pendingPayments, users] = await Promise.all([
+  const [metrics, kassaMetrics, tenants, pendingPayments, users] = await Promise.all([
     getMetrics(),
+    getKassaMetrikalari(),
     listTenantsOverview(),
     rawPrisma.payment.findMany({
       where: { status: "PENDING" },
@@ -28,6 +30,7 @@ export default async function SuperadminPage() {
     <SuperadminClient
       superadminIsm={session.ism}
       metrics={metrics}
+      kassaMetrics={kassaMetrics}
       tenants={tenants.map((t) => ({
         ...t,
         createdAt: t.createdAt.toISOString(),

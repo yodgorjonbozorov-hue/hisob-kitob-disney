@@ -2493,6 +2493,67 @@ tasdiqlash 20/20.
 
 ---
 
+## 2026-08-16 — Kassir kassasi / kassa topshirish tizimi
+
+**Nima qilindi** (branch: `claude/kassa-topshirish-system-9lzzv8`):
+
+Biznes hisobotiga PARALLEL, undan MUSTAQIL "kassir kassasi" tizimi. Asosiy
+talab: kassa topshirilishi Kirim/Chiqim/Sof/hisobotlarni umuman
+o'zgartirmaydi — faqat kassirning qo'lidagi pul qoldig'i 0 ga tushadi.
+
+1. **`CashHandover` modeli** (yangi jadval, migratsiya
+   `20260816120000_kassir_kassasi`). Ikki yo'nalish bitta jadvalda:
+   `turi = "topshirish"` (kassir → direktor, tasdiq kutadi) va
+   `turi = "berish"` (direktor → kassirga boshlang'ich pul, darhol qabul).
+   `tenantDb.BUSINESS_SCOPED` va `dump.ZAXIRA_JADVALLARI` ga qo'shildi.
+   - **Saqlangan `currentBalance` ATAYLAB YO'Q** — ikkinchi haqiqat manbai
+     bo'lardi. Qoldiq har doim ledgerdan hisoblanadi.
+   - **`CashRegister` jadvali ham yaratilmadi** — mavjud `Account.userId`
+     (shaxsiy kassa) va Transaction ledgeri yetarli; "ochiq/yopilgan" holat
+     esa qoldiqdan hosila (`qoldiq !== 0`).
+   - `DISCREPANCY` alohida holat sifatida kiritilmadi — u `farq != 0` dan
+     kelib chiqadi va UI'da "Kamomad"/"Ortiqcha" bo'lib ko'rinadi.
+
+2. **`src/lib/services/kassirKassa.ts`** — formulaning yagona joyi:
+   `qoldiq = naqd kirim(kassir) − naqd chiqim(kassir) + berishlar − topshiriqlar`.
+   Faqat NAQD sanaladi (Click/qarz kassirning qo'liga tushmaydi); naqdlik
+   qoidasi smena bilan bir xil (`tolovTuri`, aks holda kassa turi).
+   - `harakatTasiri()` sof funksiya: kamomad OCHIQ qolsa faqat topshirilgani
+     ayriladi (kassirda qarz qoladi), YOPILSA hisoblangani to'liq ayriladi
+     (kassa 0). Ortiqchada farq HAR DOIM yopiladi — manfiy kassaning ma'nosi yo'q.
+   - Topshirish va qaror `runBusinessTx` ichida ATOMIK; `hisoblangan` server
+     tomonda tranzaksiya ichida hisoblanadi va muzlatiladi (kassir so'rov
+     tanasida raqam yubora olmaydi).
+   - Ikki marta qabul qilish BAZADA bloklanadi: `updateMany` + `holat`
+     sharti + `count !== 1` tekshiruvi. Kassirda bir vaqtda bitta kutayotgan
+     topshiriq bo'ladi.
+
+3. **UI:** `/app/kassam` ("Mening kassam", har rol uchun) — eng katta raqam
+   kassadagi qoldiq, `KASSANI TOPSHIRISH` tugmasi, tasdiq oynasi, kassa
+   tarixi va "kassangiz yopilmagan" ogohlantirishi. `/app/kassa` (direktor)
+   ga uchta blok qo'shildi: kutilayotgan topshiriqlar (qabul/rad, kamomad
+   qarori bilan), kassirlar qoldig'i + "kassaga pul berish", topshiriqlar
+   tarixi. Yozuvlar sahifasidagi asosiy moliyaviy blok TEGILMADI — uning
+   ostiga alohida "Mening kassam" kartasi qo'shildi.
+
+4. **Bildirishnomalar:** xodimga "kassangiz topshirilmagan" / "kamomad",
+   direktorga "kassa topshiriqlari kutilmoqda". **Superadmin:**
+   `src/lib/superadmin/kassa.ts` — jami kassalar, jami kassadagi pul,
+   bugungi kirim/chiqim, topshirilgan, kutilayotgan, kamomad, ortiqcha.
+
+**Migratsiya:** `20260816120000_kassir_kassasi` — FAQAT `CREATE TABLE` +
+2 indeks. Mavjud jadvallarga va ma'lumotga tegilmaydi (xavf: past).
+`prisma/migrations-postgres/` qayta generatsiya qilindi.
+
+**Tekshirildi:** build ✅ · kassir-kassa 22/22 (YANGI — FINAL TEST stsenariysi:
+5 mln kirim + 4 mln chiqim → kassa 1 mln → topshirildi → qabul qilindi →
+kassa 0, Kirim/Chiqim/Sof/biznes kassalari O'ZGARMADI, Transaction yozilmadi
+ham, o'chirilmadi ham) · kassa 11/11 · smena 14/14 · agregat 7/7 ·
+atomik 6/6 · audit 12/12 · soft-delete 8/8 · backup 6/6 · migratsiya 10/10 ·
+postgres 2/2 · isolation 9/9 · izolyatsiya-royxati 9/9.
+
+---
+
 ## 2026-08-15 — Foydalanuvchilar sahifasi: Balans / Qarz / Yozuvlar ustunlari (§12)
 
 **Nima qilindi** (branch: `claude/manabu-qism-visibility-5ztu13`):
