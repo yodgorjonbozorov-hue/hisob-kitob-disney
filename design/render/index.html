@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="uz"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Balansa iOS — jonli indeks</title>
+<style>
+  body { margin:0; padding:32px; background:#0b1220; color:#e2e8f0;
+         font-family: system-ui, sans-serif; }
+  h1 { font-size:24px; margin:0 0 4px; }
+  .izoh { color:#94a3b8; font-size:14px; margin:0 0 28px; }
+  .grid { display:flex; flex-wrap:wrap; gap:36px; }
+  .kart h2 { font-size:12px; font-weight:600; color:#94a3b8; margin:0 0 8px;
+             font-family:ui-monospace,monospace; }
+  .juft { display:flex; gap:14px; }
+  iframe { width:393px; height:852px; border:0; border-radius:18px;
+           background:#000; box-shadow:0 8px 32px rgba(0,0,0,.5); display:block; }
+  .juft p { margin:6px 0 0; font-size:11px; color:#64748b; text-align:center; }
+</style></head>
+<body>
+  <h1>Balansa iOS — jonli indeks</h1>
+  <p class="izoh">1 ta ekran · HTML to'g'ridan-to'g'ri ochiladi (render kutilmaydi)</p>
+  <div class="grid">
+  <section class="kart">
+    <h2>BAL-003-home</h2>
+    <div class="juft">
+      <div><iframe src="./screens/BAL-003-home.html" data-mode="light"></iframe><p>light</p></div>
+      <div><iframe src="./screens/BAL-003-home.html" data-mode="dark"></iframe><p>dark</p></div>
+    </div>
+  </section>
+  </div>
+<script>
+  // Har iframe yuklangach unga rejimni beramiz — bitta HTML ikki ko'rinishda.
+  for (const f of document.querySelectorAll("iframe")) {
+    f.addEventListener("load", () => {
+      const d = f.contentDocument;
+      if (!d) return;
+      d.documentElement.dataset.mode = f.dataset.mode;
+      d.documentElement.dataset.material = "glass";
+    });
+  }
+</script>
+</body></html>

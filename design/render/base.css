@@ -1,0 +1,309 @@
+/* ═══════════════════════════════════════════════════════════════════
+   BALANSA iOS — BAZA QATLAMI
+   Qurilma ramkasi, xavfsiz zona, status bar, home indicator,
+   tipografiya primitivlari. Rang/o'lcham FAQAT tokens.css dan.
+   ═══════════════════════════════════════════════════════════════════ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body {
+  width: var(--device-w);
+  height: var(--device-h);
+  overflow: hidden; /* Ekran KESILMAYDI — render aynan qurilma o'lchamida */
+}
+
+body {
+  font-family: var(--font-text);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  letter-spacing: var(--ls-body);
+  color: var(--label-1);
+  background: var(--bg-base);
+}
+
+/* Raqamlar HAR JOYDA tabular — ustunlar sakramaydi, pul tekislanadi.
+   Bu loyihaning qat'iy qoidasi (web'da ham shunday). */
+.tnum,
+.amount,
+table,
+[data-numeric] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* ───────────────────── Qurilma ramkasi ───────────────────── */
+
+.device {
+  position: relative;
+  width: var(--device-w);
+  height: var(--device-h);
+  overflow: hidden;
+  background: var(--bg-base);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Ekran mazmuni — status bar bilan home indicator ORASIDA.
+   Xavfsiz zona shu yerda hurmat qilinadi. */
+.screen {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Skroll qiladigan mazmun. Render statik, lekin uzun ro'yxat
+   kesilganda "davomi bor" hissi qolishi uchun shunday tuziladi. */
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding-inline: var(--sp-4);
+}
+
+/* ───────────────────── Status bar ─────────────────────
+   Balandligi --safe-top. Ichida 9:41 va indikatorlar. */
+
+.statusbar {
+  position: relative;
+  z-index: 40;
+  height: var(--safe-top);
+  flex: 0 0 var(--safe-top);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 0 var(--sp-5) 10px;
+  color: var(--sysbar-ink);
+  font-family: var(--font-display);
+  pointer-events: none;
+}
+
+.statusbar__time {
+  font-size: 17px;
+  line-height: 22px;
+  font-weight: 620;
+  letter-spacing: -0.2px;
+  font-variant-numeric: tabular-nums;
+  /* Dynamic Island chapga surib qo'yadi */
+  padding-left: 6px;
+}
+
+.statusbar__right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.statusbar__right svg {
+  display: block;
+  fill: currentColor;
+}
+
+/* Dynamic Island — status bar markazida qora kapsula */
+.island {
+  position: absolute;
+  top: 11px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 125px;
+  height: 37px;
+  border-radius: var(--r-full);
+  background: #000;
+  z-index: 41;
+}
+
+/* ───────────────────── Home indicator ───────────────────── */
+
+.homebar {
+  position: relative;
+  z-index: 40;
+  height: var(--safe-bottom);
+  flex: 0 0 var(--safe-bottom);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.homebar__line {
+  width: 140px;
+  height: 5px;
+  border-radius: var(--r-full);
+  background: var(--label-1);
+  opacity: 0.85;
+}
+
+/* ───────────────────── Tipografiya primitivlari ───────────────────── */
+
+.t-large-title {
+  font-family: var(--font-display);
+  font-size: var(--t-large-title);
+  line-height: var(--lh-large-title);
+  letter-spacing: var(--ls-large-title);
+  font-weight: 700;
+}
+.t-title-1 {
+  font-family: var(--font-display);
+  font-size: var(--t-title-1);
+  line-height: var(--lh-title-1);
+  letter-spacing: var(--ls-title-1);
+  font-weight: 700;
+}
+.t-title-2 {
+  font-family: var(--font-display);
+  font-size: var(--t-title-2);
+  line-height: var(--lh-title-2);
+  letter-spacing: var(--ls-title-2);
+  font-weight: 700;
+}
+.t-title-3 {
+  font-family: var(--font-display);
+  font-size: var(--t-title-3);
+  line-height: var(--lh-title-3);
+  letter-spacing: var(--ls-title-3);
+  font-weight: 620;
+}
+.t-headline {
+  font-size: var(--t-headline);
+  line-height: var(--lh-headline);
+  letter-spacing: var(--ls-headline);
+  font-weight: 620;
+}
+.t-body {
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  letter-spacing: var(--ls-body);
+  font-weight: 400;
+}
+.t-callout {
+  font-size: var(--t-callout);
+  line-height: var(--lh-callout);
+  letter-spacing: var(--ls-callout);
+}
+.t-subheadline {
+  font-size: var(--t-subheadline);
+  line-height: var(--lh-subheadline);
+  letter-spacing: var(--ls-subheadline);
+}
+.t-footnote {
+  font-size: var(--t-footnote);
+  line-height: var(--lh-footnote);
+  letter-spacing: var(--ls-footnote);
+}
+.t-caption-1 {
+  font-size: var(--t-caption-1);
+  line-height: var(--lh-caption-1);
+  letter-spacing: var(--ls-caption-1);
+}
+.t-caption-2 {
+  font-size: var(--t-caption-2);
+  line-height: var(--lh-caption-2);
+  letter-spacing: var(--ls-caption-2);
+}
+
+/* Pul summasi — display shrift + tabular */
+.amount {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  letter-spacing: -0.5px;
+}
+.amount--xl {
+  font-size: var(--t-amount-xl);
+  line-height: var(--lh-amount-xl);
+  font-weight: 700;
+}
+.amount--lg {
+  font-size: var(--t-amount-lg);
+  line-height: var(--lh-amount-lg);
+  font-weight: 700;
+}
+.amount--md {
+  font-size: var(--t-amount-md);
+  line-height: var(--lh-amount-md);
+  font-weight: 620;
+}
+
+/* Matn rangi yordamchilari */
+.c-1 { color: var(--label-1); }
+.c-2 { color: var(--label-2); }
+.c-3 { color: var(--label-3); }
+.c-4 { color: var(--label-4); }
+.c-accent { color: var(--accent); }
+.c-income { color: var(--income); }
+.c-expense { color: var(--expense); }
+.c-debt { color: var(--debt); }
+
+/* ───────────────────── Material (Liquid Glass) ─────────────────────
+   Shaffof sirt: fon rangini o'ziga singdiradi, blur qiladi, yuqori
+   qirrasida yupqa yorug'lik chizig'i qoladi. `solid` rejimida
+   backdrop-filter 0 bo'lib, oddiy qattiq sirtga aylanadi. */
+
+.glass {
+  background: var(--mat-bg);
+  backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-saturate));
+  -webkit-backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-saturate));
+  box-shadow: inset 0 1px 0 var(--mat-highlight);
+  border: 1px solid var(--mat-border);
+}
+
+/* Faqat ekran ustidagi suzuvchi qatlamlar (nav bar, tab bar, sheet) */
+.glass--bar {
+  background: var(--mat-bg);
+  backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-saturate));
+  -webkit-backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-saturate));
+  border: 0;
+}
+
+/* ───────────────────── Yordamchilar ───────────────────── */
+
+.row {
+  display: flex;
+  align-items: center;
+}
+.row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.col {
+  display: flex;
+  flex-direction: column;
+}
+.grow { flex: 1; min-width: 0; }
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gap-1 { gap: var(--sp-1); }
+.gap-2 { gap: var(--sp-2); }
+.gap-3 { gap: var(--sp-3); }
+.gap-4 { gap: var(--sp-4); }
+
+.mt-2 { margin-top: var(--sp-2); }
+.mt-3 { margin-top: var(--sp-3); }
+.mt-4 { margin-top: var(--sp-4); }
+.mt-5 { margin-top: var(--sp-5); }
+.mt-6 { margin-top: var(--sp-6); }
+
+/* Har interaktiv element minimal tegish maydonini kafolatlaydi */
+.tap {
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

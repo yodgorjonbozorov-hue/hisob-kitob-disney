@@ -1,0 +1,286 @@
+/* ═══════════════════════════════════════════════════════════════════
+   BALANSA iOS — KOMPONENT KUTUBXONASI
+   ═══════════════════════════════════════════════════════════════════
+   FAZA 0 da minimal to'plam (test ekran uchun yetarli).
+   To'liq kutubxona FAZA 5 da quriladi va BAL-900 da ko'rsatiladi.
+   Qat'iy qoida: bu yerda rang/o'lcham QIYMATI yozilmaydi — faqat token.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ───────────────────── Navigation bar ─────────────────────
+   Ekran ustida suzadi (Liquid Glass), skroll ostidan o'tadi. */
+
+.navbar {
+  position: relative;
+  z-index: 30;
+  flex: 0 0 auto;
+  min-height: var(--tap-min);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-4) var(--sp-2);
+}
+
+/* Biznes almashtirgich — navbar chapida, tegish maydoni to'liq */
+.biz-switch {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--tap-min);
+  padding: var(--sp-1) var(--sp-3) var(--sp-1) var(--sp-1);
+  border-radius: var(--r-full);
+  background: var(--fill);
+  max-width: 240px;
+}
+
+.biz-switch__logo {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-sm);
+  background: var(--accent);
+  color: var(--accent-on);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--t-subheadline);
+  flex: 0 0 auto;
+}
+
+/* Ikonka tugmasi (bildirishnoma, qidiruv) */
+.icon-btn {
+  width: var(--tap-min);
+  height: var(--tap-min);
+  border-radius: var(--r-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--label-1);
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.icon-btn__dot {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 9px;
+  height: 9px;
+  border-radius: var(--r-full);
+  background: var(--expense);
+  border: 2px solid var(--bg-base);
+}
+
+/* ───────────────────── Karta ───────────────────── */
+
+.card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--sp-4);
+}
+
+.card--flush { padding: 0; overflow: hidden; }
+
+/* ───────────────────── Statistika kartasi ─────────────────────
+   Rangga TAYANMAYDI: har birida ikona + ishora (↑/↓) ham bor —
+   rang ko'rmaydiganlar uchun (FAZA 4 accessibility qoidasi). */
+
+.stat {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--sp-3) var(--sp-3) var(--sp-4);
+}
+
+.stat__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  color: var(--label-2);
+}
+
+.stat__icon {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--r-xs);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+.stat__icon--income { background: var(--income-soft); color: var(--income-on); }
+.stat__icon--expense { background: var(--expense-soft); color: var(--expense-on); }
+
+.stat__value { margin-top: var(--sp-2); }
+
+/* ───────────────────── Tez amal tugmalari ───────────────────── */
+
+.quick {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.quick__item {
+  flex: 1;
+  min-height: 74px;
+  border-radius: var(--r-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  padding: var(--sp-2);
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  box-shadow: var(--shadow-card);
+  text-align: center;
+}
+
+.quick__icon {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+.quick__icon--income { background: var(--income-soft); color: var(--income-on); }
+.quick__icon--expense { background: var(--expense-soft); color: var(--expense-on); }
+.quick__icon--sale { background: var(--accent-wash); color: var(--accent); }
+
+/* ───────────────────── Ro'yxat ───────────────────── */
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 var(--sp-1) var(--sp-2);
+}
+
+.list {
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 56px;
+  padding: var(--sp-2) var(--sp-4);
+  position: relative;
+}
+
+/* Ajratkich matndan boshlanadi (iOS naqshi), butun kenglikda emas */
+.list-row + .list-row::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: calc(var(--sp-4) + 38px + var(--sp-3));
+  right: 0;
+  height: 1px;
+  background: var(--separator);
+}
+
+.list-row__icon {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--r-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+.list-row__icon--income { background: var(--income-soft); color: var(--income-on); }
+.list-row__icon--expense { background: var(--expense-soft); color: var(--expense-on); }
+.list-row__icon--debt { background: var(--debt-soft); color: var(--debt-on); }
+
+/* ───────────────────── Chip / Badge ───────────────────── */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  height: 24px;
+  padding: 0 var(--sp-2);
+  border-radius: var(--r-full);
+  background: var(--fill);
+  color: var(--label-2);
+  font-size: var(--t-caption-1);
+  line-height: 1;
+  font-weight: 500;
+}
+.chip--income { background: var(--income-soft); color: var(--income-on); }
+.chip--expense { background: var(--expense-soft); color: var(--expense-on); }
+.chip--debt { background: var(--debt-soft); color: var(--debt-on); }
+.chip--accent { background: var(--accent-wash); color: var(--accent); }
+
+/* ───────────────────── Tab bar ─────────────────────
+   Liquid Glass qatlam — ostidagi mazmun ko'rinib turadi.
+   O'rtada FAB (yangi yozuv) — bosh barmoq zonasining markazida. */
+
+.tabbar {
+  position: relative;
+  z-index: 30;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-around;
+  padding: var(--sp-2) var(--sp-2) 0;
+  border-top: 1px solid var(--separator);
+}
+
+.tab {
+  flex: 1;
+  min-height: var(--tap-min);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: var(--label-3);
+}
+.tab--active { color: var(--accent); }
+
+.tab__label {
+  font-size: 10px;
+  line-height: 12px;
+  font-weight: 550;
+  letter-spacing: 0.05px;
+}
+
+/* Markaziy amal tugmasi */
+.tab-fab {
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  margin-top: -14px;
+  border-radius: var(--r-full);
+  background: var(--accent);
+  color: var(--accent-on);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 16px rgba(15, 118, 110, 0.35);
+}
+
+/* ───────────────────── Progress / Aging bar ───────────────────── */
+
+.bar {
+  height: 6px;
+  border-radius: var(--r-full);
+  background: var(--bg-sunk);
+  overflow: hidden;
+  display: flex;
+}
+.bar__seg { height: 100%; }
