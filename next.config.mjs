@@ -43,6 +43,12 @@ const xavfsizlikHeaderlari = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Lint ATAYLAB build'dan ajratilgan: u CI'da alohida qadam sifatida
+  // ishlaydi (`.github/workflows/ci.yml`). ESLint sozlamasi qo'shilgani
+  // uchun `next build` uni o'zi ham ishga tushirardi — ya'ni bitta lint
+  // xatosi production deploy'ini to'xtatib qo'yardi. Deploy'ning avvalgi
+  // xulqi shu bayroq bilan saqlanadi.
+  eslint: { ignoreDuringBuilds: true },
   async headers() {
     return [{ source: "/:path*", headers: xavfsizlikHeaderlari }];
   },

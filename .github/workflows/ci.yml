@@ -1,0 +1,109 @@
+# CI — har push va PR'da kod sifatini va testlarni tekshiradi.
+#
+# PRODUCTION BAZAGA TEGMAYDI. Buning kafolati:
+#   1. Bu workflow'da birorta `secrets.*` ishlatilmaydi — ya'ni production
+#      `DATABASE_URL` / `DATABASE_AUTH_TOKEN` bu yerga umuman kelmaydi.
+#   2. `DATABASE_URL` job darajasida lokal SQLite faylga qotirilgan
+#      (`file:./prisma/ci-test.db`) va "Baza manzilini tekshirish" qadami
+#      `file:` bilan boshlanmasa CI'ni to'xtatadi.
+#   3. `npm run build` ATAYLAB ishga tushirilmaydi: build zanjiri
+#      `deploy-zaxira.mjs` + `db-migrate.mjs` orqali HAQIQIY bazaga yozadi.
+#      CI faqat tipni, lintni va testlarni tekshiradi.
+#
+# Testlarning har biri o'z `DATABASE_URL` ini (`prisma/test-*.db`) o'zi
+# o'rnatadi va migratsiyani o'zi qo'llaydi — ular ham lokal fayllar.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Bir branchda ketma-ket push bo'lsa eskisi bekor qilinadi.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Testlar va migratsiya uchun yagona lokal baza manzili. Production emas.
+  DATABASE_URL: "file:./prisma/ci-test.db"
+
+jobs:
+  # 1-job: tip va lint tekshiruvi (bazasiz).
+  sifat:
+    name: Tip va lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      # `postinstall` -> `prisma generate` shu yerda ishlaydi; ulanish shart emas.
+      - name: Bog'liqliklar (npm ci)
+        run: npm ci
+
+      - name: TypeScript tekshiruvi
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+  # 2-job: baza + migratsiya + testlar. Sifat jobidan mustaqil ishlaydi —
+  # tipda xato bo'lsa ham testlar natijasi ko'rinadi.
+  testlar:
+    name: Testlar
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Bog'liqliklar (npm ci)
+        run: npm ci
+
+      # Himoya: env tasodifan production'ga o'zgartirilsa CI shu yerda to'xtaydi.
+      - name: Baza manzilini tekshirish (production himoyasi)
+        run: |
+          case "$DATABASE_URL" in
+            file:*) echo "OK — lokal sinov bazasi: $DATABASE_URL" ;;
+            *) echo "::error::DATABASE_URL lokal 'file:' bo'lishi shart. CI production bazaga tegmaydi."; exit 1 ;;
+          esac
+
+      # Toza sinov bazasi + barcha migratsiyalar. Bu ayni paytda migratsiya
+      # zanjirining bo'sh bazada qo'llanishini ham tekshiradi.
+      - name: Sinov bazasini yaratish va migratsiyalarni qo'llash
+        run: |
+          rm -f prisma/ci-test.db
+          node scripts/db-migrate.mjs
+
+      # Tenant izolyatsiyasi — loyihaning asosiy invarianti, shuning uchun
+      # alohida va birinchi ishlaydi (yiqilsa qolganini kutib o'tirmaydi).
+      - name: Tenant izolyatsiyasi testlari
+        run: |
+          npm run test:isolation
+          npm run test:izolyatsiya-royxati
+
+      # Qolgan barcha `test:*` to'plamlari. Ro'yxat `package.json` dan
+      # o'qiladi — yangi test qo'shilsa CI o'zi ko'radi.
+      - name: Qolgan testlar
+        run: node scripts/ci-testlar.mjs --tashla isolation,izolyatsiya-royxati
+
+      - name: Xulosa
+        if: always()
+        run: |
+          echo "Baza: \`$DATABASE_URL\` (lokal, CI mashinasida qoladi)." >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,29 @@
+// ESLint sozlamasi — CI uchun qo'shildi (`npm run lint` = `next lint`).
+// Bu fayl bo'lmasa `next lint` interaktiv savol beradi va CI'da osilib qoladi.
+{
+  "extends": "next/core-web-vitals",
+  "ignorePatterns": [
+    ".next/",
+    "node_modules/",
+    "out/",
+    "public/",
+    "twa/",
+    "prisma/migrations/",
+    "prisma/migrations-postgres/"
+  ],
+  "rules": {
+    // O'zbek lotin yozuvida apostrof matnning bir qismi ("o'z", "g'alaba").
+    // Bu qoida har bir apostrofni &apos; ga almashtirishni talab qiladi —
+    // 141 joyda UI matni buziladi. Loyiha tilini hisobga olib o'chirilgan.
+    "react/no-unescaped-entities": "off"
+  },
+  "overrides": [
+    {
+      // `eslint-config-next` faqat parserni ulaydi, pluginni emas. Plugin
+      // ulanmasa koddagi `// eslint-disable-next-line @typescript-eslint/...`
+      // izohlari "qoida topilmadi" xatosini beradi.
+      "files": ["**/*.ts", "**/*.tsx"],
+      "plugins": ["@typescript-eslint"]
+    }
+  ]
+}
