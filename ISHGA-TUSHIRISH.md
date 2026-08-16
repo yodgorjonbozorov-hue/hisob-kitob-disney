@@ -50,6 +50,7 @@ Vercel env tekshiruvi (Settings → Environment Variables):
 | `CRON_SECRET` | yo'q bo'lsa cron 503 qaytaradi (ataylab) |
 | `TELEGRAM_WEBHOOK_SECRET` | yo'q bo'lsa webhook 503 (ataylab) |
 | `BACKUP_CHAT_ID`, `BACKUP_BOT_TOKEN` | kunlik zaxira Telegramga — **qo'yilmasa zaxira YO'Q** |
+| `BACKUP_ENCRYPTION_KEY` | zaxira shifr kaliti (32 bayt) — **qo'yilmasa zaxira YUBORILMAYDI** (ochiq baza kanalga chiqmasligi uchun). Kalitni zaxiradan alohida saqlang: yo'qolsa fayl ochilmaydi |
 | `NEXT_PUBLIC_APP_URL` | domen ulangach `https://balansa.uz` |
 
 ---

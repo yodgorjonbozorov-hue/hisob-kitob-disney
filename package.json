@@ -53,6 +53,7 @@
     "test:automation": "node -r ts-node/register tests/automation.test.ts",
     "test:avto": "node -r ts-node/register tests/avto.test.ts",
     "test:backup": "node -r ts-node/register tests/backup.test.ts",
+    "test:zaxira-shifr": "node -r ts-node/register tests/zaxira-shifr.test.ts",
     "test:bot-avto": "node -r ts-node/register tests/bot-avto.test.ts",
     "test:tolov": "node -r ts-node/register tests/tolov.test.ts",
     "test:xarid": "node -r ts-node/register tests/xarid.test.ts",

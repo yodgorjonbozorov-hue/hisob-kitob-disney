@@ -12,6 +12,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { createDump, jamiYozuvlar } from "@/lib/backup/dump";
+import { KALIT_ENV } from "@/lib/backup/crypto";
 
 async function main() {
   const berilgan = process.argv[2];
@@ -26,6 +27,16 @@ async function main() {
 
   console.log(`\n✅ Zaxira tayyor: ${yol}`);
   console.log(`   Jami yozuv: ${jamiYozuvlar(zaxira)}`);
+  // Parol hashlari zaxira tanasida YO'Q (audit: Critical #2) — kalit bo'lsa
+  // alohida shifrlangan blokda, bo'lmasa umuman yozilmaydi.
+  if (zaxira.sirlar) {
+    console.log("   🔐 Parol hashlari alohida shifrlangan blokda (AES-256-GCM).");
+  } else {
+    console.log(
+      `   ⚠️  ${KALIT_ENV} sozlanmagan — parol hashlari zaxiraga KIRMADI.\n` +
+        "      Bu fayldan tiklansa har foydalanuvchiga yangi parol berish kerak bo'ladi."
+    );
+  }
   for (const [jadval, soni] of Object.entries(zaxira.counts)) {
     if (soni > 0) console.log(`   ${jadval}: ${soni}`);
   }
