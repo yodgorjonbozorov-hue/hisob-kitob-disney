@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { qidiruvRejimi } from "@/lib/db/dialect";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
+import { qarzsiz } from "@/lib/qarzFiltr";
 import type { Prisma } from "@prisma/client";
 
 export interface TransactionListParams {
@@ -47,26 +48,72 @@ export async function listTransactions(params: TransactionListParams) {
 
   const where = buildTransactionWhere(params);
 
-  const [items, total, sums] = await Promise.all([
+  const [items, total, sums, kassaSums, kassalar] = await Promise.all([
     prisma.transaction.findMany({
       where,
-      include: { category: true, user: { select: { id: true, ism: true } } },
+      include: {
+        category: true,
+        user: { select: { id: true, ism: true } },
+        account: { select: { id: true, nomi: true, turi: true } },
+      },
       orderBy: [{ sana: "desc" }, { createdAt: "desc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
     prisma.transaction.count({ where }),
     // Filtrlangan to'plam bo'yicha jami (butun natija, faqat sahifa emas).
+    // QARZ CHIQARIB TASHLANADI: `jamiKirim` va `sof` — REAL pul harakati.
+    // Qarzga yozilgan yozuv `qarzKirim` da alohida ko'rsatiladi.
     prisma.transaction.groupBy({
       by: ["turi"],
-      where,
+      where: qarzsiz(where),
       _sum: { summa: true },
+    }),
+    // KIRIMNING to'lov bo'limlari taqsimoti — pastdagi "Naqd / Click / Qarz"
+    // qatorlari uchun. Aniq tolovTuri ustun; null (eski yozuvlar) — kassa turidan.
+    prisma.transaction.groupBy({
+      by: ["tolovTuri", "accountId"],
+      where: { ...where, turi: "kirim" },
+      _sum: { summa: true },
+    }),
+    prisma.account.findMany({
+      where: { businessId: params.businessId },
+      select: { id: true, turi: true },
     }),
   ]);
 
+  // Ikkalasi ham QARZSIZ to'plamdan — "Sof balans" qarzga berilgan savdo
+  // hisobiga oshib ketmasligi shart (lib/qarzFiltr.ts).
   const jamiKirim = sums.find((s) => s.turi === "kirim")?._sum.summa ?? 0;
   const jamiChiqim = sums.find((s) => s.turi === "chiqim")?._sum.summa ?? 0;
-  const totals = { jamiKirim, jamiChiqim, sof: jamiKirim - jamiChiqim };
+
+  // Tushum bo'limi: yozuvdagi ANIQ tolovTuri ustun; null (eski yozuvlar) —
+  // kassa turidan: naqd kassa (va kassasiz) — Naqd, plastik/bank — Click.
+  // Kunlik hisobot bilan bir xil mantiq.
+  const kassaTuri = new Map(kassalar.map((k) => [k.id, k.turi]));
+  let naqdKirim = 0;
+  let clickKirim = 0;
+  let qarzKirim = 0;
+  for (const g of kassaSums) {
+    const summa = g._sum.summa ?? 0;
+    if (g.tolovTuri === "naqd") naqdKirim += summa;
+    else if (g.tolovTuri === "click") clickKirim += summa;
+    else if (g.tolovTuri === "qarz") qarzKirim += summa;
+    else {
+      const turi = g.accountId ? kassaTuri.get(g.accountId) ?? "naqd" : "naqd";
+      if (turi === "naqd") naqdKirim += summa;
+      else clickKirim += summa;
+    }
+  }
+
+  const totals = {
+    jamiKirim,
+    jamiChiqim,
+    sof: jamiKirim - jamiChiqim,
+    naqdKirim,
+    clickKirim,
+    qarzKirim,
+  };
 
   return { items, total, page, pageSize, totals };
 }

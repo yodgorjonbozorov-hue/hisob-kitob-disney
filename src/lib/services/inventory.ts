@@ -2,10 +2,13 @@ import { prisma } from "@/lib/prisma";
 import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { createTransactionTx } from "@/lib/services/transactionService";
 import { runBusinessTx, type BusinessTx } from "@/lib/db/businessTx";
+import { currentTenantId } from "@/lib/db/tenantContext";
+import { ensureUserKassaTx } from "@/lib/services/userKassa";
 import { todayDateOnlyString, dateOnlyStringToUTCDate } from "@/lib/date";
 import { isAvto } from "@/lib/biznesTuri";
 import { logAudit } from "@/lib/services/audit";
 import { qarzLimitTekshirTx } from "@/lib/services/mijoz";
+import { qarzHolatHisobla } from "@/lib/validation/qarz";
 
 // Sotuv va qarz to'lovi uchun avtomatik ishlatiladigan kategoriyalar.
 const SOTUV_KATEGORIYA = "Sotuv";
@@ -222,6 +225,8 @@ export async function createSale(params: {
       await tx.sale.update({ where: { id: sale.id }, data: { transactionId: txn.id } });
     } else {
       // Qarz — daromad yozilmaydi, qarzdorlik yaratiladi (bizga qarzdor).
+      // Kirim faqat to'lov qabul qilinganda, TO'LOV SANASI bilan yoziladi
+      // (lib/services/qarz.ts).
       await tx.debt.create({
         data: {
           businessId: params.businessId,
@@ -232,6 +237,8 @@ export async function createSale(params: {
           mijozNomi: params.mijozNomi!.trim(),
           mijozTel: params.mijozTel?.trim() || undefined,
           jamiSumma,
+          status: "OPEN",
+          sana: dateOnlyStringToUTCDate(sana),
           userId: params.userId,
         },
       });
@@ -335,84 +342,12 @@ export async function cancelSale(params: {
 }
 
 /**
- * Qarz to'lovi — qarzni kamaytiradi va pul harakatini yozadi:
- *  - "olinadigan" (bizga qarzdor) → kirim tranzaksiya;
- *  - "beriladigan" (biz qarzdormiz) → chiqim tranzaksiya.
+ * QARZ TO'LOVI shu fayldan `lib/services/qarz.ts` ga ko'chirildi.
+ *
+ * Sabab: to'lov endi sana, to'lov usuli, kassa va takror bosishdan himoya
+ * kabi qarzga xos qoidalarni o'z ichiga oladi — bular ombor mantig'i emas.
+ * Chaqirish: `qarzTolov({ businessId, debtId, summa, ... })`.
  */
-export async function recordDebtPayment(params: {
-  businessId: string;
-  debtId: string;
-  summa: number;
-  userId: string;
-}) {
-  const qarz = await runBusinessTx(params.businessId, async (tx) => {
-    const debt = await tx.debt.findFirst({
-      where: { id: params.debtId, businessId: params.businessId },
-    });
-    if (!debt) throw new ForbiddenError("Qarz topilmadi");
-    if (debt.isYopilgan) throw new BadRequestError("Bu qarz allaqachon yopilgan");
-
-    const qolgan = debt.jamiSumma - debt.tolangan;
-    if (params.summa > qolgan) {
-      throw new BadRequestError("To'lov summasi qolgan qarzdan ko'p");
-    }
-
-    const beriladigan = debt.turi === "beriladigan";
-    const categoryId = await ensureCategoryTx(
-      tx,
-      params.businessId,
-      beriladigan ? QARZ_TOLASH_KATEGORIYA : QARZ_TOLOVI_KATEGORIYA,
-      beriladigan ? "chiqim" : "kirim"
-    );
-    const txn = await createTransactionTx(tx, params.userId, params.businessId, {
-      turi: beriladigan ? "chiqim" : "kirim",
-      categoryId,
-      summa: params.summa,
-      sana: todayDateOnlyString(),
-      izoh: `${beriladigan ? "Qarz to'lash" : "Qarz to'lovi"}: ${debt.mijozNomi}`,
-    });
-
-    await tx.debtPayment.create({
-      data: {
-        debtId: debt.id,
-        businessId: params.businessId,
-        summa: params.summa,
-        userId: params.userId,
-        transactionId: txn.id,
-      },
-    });
-
-    // Optimistik qulf: `tolangan` biz o'qigan qiymatda qolgan bo'lsagina yoziladi.
-    // Ikki xodim bir vaqtda to'lov kiritsa — ikkinchisi jimgina yo'qolmaydi.
-    const yangiTolangan = debt.tolangan + params.summa;
-    const upd = await tx.debt.updateMany({
-      where: {
-        id: debt.id,
-        businessId: params.businessId,
-        tolangan: debt.tolangan,
-        isYopilgan: false,
-      },
-      data: {
-        tolangan: yangiTolangan,
-        isYopilgan: yangiTolangan >= debt.jamiSumma,
-      },
-    });
-    if (upd.count === 0) {
-      throw new BadRequestError("Qarz holati o'zgardi — sahifani yangilab qayta urinib ko'ring");
-    }
-
-    return tx.debt.findUniqueOrThrow({ where: { id: debt.id } });
-  });
-
-  await logAudit({
-    businessId: params.businessId,
-    action: "create",
-    entity: "debtPayment",
-    entityId: params.debtId,
-    after: { summa: params.summa, tolangan: qarz.tolangan, isYopilgan: qarz.isYopilgan },
-  });
-  return qarz;
-}
 
 /**
  * Qo'lda qarzdorlik yaratish — ikki yo'nalishda ham.
@@ -429,6 +364,8 @@ export interface CreateDebtParams {
   productId?: string | null;
   muddat?: string | null;
   izoh?: string | null;
+  /** Qarz berilgan sana "YYYY-MM-DD". Berilmasa — bugun. */
+  sana?: string | null;
   userId: string;
 }
 
@@ -451,6 +388,8 @@ async function createDebtTx(tx: BusinessTx, params: CreateDebtParams) {
     if (!product) throw new ForbiddenError("Mahsulot topilmadi");
   }
 
+  // Holat yagona joydan chiqadi — `status` hech qayerda qo'lda yozilmaydi.
+  const status = qarzHolatHisobla(params.jamiSumma, tolangan);
   return tx.debt.create({
     data: {
       businessId: params.businessId,
@@ -459,7 +398,9 @@ async function createDebtTx(tx: BusinessTx, params: CreateDebtParams) {
       mijozTel: params.mijozTel?.trim() || undefined,
       jamiSumma: params.jamiSumma,
       tolangan,
-      isYopilgan: tolangan >= params.jamiSumma,
+      status,
+      isYopilgan: status === "PAID",
+      sana: dateOnlyStringToUTCDate(params.sana ?? todayDateOnlyString()),
       productId: params.productId || undefined,
       muddat: params.muddat ? new Date(params.muddat) : undefined,
       izoh: params.izoh?.trim() || undefined,

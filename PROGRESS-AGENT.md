@@ -2049,3 +2049,549 @@ funksiya regioni `dub1` → redeploy. Eski Tokio bazasi rollback uchun turibdi.
 
 **O'lchov (keyin):** login POST (DB bilan) 0.5–1 s (oldin 2.5–3.8 s edi),
 SSR sahifa 150–600 ms, `x-vercel-id: hkg1::dub1`.
+
+---
+
+## 2026-08-11 · KUNLIK HISOBOT moduli (Disney Flowers so'rovi)
+
+**Branch:** `claude/disney-flowers-daily-report-q272aw` · **Migratsiya: 1 ta (faqat CREATE TABLE)**
+
+Loyiha egasi Disney Flowers biznesi uchun oylik hisobotdan ALOHIDA kunlik
+moliyaviy hisobot so'radi: naqd / Click / qarz tushumlari, kun yakunini
+tayinlangan direktor tasdiqlashi, ertasi kuni 0 dan boshlanishi, tarix.
+
+**Asosiy qaror — oylik tizimga tegilmadi.** Kunlik tushumlar `Transaction`
+jadvaliga YOZILMAYDI: alohida `DailyReport` + `DailyTransaction` jadvallari.
+Shuning uchun oylik hisobot, kassa qoldig'i, budjet va dashboard raqamlari
+o'zgarmaydi. (Modul istalgan biznesda ishlaydi — "Disney Flowers" alohida
+kod emas, biznes tanlagichdagi oddiy biznes.)
+
+**Sxema (3 yangi model):**
+- `DailyReport` — `@@unique([businessId, sana])`: bir biznes + bir sana =
+  bitta hisobot. Bazadagi unique kalit parallel kiritish race'ini yopadi.
+  Summalar (naqd/click/qarz/jami) har mutatsiyada `jamlashTx` bilan bazadan
+  qayta hisoblanadi — frontend yuborgan songa ishonilmaydi.
+- `DailyTransaction` — summa (Int, musbat), tolovTuri CASH|CLICK|DEBT, izoh,
+  userId + userIsm snapshot (kim kiritgani), soft-delete.
+- `DailyReportSetting` — biznes uchun tayinlangan direktor (`direktorId`).
+  Tekshiruv xizmat qatlamida: faqat shu tenantning faol foydalanuvchisi,
+  kassir bo'lsa aynan shu biznesniki.
+
+Uchalasi `BUSINESS_SCOPED` (tenantDb) va `ZAXIRA_JADVALLARI` (dump, FK
+tartibida oxirida) ro'yxatlarida. Migratsiya: `20260811120000_kunlik_hisobot`
+(faqat CREATE TABLE — xavf past); `migrations-postgres` qayta generatsiya
+qilindi (43 jadval).
+
+**Kun chegarasi — Toshkent.** `todayTashkentDateOnlyString()` (`lib/date.ts`,
+UTC+5, DSTsiz): server UTC'da bo'lsa ham kun O'zbekiston yarim tunida
+almashadi. Tushum HAR DOIM bugungi (Toshkent) hisobotga yoziladi — hisobot
+yo'q bo'lsa tranzaksiya ichida `upsert` bilan ochiladi. UI'dagi soatlar ham
+Toshkent bo'yicha (`app/kunlik/vaqt.ts`, brauzer timezone'iga tayanmaydi).
+
+**Holat oqimi:** OPEN → (faqat direktor) → CONFIRMED. Qayta tasdiqlash
+`updateMany + holat: "OPEN"` sharti bilan bazada rad etiladi. CONFIRMED
+kunga tushum kiritish/tahrirlash/o'chirish taqiqlanadi; tuzatish uchun
+direktor/boshqaruvchi kunni "qayta ochadi", tuzatadi, qayta tasdiqlaydi.
+Tasdiqlagan kim va qachon — `confirmedBy/confirmedByIsm/confirmedAt`.
+
+**Ruxsatlar (`getKunlikRuxsat` — yagona manba):**
+- Xodim (kassir/sotuvchi): bugungi hisobotni ko'radi, tushum kiritadi,
+  faqat O'Z tushumini (kun ochiq bo'lsa) o'zgartira oladi. Tarix yopiq.
+- Direktor (tayinlangan foydalanuvchi, roli muhim emas): tasdiqlash, tarix,
+  istalgan tushumni tahrirlash, qayta ochish.
+- Boshqaruvchi (OWNER/ADMIN): tarix, tahrirlash, qayta ochish, direktorni
+  tayinlash/almashtirish. Direktor tayinlanmagan bo'lsa tasdiqlash ham
+  (ish to'xtab qolmasin); tayinlangach tasdiqlash FAQAT direktorda.
+
+**Atomiklik:** barcha yozish amallari `runBusinessTx` ichida (har so'rovda
+businessId qo'lda), audit `logAudit` bilan qo'lda (kirit/tahrir/o'chir/
+tasdiqlash/qayta ochish/direktor almashishi).
+
+**Fayllar:**
+- `prisma/schema.prisma` + `prisma/migrations/20260811120000_kunlik_hisobot/`
+- `src/lib/validation/kunlik.ts`, `src/lib/services/kunlik.ts`, `src/lib/queries/kunlik.ts`
+- `src/app/api/kunlik/{hisobot,tushum,tushum/[id],tasdiqlash,qayta-ochish,tarix,direktor}/route.ts`
+- `src/app/app/kunlik/{page,loading,error}.tsx`, `KunlikClient.tsx`,
+  `TushumForm.tsx`, `DirektorModal.tsx`, `vaqt.ts`, `tarix/{page,loading}.tsx`, `tarix/TarixClient.tsx`
+- `src/lib/modules/registry.ts` (KUNLIK, rollar HAMMA), `src/lib/billing/plans.ts`
+  (barcha tariflarga), `src/components/nav/Sidebar.tsx` (daily ikon),
+  `src/lib/db/tenantDb.ts`, `src/lib/backup/dump.ts`, `src/lib/services/audit.ts`,
+  `src/lib/date.ts`, `package.json` (test:kunlik)
+
+**Test: `tests/kunlik.test.ts` (18)** — Toshkent kun chegarasi, zod (0/manfiy/
+kasr summa rad), jamlash, parallel kiritishda bitta report, direktor
+tayinlash (begona tenant rad), tasdiqlash huquqlari, qayta tasdiqlash rad,
+tasdiqlangan kun qulfi, qayta ochish + tuzatish + qayta tasdiqlash, tarix
+va 0 dan boshlanadigan yangi kun, ruxsat matritsasi, tenant izolyatsiyasi, audit.
+
+**Tekshirildi:** `npm run build` ✅ · `tsc --noEmit` toza (bitta MAVJUD xato
+`tests/toliq-ishga-tushirish.test.ts:158` — bu muhitdagi @libsql tip versiyasi,
+main'da ham bor, tegilmadi) · test:kunlik 18/18 · regressiya: isolation 22/22,
+izolyatsiya-royxati 9/9, backup 6/6, modules 13/13, dialect 11/11,
+migratsiya 10/10, audit 12/12, soft-delete 8/8, agregat 7/7, audit-qoldiq 10/10 ·
+smoke (brauzer) 7/7 — yangi /app/kunlik sahifasi ham ochiladi.
+
+**Eslatma (deploy):** modul barcha tariflarda bor, lekin core emas —
+Sozlamalar → Modullar'da "Kunlik hisobot" yoqiladi, keyin boshqaruvchi
+sahifadagi "Direktor" tugmasi bilan direktorni tayinlaydi.
+
+---
+
+## 2026-08-12 · Kunlik hisobot: Yozuvlar bilan avto-sinxron
+
+**Branch:** `claude/disney-flowers-daily-report-q272aw` · **Migratsiya: 1 ta (ADD COLUMN)**
+
+Egasining talabi: xodim kirimni Yozuvlar (tranzaksiya) formasidan kiritsa ham
+u kunlik hisobotga O'ZI tushsin; boshqa (eski) sana tanlansa — tushmasin.
+
+**Yechim — `kunlikSinxron` (lib/services/kunlik.ts):** har yaratish/tahrir/
+o'chirish/tiklashdan keyin bitta qoida tekshiriladi: *bugungi (Toshkent)
+sanali, o'chirilmagan KIRIM kunlikda bo'lishi kerak; qolgan har qanday holat —
+bo'lmasligi kerak*. `DailyTransaction.transactionId @unique` bilan ulanadi.
+
+- Ulanish nuqtasi — `createTransaction` xizmatining o'zi (API, bot va CRM
+  "yutildi" oqimi hammasi shu yerdan o'tadi). Chiqim hech qachon sinxronlanmaydi.
+- Kassa turi -> to'lov turi: naqd->CASH, plastik/bank->CLICK.
+- Sinxron XATOSI asosiy pul yozuvini buzmaydi (try/catch, console.error).
+- KUNLIK moduli yoqilmagan tenantda umuman ishlamaydi.
+- Tasdiqlangan (CONFIRMED) kunga tegilmaydi: yozuv baribir yoziladi, kunlik
+  o'zgarmaydi (kun yopilgan — tuzatish qayta ochish orqali).
+- Ulangan tushum kunlik sahifasida tahrirlanmaydi/o'chirilmaydi ("Yozuvlardan"
+  belgisi) — manba Transaction, aks holda ikkala tomon ajralib ketardi.
+- Yumshoq o'chirilgan ulangan yozuv tiklashda QAYTA OCHILADI (unique
+  transactionId yangi create'ga yo'l bermaydi — shu bug testda ushlandi).
+- Sana boshqa kunga o'zgartirilsa kunlikdan chiqadi; keyin bugunga qaytarilsa
+  bugungi hisobotga KO'CHADI (ikkala kun ochiq bo'lsa).
+- Bulk soft-delete va bulk-move: `kunlikBulkUz` ulangan tushumlarni ochiq
+  kunlardan chiqarib, jamini qayta hisoblaydi.
+
+**Yo'l-yo'lakay (oldingi so'rov):** KUNLIK yoqilgan bo'lsa kassir/sotuvchi
+telefonining pastki panelida "Kunlik" tab chiqadigan bo'ldi (computeMobileTabs).
+
+**Fayllar:** prisma/schema.prisma + `20260812090000_kunlik_transaction_link/`,
+lib/services/kunlik.ts, lib/services/transactionService.ts,
+api/transactions/{[id],[id]/restore,bulk,bulk-move}/route.ts,
+lib/queries/kunlik.ts (yozuvdan bayrog'i), app/kunlik/KunlikClient.tsx,
+lib/modules/registry.ts, components/nav/BottomNav.tsx, tests.
+
+**Tekshirildi:** build ✅ · kunlik 21/21 · modules 14/14 · isolation 22/22 ·
+izolyatsiya-royxati 9/9 · backup 6/6 · migratsiya 10/10 · soft-delete 8/8 ·
+agregat 7/7 · atomik 6/6 · audit 12/12.
+
+---
+
+## 2026-08-12 · Kunlik: direktorga eslatma + Telegramda bir bosishda tasdiqlash
+
+**Branch:** `claude/disney-flowers-daily-report-q272aw` · **Migratsiya YO'Q**
+
+Egasining talabi: tasdiqni direktor qiladi (bor edi), unga BILDIRISHNOMA
+borsin va esidan chiqsa ERTASI KUNI ham tasdiqlay olsin (bu ham bor edi —
+faqat kelajak kun taqiqlangan; endi eslatma unutilganini o'zi aytadi).
+
+- **`lib/reports/kunlikEslatma.ts`** — cron eslatmasi (hisobotIshi, 05:00 UTC
+  = 10:00 Toshkent): KUNLIK yoqilgan tenantlarda o'tgan 7 kun ichidagi OCHIQ,
+  tushumli kunlar uchun direktorga Telegram xabar (naqd/click/qarz/jami) +
+  "✅ Kun yakunini tasdiqlash" inline tugmasi. Direktor Telegramsiz bo'lsa —
+  zaxira yo'l: boshqaruvchilarga. Bo'sh (0 so'm) kunlar eslatilmaydi.
+  Kuniga bir marta (AppSetting `kunlikEslatma:<sana>` dedupe, dailyDigest uslubi).
+- **`bot/kunlikFlow.ts`** — `kht:ok:<reportId>` callback: bir bosishda
+  tasdiqlash. Bot darajasida managerOnly YO'Q (direktor kassir bo'lishi
+  mumkin) — huquq confirmKunlikReport ichida (faqat tayinlangan direktor).
+- **Bildirishnomalar sahifasi + nav badge** (`lib/queries/notifications.ts`):
+  "Kunlik yakun tasdiqlanmagan" ogohlantirishi — direktor (userId bo'yicha,
+  roli muhim emas) va boshqaruvchilarga; bosilsa o'sha kun ochiladi.
+  `getNotifications/getNotificationCount` opts'iga `userId` qo'shildi.
+- Grammy `Api` interfeys mosligi: `EslatmaBotApi.sendMessage` ataylab method
+  sintaksisida (bivariant) — aks holda `Other<...>` parametri bilan to'qnashardi.
+
+**Test:** kunlik 21 → **24**: eslatma direktorga boradi (boshqaruvchiga emas),
+tugmada `kht:ok:` bor, dedupe; direktor 2 kun oldingi kunni tasdiqlaydi
+(jami tushumlardan qayta jamlanadi); bildirishnoma direktor/boshqaruvchiga
+ko'rinadi, oddiy xodimga yo'q.
+
+**Tekshirildi:** build ✅ · tsc toza · kunlik 24/24 · isolation 22/22 ·
+modules 14/14 · cron 10/10 · audit-qoldiq 10/10.
+
+---
+
+## 2026-08-12 · Kunlik: KASSA TOPSHIRISH (xodim -> direktor, pul nazorati)
+
+**Branch:** `claude/disney-flowers-daily-report-q272aw` · **Migratsiya: 1 ta (ADD COLUMN x4)**
+
+Egasining talabi: kun yakunida sotuvchilar kassani TOPSHIRSIN ("Direktorga
+yuborish" tugmasi), direktor o'zi tasdiqlasin — maqsad pul yo'qolmasligini,
+xodim pul o'g'irlayaptimi-yo'qligini bilish.
+
+**Yechim — uch bosqichli holat oqimi:** `OPEN → SUBMITTED → CONFIRMED`.
+
+- **Topshirishda xodim kassadagi naqdni SANAB kiritadi** (`sanalganNaqd`).
+  Tizim hisobi (`naqdSumma`) ataylab modal'da KO'RSATILMAYDI — xodim
+  "chiqishi kerak" raqamni ko'chirib qo'ya olmasin. Farq = sanalgan − tizim:
+  manfiy (KAM) — pul yetishmayapti, signal qizil ko'rinadi.
+- SUBMITTED holatda tushum kiritish, tahrirlash va Yozuvlardan avto-sinxron
+  QULFLANADI (raqamlar "muzlaydi") — topshirilgandan keyin hech kim orqadan
+  raqam o'zgartira olmaydi.
+- Direktor OPEN'dan ham (xodim topshirmagan bo'lsa), SUBMITTED'dan ham
+  tasdiqlaydi; `sanalganNaqd` tarixda saqlanadi. Qayta ochish endi SUBMITTED
+  uchun ham ishlaydi va topshiruv maydonlarini tozalaydi — tuzatishdan keyin
+  xodim QAYTA sanab topshiradi.
+- **Topshirilgan zahoti direktorga Telegram xabar** (best-effort, approval
+  uslubi): tizim naqdi vs sanalgan, FARQ qatori, Click/Qarz/Jami + bir
+  bosishda "✅ Tasdiqlash" tugmasi (`kht:ok:` — mavjud callback ishlaydi).
+  Direktor Telegramsiz bo'lsa boshqaruvchilarga boradi. `rawPrisma` — bot
+  xabarnomasi tizim darajasidagi amal (approval.ts pretsedenti).
+- Ertalabki cron eslatma va bildirishnomalar endi SUBMITTED kunlarni ham
+  qamraydi (`holat != CONFIRMED`), eslatmada topshiruv/farq ko'rinadi.
+- UI: YakunCard (yangi komponent, 250 satr limiti uchun ajratildi) — holat
+  belgilari 🟡/📤/🟢, solishtiruv bloki, TopshirishModal; tarixda farq belgisi.
+
+**Sxema:** DailyReport +submittedBy/+submittedByIsm/+submittedAt/+sanalganNaqd
+(`20260812130000_kunlik_topshirish`, faqat ADD COLUMN).
+
+**Test:** kunlik 24 → **26**: topshirish (farq −50 000 bilan), tushum/sinxron
+qulfi, qayta topshirish rad, SUBMITTED'dan tasdiqlash (sanalgan saqlanadi),
+tasdiqlangandan keyin topshirish rad, kelajak kun rad, tarixda farq.
+
+**Tekshirildi:** build ✅ · tsc toza · kunlik 26/26 · isolation 22/22 ·
+izolyatsiya-royxati 9/9 · backup 6/6 · modules 14/14 · migratsiya 10/10 · cron 10/10.
+
+---
+
+## 2026-08-12 · Yozuvlar sahifasi: to'lov bo'limlari (Naqd/Click/Qarz)
+
+**Branch:** `claude/disney-flowers-daily-report-q272aw` · **Migratsiya YO'Q**
+
+Egasining talabi: Yozuvlarda "faqat so'm turibdi" — har yozuvda Naqd/Click
+farqi ko'rinsin, ro'yxat PASTIDA esa bo'lim-bo'lim jami qatorlar (Naqd,
+Click, Qarz) tursin.
+
+- **Har qatorda "To'lov" belgisi** — kassa turidan: naqd kassa → 💵 Naqd,
+  plastik → 💳 Click, bank → 🏦 Bank; kassasiz eski yozuv naqd sanaladi.
+  Desktop jadvalda alohida ustun, mobil lentada kategoriya yonida.
+- **Sticky footer'da bo'lim qatorlari**: 💵 Naqd (so'm) / 💳 Click — KIRIM
+  ning kassa bo'yicha taqsimoti (filtr qamroviga mos, faqat sahifa emas);
+  📋 Qarz — kunlik hisobotdagi qarz tushumlari jami (KUNLIK yoqiq bo'lsa;
+  qarz Transaction emas, shu bois alohida olinadi; sana oralig'i va xodim
+  ko'rinuvchanligi ro'yxat filtri bilan bir xil). Eski "+kirim −chiqim Sof"
+  qatori pastda saqlanadi.
+- `listTransactions`: items'ga `account` qo'shildi; totals'ga
+  naqdKirim/clickKirim (groupBy accountId). create/PATCH/restore javoblariga
+  ham `account` include qilindi (optimistik qatorlar DTO'ga mos bo'lsin).
+
+**Tekshirildi:** build ✅ · tsc toza · kunlik 26/26 · soft-delete 8/8 ·
+agregat 7/7 · isolation 22/22.
+
+---
+
+## 2026-08-13 · Oy fokusidagi dashboard, yozuvda to'lov turi, kunlikda SOF natija
+
+**Branch:** `claude/kassa-kategoriya-setup-fap55c` · **Migratsiya BOR** (past xavf)
+
+Egasining 3 talabi (Disney Navoiy tajribasidan):
+
+1. **Dashboarddan "Kassa qoldig'i" olib tashlandi** — umumiy (butun davr)
+   qoldiq oy raqamlari yonida turib chalg'itardi. Endi barcha kartalar
+   tanlangan OY ko'rsatkichlari; kassalar bo'yicha qoldiq /app/kassa
+   sahifasida qolgan.
+2. **Yozuvlar formasida to'lov turi**: Naqd / Click / Qarz tugmalari
+   (Qarz — faqat kirim; zod refine + PATCH'da yakuniy holat tekshiruvi).
+   - `Transaction.tolovTuri` ustuni (`20260813120000_tranzaksiya_tolov_turi`,
+     faqat ADD COLUMN; null = eski yozuvlar → kassa turidan chiqariladi).
+   - QARZ yozuvi kassaga BOG'LANMAYDI (`accountId null`) — pul kassaga
+     tushmagan, kassa qoldig'i buzilmaydi.
+   - `resolveAccountId` to'lov turiga mos kassani afzal ko'radi (naqd →
+     naqd kassa, click → plastik/bank); mosi yo'q bo'lsa birinchi faol.
+   - Kunlik sinxron endi yozuvdagi ANIQ turdan yuradi (naqd→CASH,
+     click→CLICK, qarz→DEBT), kassa turi faqat eski yozuvlar uchun zaxira.
+   - Ro'yxat belgisi va pastki Naqd/Click/Qarz jamlari ham aniq turni
+     ustun qo'yadi; Qarz jami = yozuvlardagi qarz + kunlikda qo'lda
+     kiritilgan qarz (transactionId null — ikki marta sanalmaydi).
+3. **Kunlikda SOF natija va direktorga faqat sof**: kunlik hisobot endi
+   kunning Yozuvlardagi chiqimini jonli jamlaydi (`chiqimSumma`,
+   `sofSumma = tushum − chiqim`). YakunCard bosh raqami — SOF (1 500 000
+   kirim, 200 000 chiqim → 1 300 000); kartalar qatoriga 📉 Chiqim kartasi;
+   tarixda ham sof. Direktor Telegram xabarlari (topshirish, ertalabki
+   eslatma, tasdiq javobi) endi Click/Qarz/Jami o'rniga Kirim/Chiqim/SOF
+   ko'rsatadi — naqd nazorati (tizim vs sanalgan, farq) saqlangan.
+
+Yo'l-yo'lakay: main'da sinayotgan 2 eski test yangilandi (visibility —
+totals'dagi naqdKirim/clickKirim; avto — AVTO tarifiga KUNLIK qo'shilgani).
+
+**Tekshirildi:** build ✅ · kunlik 27/27 (yangi test: aniq tur sinxroni,
+qarz kassasiz, sof formula) · isolation 22/22 · izolyatsiya-royxati 9/9 ·
+kassa 11/11 · agregat 7/7 · soft-delete 8/8 · visibility 10/10 ·
+migratsiya 10/10 · atomik 6/6 · csv-import 13/13 · tasdiqlash 20/20 ·
+crm 7/7 · avto 25/25 · sotuv-bekor 11/11 · xarid 13/13 · hr 19/19 ·
+backup 6/6 · cron 10/10.
+
+---
+
+## 2026-08-14 — PRO yangilanish: maxsus rollar, shaxsiy kassalar, kg xaridda qisman to'lov (Fortex Selos)
+
+**Nima qilindi** (branch: `claude/fortex-selos-pro-upgrade-zwx1i3`):
+
+1. **Maxsus rollar (custom role system, PRO)**: mijoz endi o'zi rol yaratadi
+   ("Taminotchi", "Omborchi", "Haydovchi"...) — `Role` modeli (tenant-scoped,
+   TENANT_DIRECT), granular huquqlar katalogi `lib/permissions/katalog.ts`
+   (18 kod, 5 guruh) va effektiv huquq hisoblagichi `lib/permissions/tekshir.ts`
+   (baza rol/maxsus rol + `huquqPlus`/`huquqMinus` per-user override; OWNER
+   hech qachon cheklanmaydi). Tizim rollari buzilmadi — `Role.bazaRol`
+   nav/modul skeletini beradi, `User.rol` u bilan sinxron saqlanadi.
+   UI: `/app/admin/rollar` (kartochkalar + checkbox guruhli modal),
+   Foydalanuvchilar sahifasida maxsus rol tanlash (optgroup).
+2. **Shaxsiy kassalar va user-to-user transfer (PRO)**: `Account.userId`
+   (null = umumiy biznes kassasi — eski xatti-harakat), `AccountTransfer`
+   kengaytirildi: `fromUserId/toUserId` + ism snapshotlari, `holat`
+   (bajarildi/bekor — bekor STORNO bilan, ledger append-only), `valyuta`,
+   `relatedType/relatedId`. Balans FAQAT ledger'dan (mavjud
+   `getAccountBalances` o'zgarishsiz ishlayveradi). Servis
+   `lib/services/userKassa.ts`: kassa avtomatik ochish, sender≠receiver,
+   balans qoidasi (xodim minusga o'tolmaydi, boshqaruvchi oladi).
+   Transfer API endi `toUserId` rejimini qabul qiladi ("pul.berish" huquqi).
+3. **Kg xaridda qisman to'lov + ichki ta'minotchi**: `Supplier.userId` —
+   ta'minotchi tizim useriga bog'lansa, xarid to'lovi chiqim EMAS, uning
+   shaxsiy kassasiga TRANSFER (pul biznes ichida qoldi — aylanma soxta
+   oshmaydi). `qabulQilish` endi `tolanganSumma` (0..jami) oladi: to'langan
+   qism transfer/chiqim, qoldiq "beriladigan" qarz (`PurchaseOrder.tolanganSumma`,
+   `transferId`). `recordDebtPayment` ichki ta'minotchi qarzini ham transfer
+   bilan yopadi. UI: QabulModal (to'liq/qisman/hammasi qarzga), ta'minotchi
+   modalida user bog'lash.
+4. **PRO gate va upgrade**: `lib/billing/pro.ts` (`requirePro`) — rollar,
+   user-transfer, override API'lari PRO'da ochiq; `npm run client:pro -- --slug
+   <slug> [--kunlar 30]` mijozni PRO'ga o'tkazib barcha PRO modullarni yoqadi.
+   Dashboard'da PRO qatori: bugungi sotilgan/olingan kg (birlik=kg),
+   kassalar jami, foydalanuvchi/ta'minotchi soni.
+5. **Migratsiya** `20260814090000_pro_rollar_shaxsiy_kassa` — faqat ADD
+   COLUMN/CREATE TABLE (xavf: past, ma'lumot ustiga xatosiz tushadi —
+   migratsiya-zanjiri testi qamrab oladi). Zaxira: `role` jadval `user`dan
+   OLDIN (FK tartibi).
+
+**Tekshirildi:** build ✅ · pro-stsenariy 13/13 (YANGI: 100kg×8000=800k to'liq;
+qisman 500k→qarz 300k→0; storno; o'ziga transfer rad; xodim limiti; audit) ·
+izolyatsiya-royxati 9/9 · backup 6/6 · migratsiya 10/10 · xarid 13/13 ·
+kassa 11/11 · isolation 22/22 · tolov 14/14 · audit 12/12.
+
+---
+
+## 2026-08-15 — "Bugun" bloki faqat Fortex Selosga (mijozga xos blok)
+
+**Muammo:** dashboard'dagi "Bugun (PRO ko'rsatkichlar)" bloki `isPro(plan)`
+bilan ochilardi. Bu blok Fortex Selos uchun buyurtma qilingan edi (kg savdosi,
+shaxsiy kassalar), lekin PRO tarifdagi HAR bir mijoz uni ko'rib turgan —
+begona ko'rsatkichlar boshqa mijozlarning panelini to'ldirgan.
+
+**Nima qilindi** (branch: `claude/manabu-qism-visibility-5ztu13`):
+
+1. `src/lib/mijozXos.ts` (yangi, sof modul) — mijozga xos bloklar ro'yxati.
+   `bugunPaneliKorinadi(tenant)` tenant `slug` yoki kompaniya nomini bir xil
+   kalitga keltirib solishtiradi ("Fortex Selos" == "fortex-selos"), shuning
+   uchun slug to'qnashuv suffiksi bilan yaratilgan bo'lsa ("fortex-selos-2")
+   ham mijoz nom bo'yicha topiladi. Ro'yxat env bilan kengaytiriladi:
+   `BUGUN_PANEL_MIJOZLARI="fortex-selos-uzb,Boshqa Mijoz"` — kod tegilmaydi.
+   Standart ro'yxat: `fortex-selos-uzb` (bazadagi haqiqiy tenant) va
+   `fortex-selos` (nom qisqartirilsa blok yo'qolib qolmasin).
+2. `src/app/app/page.tsx` — gate `isPro(tenant.plan)` o'rniga
+   `bugunPaneliKorinadi(tenant)`. Blok yopiq bo'lsa `getProBugun()` umuman
+   chaqirilmaydi (boshqa mijozlarga ortiqcha 5 ta so'rov ham ketmaydi).
+   Sarlavha "Bugun (PRO ko'rsatkichlar)" → "Bugun": blok endi tarif
+   imkoniyati emas, shuning uchun "PRO" so'zi chalg'itardi.
+3. `src/lib/auth/tenant.ts` — `TenantInfo` ga `slug` qo'shildi (select ham).
+   Boshqa gate'lar (rollar, shaxsiy kassa, user-transfer API) O'ZGARMADI —
+   ular haqiqatan PRO tarif imkoniyatlari va `requirePro` bilan qoladi.
+
+**Tekshirildi:** build ✅ · mijoz-xos 5/5 (YANGI: haqiqiy slug, qisqa nom,
+suffiksli slug, nom yozilishi, boshqa mijozga ko'rinmasligi) · pro-stsenariy 13/13 ·
+isolation 22/22 · izolyatsiya-royxati 9/9 · modules 14/14.
+
+---
+
+## 2026-08-15 — SMENA YAKUNI: kun ichida kassani bir necha marta sanab topshirish
+
+**Talab (Disney Flowers):** sotuvchilar ikki smenada ishlaydi. 1-smena tugaganda
+kassadagi pul sanab olinadi va kassa 0 dan boshlanishi kerak; 2-smena ham xuddi
+shunday. Kirim/chiqim raqamlariga hech qanday o'zgarish bo'lmasin. Maqsad —
+kassadagi xodimni tekshirish.
+
+**Qaror:** smena — kun ichidagi KESIM, hosila ko'rinish. Yangi `Smena` jadvali
+faqat YOPILGAN smenani yozadi; joriy (ochiq) smena hisoblanadi — oxirgi
+yopilganning `tugashAt` idan hozirgacha. Shuning uchun "ochiq smena" holati,
+uni ochish tugmasi va race yo'q.
+
+1. **Model `Smena`** (`20260815100000_smena_yakuni`, faqat CREATE TABLE — xavf: past):
+   `sana`+`raqam` (unique), oyna (`boshlanishAt`/`tugashAt`), yopgan xodim
+   (ism snapshot), MUZLATILGAN summalar (`naqd`/`click`/`qarz`/`naqdChiqim`),
+   `boshlangichQoldiq`, `kutilganNaqd`, `sanalganNaqd`, `farq`, `qoldirilganNaqd`.
+2. **Oyna `createdAt` bo'yicha** kesiladi (`boshlanishAt` < createdAt <= `tugashAt`),
+   yozuvning `sana` si bo'yicha EMAS: kassadagi pul kiritilgan paytga qarab
+   to'planadi. Kechagi tugash payti kun boshi bilan almashtirilmaydi — aks holda
+   smena yopilgandan keyin kiritilgan kech tushum hech qaysi smenaga tushmay qolardi.
+3. **Kutilgan naqd** = boshlangich qoldiq + naqd tushum − naqd chiqim. Click/qarz
+   kassadagi naqdga kirmaydi; chiqim naqdligi `tolovTuri` dan (bo'lmasa kassa
+   turidan) aniqlanadi — kunlik sinxron bilan bir xil qoida.
+4. **Kirim/chiqimga TEGILMAYDI:** smena hech qanday Transaction/DailyTransaction
+   yozmaydi va o'zgartirmaydi; kunlik va oylik raqamlar avvalgidek.
+   `tests/smena.test.ts` buni alohida qo'riqlaydi.
+5. **Nazorat:** joriy smenaning tizim hisobi xodimga KO'RSATILMAYDI (TopshirishModal
+   qoidasi) — faqat direktor/boshqaruvchi ko'radi, aks holda sanashning ma'nosi
+   qolmaydi. Yopilgandan keyin farq hammaga ko'rinadi.
+6. **Qaytim puli:** sanalgandan bir qismini kassada ataylab qoldirish mumkin
+   (`qoldirilganNaqd`) — u keyingi smenaning boshlangich qoldig'i bo'ladi.
+   Bo'sh qoldirilsa 0: pul to'liq topshirildi, keyingi smena 0 dan boshlanadi.
+7. **Qayta ochish** — faqat OXIRGI smena va faqat direktor/boshqaruvchi
+   (o'rtadagisi olinsa qo'shni oynalar ustma-ust tushib, bir pul ikki marta
+   hisoblanardi). Qator o'chadi, audit jurnalida raqamlari bilan qoladi.
+
+**Tekshirildi:** build ✅ · smena 14/14 (YANGI) · kunlik 27/27 · isolation 22/22 ·
+izolyatsiya-royxati 9/9 · backup 6/6 · kassa 11/11.
+
+---
+
+## 2026-08-15 — ERP spec auditi (§8–§19): to'lov holati, dashboard, senariy testi
+
+**Kontekst:** mijoz to'liq ERP spetsifikatsiyasini berdi (qarz tizimi, kassalar,
+double-entry, audit log, dashboard, validatsiya, xavfsizlik, test senariysi).
+Avval mavjud kod auditdan o'tkazildi — asosiy oqim allaqachon bor va to'g'ri
+ishlayotgani aniqlandi (§19 senariysi `tests/pro-stsenariy.test.ts` da qoplangan).
+Faqat haqiqiy bo'shliqlar yopildi; ishlayotgan mexanizmga tegilmadi.
+
+**Nima qilindi** (branch: `claude/manabu-qism-visibility-5ztu13`):
+
+1. **§13 To'lov holati** — `lib/validation/xarid.ts` da `tolovHolati()` sof
+   funksiyasi: Qoralama / Kutilmoqda / To'langan / Qisman to'langan / Qarz /
+   Bekor. Bazada saqlanmaydi — mavjud maydonlardan hisoblanadi, shuning uchun
+   MIGRATSIYA KERAK EMAS. Eski yozuvlar (`tolanganSumma` default 0) `debtId` va
+   `transactionId` izlari bo'yicha to'g'ri ajratiladi. `OrderDTO` ga
+   `tolovHolati` va `qoldiqQarz` qo'shildi; Xarid ro'yxatida ikkinchi nishon
+   (badge) sifatida ko'rinadi — tovar holati va PUL holati endi alohida.
+2. **§12 Dashboard "Bugun"** — blokka bugungi Kirim, Chiqim va joriy Qarz (sof
+   + beriladigan) qo'shildi. 5 ustun → 7. Kirim/chiqim/kg — BUGUNGI kun;
+   kassa va qarz — JORIY holat (izohda ajratilgan).
+3. **§14 Validatsiya** — `birlikNarx` endi `positive()`: 0 narxli qabul tannarx
+   snapshotini nolga tushirib keyingi foyda hisobini buzardi.
+4. **§19 Test senariysi kuchaytirildi** (13 → 21 test). Yangi tekshiruvlar:
+   - har xarid to'lovi AYNAN o'z summasi bilan transfer yozgan (800k, 500k),
+     har biri SOURCE→DESTINATION (Murod→Baxtiyor, UZS);
+   - qarz to'lovi 300k alohida ledger yozuvi (`relatedType: "debt"`);
+   - **DOUBLE-ENTRY invariant:** ichki o'tkazmalarda Σ(barcha kassa qoldig'i) = 0
+     — manbasiz pul paydo bo'lmaydi va yo'qolmaydi;
+   - balans xom ledger'dan MUSTAQIL qayta hisoblanib solishtiriladi
+     (`getAccountBalances` ga ishonmasdan);
+   - qarz matematikasi yopiq: 800k = 500k to'lov + 300k qarz to'lovi;
+   - `tolovHolati` 8 holat bo'yicha (eski yozuvlar ham);
+   - 0 kg / 0 narx / manfiy miqdor rad etiladi;
+   - jamidan ortiq to'lov rad etiladi va ATOMIK rollback bo'ladi (ombor tegilmagan).
+
+**Migratsiya:** YO'Q. Schema o'zgarmadi — `Account.turi` (naqd/plastik/bank) va
+`Account.userId` §9 uchun allaqachon yetarli, to'lov holati esa hisoblanadi.
+
+**Tekshirildi:** build ✅ · pro-stsenariy 21/21 · xarid 13/13 · kassa 11/11 ·
+mijoz-xos 5/5 · isolation 22/22 · izolyatsiya-royxati 9/9 · modules 14/14 ·
+atomik 6/6 · soft-delete 8/8 · agregat 7/7 · audit 12/12 · backup 6/6 ·
+migratsiya 10/10 · cron 10/10 · tolov 14/14 · visibility 10/10 ·
+csv-import 13/13 · inventarizatsiya 11/11 · sotuv-bekor 11/11 · hr 19/19 ·
+tasdiqlash 20/20.
+
+---
+
+## 2026-08-15 — Foydalanuvchilar sahifasi: Balans / Qarz / Yozuvlar ustunlari (§12)
+
+**Nima qilindi** (branch: `claude/manabu-qism-visibility-5ztu13`):
+
+1. `src/lib/queries/userMoliya.ts` (yangi) — `getUserMoliya(businessId)` bitta
+   Map qaytaradi: har user uchun `balans`, `qarz`, `amallar`. To'plam bo'yicha
+   so'rovlar — N+1 YO'Q (userlar soni oshsa ham so'rovlar soni o'zgarmaydi).
+   - **Balans** — `getAccountBalances()` dan, ya'ni LEDGER'dan (Transaction +
+     AccountTransfer), kassa egasi bo'yicha yig'iladi. Alohida saqlanmaydi.
+   - **Qarz** — ta'minotchi sifatida ochiq "beriladigan" qoldiq. `Debt` da
+     `supplierId` yo'q, shuning uchun bog'lanish buyurtma orqali:
+     `PurchaseOrder.debtId → PurchaseOrder.supplier.userId`.
+   - **Yozuvlar** — tranzaksiyalar + o'tkazmalar (har o'tkazma ikkala tomonda).
+2. `foydalanuvchilar/page.tsx` — raqamlar JORIY biznes kesimida (kassa va qarz
+   biznesga bog'langan). Biznes tanlanmagan bo'lsa ustunlar umuman
+   ko'rsatilmaydi — bo'sh ustun chalg'itardi. Sarlavha ostida qaysi biznes
+   ekani yozib qo'yiladi.
+3. `UsersClient.tsx` — 3 ustun + jadval `overflow-x-auto` ichiga olindi
+   (§17: tor ekranda sahifa emas, jadvalning o'zi suriladi). Balans musbat —
+   yashil, manfiy — qizil (xodim biznes nomidan pul sarflagan holat, bu
+   qarzdorlik emas).
+
+**Migratsiya:** YO'Q — barcha raqamlar mavjud jadvallardan hisoblanadi.
+
+**Tekshirildi:** build ✅ · pro-stsenariy 22/22 (YANGI: balans ledger'ga teng,
+ochiq qarz 400k−100k=300k ta'minotchi kesimida, yozuvlar soni, double-entry
+invarianti buzilmagan) · kassa 11/11 · xarid 13/13 · isolation 22/22 ·
+izolyatsiya-royxati 9/9 · visibility 10/10 · audit 12/12 · superadmin 10/10.
+
+---
+
+## 2026-08-16 — Qarz tizimi: qarz kirim emas, alohida moliyaviy majburiyat
+
+**Muammo** (branch: `claude/debt-system-refactor-gh98et`):
+
+Yozuvlar sahifasida "Kirim → To'lov turi: Qarz" tanlansa oddiy `Transaction`
+yozilardi va **hech qanday `Debt` yozuvi yaratilmasdi**. Ikki oqibat:
+
+1. Summa `jamiKirim` ga qo'shilib, **Sof balans qarz miqdoricha oshib ketardi**
+   (kassa qoldig'i esa to'g'ri edi — `accountId` null bo'lgani uchun);
+2. Qarz Qarzlar ro'yxatida umuman ko'rinmasdi — mijoz saqlanmasdi, uni yopib
+   ham bo'lmasdi.
+
+Sotuv modulidagi "qarzga sotuv" yo'li esa TO'G'RI ishlardi (`Debt` yozardi,
+kirim yozmasdi) — ya'ni bitta mahsulotda ikkita bir-biriga zid qarz oqimi bor edi.
+
+**Nima qilindi:**
+
+1. **`src/lib/qarzFiltr.ts` (yangi)** — "real pul" filtri yagona joyda.
+   `tolovTuri = "qarz"` yozuv daromad jamlarida qatnashmaydi. Filtr ATAYLAB
+   `OR: [{ tolovTuri: null }, { tolovTuri: { not: "qarz" } }]` ko'rinishida:
+   SQL'da `NULL <> 'qarz'` → NULL, ya'ni oddiy `not` bilan BARCHA eski
+   (`tolovTuri` siz) yozuvlar hisobotlardan jimgina yo'qolardi. Test bilan
+   qo'riqlanadi.
+   Qo'llanilgan joylar: `queries/transactions.ts` (footer jamlari),
+   `queries/dashboard.ts` (oylik xulosa, trend, kunlik dinamika, kategoriya
+   taqsimoti), `queries/shift.ts` (kutilgan naqd, bugungi jami),
+   `reports/dailyDigest.ts` (Telegram xulosasi).
+2. **`src/lib/services/qarz.ts` (yangi)** — `createQarz` (pul harakati YO'Q),
+   `qarzTolov` (kirim AYNAN to'lov sanasi bilan + idempotentlik), `qarzBekor`.
+   `recordDebtPayment` `services/inventory.ts` dan shu yerga ko'chirildi.
+3. **Idempotentlik** — `DebtPayment.idempotencyKey` + `@@unique([debtId,
+   idempotencyKey])`. Klient forma ochilganda bitta kalit yaratadi; tugma ikki
+   marta bosilsa server mavjud to'lovni qaytaradi, kirim ikkinchi marta
+   yozilmaydi. Poyga bazadagi unique cheklov bilan hal qilinadi.
+4. **Holat** — `Debt.status`: OPEN / PARTIALLY_PAID / PAID / CANCELLED.
+   `qarzHolatHisobla()` (validation/qarz.ts) — yagona manba; `isYopilgan`
+   eski ustun sifatida u bilan birga yangilanadi (ochiq qarz jamlari va mijoz
+   limiti hali unga tayanadi).
+5. **Qarzlar moduli** — `/app/qarzlar` OMBOR modulidan MOLIYA (core) ga
+   ko'chirildi: qarz ombordan mustaqil, ombori yo'q biznes ham yozadi.
+   Dashboard (5 ko'rsatkich, serverda jamlanadi), filtr, jadval, tafsilot +
+   to'lov tarixi, bekor qilish.
+6. **Mijoz** — `components/qarz/MijozTanlash.tsx`: qidiruv + yangi mijoz bitta
+   maydonda. Manba MIJOZLAR modulidan MUSTAQIL (`/api/debts/mijozlar`):
+   kartochkalar + oldingi qarzlardagi ism/telefon. Telefon
+   `+998901234567` ko'rinishiga normallashtiriladi (bir mijozning ikkita
+   kartochkasi paydo bo'lmasin).
+7. **Hisobot** — oylik hisobotda "Qarz harakati" bloki: qarzga berilgan /
+   qarzdan tushgan / ochiq qoldiq. Sof foydaga qo'shilmaydi.
+
+**Migratsiya:** `20260816090000_qarz_tizimi` — faqat `ADD COLUMN` +
+mavjud qatorlarni to'ldiruvchi `UPDATE`. Jadval QAYTA QURILMAYDI, ID'lar va
+FK'lar tegilmaydi. `Debt`: status, sana, categoryId, masulId/masulIsm,
+manbaTransactionId, updatedAt/updatedBy, cancelledAt/By/Reason.
+`DebtPayment`: sana, tolovTuri, accountId, izoh, idempotencyKey.
+
+**Eski ma'lumot:** `scripts/qarz-migratsiya.ts` (build zanjiriga qo'shildi,
+`npm run qarz:migratsiya`) eski `tolovTuri="qarz"` kirimlarni `Debt` ga
+ko'chiradi. Asl tranzaksiyaga TEGMAYDI (ID, summa, sana, izoh joyida) —
+faqat `Debt.manbaTransactionId` orqali bog'lanadi, shu bilan idempotent.
+Mijoz ismi izohdan olinadi, telefonni qo'lda to'ldirish kerak.
+
+**Tekshirildi:** build ✅ · qarz 16/16 (YANGI: spetsifikatsiyadagi 5 test
+stsenariysi + NULL `tolovTuri` regressiyasi) · pro-stsenariy 22/22 ·
+migratsiya-zanjiri 10/10 (mavjud ma'lumot ustiga apply) · isolation 22/22 ·
+izolyatsiya-royxati 9/9 · backup 6/6 · modules 15/15 · kassa 11/11 ·
+kunlik 27/27 · smena 14/14 · avto 25/25 · sotuv-bekor 11/11 · xarid 13/13 ·
+mijozlar 15/15 · agregat 7/7 · soft-delete 8/8 · audit-qoldiq 10/10 ·
+inventarizatsiya 11/11 · tolov 14/14 · hr 19/19 · hujjatlar 20/20 ·
+tasdiqlash 20/20 · visibility 10/10 · kochirish 8/8 · csv-import 13/13 ·
+crm 7/7 · ai 6/6 · automation 3/3.

@@ -41,6 +41,7 @@ import {
   handleRadCallback,
   handleRadText,
 } from "./approvalFlow";
+import { handleKunlikTasdiqCallback } from "./kunlikFlow";
 import { isModuleOnForTenant } from "@/lib/modules/guard";
 import { modulByCode } from "@/lib/modules/registry";
 import { BRAND } from "@/lib/brand";
@@ -286,6 +287,13 @@ bot.callbackQuery(
   tenantHandler((ctx, user) => handleChekCategoryCallback(ctx, user), { yozish: true })
 );
 bot.callbackQuery(/^chbekor$/, tenantHandler((ctx) => handleChekBekorCallback(ctx)));
+
+// Kunlik hisobot: kun yakunini tasdiqlash. managerOnly YO'Q — tayinlangan
+// direktor kassir ham bo'lishi mumkin; huquq xizmat qatlamida tekshiriladi.
+bot.callbackQuery(
+  /^kht:ok:/,
+  tenantHandler((ctx, user) => handleKunlikTasdiqCallback(ctx, user), { yozish: true })
+);
 
 // Tasdiqlash: qaror faqat boshqaruvchida (xizmat qatlami rolni yana tekshiradi).
 bot.callbackQuery(

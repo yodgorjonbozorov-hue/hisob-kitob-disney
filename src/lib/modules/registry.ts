@@ -23,6 +23,8 @@ export interface NavItem {
   tartib: number;
   /** Qaysi rollar ko'radi. */
   rollar: Rol[];
+  /** Faqat PRO tarifda ko'rinadi — boshqa mijozlar menyusi O'ZGARMAYDI. */
+  faqatPro?: boolean;
 }
 
 export interface ModulTarifi {
@@ -54,8 +56,25 @@ export const MODULLAR: ModulTarifi[] = [
       { href: "/app/hisobot", label: "Oylik hisobot", icon: "report", tartib: 12, rollar: BOSHQARUVCHILAR },
       { href: "/app/byudjet", label: "Budjet", icon: "budget", tartib: 13, rollar: BOSHQARUVCHILAR },
       { href: "/app/kassa", label: "Kassalar", icon: "wallet", tartib: 14, rollar: BOSHQARUVCHILAR },
+      // QARZLAR — MOLIYA ichida, OMBOR emas. Qarz ombordan mustaqil moliyaviy
+      // majburiyat: ombori yo'q biznes ham "Kirim → Qarz" yozadi va uni
+      // ko'radigan joyi bo'lishi shart.
+      { href: "/app/qarzlar", label: "Qarzlar", icon: "debt", tartib: 16, rollar: ["OWNER", "ADMIN", "CASHIER"] },
       { href: "/app/takroriy", label: "Takroriy", icon: "repeat", tartib: 40, rollar: BOSHQARUVCHILAR },
       { href: "/app/smena", label: "Kun yakuni", icon: "shift", tartib: 41, rollar: ["OWNER", "ADMIN", "CASHIER"] },
+    ],
+  },
+  {
+    code: "KUNLIK",
+    nomi: "Kunlik hisobot",
+    tavsif:
+      "Kun davomida tushumlar (naqd, Click, qarz) alohida yuritiladi, kun yakunini tayinlangan direktor tasdiqlaydi. Oylik hisobot va kassa qoldig'iga ta'sir qilmaydi.",
+    core: false,
+    // Tushum kiritish — xodimning asosiy amali, shuning uchun hammaga ochiq;
+    // tasdiqlash/tarix server tomonda direktor/boshqaruvchi bilan cheklanadi.
+    rollar: HAMMA,
+    nav: [
+      { href: "/app/kunlik", label: "Kunlik hisobot", icon: "daily", tartib: 15, rollar: HAMMA },
     ],
   },
   {
@@ -68,7 +87,8 @@ export const MODULLAR: ModulTarifi[] = [
     nav: [
       { href: "/app/ombor", label: "Ombor", icon: "package", tartib: 20, rollar: BOSHQARUVCHILAR },
       { href: "/app/sotuv", label: "Sotuv", icon: "cart", tartib: 21, rollar: ["OWNER", "ADMIN", "CASHIER"] },
-      { href: "/app/qarzlar", label: "Qarzlar", icon: "debt", tartib: 22, rollar: ["OWNER", "ADMIN", "CASHIER"] },
+      // "Qarzlar" ataylab bu yerda EMAS — u MOLIYA (core) modulida, chunki
+      // qarz ombori yo'q bizneslarda ham yuritiladi.
     ],
   },
   {
@@ -175,6 +195,7 @@ export const MODULLAR: ModulTarifi[] = [
       { href: "/app/admin/bizneslar", label: "Bizneslar", icon: "business", tartib: 50, rollar: BOSHQARUVCHILAR },
       { href: "/app/admin/kategoriyalar", label: "Kategoriyalar", icon: "tags", tartib: 51, rollar: BOSHQARUVCHILAR },
       { href: "/app/admin/foydalanuvchilar", label: "Foydalanuvchilar", icon: "users", tartib: 52, rollar: BOSHQARUVCHILAR },
+      { href: "/app/admin/rollar", label: "Rollar va huquqlar", icon: "shield", tartib: 52, rollar: BOSHQARUVCHILAR, faqatPro: true },
       { href: "/app/admin/ochirilganlar", label: "O'chirilganlar", icon: "trash", tartib: 53, rollar: BOSHQARUVCHILAR },
       { href: "/app/admin/audit", label: "Audit jurnali", icon: "audit", tartib: 54, rollar: BOSHQARUVCHILAR },
       { href: "/app/sozlamalar/modullar", label: "Modullar", icon: "modules", tartib: 55, rollar: ["OWNER"] },
@@ -204,6 +225,8 @@ export interface NavHolati {
   omborli: boolean;
   /** Aktiv biznes avto rejimidami — OMBOR yorliqlari "Avtopark/Mashina sotish" bo'ladi. */
   avto?: boolean;
+  /** Tenant PRO tarifdami — `faqatPro` havolalar faqat shunda ko'rinadi. */
+  pro?: boolean;
 }
 
 /** Avto rejimidagi biznes uchun OMBOR moduli yorliqlari (lib/biznesTuri.ts bilan mos). */
@@ -213,7 +236,7 @@ const AVTO_YORLIQLAR: Record<string, string> = {
 };
 
 /** Sidebar/menyu uchun tartiblangan havolalar ro'yxati. */
-export function computeNav({ rol, yoqilgan, omborli, avto = false }: NavHolati): NavItem[] {
+export function computeNav({ rol, yoqilgan, omborli, avto = false, pro = false }: NavHolati): NavItem[] {
   const items: NavItem[] = [];
   for (const m of MODULLAR) {
     if (!m.core && !yoqilgan.has(m.code)) continue;
@@ -221,6 +244,7 @@ export function computeNav({ rol, yoqilgan, omborli, avto = false }: NavHolati):
     if (!m.rollar.includes(rol)) continue;
     for (const item of m.nav) {
       if (!item.rollar.includes(rol)) continue;
+      if (item.faqatPro && !pro) continue;
       const label = avto ? AVTO_YORLIQLAR[item.href] ?? item.label : item.label;
       items.push(label === item.label ? item : { ...item, label });
     }
@@ -239,16 +263,23 @@ export function computeMobileTabs(holat: NavHolati): MobileTab[] {
   const tabs: MobileTab[] = [];
   const manager = isManager(holat.rol);
   const crmBor = holat.yoqilgan.has("CRM") && modulByCode("CRM")!.rollar.includes(holat.rol);
+  // Kunlik tushum kiritish — xodimning (kassir/sotuvchi) kundalik quroli,
+  // shuning uchun modul yoqilgan bo'lsa u pastki panelda tab bo'ladi.
+  const kunlikBor = holat.yoqilgan.has("KUNLIK") && modulByCode("KUNLIK")!.rollar.includes(holat.rol);
   if (manager) tabs.push({ href: "/app", label: "Asosiy", icon: "home" });
   tabs.push({ href: "/app/tranzaksiyalar", label: "Yozuvlar", icon: "list" });
   if (holat.rol === "SELLER") {
+    if (kunlikBor) tabs.push({ href: "/app/kunlik", label: "Kunlik", icon: "daily" });
     // Sotuvchi uchun CRM — asosiy ish quroli.
-    if (crmBor) tabs.push({ href: "/app/crm", label: "CRM", icon: "crm" });
+    if (crmBor && tabs.length < 3) tabs.push({ href: "/app/crm", label: "CRM", icon: "crm" });
     return tabs;
   }
+  if (!manager && kunlikBor) tabs.push({ href: "/app/kunlik", label: "Kunlik", icon: "daily" });
   const omborBor = holat.yoqilgan.has("OMBOR") && holat.omborli;
-  if (omborBor) tabs.push({ href: "/app/sotuv", label: holat.avto ? "Sotish" : "Sotuv", icon: "cart" });
-  else if (crmBor) tabs.push({ href: "/app/crm", label: "CRM", icon: "crm" });
-  else if (manager) tabs.push({ href: "/app/hisobot", label: "Hisobot", icon: "chart" });
+  if (tabs.length < 3) {
+    if (omborBor) tabs.push({ href: "/app/sotuv", label: holat.avto ? "Sotish" : "Sotuv", icon: "cart" });
+    else if (crmBor) tabs.push({ href: "/app/crm", label: "CRM", icon: "crm" });
+    else if (manager) tabs.push({ href: "/app/hisobot", label: "Hisobot", icon: "chart" });
+  }
   return tabs;
 }

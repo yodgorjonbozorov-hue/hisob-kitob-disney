@@ -7,6 +7,7 @@ import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import { listOrders, listSuppliers, getXaridStats } from "@/lib/queries/xarid";
 import { listProducts, type ProductAdminDTO } from "@/lib/queries/inventory";
 import { monthRangeUTC, currentMonthString } from "@/lib/date";
+import { isPro } from "@/lib/billing/pro";
 import { XaridClient } from "./XaridClient";
 
 /** XARID — ta'minotchidan tovar olish buyurtmalari va ularni qabul qilish. */
@@ -51,6 +52,7 @@ export default async function XaridPage() {
           products={products}
           stats={stats}
           omborli={business?.omborli ?? false}
+          pro={isPro(ctx.tenant.plan)}
         />
       </div>
     );

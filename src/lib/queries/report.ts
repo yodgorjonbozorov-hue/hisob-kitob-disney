@@ -34,6 +34,21 @@ export interface MonthlyReport {
   chiqimByCategory: { nomi: string; summa: number; foiz: number }[];
   prevMonth: { jamiKirim: number; jamiChiqim: number; sofFoyda: number };
   changePct: { kirim: number | null; chiqim: number | null; sofFoyda: number | null };
+  /**
+   * QARZ KO'RSATKICHLARI — `jamiKirim` va `sofFoyda` dan ATAYLAB tashqarida.
+   *
+   * Qarzga berilgan savdo real pul kirimi emas, shuning uchun daromadga
+   * qo'shilmaydi; lekin direktor uchun "shu oy qancha qarzga berdik" degan
+   * savol ham muhim, shuning uchun alohida ko'rsatiladi.
+   */
+  qarz: {
+    /** Shu oyda qarzga berilgan savdo (bekor qilinganlarsiz). */
+    berilgan: number;
+    /** Shu oyda qarzdan tushgan pul — bu `jamiKirim` ICHIDA. */
+    tushgan: number;
+    /** Oy oxiriga ochiq qarz qoldig'i. */
+    ochiqQoldiq: number;
+  };
 }
 
 /**
@@ -81,12 +96,42 @@ export async function getAvtoOylikYakun(businessId: string, month: string): Prom
   };
 }
 
+/** Oy bo'yicha qarz ko'rsatkichlari (real pul harakatidan alohida). */
+async function getQarzOylik(businessId: string, month: string) {
+  const { from, to } = monthRangeUTC(month);
+  const [berilgan, tushgan, ochiq] = await Promise.all([
+    prisma.debt.aggregate({
+      where: {
+        businessId,
+        turi: "olinadigan",
+        status: { not: "CANCELLED" },
+        sana: { gte: from, lt: to },
+      },
+      _sum: { jamiSumma: true },
+    }),
+    prisma.debtPayment.aggregate({
+      where: { businessId, sana: { gte: from, lt: to } },
+      _sum: { summa: true },
+    }),
+    prisma.debt.aggregate({
+      where: { businessId, turi: "olinadigan", isYopilgan: false },
+      _sum: { jamiSumma: true, tolangan: true },
+    }),
+  ]);
+  return {
+    berilgan: berilgan._sum.jamiSumma ?? 0,
+    tushgan: tushgan._sum.summa ?? 0,
+    ochiqQoldiq: (ochiq._sum.jamiSumma ?? 0) - (ochiq._sum.tolangan ?? 0),
+  };
+}
+
 export async function getMonthlyReport(businessId: string, month: string): Promise<MonthlyReport> {
-  const [business, summary, kirimByCategory, chiqimByCategory] = await Promise.all([
+  const [business, summary, kirimByCategory, chiqimByCategory, qarz] = await Promise.all([
     prisma.business.findUnique({ where: { id: businessId }, select: { nomi: true, turi: true } }),
     getMonthSummary(businessId, month),
     getCategoryBreakdown(businessId, month, "kirim"),
     getCategoryBreakdown(businessId, month, "chiqim"),
+    getQarzOylik(businessId, month),
   ]);
 
   // Avto biznesda direktor uchun eng muhim jadval — har mashina bo'yicha sof foyda.
@@ -103,5 +148,6 @@ export async function getMonthlyReport(businessId: string, month: string): Promi
     chiqimByCategory: chiqimByCategory.map(({ nomi, summa, foiz }) => ({ nomi, summa, foiz })),
     prevMonth: summary.prevMonth,
     changePct: summary.changePct,
+    qarz,
   };
 }

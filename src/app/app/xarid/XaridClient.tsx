@@ -9,10 +9,11 @@ import { Badge } from "@/components/ui/Badge";
 import { Money } from "@/components/ui/Money";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatDateUZ } from "@/lib/format";
-import { HOLAT_NOMI, type XaridHolat } from "@/lib/validation/xarid";
+import { HOLAT_NOMI, TOLOV_HOLAT_NOMI, type TolovHolat, type XaridHolat } from "@/lib/validation/xarid";
 import type { OrderDTO, SupplierDTO, XaridStats } from "@/lib/queries/xarid";
 import type { ProductAdminDTO } from "@/lib/queries/inventory";
 import { BuyurtmaModal } from "./BuyurtmaModal";
+import { QabulModal } from "./QabulModal";
 
 const HOLAT_TONE: Record<string, "kirim" | "chiqim" | "neutral"> = {
   qoralama: "neutral",
@@ -21,25 +22,41 @@ const HOLAT_TONE: Record<string, "kirim" | "chiqim" | "neutral"> = {
   bekor: "chiqim",
 };
 
+/** To'lov holati — tovar holati yonida alohida nishon (Paid/Partially/Debt). */
+const TOLOV_TONE: Record<TolovHolat, "kirim" | "chiqim" | "neutral"> = {
+  qoralama: "neutral",
+  kutilmoqda: "neutral",
+  tolangan: "kirim",
+  qisman: "neutral",
+  qarz: "chiqim",
+  bekor: "neutral",
+};
+
 export function XaridClient({
   orders,
   suppliers,
   products,
   stats,
   omborli,
+  pro,
 }: {
   orders: OrderDTO[];
   suppliers: SupplierDTO[];
   products: ProductAdminDTO[];
   stats: XaridStats;
   omborli: boolean;
+  /** PRO: qabulda qisman to'lov modali; PRO'siz — eski bir bosishli qabul. */
+  pro: boolean;
 }) {
   const router = useRouter();
   const [yangiOpen, setYangiOpen] = useState(false);
   const [ochiq, setOchiq] = useState<string | null>(null);
   const [amal, setAmal] = useState<string | null>(null);
   const [xato, setXato] = useState<string | null>(null);
+  const [qabulOrder, setQabulOrder] = useState<OrderDTO | null>(null);
 
+  // PRO'siz mijozda "qabul_qilingan" ham shu yerdan yuboriladi (eski xatti-harakat:
+  // naqd → to'liq chiqim, qarz → to'liq qarz); PRO'da qabul QabulModal orqali.
   async function holatOzgartir(orderId: string, holat: "tasdiqlangan" | "qabul_qilingan" | "bekor") {
     setAmal(orderId);
     setXato(null);
@@ -139,6 +156,11 @@ export function XaridClient({
                       <Badge tone={HOLAT_TONE[o.holat] ?? "neutral"}>
                         {HOLAT_NOMI[o.holat as XaridHolat] ?? o.holat}
                       </Badge>
+                      {/* Tovar holati "qabul qilingan" bo'lganda pul holati alohida
+                          ko'rsatiladi — qolgan holatlarda ikkalasi bir xil bo'lardi. */}
+                      {o.holat === "qabul_qilingan" && (
+                        <Badge tone={TOLOV_TONE[o.tolovHolati]}>{TOLOV_HOLAT_NOMI[o.tolovHolati]}</Badge>
+                      )}
                     </div>
                   </button>
 
@@ -182,7 +204,11 @@ export function XaridClient({
                         )}
                         {(o.holat === "qoralama" || o.holat === "tasdiqlangan") && (
                           <>
-                            <Button size="sm" loading={amal === o.id} onClick={() => holatOzgartir(o.id, "qabul_qilingan")}>
+                            <Button
+                              size="sm"
+                              loading={amal === o.id}
+                              onClick={() => (pro ? setQabulOrder(o) : holatOzgartir(o.id, "qabul_qilingan"))}
+                            >
                               Qabul qilish
                             </Button>
                             <Button
@@ -197,8 +223,16 @@ export function XaridClient({
                         )}
                         {o.holat === "qabul_qilingan" && (
                           <p className="text-2xs text-muted">
-                            Tovar omborga tushgan, {o.tolovTuri === "naqd" ? "chiqim" : "ta'minotchiga qarz"}{" "}
-                            yozilgan — o&apos;zgartirib bo&apos;lmaydi.
+                            {/* tolanganSumma > 0 — yangi (qisman to'lovli) yozuv; 0 bo'lsa eski
+                                yozuv: to'lov holati tolovTuri'dan o'qiladi (naqd = to'liq to'langan). */}
+                            Tovar omborga tushgan
+                            {o.tolanganSumma > 0
+                              ? ` · to'landi: ${o.tolanganSumma.toLocaleString("uz-UZ")} so'm` +
+                                (o.jamiSumma - o.tolanganSumma > 0
+                                  ? ` · qarz: ${(o.jamiSumma - o.tolanganSumma).toLocaleString("uz-UZ")} so'm`
+                                  : "")
+                              : `, ${o.tolovTuri === "naqd" ? "chiqim" : "ta'minotchiga qarz"} yozilgan`}{" "}
+                            — o&apos;zgartirib bo&apos;lmaydi.
                           </p>
                         )}
                       </div>
@@ -218,6 +252,17 @@ export function XaridClient({
           onClose={() => setYangiOpen(false)}
           onDone={() => {
             setYangiOpen(false);
+            router.refresh();
+          }}
+        />
+      )}
+
+      {qabulOrder && (
+        <QabulModal
+          order={qabulOrder}
+          onClose={() => setQabulOrder(null)}
+          onDone={() => {
+            setQabulOrder(null);
             router.refresh();
           }}
         />

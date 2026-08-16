@@ -5,6 +5,7 @@ import { resolveActiveBusinessId } from "@/lib/business";
 import { listSuppliers } from "@/lib/queries/xarid";
 import { createSupplier } from "@/lib/services/xarid";
 import { createSupplierSchema } from "@/lib/validation/xarid";
+import { requirePro } from "@/lib/billing/pro";
 
 export const GET = withTenant(async (request, _ctx, { session: user }) => {
   requireManager(user.rol);
@@ -14,7 +15,8 @@ export const GET = withTenant(async (request, _ctx, { session: user }) => {
   return NextResponse.json(await listSuppliers(businessId, faqatFaol));
 }, { module: "XARID" });
 
-export const POST = withTenant(async (request, _ctx, { session: user }) => {
+export const POST = withTenant(async (request, _ctx, tenant) => {
+  const user = tenant.session;
   requireManager(user.rol);
   const businessId = await resolveActiveBusinessId(user);
   if (!businessId) return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });
@@ -23,5 +25,7 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
   }
+  // Ta'minotchini tizim useriga bog'lash — PRO imkoniyati.
+  if (parsed.data.userId) requirePro(tenant);
   return NextResponse.json(await createSupplier(businessId, parsed.data), { status: 201 });
 }, { module: "XARID" });

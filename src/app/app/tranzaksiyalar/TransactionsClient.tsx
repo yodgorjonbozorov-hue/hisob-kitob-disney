@@ -24,11 +24,13 @@ export function TransactionsClient({
   pageSize,
   categories,
   accounts,
+  masullar = [],
   currentUserId,
   currentUserRol,
   hideProfit = false,
   moveTargets = [],
   totals,
+  qarzSumma = null,
   filters,
 }: {
   initialItems: TransactionDTO[];
@@ -37,11 +39,25 @@ export function TransactionsClient({
   pageSize: number;
   categories: CategoryOption[];
   accounts: { id: string; nomi: string }[];
+  /** Qarzga mas'ul qilib belgilash mumkin bo'lgan xodimlar. */
+  masullar?: { id: string; ism: string }[];
   currentUserId: string;
   currentUserRol: Rol;
   hideProfit?: boolean;
   moveTargets?: { id: string; nomi: string }[];
-  totals: { jamiKirim: number; jamiChiqim: number; sof: number };
+  totals: {
+    jamiKirim: number;
+    jamiChiqim: number;
+    sof: number;
+    naqdKirim: number;
+    clickKirim: number;
+    qarzKirim: number;
+  };
+  /**
+   * "Qarzga berilgan" ko'rsatkichi: qarz yozuvlari + kunlik hisobotdagi qarz
+   * tushumlari. Sof balansga KIRMAYDI — u alohida ko'rsatiladi.
+   */
+  qarzSumma?: number | null;
   filters: { from: string; to: string; turi: string; categoryId: string; q: string; minSumma: string; maxSumma: string };
 }) {
   const router = useRouter();
@@ -162,7 +178,18 @@ export function TransactionsClient({
   return (
     <div className="space-y-4">
       {importOpen && <ImportModal onClose={() => setImportOpen(false)} />}
-      <TransactionForm categories={categories} accounts={accounts} onCreated={handleCreated} />
+      <TransactionForm
+        categories={categories}
+        accounts={accounts}
+        masullar={masullar}
+        onCreated={handleCreated}
+        // Qarz tranzaksiya EMAS — ro'yxatga qo'shilmaydi, lekin "Qarzga
+        // berilgan" ko'rsatkichi serverdan qayta o'qiladi.
+        onQarzCreated={() => {
+          toast({ message: "Qarz yozildi — balans o'zgarmadi", tone: "success" });
+          router.refresh();
+        }}
+      />
 
       {moveTargets !== undefined && currentUserRol !== "CASHIER" && currentUserRol !== "SELLER" && (
         <div className="flex justify-end">
@@ -228,16 +255,36 @@ export function TransactionsClient({
         onToggleAll={toggleAll}
       />
 
-      {/* Filtrlangan jami — sticky footer (mobil'da pastki nav ustida) */}
+      {/* Filtrlangan jami — sticky footer (mobil'da pastki nav ustida).
+          Tushum BO'LIMLARI alohida qatorlarda: Naqd (naqd kassa), Click
+          (plastik/bank kassa), Qarz (kunlik hisobot qarz tushumlari). */}
       <div className="sticky bottom-[4.75rem] lg:bottom-3 z-30">
-        <div className="bg-surface/95 backdrop-blur border border-line rounded-xl shadow-card px-4 py-2.5 flex flex-wrap items-center justify-between gap-x-6 gap-y-1">
-          <span className="text-sm text-muted tnum">{total} ta yozuv</span>
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm tnum">
-            <span className="text-income font-medium">+ {formatMoney(totals.jamiKirim)}</span>
-            <span className="text-expense font-medium">− {formatMoney(totals.jamiChiqim)}</span>
-            {!hideProfit && (
-              <span className="font-semibold text-fg">Sof: {formatMoney(totals.sof)}</span>
+        <div className="bg-surface/95 backdrop-blur border border-line rounded-xl shadow-card px-4 py-2.5 space-y-1.5">
+          <div className="space-y-1 text-sm tnum">
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-muted">💵 Naqd (so&apos;m)</span>
+              <span className="font-medium text-fg">{formatMoney(totals.naqdKirim)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-muted">💳 Click</span>
+              <span className="font-medium text-fg">{formatMoney(totals.clickKirim)}</span>
+            </div>
+            {qarzSumma !== null && (
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-muted">📋 Qarz</span>
+                <span className="font-medium text-fg">{formatMoney(qarzSumma)}</span>
+              </div>
             )}
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 pt-1.5 border-t border-line">
+            <span className="text-sm text-muted tnum">{total} ta yozuv</span>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm tnum">
+              <span className="text-income font-medium">+ {formatMoney(totals.jamiKirim)}</span>
+              <span className="text-expense font-medium">− {formatMoney(totals.jamiChiqim)}</span>
+              {!hideProfit && (
+                <span className="font-semibold text-fg">Sof: {formatMoney(totals.sof)}</span>
+              )}
+            </div>
           </div>
         </div>
       </div>

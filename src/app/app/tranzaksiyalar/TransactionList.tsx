@@ -7,6 +7,7 @@ import { formatSom, formatSomLabel, parseSomInput, formatDateUZ } from "@/lib/fo
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { TOLOV_TURLARI, TOLOV_NOMI, TOLOV_BELGI, type TolovTuri } from "@/lib/validation/transaction";
 import type { TransactionDTO } from "@/lib/queries/transactions";
 import type { Rol } from "@/lib/auth/session";
 import { ReceiptList } from "@/components/ui/ReceiptList";
@@ -54,6 +55,16 @@ export function TransactionList({
     return isManager(currentUserRol) || t.userId === currentUserId;
   }
 
+  // Yozuvdagi ANIQ to'lov turi ustun; null (eski yozuvlar) — kassa turidan
+  // (kassasiz eski yozuv — naqd).
+  function tolovBelgi(t: TransactionDTO): string {
+    if (t.tolovTuri === "naqd") return "💵 Naqd";
+    if (t.tolovTuri === "click") return "💳 Click";
+    if (t.tolovTuri === "qarz") return "📋 Qarz";
+    const turi = t.account?.turi ?? "naqd";
+    return turi === "naqd" ? "💵 Naqd" : turi === "plastik" ? "💳 Click" : "🏦 Bank";
+  }
+
   return (
     <div className="bg-surface rounded-2xl shadow-sm border border-line overflow-hidden">
       {/* Desktop: jadval */}
@@ -66,6 +77,7 @@ export function TransactionList({
               </th>
               <th className="text-left px-4 py-3">Sana</th>
               <th className="text-left px-4 py-3">Turi</th>
+              <th className="text-left px-4 py-3">To&apos;lov</th>
               <th className="text-left px-4 py-3">Kategoriya</th>
               <th className="text-right px-4 py-3">Summa</th>
               <th className="text-left px-4 py-3">Izoh</th>
@@ -76,7 +88,7 @@ export function TransactionList({
           <tbody className="divide-y divide-line">
             {items.length === 0 && (
               <tr>
-                <td colSpan={8} className="text-center text-faint py-8">
+                <td colSpan={9} className="text-center text-faint py-8">
                   Tranzaksiyalar topilmadi
                 </td>
               </tr>
@@ -92,6 +104,7 @@ export function TransactionList({
                     {t.turi === "kirim" ? "Kirim" : "Chiqim"}
                   </Badge>
                 </td>
+                <td className="px-4 py-3 whitespace-nowrap text-muted">{tolovBelgi(t)}</td>
                 <td className="px-4 py-3">{t.category.nomi}</td>
                 <td
                   className={`px-4 py-3 text-right font-medium whitespace-nowrap ${
@@ -137,7 +150,8 @@ export function TransactionList({
               sana: typeof t.sana === "string" ? t.sana : new Date(t.sana).toISOString(),
               turi: t.turi,
               summa: t.summa,
-              categoryNomi: t.category.nomi,
+              // Mobil lentada to'lov bo'limi kategoriya yonida ko'rinadi.
+              categoryNomi: `${tolovBelgi(t)} · ${t.category.nomi}`,
               izoh: t.izoh,
               userIsm: t.user.ism,
             }))}
@@ -225,6 +239,13 @@ function EditModal({
   onDelete: () => void;
 }) {
   const [turi, setTuri] = useState<"kirim" | "chiqim">(transaction.turi as "kirim" | "chiqim");
+  // Eski yozuvda tolovTuri null — kassa turidan boshlang'ich qiymat chiqariladi.
+  const [tolovTuri, setTolovTuri] = useState<TolovTuri>(
+    (transaction.tolovTuri as TolovTuri | null) ??
+      (transaction.account?.turi === "plastik" || transaction.account?.turi === "bank"
+        ? "click"
+        : "naqd")
+  );
   const [categoryId, setCategoryId] = useState(transaction.categoryId);
   const [summaText, setSummaText] = useState(formatSom(transaction.summa));
   const [sana, setSana] = useState(new Date(transaction.sana).toISOString().slice(0, 10));
@@ -246,7 +267,7 @@ function EditModal({
       const res = await fetch(`/api/transactions/${transaction.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ turi, categoryId, summa, sana, izoh: izoh || undefined }),
+        body: JSON.stringify({ turi, tolovTuri, categoryId, summa, sana, izoh: izoh || undefined }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -278,11 +299,29 @@ function EditModal({
             onClick={() => {
               setTuri("chiqim");
               setCategoryId("");
+              // Qarz faqat kirim uchun — chiqimga o'tilganda naqdga qaytariladi.
+              if (tolovTuri === "qarz") setTolovTuri("naqd");
             }}
             className={`flex-1 py-1.5 rounded-lg text-sm ${turi === "chiqim" ? "bg-expense text-white" : "bg-expense-soft text-expense-fg"}`}
           >
             Chiqim
           </button>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {TOLOV_TURLARI.filter((t) => t !== "qarz" || turi === "kirim").map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTolovTuri(t)}
+              className={`px-3 py-1.5 rounded-lg border text-sm transition ${
+                tolovTuri === t
+                  ? "border-brand bg-brand-wash text-brand font-medium"
+                  : "border-line bg-surface-2 text-fg hover:border-brand"
+              }`}
+            >
+              {TOLOV_BELGI[t]} {TOLOV_NOMI[t]}
+            </button>
+          ))}
         </div>
         <select
           value={categoryId}

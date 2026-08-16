@@ -21,6 +21,7 @@ let rawPrisma: any;
 let prisma: any;
 let runWithTenant: any;
 let inventory: any;
+let qarz: any;
 let queries: any;
 let dashboard: any;
 let report: any;
@@ -48,6 +49,7 @@ before(async () => {
   ({ prisma } = await import("@/lib/prisma"));
   ({ runWithTenant } = await import("@/lib/db/tenantContext"));
   inventory = await import("@/lib/services/inventory");
+  qarz = await import("@/lib/services/qarz");
   queries = await import("@/lib/queries/inventory");
   dashboard = await import("@/lib/queries/dashboard");
   report = await import("@/lib/queries/report");
@@ -250,7 +252,7 @@ test("qarzi to'langan sotuvni bekor qilib bo'lmaydi", async () => {
   const sale = await rawPrisma.sale.findFirst({ where: { productId: p.id } });
   const debt = await rawPrisma.debt.findFirst({ where: { saleId: sale.id } });
   await O(async () =>
-    inventory.recordDebtPayment({
+    qarz.qarzTolov({
       businessId: ombor.business.id, debtId: debt.id, summa: 1_000, userId: ombor.user.id,
     })
   );
