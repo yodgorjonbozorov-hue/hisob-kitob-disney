@@ -3037,3 +3037,45 @@ ekranlar (kassa kartalari, kg oynasi, kunlik hisobot). Migratsiyadagi
 ustida sinaldi; production'da tasdiqlash uchun Actions sirlariga
 `DATABASE_URL` qo'shilsa, "Holatni tekshirish (faqat o'qish)" workflow'i
 buni pul summalarini oshkor qilmasdan ko'rsatadi.
+
+---
+
+## Qarzdorlik tizimi — "Menga qarzdor" kartasi 0 ko'rsatgani (2026-08-17)
+
+### Ildiz sabab
+
+`src/app/app/page.tsx` da qarz jamlarini o'qish `business.omborli` sharti
+bilan o'ralgan edi:
+
+```ts
+business?.omborli ? getDebtTotals(businessId) : Promise.resolve({ olinadigan: 0, ... })
+```
+
+Ombori yo'q biznesda (masalan DISNEY FLOWERS) shart yolg'on bo'lib, bazaga
+umuman so'rov ketmasdi — karta LITERAL nol ko'rsatardi. Qarzlar esa bazada
+o'z joyida turardi.
+
+Qarzlar sahifasidan ombor sharti ilgariroq olib tashlangan
+(`src/app/app/qarzlar/page.tsx` izohida yozilgan), lekin bosh sahifadagi bu
+joy o'sha o'zgarishda e'tibordan qolib ketgan. Ya'ni bu hisob xatosi emas —
+UI qatlamidagi qolgan shart edi.
+
+### Yechim
+
+- Qarz jamlari bosh sahifada SHARTSIZ o'qiladi (`getQarzJamlariKesh`).
+- Yangi `getQarzJamlari()` bitta `groupBy` bilan summa va QARZDORLAR SONINI
+  qaytaradi; qarzdor = shaxs (`qarzdorKalit`), qarz yozuvi emas.
+- Karta bosiladigan bo'ldi → `/app/qarzlar?turi=olinadigan`.
+- Qarzlar sahifasiga SHAXS kesimi qo'shildi: `listQarzdorlar` /
+  `getQarzdorTafsilot` (qarz va to'lovlar bitta vaqt o'qida, yuguruvchi
+  qoldiq bilan).
+
+Hisob mantiqi O'ZGARMADI: `Debt` + `DebtPayment` allaqachon transaksiya
+asosidagi model, qoldiq har safar `Σ(qarz) − Σ(to'lov)` sifatida qayta
+hisoblanadi. Qo'lda yuritiladigan "joriy balans" ustuni yo'q va qo'shilmadi.
+
+### Test
+
+`npm run test:qarzdorlik` — 16 ta test, jumladan topshiriqdagi 1–5
+stsenariylari (1 mln → 3 mln → 2,5 mln → 2 mln → 0), tenant izolyatsiyasi,
+takror to'lov, bekor qilingan qarz, manfiy qoldiqning oldini olish.

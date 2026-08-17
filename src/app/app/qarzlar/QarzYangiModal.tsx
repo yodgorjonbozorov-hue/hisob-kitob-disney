@@ -27,17 +27,20 @@ export function QarzYangiModal({
   turi: boshlangichTuri,
   products,
   avto,
+  mijoz: boshlangichMijoz,
   onClose,
   onDone,
 }: {
   turi: QarzTuri;
   products: QarzProductOption[];
   avto: boolean;
+  /** Qarzdor kartochkasidan ochilganda — mijoz oldindan to'ldiriladi. */
+  mijoz?: MijozTanlov | null;
   onClose: () => void;
   onDone: () => void;
 }) {
   const [turi, setTuri] = useState<QarzTuri>(boshlangichTuri);
-  const [mijoz, setMijoz] = useState<MijozTanlov>(BOSH_MIJOZ);
+  const [mijoz, setMijoz] = useState<MijozTanlov>(boshlangichMijoz ?? BOSH_MIJOZ);
   const [summa, setSumma] = useState("");
   const [tolangan, setTolangan] = useState("");
   const [productId, setProductId] = useState("");
