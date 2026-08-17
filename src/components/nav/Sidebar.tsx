@@ -2,13 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  LayoutDashboard, Receipt, FileText, PiggyBank, Bell, CalendarCheck, Repeat, Wallet, Banknote,
-  Package, ShoppingCart, HandCoins, Truck, Factory, Building2, Tags, Users, Trash2, ScrollText,
-  BadgeCheck, Gavel, Contact2, IdCard, CalendarDays, FileSignature, ClipboardList,
-  LogOut, KeyRound, CreditCard, Blocks, Handshake, BookUser, ListChecks, Sparkles, ShieldCheck, type LucideIcon,
-} from "lucide-react";
+import { Bell, LogOut, KeyRound, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { ikon } from "./ikonlar";
 import { ROL_LABEL, type Rol } from "@/lib/auth/roles";
 import type { NavItem } from "@/lib/modules/registry";
 import { TelegramLinkButton } from "@/components/TelegramLinkButton";
@@ -26,42 +22,6 @@ interface Props {
   /** Modul registry'sidan generatsiya qilingan havolalar (lib/modules/registry.ts). */
   navItems: NavItem[];
 }
-
-/** Registry'dagi ikon kaliti -> lucide komponenti. */
-const IKONLAR: Record<string, LucideIcon> = {
-  dashboard: LayoutDashboard,
-  receipt: Receipt,
-  report: FileText,
-  budget: PiggyBank,
-  wallet: Wallet,
-  cash: Banknote,
-  purchase: Truck,
-  supplier: Factory,
-  approval: BadgeCheck,
-  rule: Gavel,
-  customers: Contact2,
-  hr: IdCard,
-  attendance: CalendarDays,
-  contract: FileSignature,
-  repeat: Repeat,
-  shift: CalendarCheck,
-  daily: ClipboardList,
-  package: Package,
-  cart: ShoppingCart,
-  debt: HandCoins,
-  business: Building2,
-  tags: Tags,
-  users: Users,
-  shield: ShieldCheck,
-  trash: Trash2,
-  audit: ScrollText,
-  modules: Blocks,
-  billing: CreditCard,
-  crm: Handshake,
-  contacts: BookUser,
-  tasks: ListChecks,
-  ai: Sparkles,
-};
 
 export default function Sidebar({ ism, rol, businesses, activeBusinessId, navItems }: Props) {
   const pathname = usePathname();
@@ -110,7 +70,7 @@ export default function Sidebar({ ism, rol, businesses, activeBusinessId, navIte
       </div>
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         {item("/app/bildirishnomalar", "Bildirishnomalar", Bell, notifCount)}
-        {navItems.map((l) => item(l.href, l.label, IKONLAR[l.icon] ?? Receipt))}
+        {navItems.map((l) => item(l.href, l.label, ikon(l.icon)))}
       </nav>
       <div className="px-4 py-4 border-t border-line space-y-2">
         <div className="flex items-center justify-between">

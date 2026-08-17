@@ -2719,3 +2719,62 @@ xarid 13/13 · atomik 6/6 · audit-qoldiq 10/10 · pro 22/22 · smena 14/14 ·
 kunlik 27/27 · isolation 22/22 · izolyatsiya-royxati 9/9 · migratsiya 10/10 ·
 backup 6/6 · modules 15/15 · visibility 10/10 · tolov 14/14 ·
 mijozlar 15/15 · launch 7/7.
+---
+
+## 2026-08-17 — Sayt va ilova dizayni bir xillashtirildi (`claude/ios-design-unification-fd5bn6`)
+
+**Talab:** "iOS app dizaynini tekshir, website va mobile website dizaynini
+iOS niki bilan bir xil qil."
+
+**Muhim aniqlik:** repozitoriyada alohida iOS (Swift/native) ilova YO'Q —
+faqat Next.js web ilova + Android TWA (`twa/`). Foydalanuvchi "iOS app" deb
+iPhone'ga o'rnatilgan PWA'ni (`/app` qobig'i: sticky top bar, pastki tab-bar,
+FAB, bottom sheet) atagan. Loyiha egasi tanlovi bilan ETALON — aynan shu
+ilova qobig'i; public sayt unga moslashtirildi (ilova qayta bo'yalmadi).
+
+**Topilgan tafovutlar (audit):**
+
+1. Landing 9 ta imkoniyatni EMOJI bilan ko'rsatardi (📊🤝✅…), ilovada esa
+   lucide ikonkalar — ikki xil belgi tili.
+2. `BottomNav` o'zining qo'lda chizilgan SVG yo'llarini ishlatardi, `Sidebar`
+   esa lucide. Natijada `crm` tabi umuman IKONKASIZ chiqardi (`ICONS` da
+   bunday kalit yo'q edi).
+3. Kirish/ro'yxat tugmasi `bg-income` — YASHIL edi. Yashil bu tizimda
+   "pul kirdi" degani; brend rangi teal. Semantik rang buzilgan.
+4. `Button` primary'da `text-white` qattiq yozilgan — qorong'i mavzuda brend
+   yorqin teal'ga o'tadi va oq matn o'qilmay qolardi.
+5. Public sahifalarda ilova qobig'idagi sticky panel, mavzu almashtirgichi
+   va telefondagi doimiy amal paneli yo'q edi.
+6. Landing tugmalari qo'lda yozilgan (`rounded-xl px-8 py-3.5`) — ilovadagi
+   `Button` bilan o'lcham/radius/bosish zonasi mos emas.
+7. 404, xato, oflayn ekranlarida yana emoji (🔎 ⚠️ 🔄).
+
+**Qilingan ish:**
+
+- `components/ui/buttonStyles.ts` (yangi) — tugma klasslari YAGONA manba.
+  `Button` (ilova) va `LinkButton` (sayt, yangi) ikkisi ham shundan oladi.
+  Primary matni `text-brand-fg` — mavzu bilan almashadi.
+- `components/nav/ikonlar.ts` (yangi) — ikonka kaliti → lucide xaritasi
+  yagona manbaga chiqarildi. `Sidebar`, `BottomNav` va public sayt shundan
+  oladi; `ikon()` noma'lum kalitda ham bo'sh joy qoldirmaydi (crm tabi tuzaldi).
+- `components/public/` (yangi) — `PublicHeader` (ilovadagi `MobileNav` bilan
+  bir xil: sticky, `bg-surface/90 backdrop-blur`, `h-14`), `PublicShell`
+  (footer + telefondagi doimiy CTA paneli `pb-safe` bilan, `BottomNav`
+  qatlamiga mos), `AuthShell` (kirish/ro'yxat — ilova qobig'i bilan bir xil).
+- `components/ui/fieldStyles.ts` (yangi) — forma maydonlari: `text-base`
+  (17px) va `min-h-[44px]`. 16px dan kichik maydon iOS Safari'da sahifani
+  avtomatik kattalashtiradi — o'shanda ilova "veb-sahifa"day his qilinadi.
+- Qayta yozildi: `app/page.tsx` (emoji → lucide, `Card`/`LinkButton`,
+  tarif kartalari 3 ustunli to'r), `login/`, `signup/` (+ formalar),
+  `not-found.tsx`, `error.tsx`, `offline/`, `maxfiylik/`, `global-error.tsx`
+  (oxirgi chora ekrani — inline SVG, paketga tayanmaydi).
+
+**Ataylab QILINMAGAN:** `viewport-fit=cover` qo'shilmadi. `pb-safe` klasslari
+shusiz inert, LEKIN cover'siz iOS viewport'ni xavfsiz zonaga o'zi qisqartiradi
+— ya'ni hozir xato yo'q. Cover yoqilsa gorizontal notch (landscape Safari)
+uchun har bir fixed qatlamni qayta ko'rib chiqish kerak bo'ladi; bu talabdan
+tashqari xavf.
+
+**Tekshirildi:** `next build` ✅ · smoke-brauzer 7/7 ✅ · isolation 22/22 ✅ ·
+izolyatsiya-royxati 9/9 ✅. Skrinshotlar (390px / 1440px / qorong'i):
+`.screenshots/dizayn-birxil/`.
