@@ -5,6 +5,7 @@ import { withTenant } from "@/lib/auth/tenant";
 import { isManager } from "@/lib/auth/roles";
 import { updateTransactionSchema } from "@/lib/validation/transaction";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
+import { kgSumma, kgToGram } from "@/lib/kg";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { resolveAccountId } from "@/lib/services/accounts";
 import { dashboardYangilandi } from "@/lib/cache";
@@ -35,15 +36,61 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
   const data = parsed.data;
 
   // Kategoriya o'zgartirilsa, u ham shu biznesga tegishli bo'lishi kerak.
+  let yangiKategoriyaKg: boolean | null = null;
   if (data.categoryId !== undefined) {
     const cat = await prisma.category.findUnique({
       where: { id: data.categoryId },
-      select: { businessId: true },
+      select: { businessId: true, kgAsosli: true },
     });
     if (!cat || cat.businessId !== existing.businessId) {
       throw new ForbiddenError("Kategoriya bu biznesga tegishli emas");
     }
+    yangiKategoriyaKg = cat.kgAsosli;
   }
+
+  // KG SAVDOSI (mijozga xos — Fortex Selos).
+  //
+  // Invariant: kg yozuvida summa QO'LDA tahrirlanmaydi — u har doim
+  // miqdor × 1 kg narxi (lib/kg.ts). Aks holda tarixdagi "100 kg × 5 000 =
+  // 500 000" qatori o'zaro qarama-qarshi bo'lib qolardi.
+  const kgYozuvi = existing.miqdorGr != null && existing.kgNarxi != null;
+  const kgKeldi = data.miqdorKg != null && data.kgNarxi != null;
+  if (kgKeldi) {
+    const kgAsosli = yangiKategoriyaKg ?? kgYozuvi;
+    if (!kgAsosli) {
+      return NextResponse.json({ error: "Bu kategoriya kg bo'yicha savdo qilmaydi" }, { status: 400 });
+    }
+    if ((data.turi ?? existing.turi) !== "kirim") {
+      return NextResponse.json({ error: "Kg savdosi faqat kirim uchun" }, { status: 400 });
+    }
+  }
+  if (kgYozuvi && !kgKeldi) {
+    if (data.summa !== undefined && data.summa !== existing.summa) {
+      return NextResponse.json(
+        {
+          error:
+            "Kg savdosi summasi miqdor × 1 kg narxidan hisoblanadi — miqdor yoki narxni o'zgartiring",
+        },
+        { status: 400 }
+      );
+    }
+    if (yangiKategoriyaKg === false) {
+      return NextResponse.json(
+        { error: "Kg savdosini kg'siz kategoriyaga o'tkazib bo'lmaydi" },
+        { status: 400 }
+      );
+    }
+    if (data.turi !== undefined && data.turi !== existing.turi) {
+      return NextResponse.json({ error: "Kg savdosi faqat kirim bo'lib qoladi" }, { status: 400 });
+    }
+  }
+  const kgYangilash = kgKeldi
+    ? {
+        miqdorGr: kgToGram(data.miqdorKg!),
+        kgNarxi: data.kgNarxi!,
+        summa: kgSumma(kgToGram(data.miqdorKg!), data.kgNarxi!),
+      }
+    : null;
 
   // To'lov turi qoidasi yakuniy holatda tekshiriladi (turi va tolovTuri
   // birga yoki alohida o'zgarishi mumkin): qarz faqat kirim uchun.
@@ -71,7 +118,9 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
     data: {
       ...(data.turi !== undefined ? { turi: data.turi } : {}),
       ...(data.categoryId !== undefined ? { categoryId: data.categoryId } : {}),
+      // Kg yozuvida summa kg hisobidan keladi (pastdagi `kgYangilash` ustun turadi).
       ...(data.summa !== undefined ? { summa: data.summa } : {}),
+      ...(kgYangilash ?? {}),
       ...(data.sana !== undefined ? { sana: dateOnlyStringToUTCDate(data.sana) } : {}),
       ...(data.tolovTuri !== undefined ? { tolovTuri: data.tolovTuri } : {}),
       ...accountYangilash,

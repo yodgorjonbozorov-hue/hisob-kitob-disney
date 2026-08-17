@@ -13,6 +13,7 @@
  *
  * Kengaytirish uchun kod tegilmaydi — env yetarli:
  *   BUGUN_PANEL_MIJOZLARI="fortex-selos,Boshqa Mijoz"
+ *   KG_SAVDO_MIJOZLARI="fortex-selos,Boshqa Mijoz"
  */
 
 /** Slug yoki kompaniya nomini taqqoslash kalitiga aylantiradi. */
@@ -52,4 +53,20 @@ function tenantKalitlari(tenant: { name: string; slug: string }): string[] {
  */
 export function bugunPaneliKorinadi(tenant: { name: string; slug: string }): boolean {
   return tenantKalitlari(tenant).some((k) => BUGUN_PANEL.has(k));
+}
+
+/**
+ * KG SAVDOSI ochiq mijozlar — "Selos" kabi kategoriya bosilganda summa emas,
+ * MIQDOR (kg) va 1 KG NARXI so'raladigan oyna.
+ *
+ * Fortex Selos mahsulotni og'irlik bilan sotadi va narx har savdoda
+ * savdolashib belgilanadi. Boshqa mijozlar uchun bu faqat chalg'ituvchi
+ * qadam bo'lardi: ularning "Pul kirdi" ekrani va kategoriyalari
+ * O'ZGARMAYDI (bayroq ham, menyu ham, hisobot bloki ham ko'rinmaydi).
+ */
+const KG_SAVDO = royxat(process.env.KG_SAVDO_MIJOZLARI, "fortex-selos-uzb,fortex-selos");
+
+/** Kg savdosi (miqdor × 1 kg narxi) shu mijozga ochiqmi. */
+export function kgSavdoKorinadi(tenant: { name: string; slug: string }): boolean {
+  return tenantKalitlari(tenant).some((k) => KG_SAVDO.has(k));
 }

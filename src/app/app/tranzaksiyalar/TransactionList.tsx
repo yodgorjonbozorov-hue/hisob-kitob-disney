@@ -3,20 +3,14 @@
 import { isManager } from "@/lib/auth/roles";
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { formatSom, formatSomLabel, parseSomInput, formatDateUZ } from "@/lib/format";
+import { formatSom, formatSomLabel, formatDateUZ } from "@/lib/format";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
-import { Modal } from "@/components/ui/Modal";
-import { TOLOV_TURLARI, TOLOV_NOMI, TOLOV_BELGI, type TolovTuri } from "@/lib/validation/transaction";
 import type { TransactionDTO } from "@/lib/queries/transactions";
 import type { Rol } from "@/lib/auth/session";
 import { ReceiptList } from "@/components/ui/ReceiptList";
-
-interface CategoryOption {
-  id: string;
-  nomi: string;
-  turi: string;
-}
+import { formatKgLabel } from "@/lib/kg";
+import { EditModal } from "./EditModal";
+import type { CategoryOption } from "./turlar";
 
 interface Props {
   items: TransactionDTO[];
@@ -105,7 +99,15 @@ export function TransactionList({
                   </Badge>
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-muted">{tolovBelgi(t)}</td>
-                <td className="px-4 py-3">{t.category.nomi}</td>
+                <td className="px-4 py-3">
+                  {t.category.nomi}
+                  {/* Kg savdosi: miqdor × 1 kg narxi — o'sha savdodagi REAL narx. */}
+                  {t.miqdorGr != null && t.kgNarxi != null && (
+                    <span className="block text-2xs text-muted tnum">
+                      {formatKgLabel(t.miqdorGr)} × {formatSom(t.kgNarxi)} soʻm
+                    </span>
+                  )}
+                </td>
                 <td
                   className={`px-4 py-3 text-right font-medium whitespace-nowrap ${
                     t.turi === "kirim" ? "text-income" : "text-expense"
@@ -154,6 +156,8 @@ export function TransactionList({
               categoryNomi: `${tolovBelgi(t)} · ${t.category.nomi}`,
               izoh: t.izoh,
               userIsm: t.user.ism,
+              miqdorGr: t.miqdorGr,
+              kgNarxi: t.kgNarxi,
             }))}
             onRowClick={(id) => {
               const t = items.find((x) => x.id === id);
@@ -223,154 +227,3 @@ function PageLink({
   );
 }
 
-function EditModal({
-  transaction,
-  categories,
-  canDelete,
-  onClose,
-  onSaved,
-  onDelete,
-}: {
-  transaction: TransactionDTO;
-  categories: CategoryOption[];
-  canDelete: boolean;
-  onClose: () => void;
-  onSaved: (t: TransactionDTO) => void;
-  onDelete: () => void;
-}) {
-  const [turi, setTuri] = useState<"kirim" | "chiqim">(transaction.turi as "kirim" | "chiqim");
-  // Eski yozuvda tolovTuri null — kassa turidan boshlang'ich qiymat chiqariladi.
-  const [tolovTuri, setTolovTuri] = useState<TolovTuri>(
-    (transaction.tolovTuri as TolovTuri | null) ??
-      (transaction.account?.turi === "plastik" || transaction.account?.turi === "bank"
-        ? "click"
-        : "naqd")
-  );
-  const [categoryId, setCategoryId] = useState(transaction.categoryId);
-  const [summaText, setSummaText] = useState(formatSom(transaction.summa));
-  const [sana, setSana] = useState(new Date(transaction.sana).toISOString().slice(0, 10));
-  const [izoh, setIzoh] = useState(transaction.izoh ?? "");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const filteredCategories = categories.filter((c) => c.turi === turi);
-
-  async function handleSave() {
-    setError(null);
-    const summa = parseSomInput(summaText);
-    if (summa <= 0) {
-      setError("Summani kiriting");
-      return;
-    }
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/transactions/${transaction.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ turi, tolovTuri, categoryId, summa, sana, izoh: izoh || undefined }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "Xatolik yuz berdi");
-        setLoading(false);
-        return;
-      }
-      onSaved(data);
-    } catch {
-      setError("Serverga ulanib bo'lmadi");
-      setLoading(false);
-    }
-  }
-
-  return (
-    <Modal open onClose={onClose} title="Tranzaksiyani tahrirlash">
-      <div className="space-y-3">
-        <div className="flex gap-2">
-          <button
-            onClick={() => {
-              setTuri("kirim");
-              setCategoryId("");
-            }}
-            className={`flex-1 py-1.5 rounded-lg text-sm ${turi === "kirim" ? "bg-income text-white" : "bg-income-soft text-income-fg"}`}
-          >
-            Kirim
-          </button>
-          <button
-            onClick={() => {
-              setTuri("chiqim");
-              setCategoryId("");
-              // Qarz faqat kirim uchun — chiqimga o'tilganda naqdga qaytariladi.
-              if (tolovTuri === "qarz") setTolovTuri("naqd");
-            }}
-            className={`flex-1 py-1.5 rounded-lg text-sm ${turi === "chiqim" ? "bg-expense text-white" : "bg-expense-soft text-expense-fg"}`}
-          >
-            Chiqim
-          </button>
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          {TOLOV_TURLARI.filter((t) => t !== "qarz" || turi === "kirim").map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTolovTuri(t)}
-              className={`px-3 py-1.5 rounded-lg border text-sm transition ${
-                tolovTuri === t
-                  ? "border-brand bg-brand-wash text-brand font-medium"
-                  : "border-line bg-surface-2 text-fg hover:border-brand"
-              }`}
-            >
-              {TOLOV_BELGI[t]} {TOLOV_NOMI[t]}
-            </button>
-          ))}
-        </div>
-        <select
-          value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
-          className="w-full rounded-lg border border-line px-3 py-2 text-sm"
-        >
-          {filteredCategories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.nomi}
-            </option>
-          ))}
-        </select>
-        <input
-          type="text"
-          inputMode="numeric"
-          value={summaText}
-          onChange={(e) => setSummaText(formatSom(parseSomInput(e.target.value)))}
-          className="w-full rounded-lg border border-line px-3 py-2 text-sm"
-        />
-        <input
-          type="date"
-          value={sana}
-          onChange={(e) => setSana(e.target.value)}
-          className="w-full rounded-lg border border-line px-3 py-2 text-sm"
-        />
-        <input
-          type="text"
-          value={izoh}
-          onChange={(e) => setIzoh(e.target.value)}
-          placeholder="Izoh"
-          className="w-full rounded-lg border border-line px-3 py-2 text-sm"
-        />
-        {error && <p className="text-expense text-sm">{error}</p>}
-        <div className="flex gap-2 items-center pt-2">
-          {canDelete && (
-            <Button variant="danger" onClick={onDelete} type="button">
-              O'chirish
-            </Button>
-          )}
-          <div className="flex gap-2 ml-auto">
-            <Button variant="secondary" onClick={onClose} type="button">
-              Bekor qilish
-            </Button>
-            <Button onClick={handleSave} loading={loading} type="button">
-              Saqlash
-            </Button>
-          </div>
-        </div>
-      </div>
-    </Modal>
-  );
-}

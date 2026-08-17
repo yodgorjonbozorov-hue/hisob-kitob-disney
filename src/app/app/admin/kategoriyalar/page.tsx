@@ -4,10 +4,11 @@ import { requireTenantPage } from "@/lib/auth/tenant";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { isManager } from "@/lib/auth/roles";
 import { getActiveBusiness } from "@/lib/business";
+import { kgSavdoKorinadi } from "@/lib/mijozXos";
 import { CategoriesClient } from "./CategoriesClient";
 
 export default async function KategoriyalarPage() {
-  const { session, tenantId } = await requireTenantPage();
+  const { session, tenantId, tenant } = await requireTenantPage();
   // Tenant konteksti: quyidagi barcha prisma so'rovlari shu tenantga avtomatik cheklanadi.
   return runWithTenant(tenantId, async () => {
   if (!isManager(session.rol)) {
@@ -37,7 +38,9 @@ export default async function KategoriyalarPage() {
           Biznes: <span className="font-medium text-fg">{activeBusiness.nomi}</span>
         </p>
       </div>
-      <CategoriesClient initialCategories={categories} />
+      {/* Kg savdosi bayrog'i — mijozga xos (Fortex Selos). Boshqa mijozlarda
+          bu ustun/tugma umuman ko'rinmaydi. */}
+      <CategoriesClient initialCategories={categories} kgSavdo={kgSavdoKorinadi(tenant)} />
     </div>
   );
   });

@@ -7,7 +7,7 @@ import { CategoryBars } from "@/components/charts/CategoryBars";
 import { TrendChart } from "@/components/charts/TrendChart";
 import { DailyDynamicsChart } from "@/components/charts/DailyDynamicsChart";
 import { formatMoneyCompact } from "@/lib/format";
-import { currentMonthString, todayDateOnlyString } from "@/lib/date";
+import { currentMonthString, todayDateOnlyString, todayTashkentDateOnlyString } from "@/lib/date";
 import { requireTenantPage } from "@/lib/auth/tenant";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { isManager } from "@/lib/auth/roles";
@@ -25,8 +25,10 @@ import { getDebtTotals } from "@/lib/queries/inventory";
 import { getTodayTotals } from "@/lib/queries/shift";
 import { listTransactions } from "@/lib/queries/transactions";
 import { getProBugun } from "@/lib/queries/proDashboard";
-import { bugunPaneliKorinadi } from "@/lib/mijozXos";
+import { getKgSavdo } from "@/lib/queries/selos";
+import { bugunPaneliKorinadi, kgSavdoKorinadi } from "@/lib/mijozXos";
 import { KassaHome } from "./KassaHome";
+import { SelosBugunKartasi } from "./SelosBugunKartasi";
 
 export default async function DashboardPage({
   searchParams,
@@ -63,6 +65,9 @@ export default async function DashboardPage({
       categoryNomi: t.category.nomi,
       izoh: t.izoh,
       userIsm: t.user.ism,
+      // Kg savdosi: "100 kg × 5 000" qatori lentada ham ko'rinadi (mijozga xos).
+      miqdorGr: t.miqdorGr,
+      kgNarxi: t.kgNarxi,
     }));
     return (
       <KassaHome
@@ -91,7 +96,9 @@ export default async function DashboardPage({
   // "Bugun" bloki — mijozga xos (Fortex Selos), tarif imkoniyati EMAS.
   // Boshqa mijozlarning dashboard'i o'zgarmaydi.
   const bugunPanel = bugunPaneliKorinadi(tenant);
-  const [summary, kirimBreakdown, chiqimBreakdown, trend, daily, qarzTotal, categoryCount, proBugun] = await Promise.all([
+  // Kg savdosi bloki — mijozga xos (Fortex Selos), tarif imkoniyati EMAS.
+  const kgPanel = kgSavdoKorinadi(tenant);
+  const [summary, kirimBreakdown, chiqimBreakdown, trend, daily, qarzTotal, categoryCount, proBugun, kgBugun] = await Promise.all([
     getMonthSummaryKesh(businessId, month),
     getCategoryBreakdownKesh(businessId, month, "kirim"),
     getCategoryBreakdownKesh(businessId, month, "chiqim"),
@@ -101,6 +108,8 @@ export default async function DashboardPage({
     prisma.category.count({ where: { businessId } }),
     // Bugungi kg va kassa/jamoa ko'rsatkichlari (mijozga xos blok).
     bugunPanel ? getProBugun(businessId) : Promise.resolve(null),
+    // Bugungi kg savdosi (yozuvlardan): jami kg, tushum va sotuvchilar kesimi.
+    kgPanel ? getKgSavdo(businessId, todayTashkentDateOnlyString()) : Promise.resolve(null),
   ]);
 
   return (
@@ -172,6 +181,10 @@ export default async function DashboardPage({
           )}
         </StatCard>
       </div>
+
+      {/* Kg savdosi (mijozga xos — Fortex Selos): bugun necha kg, qancha tushum,
+          sotuvchilar bo'yicha. Boshqa mijozlarda bu blok umuman yo'q. */}
+      {kgBugun && <SelosBugunKartasi hisobot={kgBugun} />}
 
       {proBugun && (
         <Card>

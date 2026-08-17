@@ -4,6 +4,7 @@ import { requireManager } from "@/lib/auth/guard";
 import { withTenant } from "@/lib/auth/tenant";
 import { createCategorySchema } from "@/lib/validation/category";
 import { resolveActiveBusinessId } from "@/lib/business";
+import { oxirgiKgNarxlari } from "@/lib/queries/selos";
 
 export const GET = withTenant(async (request, _ctx, { session: user }) => {
 
@@ -23,7 +24,16 @@ export const GET = withTenant(async (request, _ctx, { session: user }) => {
     orderBy: [{ tartib: "asc" }, { nomi: "asc" }],
   });
 
-  return NextResponse.json(categories);
+  // KG SAVDOSI (mijozga xos): kg oynasi 1 kg narxini oxirgi savdodan
+  // taklif qiladi. Bunday kategoriyasi yo'q mijozda qo'shimcha so'rov ham
+  // yo'q — javob avvalgidek qaytadi.
+  const kgIdlar = categories.filter((c) => c.kgAsosli).map((c) => c.id);
+  if (kgIdlar.length === 0) return NextResponse.json(categories);
+
+  const narxlar = await oxirgiKgNarxlari(businessId, kgIdlar);
+  return NextResponse.json(
+    categories.map((c) => (c.kgAsosli ? { ...c, oxirgiKgNarxi: narxlar[c.id] ?? null } : c))
+  );
 });
 
 export const POST = withTenant(async (request, _ctx, { session: user }) => {

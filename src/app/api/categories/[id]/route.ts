@@ -11,7 +11,7 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
   const businessId = await resolveActiveBusinessId(user);
   const existing = await prisma.category.findUnique({
     where: { id: params.id },
-    select: { businessId: true },
+    select: { businessId: true, turi: true },
   });
   if (!existing) {
     return NextResponse.json({ error: "Kategoriya topilmadi" }, { status: 404 });
@@ -25,6 +25,15 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
   const parsed = updateCategorySchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
+  }
+
+  // Kg savdosi bayrog'i faqat kirim kategoriyasida ma'noga ega (chiqimda
+  // "sotilgan kg" degan tushuncha yo'q).
+  if (parsed.data.kgAsosli && existing.turi !== "kirim") {
+    return NextResponse.json(
+      { error: "Kg savdosi faqat kirim kategoriyasida bo'ladi" },
+      { status: 400 }
+    );
   }
 
   const category = await prisma.category.update({
