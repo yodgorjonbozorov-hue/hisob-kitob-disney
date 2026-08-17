@@ -6,7 +6,7 @@ import { MonthSelector } from "@/components/MonthSelector";
 import { CategoryBars } from "@/components/charts/CategoryBars";
 import { TrendChart } from "@/components/charts/TrendChart";
 import { DailyDynamicsChart } from "@/components/charts/DailyDynamicsChart";
-import { formatMoneyCompact } from "@/lib/format";
+import { formatMoneyCompact, formatSomLabel } from "@/lib/format";
 import { currentMonthString, todayDateOnlyString, todayTashkentDateOnlyString } from "@/lib/date";
 import { requireTenantPage } from "@/lib/auth/tenant";
 import { runWithTenant } from "@/lib/db/tenantContext";
@@ -20,8 +20,8 @@ import {
   getCategoryBreakdownKesh,
   getTrendKesh,
   getDailyDynamicsKesh,
+  getQarzJamlariKesh,
 } from "@/lib/queries/dashboardCached";
-import { getDebtTotals } from "@/lib/queries/inventory";
 import { getTodayTotals } from "@/lib/queries/shift";
 import { listTransactions } from "@/lib/queries/transactions";
 import { getProBugun } from "@/lib/queries/proDashboard";
@@ -92,7 +92,6 @@ export default async function DashboardPage({
     );
   }
 
-  const business = await getActiveBusiness(session);
   // "Bugun" bloki — mijozga xos (Fortex Selos), tarif imkoniyati EMAS.
   // Boshqa mijozlarning dashboard'i o'zgarmaydi.
   const bugunPanel = bugunPaneliKorinadi(tenant);
@@ -104,7 +103,11 @@ export default async function DashboardPage({
     getCategoryBreakdownKesh(businessId, month, "chiqim"),
     getTrendKesh(businessId, 6, month),
     getDailyDynamicsKesh(businessId, month),
-    business?.omborli ? getDebtTotals(businessId) : Promise.resolve({ olinadigan: 0, beriladigan: 0, sof: 0 }),
+    // QARZ OMBORDAN MUSTAQIL. Ilgari bu so'rov `business.omborli` bilan
+    // o'ralgan edi va ombori yo'q biznesda karta har doim 0 ko'rsatardi —
+    // qarzlar bazada turgan holda. Qarzlar sahifasidan ombor sharti
+    // olib tashlanganda bu joy e'tibordan qolib ketgan.
+    getQarzJamlariKesh(businessId),
     prisma.category.count({ where: { businessId } }),
     // Bugungi kg va kassa/jamoa ko'rsatkichlari (mijozga xos blok).
     bugunPanel ? getProBugun(businessId) : Promise.resolve(null),
@@ -168,15 +171,26 @@ export default async function DashboardPage({
           goodWhenUp
           accent={summary.sofFoyda >= 0 ? "income" : "expense"}
         />
+        {/* Yagona bosiladigan karta — qarzdorlar ro'yxatiga olib kiradi.
+            Raqam har yuklashda yozuvlardan qayta hisoblanadi (qo'lda
+            yuritiladigan "joriy balans" ustuni yo'q). */}
         <StatCard
           label="Menga qarzdor"
           value={formatMoneyCompact(qarzTotal.olinadigan)}
-          accent={qarzTotal.olinadigan > 0 ? "expense" : "neutral"}
+          title={formatSomLabel(qarzTotal.olinadigan)}
+          accent={qarzTotal.olinadigan > 0 ? "debt" : "neutral"}
+          href="/app/qarzlar?turi=olinadigan"
         >
+          <p className="text-2xs mt-1 tnum text-muted">
+            {qarzTotal.olinadiganSoni} ta qarzdor
+          </p>
           {qarzTotal.beriladigan > 0 && (
-            <p className="text-2xs mt-1 tnum text-muted">
+            <p className="text-2xs mt-0.5 tnum text-muted">
               Men qarzdorman:{" "}
-              <span className="font-medium text-expense">{formatMoneyCompact(qarzTotal.beriladigan)}</span>
+              <span className="font-medium text-expense">
+                {formatMoneyCompact(qarzTotal.beriladigan)}
+              </span>{" "}
+              · {qarzTotal.beriladiganSoni} ta
             </p>
           )}
         </StatCard>

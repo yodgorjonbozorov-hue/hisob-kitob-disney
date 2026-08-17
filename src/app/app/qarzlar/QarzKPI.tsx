@@ -4,19 +4,24 @@ import { formatMoneyCompact, formatSomLabel } from "@/lib/format";
 import type { QarzDashboardDTO } from "@/lib/queries/qarz";
 
 /**
- * QARZLAR DASHBOARDI — beshta ko'rsatkich.
+ * QARZLAR DASHBOARDI.
  *
  * Raqamlar SERVERDA jamlanadi (lib/queries/qarz.ts): ro'yxat 1000 yozuv
  * bilan chegaralangan, minglab qarzi bor biznesda brauzerda jamlash
  * yolg'on natija berardi.
+ *
+ * Birinchi karta — sahifaning bosh raqami: jami qarzdorlik va NECHTA
+ * qarzdor. U bosh sahifadagi "Menga qarzdor" kartasi bilan bir xil manbadan
+ * (ochiq qarzlar qoldig'i) chiqadi, shuning uchun ikki ekranda ikki xil
+ * raqam bo'lishi mumkin emas.
  */
 export function QarzKPI({ d }: { d: QarzDashboardDTO }) {
   const kartalar = [
     {
-      label: "Jami ochiq qarz",
+      label: "Jami qarzdorlik",
       qiymat: d.ochiqJami,
       cls: "text-debt",
-      izoh: "Bizga qarzdorlar — kelishi kerak bo'lgan pul",
+      izoh: `${d.mijozlarSoni} ta qarzdor · kelishi kerak bo'lgan pul`,
     },
     {
       label: "Bugun berilgan",
@@ -51,20 +56,17 @@ export function QarzKPI({ d }: { d: QarzDashboardDTO }) {
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {/* "Men qarzdorman" — teskari yo'nalish. Nol bo'lsa ko'rsatilmaydi:
+          qarzi yo'q biznesda ekranda keraksiz nol turmasin. */}
+      {d.beriladiganJami > 0 && (
         <div className="bg-surface rounded-2xl shadow-card border border-line p-4">
-          <p className="text-muted text-sm mb-1">Jami mijozlar qarzi</p>
-          <p className="text-lg font-semibold text-fg tnum">
-            {d.mijozlarSoni} ta mijoz · {formatSomLabel(d.ochiqJami)}
-          </p>
-        </div>
-        <div className="bg-surface rounded-2xl shadow-card border border-line p-4">
-          <p className="text-muted text-sm mb-1">Biz qarzdormiz</p>
+          <p className="text-muted text-sm mb-1">Men qarzdorman</p>
           <p className="text-lg font-semibold text-expense tnum">
             {formatSomLabel(d.beriladiganJami)}
           </p>
+          <p className="text-2xs text-faint mt-1">Ta&apos;minotchi va boshqalarga to&apos;lanadigan pul</p>
         </div>
-      </div>
+      )}
     </div>
   );
 }

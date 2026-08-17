@@ -5,6 +5,7 @@ import {
   getTrend,
   getDailyDynamics,
 } from "@/lib/queries/dashboard";
+import { getQarzJamlari } from "@/lib/queries/qarz";
 
 /**
  * Dashboard so'rovlarining KESHLANGAN variantlari (60 s).
@@ -22,3 +23,9 @@ export const getMonthSummaryKesh = keshlangan("dashboard:oylik-xulosa", getMonth
 export const getCategoryBreakdownKesh = keshlangan("dashboard:kategoriya", getCategoryBreakdown);
 export const getTrendKesh = keshlangan("dashboard:trend", getTrend);
 export const getDailyDynamicsKesh = keshlangan("dashboard:kunlik", getDailyDynamics);
+/**
+ * "Menga qarzdor" kartasi. Qarz yozilganda ham, to'lov qabul qilinganda ham
+ * route'lar `dashboardYangilandi(businessId)` chaqiradi — karta darhol
+ * yangilanadi, foydalanuvchi 60 soniya kutmaydi.
+ */
+export const getQarzJamlariKesh = keshlangan("dashboard:qarz-jamlari", getQarzJamlari);
