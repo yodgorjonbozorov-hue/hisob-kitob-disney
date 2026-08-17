@@ -110,6 +110,16 @@ export function TozalashModal({
 
         {xato && <p className="text-sm text-expense">{xato}</p>}
 
+        {/* Tugma nima uchun bosilmasligini AYTIB turadi — o'chiq tugma
+            sababsiz turganda foydalanuvchi uni "buzuq" deb o'ylaydi. */}
+        {!mos && (
+          <p className="text-2xs text-faint">
+            {nomi.trim().length === 0
+              ? "Tugma faollashishi uchun yuqoridagi maydonga biznes nomini qo'lda yozing."
+              : "Nom mos kelmadi — aynan " + `"${biznes.nomi}"` + " deb yozing."}
+          </p>
+        )}
+
         <div className="flex gap-2 justify-end">
           <Button type="button" variant="secondary" onClick={onClose}>
             Bekor qilish
