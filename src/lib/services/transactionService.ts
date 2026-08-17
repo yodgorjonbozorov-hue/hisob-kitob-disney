@@ -4,6 +4,7 @@ import { ForbiddenError } from "@/lib/auth/guard";
 import type { BusinessTx } from "@/lib/db/businessTx";
 import { resolveAccountId } from "@/lib/services/accounts";
 import { kunlikSinxron } from "@/lib/services/kunlik";
+import { assertYangiYozuvDavri, assertYangiYozuvDavriTx } from "@/lib/services/davrQulfi";
 
 export interface CreateTransactionData {
   turi: "kirim" | "chiqim";
@@ -30,6 +31,11 @@ export async function createTransaction(userId: string, businessId: string, data
   if (!category || category.businessId !== businessId) {
     throw new ForbiddenError("Kategoriya bu biznesga tegishli emas");
   }
+
+  // Yopilgan davr qulfi: tasdiqlangan kunga yangi yozuv kiritilmaydi
+  // (audit: Critical #4). Barcha modullar yozuvni shu yerdan yaratadi,
+  // shuning uchun qulf ham shu yerda — bitta joyda.
+  await assertYangiYozuvDavri(businessId, dateOnlyStringToUTCDate(data.sana));
 
   // Kassa: tanlangani tekshiriladi, tanlanmagani — to'lov turiga mos faol
   // kassa. QARZ — pul kassaga tushmagan, hech qaysi kassaga bog'lanmaydi
@@ -84,6 +90,9 @@ export async function createTransactionTx(
   if (!category) {
     throw new ForbiddenError("Kategoriya bu biznesga tegishli emas");
   }
+
+  // Yopilgan davr qulfi (audit: Critical #4) — tranzaksiya ichidagi variant.
+  await assertYangiYozuvDavriTx(tx, businessId, dateOnlyStringToUTCDate(data.sana));
 
   // Tranzaksiya ichida: kassa xom `tx` bilan qidiriladi (businessId qo'lda).
   // QARZ — kassaga bog'lanmaydi (createTransaction bilan bir xil qoida).

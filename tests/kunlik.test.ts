@@ -504,7 +504,12 @@ test("modul yoqilmagan tenantda sinxron ishlamaydi", async () => {
   assert.equal(soni, 0, "KUNLIK yoqilmagan tenantda hisobot ochilmasin");
 });
 
-test("tasdiqlangan kunga sinxron tegmaydi, asosiy yozuv esa yoziladi", async () => {
+test("tasdiqlangan kunga yozuv umuman KIRITILMAYDI (davr qulfi)", async () => {
+  // XULQ ATAYLAB O'ZGARDI (audit: Critical #4). Ilgari asosiy yozuv baribir
+  // yozilar, faqat kunlikka sinxron qilinmasdi — natijada tasdiqlangan
+  // hisobot raqamlari bilan Yozuvlar bir-biriga mos kelmay qolardi.
+  // Endi yopilgan kunga yozuvning o'zi kirmaydi: tuzatish uchun kun qayta
+  // ochiladi yoki joriy ochiq kunga qarama-qarshi yozuv kiritiladi.
   const { createTransaction } = await import("@/lib/services/transactionService");
   await A(() => kunlikSvc.confirmKunlikReport(tA.business.id, kassirAktor(), bugun));
   const oldin = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
@@ -512,12 +517,15 @@ test("tasdiqlangan kunga sinxron tegmaydi, asosiy yozuv esa yoziladi", async () 
   const kirimCat = await A(() =>
     prisma.category.findFirst({ where: { businessId: tA.business.id, turi: "kirim" } })
   );
-  const t = await A(() =>
-    createTransaction(tA.user.id, tA.business.id, {
-      turi: "kirim", categoryId: kirimCat.id, summa: 111_000, sana: bugun,
-    })
+  await assert.rejects(
+    () =>
+      A(() =>
+        createTransaction(tA.user.id, tA.business.id, {
+          turi: "kirim", categoryId: kirimCat.id, summa: 111_000, sana: bugun,
+        })
+      ),
+    /tasdiqlangan \(yopilgan\)/
   );
-  assert.ok(t.id, "asosiy yozuv baribir yozilishi kerak");
 
   const keyin = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
   assert.equal(keyin.jamiSumma, oldin.jamiSumma, "yopilgan kun o'zgarmasin");

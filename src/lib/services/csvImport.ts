@@ -1,5 +1,6 @@
 import { runBusinessTx } from "@/lib/db/businessTx";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
+import { assertYangiYozuvDavriTx } from "@/lib/services/davrQulfi";
 import { logAudit } from "@/lib/services/audit";
 import { z } from "zod";
 
@@ -162,6 +163,19 @@ export async function csvniYoz(params: {
   if (params.qatorlar.length === 0) return 0;
 
   const yozildi = await runBusinessTx(params.businessId, async (tx) => {
+    // Yopilgan davr qulfi (audit: Critical #4). Import tarixiy sanalar bilan
+    // keladi, shuning uchun HAR BIR noyob sana oldindan tekshiriladi: bitta
+    // qator tasdiqlangan kunga tushsa butun import bekor qilinadi (yarim
+    // import — eng chalkash holat).
+    for (const sanaStr of new Set(params.qatorlar.map((q) => q.sana))) {
+      await assertYangiYozuvDavriTx(
+        tx,
+        params.businessId,
+        dateOnlyStringToUTCDate(sanaStr),
+        "import qilish"
+      );
+    }
+
     // Kassa: birinchi faol kassa (import odatda tarixiy ma'lumot).
     const kassa = await tx.account.findFirst({
       where: { businessId: params.businessId, isActive: true },

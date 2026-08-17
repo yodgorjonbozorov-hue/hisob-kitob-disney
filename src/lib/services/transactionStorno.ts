@@ -35,6 +35,8 @@ import { BadRequestError, ForbiddenError, requireOwnerOrAdmin } from "@/lib/auth
 import { logAudit } from "@/lib/services/audit";
 import { kunlikSinxron } from "@/lib/services/kunlik";
 import { createTransactionTx, type CreateTransactionData } from "@/lib/services/transactionService";
+import { assertYangiYozuvDavriTx, assertYozuvOzgarishiTx } from "@/lib/services/davrQulfi";
+import { dateOnlyStringToUTCDate } from "@/lib/date";
 import type { Rol } from "@/lib/auth/roles";
 
 export interface StornoParams {
@@ -74,6 +76,24 @@ export async function stornoTransaction(params: StornoParams): Promise<StornoNat
     if (asl.deletedAt) throw new BadRequestError("Bu yozuv allaqachon bekor qilingan");
 
     requireOwnerOrAdmin(params.actorRol, params.actorId, asl.userId);
+
+    // Storno ham yopilgan davrni buzmaydi (audit: Critical #4): asl yozuv
+    // tasdiqlangan kunga yoki yopilgan smena oynasiga tegishli bo'lsa uni
+    // bekor qilib bo'lmaydi. Xato matnida joriy ochiq davrga tuzatuvchi
+    // yozuv kiritish yo'li ko'rsatiladi.
+    await assertYozuvOzgarishiTx(tx, params.businessId, asl, "bekor qilish");
+
+    // Tuzatilgan yozuv ham yopiq kunga tushmasin — `createTransactionTx`
+    // buni o'zi tekshiradi, lekin xato matni aniqroq bo'lishi uchun shu
+    // yerda ham nazorat qilinadi.
+    if (params.tuzatish) {
+      await assertYangiYozuvDavriTx(
+        tx,
+        params.businessId,
+        dateOnlyStringToUTCDate(params.tuzatish.sana),
+        "tuzatuvchi yozuv kiritish"
+      );
+    }
 
     // 1. Asl yozuv bekor qilinadi. `updateMany` + `deletedAt: null` sharti —
     //    ikki parallel storno bir yozuvni ikki marta bekor qilmasin.

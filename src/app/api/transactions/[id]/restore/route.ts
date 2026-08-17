@@ -5,6 +5,7 @@ import { withTenant } from "@/lib/auth/tenant";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { dashboardYangilandi } from "@/lib/cache";
 import { kunlikSinxron } from "@/lib/services/kunlik";
+import { assertYozuvOzgarishi } from "@/lib/services/davrQulfi";
 
 /** O'chirilgan tranzaksiyani tiklaydi (undo yoki savatdan). */
 export const POST = withTenant<{ params: { id: string } }>(async (request, { params }, { session: user }) => {
@@ -18,6 +19,10 @@ export const POST = withTenant<{ params: { id: string } }>(async (request, { par
     throw new ForbiddenError("Bu yozuv boshqa biznesga tegishli");
   }
   requireOwnerOrAdmin(user.rol, user.userId, existing.userId);
+
+  // Tiklash ham pulni qaytaradi — yopilgan davrga tegib ketmasin
+  // (audit: Critical #4).
+  await assertYozuvOzgarishi(businessId!, existing, "tiklash");
 
   const restored = await prisma.transaction.update({
     where: { id: params.id },

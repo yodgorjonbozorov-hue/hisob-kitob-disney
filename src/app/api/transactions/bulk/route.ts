@@ -6,6 +6,7 @@ import { resolveActiveBusinessId } from "@/lib/business";
 import { z } from "zod";
 import { dashboardYangilandi } from "@/lib/cache";
 import { kunlikBulkUz } from "@/lib/services/kunlik";
+import { assertYozuvlarOzgarishi } from "@/lib/services/davrQulfi";
 
 const schema = z.object({ ids: z.array(z.string()).min(1).max(500) });
 
@@ -19,6 +20,20 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
   if (!parsed.success) {
     return NextResponse.json({ error: "Xato ma'lumot" }, { status: 400 });
   }
+
+  // Yopilgan davr qulfi (audit: Critical #4). Avval BARCHA tanlanganlar
+  // tekshiriladi: bittasi yopiq davrda bo'lsa hech biri o'chmaydi — yarim
+  // bajarilgan ommaviy o'chirishdan yomoni yo'q.
+  const tanlangan = await prisma.transaction.findMany({
+    where: {
+      id: { in: parsed.data.ids },
+      businessId,
+      deletedAt: null,
+      ...(isManager(user.rol) ? {} : { userId: user.userId }),
+    },
+    select: { sana: true, createdAt: true },
+  });
+  await assertYozuvlarOzgarishi(businessId, tanlangan, "o'chirish");
 
   const res = await prisma.transaction.updateMany({
     where: {

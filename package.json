@@ -35,6 +35,7 @@
     "test:kassa": "node -r ts-node/register tests/kassa.test.ts",
     "test:kassir-kassa": "node -r ts-node/register tests/kassir-kassa.test.ts",
     "test:qarz": "node -r ts-node/register tests/qarz.test.ts",
+    "test:davr-qulfi": "node -r ts-node/register tests/davr-qulfi.test.ts",
     "test:kunlik": "node -r ts-node/register tests/kunlik.test.ts",
     "test:smena": "node -r ts-node/register tests/smena.test.ts",
     "test:tranzaksiya-ozgarmas": "node -r ts-node/register tests/tranzaksiya-ozgarmas.test.ts",

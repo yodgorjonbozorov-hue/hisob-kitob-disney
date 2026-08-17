@@ -7,6 +7,7 @@ import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { dashboardYangilandi } from "@/lib/cache";
 import { kunlikSinxron } from "@/lib/services/kunlik";
+import { assertYozuvOzgarishi } from "@/lib/services/davrQulfi";
 
 /**
  * Yozuvning MOLIYAVIY BO'LMAGAN qismini tahrirlaydi (izoh, filial, kategoriya).
@@ -115,6 +116,10 @@ export const DELETE = withTenant<{ params: { id: string } }>(async (request, { p
       { status: 400 }
     );
   }
+
+  // Yopilgan davr qulfi: tasdiqlangan kun yoki yopilgan smenadagi yozuv
+  // o'chirilmaydi (audit: Critical #4).
+  await assertYozuvOzgarishi(businessId!, existing, "o'chirish");
 
   // Soft delete — belgilanadi (undo/savat uchun). Kunlikdagi ulangan tushum ham chiqadi.
   await prisma.transaction.update({ where: { id: params.id }, data: { deletedAt: new Date() } });

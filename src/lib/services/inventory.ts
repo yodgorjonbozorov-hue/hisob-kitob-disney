@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { createTransactionTx } from "@/lib/services/transactionService";
+import { assertYozuvOzgarishiTx } from "@/lib/services/davrQulfi";
 import { runBusinessTx, type BusinessTx } from "@/lib/db/businessTx";
 import { currentTenantId } from "@/lib/db/tenantContext";
 import { ensureUserKassaTx } from "@/lib/services/userKassa";
@@ -310,6 +311,15 @@ export async function cancelSale(params: {
 
     // Naqd sotuvning kirim tranzaksiyasi — soft delete (kassadagi pul qaytadi).
     if (sale.transactionId) {
+      // Yopilgan davr qulfi (audit: Critical #4): tasdiqlangan kun yoki
+      // yopilgan smenadagi tushumni bekor qilib bo'lmaydi.
+      const txn = await tx.transaction.findFirst({
+        where: { id: sale.transactionId, businessId: params.businessId, deletedAt: null },
+        select: { sana: true, createdAt: true },
+      });
+      if (txn) {
+        await assertYozuvOzgarishiTx(tx, params.businessId, txn, "bekor qilish");
+      }
       await tx.transaction.updateMany({
         where: { id: sale.transactionId, businessId: params.businessId, deletedAt: null },
         data: { deletedAt: new Date() },
@@ -645,6 +655,14 @@ export async function deleteProductExpense(params: {
     }
 
     if (expense.transactionId) {
+      // Yopilgan davr qulfi (audit: Critical #4).
+      const txn = await tx.transaction.findFirst({
+        where: { id: expense.transactionId, businessId: params.businessId, deletedAt: null },
+        select: { sana: true, createdAt: true },
+      });
+      if (txn) {
+        await assertYozuvOzgarishiTx(tx, params.businessId, txn, "bekor qilish");
+      }
       await tx.transaction.updateMany({
         where: { id: expense.transactionId, businessId: params.businessId, deletedAt: null },
         data: { deletedAt: new Date() },
