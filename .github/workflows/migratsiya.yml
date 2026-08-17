@@ -1,5 +1,12 @@
 # Migratsiyalarni TELEFONDAN qo'llash.
 #
+# ⚠️ DIQQAT — REPOZITORIYA OMMAVIY: pastdagi "Zaxiralarni saqlash" qadami
+# baza suratini GitHub ARTEFAKTI sifatida yuklaydi, ya'ni havolasi bo'lgan
+# har kim uni yuklab olishi mumkin (parol xeshlari, telefonlar, pul harakati).
+# Production uchun buning o'rniga "Production migratsiyasi"
+# (production-migratsiya.yml) ishlatilsin — u zaxirani FAQAT yopiq Telegram
+# kanaliga yuboradi va artefakt yuklamaydi.
+#
 # GitHub mobil ilovasi yoki brauzeridan:
 #   Actions -> "Migratsiya qo'llash" -> "Run workflow" -> tasdiq: HA -> Run
 #
