@@ -83,6 +83,7 @@ CREATE TABLE "Business" (
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "omborli" BOOLEAN NOT NULL DEFAULT false,
     "turi" TEXT NOT NULL DEFAULT 'umumiy',
+    "shaxsiyKassa" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "tenantId" TEXT NOT NULL,
 
@@ -172,7 +173,13 @@ CREATE TABLE "AccountTransfer" (
     "fromUserIsm" TEXT,
     "toUserId" TEXT,
     "toUserIsm" TEXT,
+    "turi" TEXT NOT NULL DEFAULT 'transfer',
     "holat" TEXT NOT NULL DEFAULT 'bajarildi',
+    "tasdiqlaganId" TEXT,
+    "tasdiqlaganIsm" TEXT,
+    "tasdiqlanganAt" TIMESTAMP(3),
+    "radAt" TIMESTAMP(3),
+    "qarorIzoh" TEXT,
     "relatedType" TEXT,
     "relatedId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -871,6 +878,9 @@ CREATE INDEX "AccountTransfer_businessId_fromUserId_idx" ON "AccountTransfer"("b
 
 -- CreateIndex
 CREATE INDEX "AccountTransfer_businessId_toUserId_idx" ON "AccountTransfer"("businessId", "toUserId");
+
+-- CreateIndex
+CREATE INDEX "AccountTransfer_businessId_holat_createdAt_idx" ON "AccountTransfer"("businessId", "holat", "createdAt");
 
 -- CreateIndex
 CREATE INDEX "Category_turi_isActive_idx" ON "Category"("turi", "isActive");

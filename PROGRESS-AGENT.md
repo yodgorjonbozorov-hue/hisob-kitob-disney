@@ -2800,7 +2800,7 @@ smena oynasi, tasdiqlash va zaxira zanjirlari avvalgidek ishlaydi.
    og'irlik ham pul kabi float bo'lmasligi kerak), `Transaction.kgNarxi Int?`
    — o'sha savdodagi 1 kg narxi (muzlatilgan snapshot), `Category.kgAsosli
    Boolean @default(false)` — qaysi kategoriya kg bo'yicha sotiladi.
-   Migratsiya `20260817090000_kg_savdo`: eski yozuvlarda ikkala ustun NULL,
+   Migratsiya `20260817100000_kg_savdo`: eski yozuvlarda ikkala ustun NULL,
    hech qanday summa/qoldiq o'zgarmaydi. Migratsiyadagi bitta `UPDATE`
    bayroqni FAQAT tenant nomi/slugi `fortex-selos*` bo'lgan bizneslarning
    "…selos…" nomli kirim kategoriyalariga qo'yadi.
