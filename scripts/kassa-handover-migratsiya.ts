@@ -376,5 +376,11 @@ if (require.main === module) {
       console.error(e);
       process.exitCode = 1;
     })
-    .finally(() => rawPrisma.$disconnect());
+    // DIQQAT: `rawPrisma` libsql klientini DASTLABKI murojaatda quradi va
+    // `DATABASE_URL` yo'q bo'lsa URL_INVALID bilan yiqiladi. Skript env'siz
+    // ishga tushganda (env'siz lokal `npm run build`) yuqorida jimgina
+    // o'tkazib yuborilgan, ya'ni ulanish umuman ochilmagan — shuning uchun
+    // uzishga ham urinmaymiz. Aks holda "o'tkazib yuborildi" deb yozib,
+    // keyin butun build zanjirini yiqitardi.
+    .finally(() => (process.env.DATABASE_URL ? rawPrisma.$disconnect() : undefined));
 }
