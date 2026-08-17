@@ -2778,3 +2778,52 @@ tashqari xavf.
 **Tekshirildi:** `next build` ✅ · smoke-brauzer 7/7 ✅ · isolation 22/22 ✅ ·
 izolyatsiya-royxati 9/9 ✅. Skrinshotlar (390px / 1440px / qorong'i):
 `.screenshots/dizayn-birxil/`.
+
+---
+
+## 2026-08-17 (2) — Legacy `CashHandover` → Account Ledger migratsiyasi
+
+**Audit xulosasi:** legacy tizim ledgerga ATAYLAB tegmasdi
+(`kassirKassa.ts` bosh izohi: "hech qanday Account/AccountTransfer
+qo'zg'atilmaydi"). Ya'ni kassir pul topshirganda ledgerdagi kassalar
+qoldig'i o'zgarmagan — pul o'sha biznes kassasida qolgan.
+
+Shundan kelib chiqib: bu topshiriqlarni HAQIQIY `AccountTransfer` sifatida
+qayta o'ynatish PUL YARATISH bo'lardi. Kassirning shaxsiy kassasi hech qachon
+o'sha daromadni olmagan (yozuvlar umumiy kassaga tushgan), demak undan pul
+chiqarish kassani manfiyga tushirardi va qabul qiluvchida bir pul ikki marta
+sanalardi. Shuning uchun migratsiya — **tarix ko'chirish**, pul ko'chirish emas.
+
+1. **Arxiv holati.** Har `CashHandover` → `AccountTransfer` qatori
+   `holat = "arxiv"` bilan. Kim, kimga, qancha, qachon, sabab va legacy holat
+   saqlanadi; qoldiqqa ta'siri NOL. **Ikki qavatli himoya:** arxiv qatorida
+   `fromAccountId = toAccountId`, ya'ni biror so'rov `holat` filtrini unutsa
+   ham qator o'zini-o'zi nolga chiqaradi.
+2. **Idempotentlik.** `AccountTransfer.legacyCashHandoverId` UNIQUE —
+   ikkinchi ishga tushirishda hammasi SKIP.
+3. **Balans sverkasi.** Migratsiyadan oldin va keyin HAR KASSA kesimida
+   qoldiq hisoblanadi (faqat jami emas: jami tenglik xato arxiv qatorini
+   sezmay qolardi). Farq bo'lsa skript xato bilan tugaydi.
+4. **Dry-run:** `npm run kassa:handover-migratsiya -- --dry-run`.
+   Build zanjiriga ham qo'shildi (`qarz-migratsiya` dan keyin).
+5. **Legacy oqim yopildi.** `/api/kassa-topshirish` POST va PATCH → 410 Gone.
+   Jadval va yozuvlar O'CHIRILMADI — tarix zaxirasi sifatida qoladi.
+6. **Direktor paneli birlashtirildi.** Eski "Kassa topshiriqlari",
+   "Kassirlar" va "Topshiriqlar tarixi" bloklari olib tashlandi; o'rniga
+   bitta **"Kassa harakatlari"** ro'yxati (yangi o'tkazmalar + arxiv, holat
+   yorliqlari bilan).
+7. **"Mening kassam" kartasi** (Yozuvlar sahifasi) va **bildirishnomalar**
+   ham ledgerga o'tkazildi — legacy `kassaQoldiq` endi ilovada ishlatilmaydi.
+8. **Legacy qoldiqlar yo'qolmaydi:** migratsiya hisoboti nol bo'lmagan
+   kassir qoldiqlarini ro'yxatlab beradi va ularni Kassalar → "Pul
+   o'tkazish" orqali taqsimlashni tavsiya qiladi (jami qoldiq o'zgarmaydi).
+
+**Migratsiya:** `20260817140000_legacy_handover_arxiv` — bitta `ADD COLUMN`
+va bitta unique indeks. Ma'lumot ko'chirish alohida skriptda.
+
+**Tekshirildi:** build ✅ · YANGI handover-migratsiya 11/11 ·
+kassa-transfer 20/20 · kassa 11/11 · kassir-kassa 22/22 · pro 22/22 ·
+qarz 16/16 · xarid 13/13 · atomik 6/6 · audit-qoldiq 10/10 · smena 14/14 ·
+kunlik 27/27 · isolation 22/22 · izolyatsiya-royxati 9/9 ·
+migratsiya 10/10 · backup 6/6 · modules 15/15 · visibility 10/10 ·
+superadmin 10/10 · launch 7/7.

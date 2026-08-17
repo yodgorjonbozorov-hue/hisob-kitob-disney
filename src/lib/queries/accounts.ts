@@ -138,6 +138,50 @@ export async function getKassaKunlik(
   return natija;
 }
 
+/** "Mening kassam" ixcham kartasi uchun — ledgerdan. */
+export interface MeningKassam {
+  accountId: string;
+  nomi: string;
+  qoldiq: number;
+  bugungiKirim: number;
+  bugungiChiqim: number;
+  /** Menga yuborilgan, hali qabul qilinmagan o'tkazmalar soni. */
+  kutilayotganSoni: number;
+}
+
+/**
+ * Joriy foydalanuvchining shaxsiy kassasi.
+ *
+ * `null` — shaxsiy kassa ochilmagan (rejim yoqilmagan): u holda xodimning
+ * naqdi umumiy kassaga tushadi va alohida karta ko'rsatishning ma'nosi yo'q.
+ */
+export async function getMeningKassam(
+  businessId: string,
+  userId: string,
+  kunBoshi: Date
+): Promise<MeningKassam | null> {
+  const qoldiqlar = await getAccountBalances(businessId);
+  const meniki = qoldiqlar.find((q) => q.userId === userId && q.isActive);
+  if (!meniki) return null;
+
+  const [kunlik, kutilayotgan] = await Promise.all([
+    getKassaKunlik(businessId, kunBoshi),
+    prisma.accountTransfer.count({
+      where: { businessId, holat: "kutilmoqda", toUserId: userId },
+    }),
+  ]);
+  const bugun = kunlik.get(meniki.id) ?? { kirim: 0, chiqim: 0 };
+
+  return {
+    accountId: meniki.id,
+    nomi: meniki.nomi,
+    qoldiq: meniki.qoldiq,
+    bugungiKirim: bugun.kirim,
+    bugungiChiqim: bugun.chiqim,
+    kutilayotganSoni: kutilayotgan,
+  };
+}
+
 /** Biznesning jami kassa qoldig'i (dashboard kartasi uchun). */
 export async function getJamiKassaQoldiq(businessId: string): Promise<number> {
   const qoldiqlar = await getAccountBalances(businessId);

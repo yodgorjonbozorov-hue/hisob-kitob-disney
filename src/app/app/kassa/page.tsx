@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
 import { requireTenantPage } from "@/lib/auth/tenant";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { isManager } from "@/lib/auth/roles";
@@ -13,16 +12,8 @@ import {
   listTransfers,
   type KassaKunlik,
 } from "@/lib/queries/accounts";
-import {
-  listKassirQoldiqlari,
-  listKutilayotganTopshiriqlar,
-  listTopshiriqlar,
-} from "@/lib/queries/kassirKassa";
 import { toshkentBugunBoshi } from "@/lib/services/kassirKassa";
-import { KassirlarPaneli } from "@/components/kassa/KassirlarPaneli";
-import { TopshiriqlarPaneli } from "@/components/kassa/TopshiriqlarPaneli";
 import { KutilayotganTransferlar } from "@/components/kassa/KutilayotganTransferlar";
-import { KassaTarix } from "@/components/kassa/KassaTarix";
 import { KassaClient } from "./KassaClient";
 import { RejimPaneli } from "./RejimPaneli";
 
@@ -61,27 +52,13 @@ export default async function KassaPage() {
     ] = await Promise.all([
       getAccountBalances(businessId),
       getKassaKunlik(businessId, toshkentBugunBoshi()),
-      listTransfers(businessId, 20),
+      listTransfers(businessId, 30),
       listKutilayotganTransferlar(businessId),
       hasPermission(session.userId, "pul.berish"),
     ]);
 
     const kunlik: Record<string, KassaKunlik> = Object.fromEntries(kunlikMap);
     const meniKassam = qoldiqlar.find((q) => q.userId === session.userId && q.isActive)?.id ?? null;
-
-    // KASSIR KASSASI (eski topshirish oqimi) — faqat boshqaruvchiga ko'rinadi.
-    const [kassirlar, kutilayotganlar, topshiriqTarix, barchaUserlar] = boshqaruvchi
-      ? await Promise.all([
-          listKassirQoldiqlari(businessId),
-          listKutilayotganTopshiriqlar(businessId),
-          listTopshiriqlar(businessId, 20),
-          prisma.user.findMany({
-            where: { isActive: true },
-            select: { id: true, ism: true },
-            orderBy: { ism: "asc" },
-          }),
-        ])
-      : [[], [], [], []];
 
     return (
       <div className="space-y-6">
@@ -117,18 +94,13 @@ export default async function KassaPage() {
           transferQila={transferQila}
         />
 
+        {/* Eski "Kassa topshiriqlari" / "Kassirlar" bloklari OLIB TASHLANDI:
+            ular ikkinchi moliyaviy oqim edi va Kassa harakatlari ro'yxati
+            bilan bir xil savolga boshqa javob berardi. Tarix `AccountTransfer`
+            ga "arxiv" holati bilan ko'chirildi va yuqoridagi yagona
+            ro'yxatda ko'rinadi. */}
         {boshqaruvchi && (
-          <>
-            <RejimPaneli businessId={businessId} yoqilgan={business?.shaxsiyKassa ?? false} />
-            {/* KASSA TOPSHIRISH (eski oqim) — kirim/chiqim raqamlariga tegmaydi. */}
-            <TopshiriqlarPaneli topshiriqlar={kutilayotganlar} />
-            <KassirlarPaneli kassirlar={kassirlar} userlar={barchaUserlar} />
-            <KassaTarix
-              tarix={topshiriqTarix}
-              sarlavha="Kassa topshiriqlari tarixi"
-              kassirKorsatilsin
-            />
-          </>
+          <RejimPaneli businessId={businessId} yoqilgan={business?.shaxsiyKassa ?? false} />
         )}
       </div>
     );

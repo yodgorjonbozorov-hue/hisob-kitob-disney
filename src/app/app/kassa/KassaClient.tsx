@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
 import { Money } from "@/components/ui/Money";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatToshkentVaqt } from "@/lib/format";
@@ -11,6 +12,17 @@ import type { AccountQoldiq, KassaKunlik, TransferDTO } from "@/lib/queries/acco
 import { KassaKarta } from "./KassaKarta";
 import { KassaModal } from "./KassaModal";
 import { TransferModal } from "./TransferModal";
+
+/**
+ * O'tkazma holatining yorlig'i. "bajarildi" ataylab yorliqsiz — u odatiy
+ * holat va har qatorga rangli belgi qo'yish ro'yxatni o'qib bo'lmas qiladi.
+ */
+const HOLAT_YORLIQ: Record<string, { matn: string; tone: "warning" | "neutral" | "chiqim" }> = {
+  kutilmoqda: { matn: "Kutilmoqda", tone: "warning" },
+  rad: { matn: "Rad etilgan", tone: "chiqim" },
+  bekor: { matn: "Bekor qilingan", tone: "neutral" },
+  arxiv: { matn: "Arxiv", tone: "neutral" },
+};
 
 /**
  * KASSALAR PANELI.
@@ -94,25 +106,27 @@ export function KassaClient({
       </div>
 
       <Card>
-        <h2 className="font-semibold text-fg mb-3">So&apos;nggi o&apos;tkazmalar</h2>
+        <h2 className="font-semibold text-fg mb-1">Kassa harakatlari</h2>
+        <p className="text-2xs text-faint mb-3">
+          Barcha pul o&apos;tkazmalari va smena topshiriqlari — yangi ham, eski tizimdan
+          ko&apos;chirilgan arxiv ham bitta ro&apos;yxatda.
+        </p>
         {transferlar.length === 0 ? (
           <EmptyState
             icon="↔"
-            title="Hali pul o'tkazilmagan"
+            title="Hali harakat yo'q"
             description="Bir kassadan boshqasiga pul o'tkazsangiz — shu yerda ko'rinadi."
           />
         ) : (
           <ul className="divide-y divide-line">
             {transferlar.map((t) => {
-              const bekor = t.holat === "bekor";
-              const rad = t.holat === "rad";
+              const holat = HOLAT_YORLIQ[t.holat];
+              const otmagan = t.holat === "bekor" || t.holat === "rad";
               return (
                 <li key={t.id} className="py-3 flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p
-                      className={`text-sm truncate ${
-                        bekor || rad ? "text-faint line-through" : "text-fg"
-                      }`}
+                      className={`text-sm truncate ${otmagan ? "text-faint line-through" : "text-fg"}`}
                     >
                       {t.fromUserIsm ?? t.fromNomi} → {t.toUserIsm ?? t.toNomi}
                     </p>
@@ -120,11 +134,12 @@ export function KassaClient({
                       {formatToshkentVaqt(new Date(t.createdAt))}
                       {t.turi === "smena" ? " · Smena topshirish" : ""}
                       {t.izoh ? ` · ${t.izoh}` : ""}
-                      {bekor ? " · bekor qilingan" : ""}
-                      {rad ? " · rad etilgan" : ""}
                     </p>
                   </div>
-                  <Money value={t.summa} size="md" tone="neutral" />
+                  <div className="flex items-center gap-2 shrink-0">
+                    {holat && <Badge tone={holat.tone}>{holat.matn}</Badge>}
+                    <Money value={t.summa} size="md" tone="neutral" />
+                  </div>
                 </li>
               );
             })}

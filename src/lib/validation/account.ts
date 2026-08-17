@@ -57,8 +57,13 @@ export const userTransferSchema = z.object({
  * Qoldiqqa faqat `QOLDIQ_HOLATLARI` kiradi. "bekor" ataylab ichida: uni
  * qarama-qarshi storno qatori nolga chiqaradi (ledger append-only). "kutilmoqda"
  * va "rad" esa hech qachon pul ko'chirmagan.
+ *
+ * "arxiv" — eski CashHandover tizimidan ko'chirilgan tarix. Legacy tizim
+ * ledgerga ataylab tegmasdi, shuning uchun bu qatorlar ham qoldiqni
+ * o'zgartirmaydi (ular ustiga qo'shimcha himoya: migratsiya from = to
+ * qo'yadi, ya'ni filtr unutilsa ham ta'sir nol bo'ladi).
  */
-export const TRANSFER_HOLATLARI = ["bajarildi", "kutilmoqda", "rad", "bekor"] as const;
+export const TRANSFER_HOLATLARI = ["bajarildi", "kutilmoqda", "rad", "bekor", "arxiv"] as const;
 export type TransferHolat = (typeof TRANSFER_HOLATLARI)[number];
 export const QOLDIQ_HOLATLARI: readonly TransferHolat[] = ["bajarildi", "bekor"];
 

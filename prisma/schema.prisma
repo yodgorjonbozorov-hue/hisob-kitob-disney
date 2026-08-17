@@ -343,7 +343,7 @@ model AccountTransfer {
   /// (kassir kassasini keyingi kassirga/direktorga topshiradi).
   /// Faqat KO'RSATISH va hisobot uchun — pul harakati ikkalasida bir xil.
   turi          String   @default("transfer")
-  /// "bajarildi" | "kutilmoqda" | "rad" | "bekor".
+  /// "bajarildi" | "kutilmoqda" | "rad" | "bekor" | "arxiv".
   ///
   /// QOLDIQQA KIRADIGANLAR: "bajarildi" va "bekor".
   ///   - "kutilmoqda" — qabul qiluvchi hali tasdiqlamagan; pul YUBORUVCHIDA
@@ -354,7 +354,14 @@ model AccountTransfer {
   ///     yangi transfer yoziladi (ledger append-only), asl yozuv shu bayroq
   ///     bilan belgilanadi. Shuning uchun u qoldiqda QOLADI — storno uni
   ///     nolga chiqaradi.
+  ///   - "arxiv" — eski `CashHandover` tizimidan ko'chirilgan TARIX yozuvi.
+  ///     Legacy tizim ATAYLAB ledgerga tegmasdi, shuning uchun bu qatorlar
+  ///     ham pul ko'chirmaydi: ular faqat "kim kimga qachon topshirdi"
+  ///     tarixini bitta joyda ko'rsatish uchun (scripts/kassa-handover-migratsiya.ts).
   holat         String   @default("bajarildi")
+  /// Ko'chirilgan `CashHandover` yozuvining IDsi. UNIQUE — migratsiya
+  /// idempotent: qayta ishga tushirilsa dublikat yaratilmaydi.
+  legacyCashHandoverId String? @unique
   /// Qabul qilgan/rad etgan foydalanuvchi. Ism — snapshot (tarix o'qiladigan qolsin).
   tasdiqlaganId String?
   tasdiqlaganIsm String?

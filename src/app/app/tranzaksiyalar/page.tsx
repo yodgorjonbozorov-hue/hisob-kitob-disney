@@ -9,8 +9,8 @@ import { formatSom } from "@/lib/format";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { isModuleOnForTenant } from "@/lib/modules/guard";
 import { TransactionsClient } from "./TransactionsClient";
-import { listAccounts } from "@/lib/queries/accounts";
-import { getKassaHolat } from "@/lib/queries/kassirKassa";
+import { listAccounts, getMeningKassam } from "@/lib/queries/accounts";
+import { toshkentBugunBoshi } from "@/lib/services/kassirKassa";
 import { KassamKartasi } from "@/components/kassa/KassamKartasi";
 import type { Prisma } from "@prisma/client";
 
@@ -46,7 +46,7 @@ export default async function TranzaksiyalarPage({
     );
   }
 
-  const [result, categories, accounts, masullar, kassaHolat] = await Promise.all([
+  const [result, categories, accounts, masullar, meningKassam] = await Promise.all([
     listTransactions({
       businessId,
       // Xodim faqat o'zi kiritgan yozuvlarni ko'radi, direktor — barchasini.
@@ -73,9 +73,9 @@ export default async function TranzaksiyalarPage({
       orderBy: { ism: "asc" },
       take: 100,
     }),
-    // KASSIR KASSASI: foydalanuvchining QO'LIDAGI naqd. Yuqoridagi
+    // MENING KASSAM: foydalanuvchining shaxsiy kassasi (ledgerdan). Yuqoridagi
     // Naqd/Click/Qarz/Sof raqamlariga hech qanday ta'siri yo'q.
-    getKassaHolat(businessId, { id: session.userId, ism: session.ism }),
+    getMeningKassam(businessId, session.userId, toshkentBugunBoshi()),
   ]);
 
   // QARZ bo'limi jami — uchta manba qo'shiladi:
@@ -169,7 +169,7 @@ export default async function TranzaksiyalarPage({
         }}
       />
       {/* Asosiy moliyaviy blokdan ALOHIDA karta — kassirning real kassasi. */}
-      <KassamKartasi holat={kassaHolat} />
+      <KassamKartasi kassa={meningKassam} />
     </div>
   );
   });

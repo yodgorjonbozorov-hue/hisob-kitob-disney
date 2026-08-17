@@ -1,43 +1,24 @@
 import { NextResponse } from "next/server";
 import { withTenant } from "@/lib/auth/tenant";
-import { resolveActiveBusinessId } from "@/lib/business";
-import { topshiriqQaror } from "@/lib/services/kassirKassa";
-import { qarorSchema } from "@/lib/validation/kassirKassa";
 
 /**
- * KASSA TOPSHIRIG'I BO'YICHA QAROR.
+ * KASSA TOPSHIRIG'I BO'YICHA QAROR — DEPRECATED.
  *
- *  - `{ amal: "qabul", farqYopildi? }` — direktor/admin qabul qiladi;
- *  - `{ amal: "rad", qarorIzoh? }`     — direktor/admin rad etadi;
- *  - `{ amal: "bekor" }`               — topshiruvchining o'zi bekor qiladi.
+ * Eski oqim yopildi (batafsil: ../route.ts). Ochiq qolgan topshiriqlar
+ * migratsiyada `AccountTransfer` ga `holat = "arxiv"` bilan ko'chirilgan va
+ * ular hech qanday qoldiqqa ta'sir qilmaydi, shuning uchun ular bo'yicha
+ * qaror qabul qilishning ma'nosi yo'q.
  *
- * Ikkinchi marta qaror qabul qilish bazada bloklanadi (holat sharti bilan
- * `updateMany`), shuning uchun tugma ikki marta bosilsa ham pul ikki marta
- * hisobdan chiqmaydi.
+ * Yozuvlar bazadan O'CHIRILMAYDI — `CashHandover` jadvali tarix zaxirasi
+ * sifatida turaveradi.
  */
-export const PATCH = withTenant<{ params: { id: string } }>(
-  async (request, { params }, { session: user }) => {
-    const businessId = await resolveActiveBusinessId(user);
-    if (!businessId) return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });
-
-    const parsed = qarorSchema.safeParse(await request.json());
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" },
-        { status: 400 }
-      );
-    }
-
-    const natija = await topshiriqQaror(
-      businessId,
-      { userId: user.userId, ism: user.ism, rol: user.rol },
-      params.id,
-      parsed.data
-    );
-    return NextResponse.json({
-      ok: true,
-      holat: natija.holat,
-      qoldiq: "yangiQoldiq" in natija ? natija.yangiQoldiq : null,
-    });
-  }
+export const PATCH = withTenant(async () =>
+  NextResponse.json(
+    {
+      error:
+        "Kassa topshirishning eski usuli o'chirildi. Yangi o'tkazmalar " +
+        "Kassalar sahifasida tasdiqlanadi.",
+    },
+    { status: 410 }
+  )
 );

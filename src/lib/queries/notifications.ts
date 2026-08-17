@@ -68,49 +68,41 @@ export async function getNotifications(
     }
   }
 
-  // KASSIR KASSASI. Ikki tomonlama eslatma:
+  // SHAXSIY KASSA. Ikki tomonlama eslatma:
   //  - xodimga: kassangizda pul qoldi, kunni topshirmasdan yakunlamang;
-  //  - direktorga: tasdiq kutayotgan topshiriqlar bor.
-  // Hech biri kirim/chiqim raqamlariga bog'liq emas (lib/services/kassirKassa.ts).
+  //  - hammaga: sizga yuborilgan o'tkazma qabul qilinishini kutmoqda.
+  // Manba — Account ledgeri (Kassalar sahifasi bilan AYNI). Eski
+  // `CashHandover` hisobi ishlatilmaydi: u ikkinchi haqiqat manbai edi.
   if (opts.userId) {
-    // Yengil yo'l: to'liq `getKassaHolat` emas (u 7 so'rov qiladi va bu blok
-    // HAR sahifa yuklanishida nav badge uchun chaqiriladi).
-    const { kassaQoldiq } = await import("@/lib/services/kassirKassa");
-    const { listKutilayotganTopshiriqlar } = await import("@/lib/queries/kassirKassa");
-    const [qoldiq, ozKutayotgani] = await Promise.all([
-      kassaQoldiq(businessId, opts.userId),
-      prisma.cashHandover.count({
-        where: { businessId, kassirId: opts.userId, holat: "kutilmoqda" },
-      }),
-    ]);
-    if (qoldiq > 0 && ozKutayotgani === 0) {
-      out.push({
-        severity: "warning",
-        title: "Kassangiz topshirilmagan",
-        message: `Kassangizda ${qoldiq.toLocaleString("ru-RU")} so'm bor — direktor/qabul qiluvchiga topshiring`,
-        href: "/app/kassam",
-      });
-    } else if (qoldiq < 0) {
-      out.push({
-        severity: "danger",
-        title: "Kassangizda kamomad",
-        message: `${Math.abs(qoldiq).toLocaleString("ru-RU")} so'm yetishmaydi — direktor bilan bog'laning`,
-        href: "/app/kassam",
-      });
-    }
+    const meniki = await prisma.account.findFirst({
+      where: { businessId, userId: opts.userId, isActive: true },
+      select: { id: true },
+      orderBy: { createdAt: "asc" },
+    });
 
-    if (isManager(opts.rol)) {
-      const kutilayotganlar = await listKutilayotganTopshiriqlar(businessId, 20);
-      if (kutilayotganlar.length > 0) {
-        const jami = kutilayotganlar.reduce((a, t) => a + t.topshirilgan, 0);
-        const farqli = kutilayotganlar.filter((t) => t.farq !== 0).length;
+    if (meniki) {
+      const { getAccountBalances } = await import("@/lib/queries/accounts");
+      const [qoldiqlar, ozKutayotgani] = await Promise.all([
+        getAccountBalances(businessId),
+        prisma.accountTransfer.count({
+          where: { businessId, fromAccountId: meniki.id, holat: "kutilmoqda" },
+        }),
+      ]);
+      const qoldiq = qoldiqlar.find((q) => q.id === meniki.id)?.qoldiq ?? 0;
+
+      if (qoldiq > 0 && ozKutayotgani === 0) {
         out.push({
-          severity: farqli > 0 ? "danger" : "info",
-          title: "Kassa topshiriqlari kutilmoqda",
-          message:
-            `${kutilayotganlar.length} ta topshiriq, jami ${jami.toLocaleString("ru-RU")} so'm` +
-            (farqli > 0 ? ` — ${farqli} tasida kamomad/ortiqcha bor` : ""),
-          href: "/app/kassa",
+          severity: "warning",
+          title: "Kassangiz topshirilmagan",
+          message: `Kassangizda ${qoldiq.toLocaleString("ru-RU")} so'm bor — smenani topshiring`,
+          href: "/app/kassam",
+        });
+      } else if (qoldiq < 0) {
+        out.push({
+          severity: "danger",
+          title: "Kassangizda kamomad",
+          message: `${Math.abs(qoldiq).toLocaleString("ru-RU")} so'm yetishmaydi — direktor bilan bog'laning`,
+          href: "/app/kassam",
         });
       }
     }
