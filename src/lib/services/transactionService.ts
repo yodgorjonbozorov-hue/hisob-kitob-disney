@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
-import { ForbiddenError } from "@/lib/auth/guard";
+import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
+import { kgSumma, kgToGram } from "@/lib/kg";
 import type { BusinessTx } from "@/lib/db/businessTx";
 import { resolveAccountId } from "@/lib/services/accounts";
 import { kunlikSinxron } from "@/lib/services/kunlik";
@@ -16,6 +17,46 @@ export interface CreateTransactionData {
   accountId?: string | null;
   /** "naqd" | "click" | "qarz". Berilmasa kassa turidan chiqariladi (eski xulq). */
   tolovTuri?: string | null;
+  /**
+   * KG SAVDOSI (mijozga xos — Fortex Selos): miqdor (kg) va 1 kg narxi.
+   * Berilsa `summa` E'TIBORGA OLINMAYDI — miqdor × narx qayta hisoblanadi.
+   */
+  miqdorKg?: number | null;
+  kgNarxi?: number | null;
+}
+
+/**
+ * KG MAYDONLARI — summani YAGONA joyda hisoblaydi.
+ *
+ * Frontend yuborgan `summa`ga ishonilmaydi: kg savdosida jami har doim
+ * shu yerda `miqdorGr × kgNarxi / 1000` bo'yicha qayta hisoblanadi
+ * (lib/kg.ts). Kg faqat `kgAsosli` kategoriyaga yoziladi — aks holda
+ * hisobotdagi "sotilgan kg" boshqa kategoriyalar bilan aralashib ketardi.
+ */
+function kgMaydonlari(
+  data: CreateTransactionData,
+  kgAsosli: boolean
+): { miqdorGr: number | null; kgNarxi: number | null; summa: number } {
+  if (data.miqdorKg == null || data.kgNarxi == null) {
+    if (kgAsosli) {
+      throw new BadRequestError(
+        "Bu kategoriya kg bo'yicha sotiladi — miqdor (kg) va 1 kg narxini kiriting"
+      );
+    }
+    return { miqdorGr: null, kgNarxi: null, summa: data.summa };
+  }
+  if (!kgAsosli) {
+    throw new BadRequestError("Bu kategoriya kg bo'yicha savdo qilmaydi");
+  }
+  if (data.turi !== "kirim") {
+    throw new BadRequestError("Kg savdosi faqat kirim uchun");
+  }
+  if (!(data.miqdorKg > 0) || !(data.kgNarxi > 0)) {
+    throw new BadRequestError("Miqdor va 1 kg narxi 0 dan katta bo'lishi kerak");
+  }
+  const miqdorGr = kgToGram(data.miqdorKg);
+  if (miqdorGr <= 0) throw new BadRequestError("Miqdor 0 dan katta bo'lishi kerak");
+  return { miqdorGr, kgNarxi: data.kgNarxi, summa: kgSumma(miqdorGr, data.kgNarxi) };
 }
 
 /**
@@ -25,11 +66,15 @@ export interface CreateTransactionData {
 export async function createTransaction(userId: string, businessId: string, data: CreateTransactionData) {
   const category = await prisma.category.findUnique({
     where: { id: data.categoryId },
-    select: { businessId: true, turi: true },
+    select: { businessId: true, turi: true, kgAsosli: true },
   });
   if (!category || category.businessId !== businessId) {
     throw new ForbiddenError("Kategoriya bu biznesga tegishli emas");
   }
+
+  // Kg savdosi: summa server tomonda qayta hisoblanadi (frontend yuborganiga
+  // ishonilmaydi). Kg'siz kategoriyada hech nima o'zgarmaydi.
+  const kg = kgMaydonlari(data, category.kgAsosli);
 
   // Kassa: tanlangani tekshiriladi, tanlanmagani — to'lov turiga mos faol
   // kassa. QARZ — pul kassaga tushmagan, hech qaysi kassaga bog'lanmaydi
@@ -46,7 +91,9 @@ export async function createTransaction(userId: string, businessId: string, data
       businessId,
       accountId,
       tolovTuri: data.tolovTuri ?? undefined,
-      summa: data.summa,
+      summa: kg.summa,
+      miqdorGr: kg.miqdorGr,
+      kgNarxi: kg.kgNarxi,
       sana: dateOnlyStringToUTCDate(data.sana),
       izoh: data.izoh ?? undefined,
       filial: data.filial ?? undefined,
@@ -79,11 +126,20 @@ export async function createTransactionTx(
 ) {
   const category = await tx.category.findFirst({
     where: { id: data.categoryId, businessId },
-    select: { id: true },
+    select: { id: true, kgAsosli: true },
   });
   if (!category) {
     throw new ForbiddenError("Kategoriya bu biznesga tegishli emas");
   }
+
+  // KG: bu yo'ldan sotuv/qarz/oylik/xarid kabi TIZIM yozuvlari o'tadi — ular
+  // kg kiritmaydi, shuning uchun kg MAJBURIY QILINMAYDI (aks holda kg'li
+  // kategoriyaga tushgan qarz to'lovi bloklanib qolardi). Kg berilgan bo'lsa
+  // esa qoidalar bir xil: faqat kgAsosli kategoriya va qayta hisoblangan summa.
+  const kg =
+    data.miqdorKg == null && data.kgNarxi == null
+      ? { miqdorGr: null, kgNarxi: null, summa: data.summa }
+      : kgMaydonlari(data, category.kgAsosli);
 
   // Tranzaksiya ichida: kassa xom `tx` bilan qidiriladi (businessId qo'lda).
   // QARZ — kassaga bog'lanmaydi (createTransaction bilan bir xil qoida).
@@ -110,7 +166,9 @@ export async function createTransactionTx(
       businessId,
       accountId,
       tolovTuri: data.tolovTuri ?? undefined,
-      summa: data.summa,
+      summa: kg.summa,
+      miqdorGr: kg.miqdorGr,
+      kgNarxi: kg.kgNarxi,
       sana: dateOnlyStringToUTCDate(data.sana),
       izoh: data.izoh ?? undefined,
       filial: data.filial ?? undefined,

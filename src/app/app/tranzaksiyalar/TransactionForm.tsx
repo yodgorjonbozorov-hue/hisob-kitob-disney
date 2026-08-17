@@ -6,13 +6,9 @@ import { todayDateOnlyString } from "@/lib/date";
 import { Button } from "@/components/ui/Button";
 import { TOLOV_TURLARI, TOLOV_NOMI, TOLOV_BELGI, type TolovTuri } from "@/lib/validation/transaction";
 import { QarzForm, type QarzMasul } from "./QarzForm";
+import { KG_BOSH, KgMaydonlari, type KgQiymat } from "./KgMaydonlari";
 import type { TransactionDTO } from "@/lib/queries/transactions";
-
-interface CategoryOption {
-  id: string;
-  nomi: string;
-  turi: string;
-}
+import type { CategoryOption } from "./turlar";
 
 interface AccountOption {
   id: string;
@@ -50,6 +46,13 @@ export function TransactionForm({
     [categories, turi]
   );
 
+  // KG SAVDOSI (mijozga xos — Fortex Selos): kg kategoriyasi tanlansa summa
+  // maydoni o'rniga miqdor va 1 kg narxi so'raladi (KgMaydonlari).
+  const [kg, setKg] = useState<KgQiymat>(KG_BOSH);
+  const [kgTozalash, setKgTozalash] = useState(0);
+  const tanlangan = filteredCategories.find((c) => c.id === (categoryId || filteredCategories[0]?.id));
+  const kgRejimi = !!tanlangan?.kgAsosli;
+
   function handleSummaChange(e: React.ChangeEvent<HTMLInputElement>) {
     const numeric = parseSomInput(e.target.value);
     setSummaText(numeric ? formatSom(numeric) : "");
@@ -59,10 +62,18 @@ export function TransactionForm({
     e.preventDefault();
     setError(null);
 
-    const summa = parseSomInput(summaText);
+    const summa = kgRejimi ? kg.jami : parseSomInput(summaText);
     const catId = categoryId || filteredCategories[0]?.id;
     if (!catId) {
       setError("Kategoriya tanlanmagan");
+      return;
+    }
+    if (kgRejimi && kg.miqdorKg <= 0) {
+      setError("Miqdorni (kg) kiriting");
+      return;
+    }
+    if (kgRejimi && kg.kgNarxi <= 0) {
+      setError("1 kg narxini kiriting");
       return;
     }
     if (summa <= 0) {
@@ -82,6 +93,8 @@ export function TransactionForm({
           summa,
           sana,
           izoh: izoh || undefined,
+          // Kg savdosida server summani miqdor × narxdan qayta hisoblaydi.
+          ...(kgRejimi ? { miqdorKg: kg.miqdorKg, kgNarxi: kg.kgNarxi } : {}),
           // Bitta kassali biznesda accountId yuborilmaydi — server birinchi
           // faol kassani o'zi tanlaydi.
           ...(accountId ? { accountId } : {}),
@@ -95,6 +108,7 @@ export function TransactionForm({
       }
       onCreated(data);
       setSummaText("");
+      setKgTozalash((n) => n + 1);
       setIzoh("");
       setCategoryId("");
     } catch {
@@ -185,17 +199,21 @@ export function TransactionForm({
             ))}
           </select>
         </div>
-        <div>
-          <label className="block text-xs font-medium text-muted mb-1">Summa (so'm)</label>
-          <input
-            type="text"
-            inputMode="numeric"
-            value={summaText}
-            onChange={handleSummaChange}
-            placeholder="0"
-            className="w-full rounded-lg border border-line px-3 py-2 text-sm"
-          />
-        </div>
+        {kgRejimi ? (
+          <KgMaydonlari onChange={setKg} tozalash={kgTozalash} />
+        ) : (
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">Summa (so'm)</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={summaText}
+              onChange={handleSummaChange}
+              placeholder="0"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+            />
+          </div>
+        )}
         <div>
           <label className="block text-xs font-medium text-muted mb-1">Sana</label>
           <input

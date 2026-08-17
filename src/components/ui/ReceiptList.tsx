@@ -3,7 +3,8 @@
 import { cn } from "@/lib/cn";
 import { Money } from "@/components/ui/Money";
 import { categoryVisual } from "@/lib/categoryVisual";
-import { formatRelativeDay } from "@/lib/format";
+import { formatRelativeDay, formatSom } from "@/lib/format";
+import { formatKgLabel } from "@/lib/kg";
 
 export interface ReceiptItem {
   id: string;
@@ -13,6 +14,9 @@ export interface ReceiptItem {
   categoryNomi: string;
   izoh?: string | null;
   userIsm?: string | null;
+  /** KG SAVDOSI (mijozga xos): miqdor grammda va o'sha savdodagi 1 kg narxi. */
+  miqdorGr?: number | null;
+  kgNarxi?: number | null;
 }
 
 const TASHKENT_OFFSET_MS = 5 * 60 * 60 * 1000;
@@ -80,6 +84,13 @@ export function ReceiptList({
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-fg font-medium truncate">{it.categoryNomi}</span>
+                    {/* Kg savdosida "100 kg × 5 000" qatori tarixda YO'QOLMAYDI:
+                        pul va og'irlik birga o'qiladi. */}
+                    {it.miqdorGr != null && it.kgNarxi != null && (
+                      <span className="block text-2xs text-muted tnum truncate">
+                        {formatKgLabel(it.miqdorGr)} × {formatSom(it.kgNarxi)} soʻm
+                      </span>
+                    )}
                     <span className="block text-2xs text-faint truncate">
                       {it.izoh ? it.izoh : ""}
                       {it.izoh && it.userIsm ? " · " : ""}

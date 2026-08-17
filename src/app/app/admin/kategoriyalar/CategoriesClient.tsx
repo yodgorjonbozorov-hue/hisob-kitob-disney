@@ -12,9 +12,18 @@ interface CategoryDTO {
   turi: string;
   tartib: number;
   isActive: boolean;
+  /** KG SAVDOSI kategoriyasi (mijozga xos — Fortex Selos). */
+  kgAsosli: boolean;
 }
 
-export function CategoriesClient({ initialCategories }: { initialCategories: CategoryDTO[] }) {
+export function CategoriesClient({
+  initialCategories,
+  kgSavdo = false,
+}: {
+  initialCategories: CategoryDTO[];
+  /** Kg savdosi shu mijozga ochiqmi (lib/mijozXos.ts) — ustun shunda ko'rinadi. */
+  kgSavdo?: boolean;
+}) {
   const [categories, setCategories] = useState(initialCategories);
   const [tab, setTab] = useState<"kirim" | "chiqim">("kirim");
   const [modalOpen, setModalOpen] = useState(false);
@@ -26,6 +35,23 @@ export function CategoriesClient({ initialCategories }: { initialCategories: Cat
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isActive: !cat.isActive }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setCategories((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    }
+  }
+
+  /**
+   * KG SAVDOSI bayrog'i. Yoqilgan kategoriya bosilganda "Pul kirdi" ekranida
+   * summa emas, miqdor (kg) va 1 kg narxi so'raladi. Bayroq faqat kirim
+   * kategoriyasida ma'noga ega, shuning uchun tugma faqat kirim tabida.
+   */
+  async function toggleKg(cat: CategoryDTO) {
+    const res = await fetch(`/api/categories/${cat.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kgAsosli: !cat.kgAsosli }),
     });
     if (res.ok) {
       const updated = await res.json();
@@ -64,6 +90,7 @@ export function CategoriesClient({ initialCategories }: { initialCategories: Cat
             <tr className="text-left text-faint text-xs uppercase">
               <th className="pb-2">Nomi</th>
               <th className="pb-2">Holati</th>
+              {kgSavdo && tab === "kirim" && <th className="pb-2">Kg savdosi</th>}
               <th className="pb-2 text-right">Amal</th>
             </tr>
           </thead>
@@ -74,6 +101,19 @@ export function CategoriesClient({ initialCategories }: { initialCategories: Cat
                 <td className="py-2.5">
                   <Badge tone={cat.isActive ? "kirim" : "neutral"}>{cat.isActive ? "Faol" : "Nofaol"}</Badge>
                 </td>
+                {kgSavdo && tab === "kirim" && (
+                  <td className="py-2.5">
+                    <button
+                      onClick={() => toggleKg(cat)}
+                      className="text-xs font-medium text-muted hover:text-brand"
+                      title="Yoqilsa: summa emas, miqdor (kg) va 1 kg narxi so'raladi"
+                    >
+                      <Badge tone={cat.kgAsosli ? "kirim" : "neutral"}>
+                        {cat.kgAsosli ? "Kg bo'yicha" : "Summa bo'yicha"}
+                      </Badge>
+                    </button>
+                  </td>
+                )}
                 <td className="py-2.5 text-right">
                   <button
                     onClick={() => toggleActive(cat)}

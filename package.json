@@ -73,6 +73,7 @@
     "test:kelishilgan-narx": "node -r ts-node/register tests/kelishilgan-narx.test.ts",
     "test:pro": "node -r ts-node/register tests/pro-stsenariy.test.ts",
     "test:mijoz-xos": "node -r ts-node/register tests/mijoz-xos.test.ts",
+    "test:selos-kg": "node -r ts-node/register tests/selos-kg.test.ts",
     "test:kochirish": "node -r ts-node/register tests/kochirish.test.ts",
     "test:launch": "node -r ts-node/register tests/toliq-ishga-tushirish.test.ts"
   },

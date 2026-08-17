@@ -352,6 +352,11 @@ model Category {
   turi             String
   tartib           Int                    @default(0)
   isActive         Boolean                @default(true)
+  /// KG ASOSIDA SAVDO (mijozga xos — Fortex Selos, lib/mijozXos.ts).
+  /// Bu kategoriya tanlanganda summa qo'lda kiritilmaydi: miqdor (kg) va
+  /// 1 kg narxi so'raladi, summa shundan hisoblanadi. Kategoriyaga NARX
+  /// QOTIRILMAYDI — narx har savdoda erkin.
+  kgAsosli         Boolean                @default(false)
   createdAt        DateTime               @default(now())
   businessId       String
   business         Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
@@ -383,6 +388,17 @@ model Transaction {
   /// shuning uchun accountId null bo'ladi va kassa qoldig'iga kirmaydi.
   tolovTuri       String?
   summa           Int
+  /// KG SAVDOSI (mijozga xos — Fortex Selos, lib/mijozXos.ts).
+  /// Miqdor GRAMDA butun son sifatida saqlanadi (100,5 kg → 100500): og'irlik
+  /// ham pul kabi float bo'lmasligi kerak, aks holda 100.5 × 5000 kabi oddiy
+  /// hisobda ham yaxlitlash xatosi paydo bo'ladi.
+  /// null — kg savdosi emas (barcha oddiy va eski yozuvlar).
+  miqdorGr        Int?
+  /// Shu savdodagi 1 kg narxi (so'm). MUZLATILGAN snapshot: narx kategoriyaga
+  /// qotirilmagan — sotuvchi har savdoda o'zi kiritadi, keyingi savdo boshqa
+  /// narxda bo'lsa ham bu yozuv o'zgarmaydi. `summa` = miqdorGr × kgNarxi / 1000
+  /// (server tomonda qayta hisoblanadi — lib/kg.ts).
+  kgNarxi         Int?
   sana            DateTime
   izoh            String?
   userId          String

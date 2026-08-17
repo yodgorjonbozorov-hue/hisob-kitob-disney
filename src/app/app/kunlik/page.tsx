@@ -5,7 +5,10 @@ import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import { getKunlikReport, getKunlikDirektor } from "@/lib/queries/kunlik";
 import { getSmenaHolat } from "@/lib/queries/smena";
 import { getKunlikRuxsat, kunlikBugun } from "@/lib/services/kunlik";
+import { getKgSavdo } from "@/lib/queries/selos";
+import { kgSavdoKorinadi } from "@/lib/mijozXos";
 import { KunlikClient } from "./KunlikClient";
+import { SelosBugunKartasi } from "../SelosBugunKartasi";
 
 export const dynamic = "force-dynamic";
 
@@ -43,10 +46,15 @@ export default async function KunlikPage({
     const sana =
       soralgan && /^\d{4}-\d{2}-\d{2}$/.test(soralgan) && ruxsat.tarixniKoradi ? soralgan : bugun;
 
-    const [report, direktor, smena] = await Promise.all([
+    // Kg savdosi kesimi — mijozga xos (Fortex Selos). Kunlik hisobot pul
+    // bo'yicha yuritiladi; kg ALOHIDA blok bo'lib turadi va tushum
+    // summalariga aralashmaydi.
+    const kgPanel = kgSavdoKorinadi(ctx.tenant);
+    const [report, direktor, smena, kgSavdo] = await Promise.all([
       getKunlikReport(businessId, sana),
       getKunlikDirektor(businessId),
       getSmenaHolat(businessId, sana, bugun),
+      kgPanel ? getKgSavdo(businessId, sana) : Promise.resolve(null),
     ]);
 
     return (
@@ -59,6 +67,12 @@ export default async function KunlikPage({
             tasdiqlaydi
           </p>
         </div>
+        {kgSavdo && kgSavdo.savdoSoni > 0 && (
+          <SelosBugunKartasi
+            hisobot={kgSavdo}
+            sarlavha={sana === bugun ? "Bugungi kg savdosi" : "Shu kundagi kg savdosi"}
+          />
+        )}
         <KunlikClient
           report={report}
           ruxsat={ruxsat}

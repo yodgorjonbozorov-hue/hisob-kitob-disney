@@ -187,6 +187,7 @@ CREATE TABLE "Category" (
     "turi" TEXT NOT NULL,
     "tartib" INTEGER NOT NULL DEFAULT 0,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "kgAsosli" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "businessId" TEXT NOT NULL,
 
@@ -202,6 +203,8 @@ CREATE TABLE "Transaction" (
     "accountId" TEXT,
     "tolovTuri" TEXT,
     "summa" INTEGER NOT NULL,
+    "miqdorGr" INTEGER,
+    "kgNarxi" INTEGER,
     "sana" TIMESTAMP(3) NOT NULL,
     "izoh" TEXT,
     "userId" TEXT NOT NULL,

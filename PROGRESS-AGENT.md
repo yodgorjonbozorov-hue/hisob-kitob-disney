@@ -2731,3 +2731,79 @@ tashqari xavf.
 **Tekshirildi:** `next build` ✅ · smoke-brauzer 7/7 ✅ · isolation 22/22 ✅ ·
 izolyatsiya-royxati 9/9 ✅. Skrinshotlar (390px / 1440px / qorong'i):
 `.screenshots/dizayn-birxil/`.
+
+---
+
+## 2026-08-17 — KG SAVDOSI: miqdor × erkin narx (mijozga xos — Fortex Selos)
+
+**Talab:** Fortex Selos mahsulotni KG bilan sotadi va 1 kg narxi har savdoda
+savdolashib belgilanadi (100 kg × 5 000, keyingi mijozga 80 kg × 5 500,
+yana 50 kg × 4 800 — hammasi valid). Sotuvchi "Selos" tugmasini bosganda
+summa emas, MIQDOR va 1 KG NARXI so'ralishi kerak; jami avtomatik chiqadi.
+Kg tarixda yo'qolmasin, eski yozuvning narxi keyingi savdodan keyin
+o'zgarmasin. Bu FAQAT Fortex uchun — boshqa mijozlar ekrani o'zgarmasin.
+
+**Yechim — mavjud tizimga eng kam xavfli integratsiya.** Ikkinchi balans
+tizimi, yangi model va `Sale`/ombor dublikati YO'Q: kg savdosi oddiy
+`Transaction` (kirim) bo'lib qoladi, ya'ni kassa qoldig'i, kunlik hisobot,
+smena oynasi, tasdiqlash va zaxira zanjirlari avvalgidek ishlaydi.
+
+1. **Sxema (faqat ustun qo'shildi, jadval qayta qurilmadi):**
+   `Transaction.miqdorGr Int?` — miqdor GRAMDA butun son (100,5 kg → 100500;
+   og'irlik ham pul kabi float bo'lmasligi kerak), `Transaction.kgNarxi Int?`
+   — o'sha savdodagi 1 kg narxi (muzlatilgan snapshot), `Category.kgAsosli
+   Boolean @default(false)` — qaysi kategoriya kg bo'yicha sotiladi.
+   Migratsiya `20260817090000_kg_savdo`: eski yozuvlarda ikkala ustun NULL,
+   hech qanday summa/qoldiq o'zgarmaydi. Migratsiyadagi bitta `UPDATE`
+   bayroqni FAQAT tenant nomi/slugi `fortex-selos*` bo'lgan bizneslarning
+   "…selos…" nomli kirim kategoriyalariga qo'yadi.
+2. **`src/lib/kg.ts` (yangi, sof modul)** — YAGONA hisob manbai:
+   `kgToGram`, `kgSumma(miqdorGr, kgNarxi)` (butun so'mga yaxlitlash faqat
+   shu yerda), `ortachaKgNarxi` (statistik), `formatKg`, `parseKgInput`.
+3. **Server frontendga ISHONMAYDI:** `transactionService` da kg berilsa
+   summa har doim `miqdorGr × kgNarxi / 1000` bo'yicha QAYTA hisoblanadi;
+   kg faqat `kgAsosli` kategoriyaga yoziladi va faqat kirimga. `createTransaction`
+   (qo'lda kiritish yo'li) kg'li kategoriyada kg'ni MAJBURIY qiladi;
+   `createTransactionTx` (sotuv/qarz/oylik/xarid — tizim yozuvlari) esa
+   majburiy qilmaydi, aks holda kg'li kategoriyaga tushgan qarz to'lovi
+   bloklanib qolardi.
+4. **Tahrirlash — narx tarixi immutable:** kg yozuvida `summa`ni qo'lda
+   o'zgartirish rad etiladi (`PATCH`), faqat miqdor/narx yuboriladi va jami
+   qayta hisoblanadi. Kg yozuvini chiqimga yoki kg'siz kategoriyaga
+   o'tkazish ham rad etiladi.
+5. **UI (mavjud dizayn buzilmadi):** `components/nav/KgSavdoSheet.tsx`
+   (yangi) — "Pul kirdi" ekranidagi kg kategoriyasi bosilganda ochiladigan
+   oyna: miqdor, 1 kg narxi, jami, Bekor/Saqlash. Narx oxirgi savdodan
+   TAKLIF qilinadi (`/api/categories` javobidagi `oxirgiKgNarxi`), lekin hech
+   qayerga qotirilmaydi. Keypad va kategoriya to'ri o'z holida qoldi.
+   Tarix (`ReceiptList`, Yozuvlar jadvali) da "100 kg × 5 000" qatori
+   ko'rinadi; Excel eksportga "Miqdor (kg)" va "1 kg narxi" ustunlari qo'shildi.
+6. **Hisobot:** `lib/queries/selos.ts` (yangi) — bir kunlik kesim
+   yozuvlarning O'ZIDAN: jami kg, jami savdo, o'rtacha so'm/kg va sotuvchi /
+   kassa / mahsulot bo'yicha taqsimot. `/app/selos` sahifasi (kun tanlash,
+   uch KPI, uch kesim, savdolar jadvali; kassa kesimida joriy kassa puli ham
+   yonma-yon — kg kassa qoldig'iga QO'SHILMAYDI), direktor panelida va
+   kunlik hisobotda `SelosBugunKartasi` bloki.
+7. **Mijozga xoslik:** `lib/mijozXos.ts` ga `kgSavdoKorinadi(tenant)`
+   qo'shildi (env: `KG_SAVDO_MIJOZLARI`). Menyu havolasi `faqatKgSavdo`
+   bayrog'i bilan, kategoriyalardagi kg tugmasi, `/app/selos` sahifasi va
+   dashboard bloki shu gate ostida. Boshqa mijozda `kgAsosli` hech qachon
+   yoqilmagani uchun ularning oqimi bit darajasida o'zgarmaydi.
+8. **Bot:** `transactionFlow` kategoriya ro'yxatidan kg kategoriyalari
+   chiqarildi — botda faqat summa so'raladi, ya'ni u yerdan kiritilgan savdo
+   kg hisobotidan tushib qolardi.
+
+**Ataylab QILINMAGAN:** `Transaction.shiftId` qo'shilmadi. Smena bu tizimda
+VAQT OYNASI bo'yicha hisoblanadi (`smena.boshlanishAt` → `createdAt` filtri),
+shuning uchun kg savdosi smenaga o'zi bog'lanadi va smena topshirilganda
+yo'qolmaydi; yangi ustun faqat ikkinchi haqiqat manbai bo'lardi. Minimal/
+maksimal narx nazorati ham qo'shilmadi — talabda narx ataylab erkin.
+
+**Tekshirildi:** `npm run build` ✅ · YANGI `selos-kg` 21/21 ✅ (100×5000,
+80×5500, 50×4800, 0/manfiy kg, 0/manfiy narx, kasr kg, frontend soxta summa,
+kassa balansi, kunlik va sotuvchi kesimi, turli narxlar, narx immutability,
+mijozga xoslik) · isolation 22/22 · izolyatsiya-royxati 9/9 · migratsiya 10/10 ·
+kassa 11/11 · kunlik 27/27 · smena 14/14 · qarz 16/16 · tasdiqlash 20/20 ·
+atomik 6/6 · agregat 7/7 · backup 6/6 · soft-delete 8/8 · visibility 10/10 ·
+modules 15/15 · csv-import 13/13 · mijoz-xos 5/5 · postgres ✅ (init SQL
+`npm run pg:migratsiya` bilan qayta generatsiya qilindi).

@@ -54,7 +54,11 @@ async function showCategories(
   edit: boolean
 ) {
   const categories = await prisma.category.findMany({
-    where: { businessId, turi, isActive: true },
+    // KG SAVDOSI kategoriyalari bu ro'yxatda ATAYLAB YO'Q: botda faqat summa
+    // so'raladi, miqdor (kg) va 1 kg narxi so'ralmaydi — u yerdan kiritilgan
+    // savdo kg hisobotidan tushib qolardi. Ular ilovadagi kg oynasidan
+    // kiritiladi (mijozga xos, lib/mijozXos.ts).
+    where: { businessId, turi, isActive: true, kgAsosli: false },
     orderBy: [{ tartib: "asc" }, { nomi: "asc" }],
   });
 

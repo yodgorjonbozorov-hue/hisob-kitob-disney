@@ -7,6 +7,7 @@ import { todayDateOnlyString } from "@/lib/date";
 import { Button } from "@/components/ui/Button";
 import { NumberPad } from "@/components/ui/NumberPad";
 import { CategoryPicker } from "@/components/ui/CategoryPicker";
+import { KgSavdoSheet } from "@/components/nav/KgSavdoSheet";
 import { useToast } from "@/components/ui/Toast";
 import type { Rol } from "@/lib/auth/session";
 
@@ -14,6 +15,10 @@ interface CategoryOption {
   id: string;
   nomi: string;
   turi: string;
+  /** KG SAVDOSI (mijozga xos): bosilganda kg oynasi ochiladi, keypad emas. */
+  kgAsosli?: boolean;
+  /** Oxirgi savdodagi 1 kg narxi — kg oynasidagi boshlang'ich taklif. */
+  oxirgiKgNarxi?: number | null;
 }
 
 /**
@@ -40,6 +45,8 @@ export function QuickAddSheet({
   const [categories, setCategories] = useState<CategoryOption[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Kg savdosi oynasi ochiq bo'lgan kategoriya (mijozga xos, null — yopiq). */
+  const [kgKategoriya, setKgKategoriya] = useState<CategoryOption | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -59,11 +66,31 @@ export function QuickAddSheet({
 
   const filtered = useMemo(() => (categories ?? []).filter((c) => c.turi === turi), [categories, turi]);
 
+  /**
+   * Kategoriya tanlash. KG SAVDOSI kategoriyasi (mijozga xos — Fortex Selos)
+   * bosilganda summa keypad'i o'rniga kg oynasi ochiladi: bunday savdoda jami
+   * qo'lda kiritilmaydi, u miqdor × 1 kg narxidan chiqadi.
+   */
+  function kategoriyaTanla(id: string) {
+    const cat = filtered.find((c) => c.id === id);
+    if (cat?.kgAsosli) {
+      setKgKategoriya(cat);
+      return;
+    }
+    setCategoryId(id);
+  }
+
   async function submit() {
     setError(null);
     const catId = categoryId || filtered[0]?.id;
     if (summa <= 0) return setError("Summani kiriting");
     if (!catId) return setError("Kategoriya tanlang");
+    // Kg kategoriyasi keypad orqali yozilmaydi — jami miqdor × narxdan chiqadi.
+    const kgCat = filtered.find((c) => c.id === catId);
+    if (kgCat?.kgAsosli) {
+      setKgKategoriya(kgCat);
+      return;
+    }
     setLoading(true);
     try {
       const sana = kecha
@@ -121,7 +148,7 @@ export function QuickAddSheet({
           ) : filtered.length === 0 ? (
             <p className="text-sm text-muted">Kategoriya yo'q</p>
           ) : (
-            <CategoryPicker categories={filtered} value={categoryId} onChange={setCategoryId} />
+            <CategoryPicker categories={filtered} value={categoryId} onChange={kategoriyaTanla} />
           )}
         </div>
 
@@ -140,6 +167,18 @@ export function QuickAddSheet({
           <Button size="lg" variant={turi === "chiqim" ? "danger" : "primary"} loading={loading} onClick={submit} className="flex-[2]">Saqlash</Button>
         </div>
       </div>
+
+      {/* Kg savdosi oynasi — saqlangandan keyin ikkala oyna ham yopiladi,
+          bekor qilinganda esa kategoriya to'riga qaytiladi. */}
+      <KgSavdoSheet
+        open={kgKategoriya !== null}
+        kategoriya={kgKategoriya}
+        onClose={() => setKgKategoriya(null)}
+        onSaved={() => {
+          setKgKategoriya(null);
+          onClose();
+        }}
+      />
     </div>
   );
 }
