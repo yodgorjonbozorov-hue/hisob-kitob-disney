@@ -194,6 +194,46 @@ model Business {
   @@index([tenantId])
 }
 
+/// MOBIL SESSIYA TOKENI (native iOS/Android ilova uchun).
+///
+/// NEGA ALOHIDA: veb `iron-session` cookie ishlatadi (lib/auth/session.ts).
+/// Native ilova cookie'ni ishonchli saqlay olmaydi va uni Face ID bilan
+/// bog'lab bo'lmaydi. Shuning uchun ikki tokenli sxema:
+///   - access  (qisqa, 15 daq) — har so'rovda `Authorization: Bearer`;
+///   - refresh (uzoq, 30 kun)  — iOS Keychain'da, Face ID ortida.
+///
+/// TOKENNING O'ZI SAQLANMAYDI — faqat SHA-256 xeshi. Baza o'g'irlansa ham
+/// tokenlar ishlatib bo'lmaydi (parol xeshi bilan bir xil mantiq).
+///
+/// ROTATSIYA: har `/refresh` da yangi juftlik beriladi, eskisi `ishlatilganAt`
+/// bilan belgilanadi. Bir marta ishlatilgan refresh QAYTA kelsa — bu o'g'irlik
+/// belgisi, o'sha qurilmaning BARCHA tokenlari bekor qilinadi.
+model MobileToken {
+  id        String   @id @default(cuid())
+  /// SHA-256(token) — xom token hech qayerda saqlanmaydi.
+  tokenHash String   @unique
+  /// "access" | "refresh"
+  turi      String
+  userId    String
+  /// Foydalanuvchi o'chirilsa tokenlar ham ketadi (yetim token qolmaydi).
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Qurilma identifikatori — bitta qurilmaning barcha tokenlarini
+  /// birdaniga bekor qilish uchun (o'g'irlik aniqlanganda).
+  deviceId  String
+  /// Qurilma nomi ("Salima iPhone") — foydalanuvchiga ko'rsatish uchun.
+  deviceNom String?
+  expiresAt DateTime
+  /// Refresh rotatsiyasi: ishlatilgan token qayta kelsa o'g'irlik hisoblanadi.
+  ishlatilganAt DateTime?
+  /// Bekor qilingan (chiqish, rotatsiya yoki o'g'irlik).
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, turi])
+  @@index([userId, deviceId])
+  @@index([expiresAt])
+}
+
 model User {
   id                 String            @id @default(cuid())
   ism                String
@@ -210,6 +250,7 @@ model User {
   employees          Employee[]
   approvalRequests   ApprovalRequest[] @relation("TasdiqSorovchi")
   approvalDecisions  ApprovalRequest[] @relation("TasdiqQaror")
+  mobileTokens       MobileToken[]
 
   // Tenant a'zoligi. Faqat SUPERADMIN (platforma egasi) uchun null.
   tenantId String?

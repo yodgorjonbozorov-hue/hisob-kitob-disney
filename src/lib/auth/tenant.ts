@@ -1,4 +1,5 @@
 import { requestCache } from "@/lib/requestCache";
+import { headers } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 import { redirect } from "next/navigation";
 import { getCurrentUser, requireUser, type SessionData } from "./session";
@@ -91,9 +92,43 @@ async function buildContext(session: Required<SessionData>): Promise<TenantConte
   return { session, tenantId: tenant.id, tenant, access: computeAccess(tenant) };
 }
 
+/**
+ * So'rov egasini aniqlaydi: avval veb cookie sessiyasi, topilmasa
+ * `Authorization: Bearer` (native mobil ilova).
+ *
+ * NEGA SHU YERDA: bu bitta joyga qo'shilgani uchun MAVJUD 117 route'ning
+ * hammasi mobil ilova uchun ham ochiladi — har birini alohida o'zgartirish
+ * shart emas. Cookie yo'li mutlaqo tegilmagan: veb avvalgidek ishlaydi.
+ */
+export async function sorovEgasi(): Promise<Required<SessionData> | null> {
+  const cookieSessiya = await getCurrentUser();
+  if (cookieSessiya) return cookieSessiya;
+
+  // Dinamik import — `mobil.ts` rawPrisma'ga bog'liq, uni faqat kerak
+  // bo'lganda yuklaymiz (veb yo'lida umuman chaqirilmaydi).
+  const { bearerToken, accessTokenSessiya } = await import("./mobil");
+  const token = bearerToken((await headers()).get("authorization"));
+  if (!token) return null;
+
+  const m = await accessTokenSessiya(token);
+  if (!m) return null;
+
+  return {
+    userId: m.userId,
+    login: m.login,
+    ism: m.ism,
+    rol: m.rol,
+    tenantId: m.tenantId,
+    businessId: m.businessId,
+    mustChangePassword: m.mustChangePassword,
+    // Impersonatsiya faqat veb superadmin panelida — mobil ilovada yo'q.
+    impersonatedBy: null,
+  };
+}
+
 /** API route'lar uchun: sessiya + tenant bo'lishi shart, aks holda 401/403 xato. STATUS TEKSHIRMAYDI. */
 export async function requireTenantApi(): Promise<TenantContext> {
-  const session = await getCurrentUser();
+  const session = await sorovEgasi();
   if (!session) throw new UnauthorizedError();
   const ctx = await buildContext(session);
   if (!ctx) {

@@ -92,6 +92,22 @@ CREATE TABLE "Business" (
 );
 
 -- CreateTable
+CREATE TABLE "MobileToken" (
+    "id" TEXT NOT NULL,
+    "tokenHash" TEXT NOT NULL,
+    "turi" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "deviceId" TEXT NOT NULL,
+    "deviceNom" TEXT,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "ishlatilganAt" TIMESTAMP(3),
+    "revokedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "MobileToken_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "User" (
     "id" TEXT NOT NULL,
     "ism" TEXT NOT NULL,
@@ -833,6 +849,18 @@ CREATE INDEX "Payment_status_idx" ON "Payment"("status");
 CREATE INDEX "Business_tenantId_idx" ON "Business"("tenantId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "MobileToken_tokenHash_key" ON "MobileToken"("tokenHash");
+
+-- CreateIndex
+CREATE INDEX "MobileToken_userId_turi_idx" ON "MobileToken"("userId", "turi");
+
+-- CreateIndex
+CREATE INDEX "MobileToken_userId_deviceId_idx" ON "MobileToken"("userId", "deviceId");
+
+-- CreateIndex
+CREATE INDEX "MobileToken_expiresAt_idx" ON "MobileToken"("expiresAt");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "User_login_key" ON "User"("login");
 
 -- CreateIndex
@@ -1185,6 +1213,9 @@ ALTER TABLE "Payment" ADD CONSTRAINT "Payment_tenantId_fkey" FOREIGN KEY ("tenan
 
 -- AddForeignKey
 ALTER TABLE "Business" ADD CONSTRAINT "Business_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "MobileToken" ADD CONSTRAINT "MobileToken_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "User" ADD CONSTRAINT "User_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

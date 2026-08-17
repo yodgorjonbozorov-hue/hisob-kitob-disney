@@ -98,6 +98,12 @@ export const ZAXIRASIZ_JADVALLAR = [
   "botConversation",
   // AI yordamchi suhbati — vaqtinchalik kontekst, tiklashning ma'nosi yo'q.
   "aiConversation",
+  // Mobil ilova sessiya tokenlari. ATAYLAB zaxiraga kirmaydi:
+  //  1. vaqtinchalik holat — access 15 daqiqa, refresh 30 kun;
+  //  2. eski zaxiradan tiklash XAVFSIZLIK XATOSI bo'lardi — allaqachon
+  //     bekor qilingan (chiqilgan yoki o'g'irlangan) token qayta tirilardi.
+  // Tiklashdan keyin foydalanuvchi qaytadan kiradi — bu to'g'ri xatti-harakat.
+  "mobileToken",
 ] as const;
 
 export type Zaxira = {

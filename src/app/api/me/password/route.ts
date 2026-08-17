@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 // Self-service: faqat sessiyadagi o'z userId bilan ishlaydi — rawPrisma xavfsiz.
 import { rawPrisma as prisma } from "@/lib/db/rawPrisma";
 import { getSession } from "@/lib/auth/session";
+import { sorovEgasi } from "@/lib/auth/tenant";
+import { hammaQurilmalarniBekorQil } from "@/lib/auth/mobil";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { z } from "zod";
 
@@ -12,8 +14,9 @@ const schema = z.object({
 
 /** Foydalanuvchi o'z parolini o'zgartiradi (eski parolni tasdiqlab). */
 export async function PATCH(request: NextRequest) {
-  const session = await getSession();
-  if (!session.userId) {
+  // Veb cookie sessiyasi YOKI mobil Bearer tokeni — ikkalasi ham qabul qilinadi.
+  const egasi = await sorovEgasi();
+  if (!egasi) {
     return NextResponse.json({ error: "Avtorizatsiyadan o'ting" }, { status: 401 });
   }
 
@@ -23,7 +26,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
   }
 
-  const user = await prisma.user.findUnique({ where: { id: session.userId } });
+  const user = await prisma.user.findUnique({ where: { id: egasi.userId } });
   if (!user) {
     return NextResponse.json({ error: "Foydalanuvchi topilmadi" }, { status: 404 });
   }
@@ -42,8 +45,17 @@ export async function PATCH(request: NextRequest) {
     data: { parolHash: await hashPassword(parsed.data.yangi), mustChangePassword: false },
   });
 
-  session.mustChangePassword = false;
-  await session.save();
+  // Parol o'zgardi — BARCHA mobil qurilmalar bekor qilinadi. Sabab: parolni
+  // o'zgartirishning odatiy sababi "kimdir kirdi" degan shubha; eski
+  // qurilmalarda token 30 kun ishlab tursa bu himoya ma'nosini yo'qotadi.
+  await hammaQurilmalarniBekorQil(user.id);
+
+  // Cookie sessiyasi faqat vebda bor — mobil so'rovda uni yangilash shart emas.
+  const cookieSessiya = await getSession();
+  if (cookieSessiya.userId) {
+    cookieSessiya.mustChangePassword = false;
+    await cookieSessiya.save();
+  }
 
   return NextResponse.json({ ok: true });
 }

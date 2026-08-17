@@ -48,6 +48,10 @@ export const TIZIM_MODELLAR: Record<string, string> = {
   // (businessId + userId) bilan o'qiladi; businessId egaligi withTenant'da
   // yuqorida tekshiriladi. Scoped client orqali umuman ishlatilmaydi.
   AiConversation: "faqat rawPrisma va (businessId, userId) kompozit kaliti bilan o'qiladi",
+  // Token TENANT ANIQLANISHIDAN OLDIN o'qiladi — aynan u tenantni aniqlaydi.
+  // Kalit — tokenning SHA-256 xeshi (global unique), egaligi `userId` orqali
+  // tekshiriladi (lib/auth/mobil.ts).
+  MobileToken: "sessiya tokeni tenant aniqlanishidan oldin o'qiladi (tokenHash kaliti)",
 };
 
 const BUSINESS_SCOPED = new Set([
