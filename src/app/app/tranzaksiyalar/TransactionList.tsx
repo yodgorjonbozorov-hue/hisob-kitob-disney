@@ -1,7 +1,7 @@
 "use client";
 
 import { isManager } from "@/lib/auth/roles";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { formatSom, formatSomLabel, parseSomInput, formatDateUZ } from "@/lib/format";
 import { Badge } from "@/components/ui/Badge";
@@ -27,6 +27,8 @@ interface Props {
   currentUserId: string;
   currentUserRol: Rol;
   onUpdated: (t: TransactionDTO) => void;
+  /** Storno: eski yozuv bekor qilindi, ro'yxatdan chiqadi. */
+  onStorno: (eskiId: string) => void;
   onDelete: (t: TransactionDTO) => void;
   selected: Set<string>;
   onToggleSelect: (id: string) => void;
@@ -42,6 +44,7 @@ export function TransactionList({
   currentUserId,
   currentUserRol,
   onUpdated,
+  onStorno,
   onDelete,
   selected,
   onToggleSelect,
@@ -189,6 +192,10 @@ export function TransactionList({
             onUpdated(t);
             setEditing(null);
           }}
+          onStorno={(eskiId) => {
+            onStorno(eskiId);
+            setEditing(null);
+          }}
           onDelete={() => {
             const t = editing;
             setEditing(null);
@@ -229,6 +236,7 @@ function EditModal({
   canDelete,
   onClose,
   onSaved,
+  onStorno,
   onDelete,
 }: {
   transaction: TransactionDTO;
@@ -236,46 +244,87 @@ function EditModal({
   canDelete: boolean;
   onClose: () => void;
   onSaved: (t: TransactionDTO) => void;
+  onStorno: (eskiId: string) => void;
   onDelete: () => void;
 }) {
-  const [turi, setTuri] = useState<"kirim" | "chiqim">(transaction.turi as "kirim" | "chiqim");
-  // Eski yozuvda tolovTuri null — kassa turidan boshlang'ich qiymat chiqariladi.
-  const [tolovTuri, setTolovTuri] = useState<TolovTuri>(
-    (transaction.tolovTuri as TolovTuri | null) ??
-      (transaction.account?.turi === "plastik" || transaction.account?.turi === "bank"
+  // Boshlang'ich qiymatlar BIR MARTA hisoblanadi va keyin taqqoslash uchun
+  // ishlatiladi. Eski yozuvda `tolovTuri` null — u kassa turidan chiqariladi,
+  // shuning uchun xom qiymat bilan emas, AYNAN shu chiqarilgan qiymat bilan
+  // solishtiriladi (aks holda foydalanuvchi hech narsaga tegmasa ham
+  // "o'zgardi" deb hisoblanardi).
+  const boshlangich = useRef({
+    turi: transaction.turi as "kirim" | "chiqim",
+    tolovTuri:
+      (transaction.tolovTuri as TolovTuri | null) ??
+      ((transaction.account?.turi === "plastik" || transaction.account?.turi === "bank"
         ? "click"
-        : "naqd")
-  );
-  const [categoryId, setCategoryId] = useState(transaction.categoryId);
-  const [summaText, setSummaText] = useState(formatSom(transaction.summa));
-  const [sana, setSana] = useState(new Date(transaction.sana).toISOString().slice(0, 10));
-  const [izoh, setIzoh] = useState(transaction.izoh ?? "");
+        : "naqd") as TolovTuri),
+    categoryId: transaction.categoryId,
+    summa: transaction.summa,
+    sana: new Date(transaction.sana).toISOString().slice(0, 10),
+    izoh: transaction.izoh ?? "",
+  }).current;
+
+  const [turi, setTuri] = useState<"kirim" | "chiqim">(boshlangich.turi);
+  const [tolovTuri, setTolovTuri] = useState<TolovTuri>(boshlangich.tolovTuri);
+  const [categoryId, setCategoryId] = useState(boshlangich.categoryId);
+  const [summaText, setSummaText] = useState(formatSom(boshlangich.summa));
+  const [sana, setSana] = useState(boshlangich.sana);
+  const [izoh, setIzoh] = useState(boshlangich.izoh);
+  const [sabab, setSabab] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const filteredCategories = categories.filter((c) => c.turi === turi);
 
+  // MOLIYAVIY o'zgarish bo'ldimi. Bunday o'zgarish yozuvni JOYIDA tahrirlab
+  // bo'lmaydi (audit: Critical #3) — yozuv sabab bilan bekor qilinib, o'rniga
+  // tuzatilgani yoziladi.
+  const summa = parseSomInput(summaText);
+  const moliyaviyOzgardi =
+    turi !== boshlangich.turi ||
+    tolovTuri !== boshlangich.tolovTuri ||
+    summa !== boshlangich.summa ||
+    sana !== boshlangich.sana;
+
   async function handleSave() {
     setError(null);
-    const summa = parseSomInput(summaText);
     if (summa <= 0) {
       setError("Summani kiriting");
       return;
     }
+    if (moliyaviyOzgardi && sabab.trim().length < 3) {
+      setError("Nima uchun tuzatilayotganini yozing");
+      return;
+    }
     setLoading(true);
     try {
-      const res = await fetch(`/api/transactions/${transaction.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ turi, tolovTuri, categoryId, summa, sana, izoh: izoh || undefined }),
-      });
+      const res = moliyaviyOzgardi
+        ? // Storno: eski yozuv sabab bilan bekor qilinadi, o'rniga yangisi yoziladi.
+          await fetch(`/api/transactions/${transaction.id}/storno`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              sabab,
+              tuzatish: { turi, tolovTuri, categoryId, summa, sana, izoh: izoh || undefined },
+            }),
+          })
+        : // Faqat moliyaviy bo'lmagan qism o'zgargan — oddiy tahrir.
+          await fetch(`/api/transactions/${transaction.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ categoryId, izoh: izoh || undefined }),
+          });
+
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "Xatolik yuz berdi");
         setLoading(false);
         return;
       }
-      onSaved(data);
+      // Storno yangi id bilan yozuv yaratadi — ro'yxat serverdan yangilanadi.
+      if (moliyaviyOzgardi) onStorno(transaction.id);
+      else onSaved(data);
     } catch {
       setError("Serverga ulanib bo'lmadi");
       setLoading(false);
@@ -354,6 +403,22 @@ function EditModal({
           placeholder="Izoh"
           className="w-full rounded-lg border border-line px-3 py-2 text-sm"
         />
+        {moliyaviyOzgardi && (
+          <div className="rounded-lg border border-line bg-surface-2 p-3 space-y-2">
+            <p className="text-2xs text-muted">
+              Summa, sana, turi va to&apos;lov turi yozilgandan keyin o&apos;zgarmaydi. Saqlansa
+              eski yozuv sabab bilan bekor qilinadi va o&apos;rniga tuzatilgani yoziladi —
+              ikkalasi ham tarixda qoladi.
+            </p>
+            <input
+              type="text"
+              value={sabab}
+              onChange={(e) => setSabab(e.target.value)}
+              placeholder="Nima uchun tuzatilmoqda?"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm"
+            />
+          </div>
+        )}
         {error && <p className="text-expense text-sm">{error}</p>}
         <div className="flex gap-2 items-center pt-2">
           {canDelete && (

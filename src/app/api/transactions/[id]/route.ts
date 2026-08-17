@@ -2,14 +2,19 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireOwnerOrAdmin, ForbiddenError } from "@/lib/auth/guard";
 import { withTenant } from "@/lib/auth/tenant";
-import { isManager } from "@/lib/auth/roles";
-import { updateTransactionSchema } from "@/lib/validation/transaction";
+import { updateTransactionSchema, ozgarmasBuzilishi } from "@/lib/validation/transaction";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { resolveActiveBusinessId } from "@/lib/business";
-import { resolveAccountId } from "@/lib/services/accounts";
 import { dashboardYangilandi } from "@/lib/cache";
 import { kunlikSinxron } from "@/lib/services/kunlik";
 
+/**
+ * Yozuvning MOLIYAVIY BO'LMAGAN qismini tahrirlaydi (izoh, filial, kategoriya).
+ *
+ * Summa, sana, turi, to'lov turi va kassa — o'zgarmas (audit: Critical #3).
+ * Ularni tuzatish uchun `POST /api/transactions/[id]/storno`: yozuv sabab
+ * bilan bekor qilinadi va o'rniga tuzatilgani yoziladi.
+ */
 export const PATCH = withTenant<{ params: { id: string } }>(async (request, { params }, { session: user }) => {
   const businessId = await resolveActiveBusinessId(user);
 
@@ -34,6 +39,23 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
 
   const data = parsed.data;
 
+  // MOLIYAVIY MAYDONLAR O'ZGARMAS. Yozuv tarixi jimgina qayta yozilmasin —
+  // tuzatish faqat storno orqali, ya'ni iz qoldirib bajariladi.
+  const buzilgan = ozgarmasBuzilishi(data, existing, dateOnlyStringToUTCDate);
+  if (buzilgan.length > 0) {
+    return NextResponse.json(
+      {
+        error:
+          `Moliyaviy maydonni tahrirlab bo'lmaydi (${buzilgan.join(", ")}). ` +
+          "Yozuvni sabab bilan bekor qilib, tuzatilganini kiriting.",
+        // Mijoz kodi shu belgiga qarab storno oynasini ochadi.
+        storno: true,
+        maydonlar: buzilgan,
+      },
+      { status: 400 }
+    );
+  }
+
   // Kategoriya o'zgartirilsa, u ham shu biznesga tegishli bo'lishi kerak.
   if (data.categoryId !== undefined) {
     const cat = await prisma.category.findUnique({
@@ -45,36 +67,10 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
     }
   }
 
-  // To'lov turi qoidasi yakuniy holatda tekshiriladi (turi va tolovTuri
-  // birga yoki alohida o'zgarishi mumkin): qarz faqat kirim uchun.
-  const yakuniyTuri = data.turi ?? existing.turi;
-  const yakuniyTolov = data.tolovTuri !== undefined ? data.tolovTuri : existing.tolovTuri;
-  if (yakuniyTolov === "qarz" && yakuniyTuri === "chiqim") {
-    return NextResponse.json({ error: "Qarz to'lov turi faqat kirim uchun" }, { status: 400 });
-  }
-
-  // Kassa bog'lanishi to'lov turiga ergashadi: qarz — kassasiz; qarzdan
-  // naqd/click'ka qaytsa — mos faol kassa qayta bog'lanadi.
-  let accountYangilash: { accountId: string | null } | Record<string, never> = {};
-  if (data.tolovTuri !== undefined) {
-    if (yakuniyTolov === "qarz") {
-      accountYangilash = { accountId: null };
-    } else if (existing.accountId === null || data.accountId !== undefined) {
-      accountYangilash = {
-        accountId: await resolveAccountId(businessId!, data.accountId, yakuniyTolov),
-      };
-    }
-  }
-
   const updated = await prisma.transaction.update({
     where: { id: params.id },
     data: {
-      ...(data.turi !== undefined ? { turi: data.turi } : {}),
       ...(data.categoryId !== undefined ? { categoryId: data.categoryId } : {}),
-      ...(data.summa !== undefined ? { summa: data.summa } : {}),
-      ...(data.sana !== undefined ? { sana: dateOnlyStringToUTCDate(data.sana) } : {}),
-      ...(data.tolovTuri !== undefined ? { tolovTuri: data.tolovTuri } : {}),
-      ...accountYangilash,
       ...(data.izoh !== undefined ? { izoh: data.izoh } : {}),
       ...(data.filial !== undefined ? { filial: data.filial } : {}),
     },
@@ -105,15 +101,19 @@ export const DELETE = withTenant<{ params: { id: string } }>(async (request, { p
   }
   requireOwnerOrAdmin(user.rol, user.userId, existing.userId);
 
-  const permanent = new URL(request.url).searchParams.get("permanent") === "true";
-
-  if (permanent) {
-    // Butunlay o'chirish — faqat admin. Avval kunlikdagi ulangan tushum olib tashlanadi.
-    if (!isManager(user.rol)) throw new ForbiddenError("Butunlay o'chirish faqat direktor uchun");
-    await kunlikSinxron({ ...existing, deletedAt: new Date() }, null);
-    await prisma.transaction.delete({ where: { id: params.id } });
-    dashboardYangilandi(existing.businessId);
-    return NextResponse.json({ ok: true, permanent: true });
+  // `?permanent=true` OLIB TASHLANDI (audit: Critical #3): moliyaviy yozuvni
+  // bazadan butunlay yo'q qilish audit izini ham, zaxiradan tiklash imkonini
+  // ham yo'qotardi. Jimgina yumshoq o'chirishga o'tmaymiz — chaqiruvchi nima
+  // bo'lganini bilishi kerak.
+  if (new URL(request.url).searchParams.get("permanent") === "true") {
+    return NextResponse.json(
+      {
+        error:
+          "Moliyaviy yozuvni butunlay o'chirib bo'lmaydi. Yozuv savatda qoladi va " +
+          "kerak bo'lsa tiklanadi; tuzatish uchun storno ishlating.",
+      },
+      { status: 400 }
+    );
   }
 
   // Soft delete — belgilanadi (undo/savat uchun). Kunlikdagi ulangan tushum ham chiqadi.

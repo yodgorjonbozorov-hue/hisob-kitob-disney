@@ -1,5 +1,13 @@
 "use client";
 
+/**
+ * SAVAT — bekor qilingan (yumshoq o'chirilgan) tranzaksiyalar.
+ *
+ * "Butunlay o'chirish" tugmasi OLIB TASHLANDI (audit: Critical #3): moliyaviy
+ * yozuvni bazadan yo'q qilish audit izini ham, tiklash imkonini ham
+ * yo'qotardi. Yozuv shu yerda qoladi va istalgan paytda tiklanadi.
+ */
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
@@ -40,27 +48,14 @@ export function OchirilganlarClient({ initialItems }: { initialItems: DeletedIte
     }
   }
 
-  async function permanentDelete(id: string) {
-    if (!confirm("Butunlay o'chirilsinmi? Bu amalni qaytarib bo'lmaydi.")) return;
-    setBusy(id);
-    try {
-      const res = await fetch(`/api/transactions/${id}?permanent=true`, { method: "DELETE" });
-      if (res.ok) {
-        setItems((prev) => prev.filter((i) => i.id !== id));
-        toast({ message: "Butunlay o'chirildi", tone: "neutral" });
-        router.refresh();
-      } else {
-        toast({ message: "O'chirib bo'lmadi", tone: "error" });
-      }
-    } finally {
-      setBusy(null);
-    }
-  }
-
   if (items.length === 0) {
     return (
       <Card>
-        <EmptyState title="Savat bo'sh" description="O'chirilgan tranzaksiyalar bu yerda ko'rinadi." icon="🗑" />
+        <EmptyState
+          title="Savat bo'sh"
+          description="Bekor qilingan tranzaksiyalar bu yerda ko'rinadi va tiklanishi mumkin."
+          icon="🗑"
+        />
       </Card>
     );
   }
@@ -92,13 +87,6 @@ export function OchirilganlarClient({ initialItems }: { initialItems: DeletedIte
                 className="text-sm font-medium text-income hover:underline disabled:opacity-50 min-h-[40px] px-2"
               >
                 Tiklash
-              </button>
-              <button
-                onClick={() => permanentDelete(t.id)}
-                disabled={busy === t.id}
-                className="text-sm font-medium text-expense hover:underline disabled:opacity-50 min-h-[40px] px-2"
-              >
-                Butunlay o'chirish
               </button>
             </div>
           </div>

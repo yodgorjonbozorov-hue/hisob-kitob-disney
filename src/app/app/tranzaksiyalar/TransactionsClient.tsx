@@ -143,6 +143,16 @@ export function TransactionsClient({
     router.refresh();
   }
 
+  /**
+   * Storno: eski yozuv bekor qilindi (ro'yxatdan chiqadi), tuzatilgani esa
+   * YANGI id bilan yozildi — uni serverdan olamiz.
+   */
+  function handleStorno(eskiId: string) {
+    setItems((prev) => prev.filter((i) => i.id !== eskiId));
+    router.refresh();
+    toast({ message: "Yozuv bekor qilindi, tuzatilgani yozildi", tone: "success" });
+  }
+
   // Optimistik o'chirish + 5s "Qaytarish" (undo). Soft-delete, keyin undo → restore.
   async function handleDelete(t: TransactionDTO) {
     setItems((prev) => prev.filter((i) => i.id !== t.id));
@@ -249,6 +259,7 @@ export function TransactionsClient({
         currentUserId={currentUserId}
         currentUserRol={currentUserRol}
         onUpdated={handleUpdated}
+        onStorno={handleStorno}
         onDelete={handleDelete}
         selected={selected}
         onToggleSelect={toggleSelect}
