@@ -21,10 +21,10 @@ export const POST = withTenant(async (request, _ctx, { session: user, tenantId }
     return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
   }
 
-  // Avto rejimi ombor tizimisiz ishlamaydi — birga yoqiladi.
-  const omborli = parsed.data.turi === "avto" ? { omborli: true } : {};
+  // Avto rejimi ombor tizimisiz ishlamaydi — birga yoqiladi (so'rovdagi qiymatdan ustun).
+  const avtoMajburiy = parsed.data.turi === "avto" ? { omborli: true } : {};
   // tenantId kontekstdan — extension ham xuddi shu qiymatni majburlaydi (lib/db/tenantDb.ts).
-  const business = await prisma.business.create({ data: { ...parsed.data, ...omborli, tenantId } });
+  const business = await prisma.business.create({ data: { ...parsed.data, ...avtoMajburiy, tenantId } });
 
   // Har biznesda kamida bitta kassa bo'lishi shart, aks holda yozuv qayerga
   // tushishini ko'rsatib bo'lmaydi (signup'dagi bilan bir xil qoida).
