@@ -25,6 +25,11 @@ export interface NavItem {
   rollar: Rol[];
   /** Faqat PRO tarifda ko'rinadi — boshqa mijozlar menyusi O'ZGARMAYDI. */
   faqatPro?: boolean;
+  /**
+   * Faqat kg savdosi ochilgan mijozda ko'rinadi (mijozga xos — lib/mijozXos.ts).
+   * Tarif imkoniyati EMAS: boshqa mijozlar menyusi O'ZGARMAYDI.
+   */
+  faqatKgSavdo?: boolean;
 }
 
 export interface ModulTarifi {
@@ -74,6 +79,17 @@ export const MODULLAR: ModulTarifi[] = [
       // SELLER menyusi ATAYLAB tegilmaydi ("Sotuvchi faqat Yozuvlar ko'radi"
       // qoidasi) — u o'z kassasiga Yozuvlar sahifasidagi karta orqali kiradi.
       { href: "/app/kassam", label: "Mening kassam", icon: "cash", tartib: 17, rollar: ["OWNER", "ADMIN", "CASHIER"] },
+      // KG SAVDOSI kesimi (mijozga xos — Fortex Selos): bugun necha kg sotildi,
+      // qaysi sotuvchi/kassa bo'yicha va o'rtacha narx qancha. Kassir ham
+      // ko'radi — u o'z savdosini tekshirib turishi kerak.
+      {
+        href: "/app/selos",
+        label: "Kg savdosi",
+        icon: "weight",
+        tartib: 18,
+        rollar: ["OWNER", "ADMIN", "CASHIER", "SELLER"],
+        faqatKgSavdo: true,
+      },
       { href: "/app/takroriy", label: "Takroriy", icon: "repeat", tartib: 40, rollar: BOSHQARUVCHILAR },
       { href: "/app/smena", label: "Kun yakuni", icon: "shift", tartib: 41, rollar: ["OWNER", "ADMIN", "CASHIER"] },
     ],
@@ -241,6 +257,11 @@ export interface NavHolati {
   avto?: boolean;
   /** Tenant PRO tarifdami — `faqatPro` havolalar faqat shunda ko'rinadi. */
   pro?: boolean;
+  /**
+   * Kg savdosi shu mijozga ochiqmi (mijozga xos — lib/mijozXos.ts).
+   * `faqatKgSavdo` havolalar faqat shunda ko'rinadi.
+   */
+  kgSavdo?: boolean;
 }
 
 /** Avto rejimidagi biznes uchun OMBOR moduli yorliqlari (lib/biznesTuri.ts bilan mos). */
@@ -250,7 +271,14 @@ const AVTO_YORLIQLAR: Record<string, string> = {
 };
 
 /** Sidebar/menyu uchun tartiblangan havolalar ro'yxati. */
-export function computeNav({ rol, yoqilgan, omborli, avto = false, pro = false }: NavHolati): NavItem[] {
+export function computeNav({
+  rol,
+  yoqilgan,
+  omborli,
+  avto = false,
+  pro = false,
+  kgSavdo = false,
+}: NavHolati): NavItem[] {
   const items: NavItem[] = [];
   for (const m of MODULLAR) {
     if (!m.core && !yoqilgan.has(m.code)) continue;
@@ -259,6 +287,7 @@ export function computeNav({ rol, yoqilgan, omborli, avto = false, pro = false }
     for (const item of m.nav) {
       if (!item.rollar.includes(rol)) continue;
       if (item.faqatPro && !pro) continue;
+      if (item.faqatKgSavdo && !kgSavdo) continue;
       const label = avto ? AVTO_YORLIQLAR[item.href] ?? item.label : item.label;
       items.push(label === item.label ? item : { ...item, label });
     }

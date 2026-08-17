@@ -6,6 +6,7 @@ import { getEnabledModules } from "@/lib/modules/guard";
 import { computeNav, computeMobileTabs } from "@/lib/modules/registry";
 import { isAvto } from "@/lib/biznesTuri";
 import { isPro } from "@/lib/billing/pro";
+import { kgSavdoKorinadi } from "@/lib/mijozXos";
 import Sidebar from "@/components/nav/Sidebar";
 import MobileNav from "@/components/nav/MobileNav";
 import { BottomNav } from "@/components/nav/BottomNav";
@@ -48,6 +49,8 @@ export default async function ProtectedLayout({
     avto: activeAvto,
     // PRO havolalar (Rollar va huquqlar) faqat PRO mijozda — boshqalar menyusi o'zgarmaydi.
     pro: isPro(ctx.tenant.plan),
+    // "Kg savdosi" havolasi — mijozga xos (Fortex Selos), tarif imkoniyati EMAS.
+    kgSavdo: kgSavdoKorinadi(ctx.tenant),
   };
   const navItems = computeNav(navHolati);
   const mobileTabs = computeMobileTabs(navHolati);

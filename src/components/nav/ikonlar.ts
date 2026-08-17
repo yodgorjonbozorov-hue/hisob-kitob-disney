@@ -3,7 +3,7 @@ import {
   Package, ShoppingCart, HandCoins, Truck, Factory, Building2, Tags, Users, Trash2, ScrollText,
   BadgeCheck, Gavel, Contact2, IdCard, CalendarDays, FileSignature, ClipboardList,
   CreditCard, Blocks, Handshake, BookUser, ListChecks, Sparkles, ShieldCheck, Menu, BarChart3,
-  Home, Send, type LucideIcon,
+  Home, Send, Scale, type LucideIcon,
 } from "lucide-react";
 
 /**
@@ -50,6 +50,8 @@ export const IKONLAR: Record<string, LucideIcon> = {
   tasks: ListChecks,
   ai: Sparkles,
   telegram: Send,
+  // Kg savdosi (mijozga xos) — tarozi.
+  weight: Scale,
 };
 
 /** Noma'lum kalit kelsa ham ikonkasiz bo'sh joy qolmasin. */
