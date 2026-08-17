@@ -2941,3 +2941,64 @@ ikki tekshiruv hech nimani tasdiqlamayotgan edi. Endi ular haqiqiy.
 handover-migratsiya 11/11 · kassa 11/11 · kassir-kassa 22/22 · pro 22/22 ·
 qarz 16/16 · selos-kg 21/21 · backup 6/6 · isolation 22/22 · modules 15/15 ·
 launch 7/7.
+
+---
+
+## 2026-08-17 — Production deploy: holat tekshiruvi, /api/health va xavfsiz migratsiya yo'li
+
+**Vaziyat:** kg savdosi (#14) `main` ga qo'shildi (`9173e22`), lekin PR'dagi
+Vercel PREVIEW deploy'i yiqildi. Sabab kod emas — loyihaning o'z himoyasi:
+`scripts/deploy-zaxira.mjs` kutayotgan migratsiya bor bo'lganda zaxira
+yuboriladigan kanal sozlanmagan bo'lsa build'ni TO'XTATADI. Lokalda aynan
+takrorlandi (2 kutayotgan migratsiya + kanalsiz → exit 1, baza tegilmagan).
+
+**Access auditi (hech narsa o'zgartirilmasdan):**
+
+| Nima | Holat |
+|---|---|
+| Konteynerda `DATABASE_URL` / `DATABASE_AUTH_TOKEN` | YO'Q (`.env` ham yo'q, faqat `.env.example`) |
+| Vercel CLI / token / `~/.vercel` | YO'Q |
+| Actions sirlari: `DATABASE_URL`, `DATABASE_AUTH_TOKEN`, `BACKUP_CHAT_ID`, `BACKUP_BOT_TOKEN`, `TELEGRAM_BOT_TOKEN` | BARCHASI YO'Q (`holat-tekshir.yml` run #1 logi) |
+| GitHub API (PR, merge, workflow dispatch, log o'qish) | BOR |
+
+Ya'ni production bazasiga BIROR yo'l bilan ham yetib bo'lmaydi: zaxira ham,
+migratsiya ham, Vercel env ham shu sessiyadan bajarilmaydi. Sir qiymatlari
+o'ylab topilmadi va so'ralmadi — migratsiya ATAYLAB to'xtatildi.
+
+**Qo'shilgan vositalar (keyingi qadam bir marta bosishga qolsin):**
+
+1. `scripts/production-holat.mjs` + `.github/workflows/holat-tekshir.yml` —
+   FAQAT O'QIYDIGAN preflight: ulanish, kutayotgan migratsiyalar, kg
+   ustunlari/bayroqlari, FK yaxlitligi va moliyaviy BARMOQ IZI (SHA-256).
+   **Ommaviy repozitoriya qoidasi:** Actions logi hammaga ko'rinadi, shuning
+   uchun pul summalari, mijoz nomlari va telefonlar CHIQARILMAYDI — summa
+   o'rniga iz beriladi. Iz deploy oldidan va keyin bir xil bo'lsa,
+   migratsiya pulga tegmagani summalarni oshkor qilmasdan isbotlanadi.
+2. `.github/workflows/production-migratsiya.yml` — production uchun xavfsiz
+   yo'l: zaxira FAQAT yopiq Telegram kanaliga, artefakt YUKLANMAYDI.
+   Mavjud `migratsiya.yml` baza suratini GitHub artefakti qilib yuklaydi —
+   repozitoriya ommaviy bo'lgani uchun bu ochiq havola bo'lardi; ogohlantirish
+   uning sarlavhasiga yozildi (xulqi o'zgartirilmadi — egasining qarori).
+3. `src/app/api/health/route.ts` — ommaviy, bazaga tegmaydigan endpoint:
+   `{ ok, commit, muhit }`. Nega kerak: `/app/*` middleware orqali login'ga
+   yo'naltiriladi, ya'ni mavjud bo'lmagan sahifa ham login qaytaradi va
+   "yangi build chiqdimi?" degan savolga javob bermaydi. Endi deploy
+   tashqaridan aniq tasdiqlanadi.
+
+**Yo'l-yo'lakay tuzatilgan regressiya:** `scripts/kassa-handover-migratsiya.ts`
+env'siz `npm run build` ni yiqitardi — "DATABASE_URL yo'q" deb to'g'ri
+o'tkazib yuborardi, lekin `finally` ichidagi `rawPrisma.$disconnect()`
+klientni qurishga urinib `URL_INVALID` berardi. `apply-oqimi` testidagi
+regex ham yangilandi (eski bazada Prisma yetishmayotgan USTUN haqida yozadi).
+
+**Tekshirildi:** `npm run build` ✅ (env'siz ham) · selos-kg 21/21 ·
+handover-migratsiya 11/11 · tozalash 9/9 · kassa-transfer 20/20 ·
+kassir-kassa 22/22 · isolation 22/22 · izolyatsiya-royxati 9/9 ·
+migratsiya-zanjiri 10/10 · deploy-zaxira 10/10 · apply-oqimi 9/9 ·
+backup 6/6 · kunlik 27/27 · smena 14/14 · qarz 16/16 · kassa 11/11.
+
+**Qolgan yagona qo'lda amal (agentga berilmagan access):** Actions sirlariga
+`DATABASE_URL` (+ Turso uchun `DATABASE_AUTH_TOKEN`), `BACKUP_CHAT_ID` va
+`BACKUP_BOT_TOKEN`/`TELEGRAM_BOT_TOKEN` qo'shilishi. Shundan keyin
+"Production migratsiyasi" workflow'i bir marta ishga tushirilsa —
+zaxira → migratsiya → tekshiruv o'zi bajariladi.
