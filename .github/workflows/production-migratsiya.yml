@@ -1,0 +1,121 @@
+# PRODUCTION MIGRATSIYASI — ZAXIRA TELEGRAMGA, ARTEFAKT YO'Q.
+#
+# Nega mavjud `migratsiya.yml` dan alohida: u zaxirani GitHub ARTEFAKTI
+# sifatida yuklaydi. Bu repozitoriya OMMAVIY, ya'ni artefakt havolasi
+# bo'lgan har kim to'liq baza suratini (parol xeshlari, telefonlar, pul
+# harakati) yuklab olishi mumkin. Shu sababli bu yerda zaxira FAQAT
+# yopiq Telegram kanaliga yuboriladi va hech qanday artefakt yuklanmaydi.
+#
+# Ketma-ketlik (har qadam oldingisiga bog'liq — fail-fast):
+#   1. tasdiq = HA                     (tasodifan ishga tushmasin)
+#   2. sirlar bormi                    (yo'q bo'lsa bazaga UMUMAN tegilmaydi)
+#   3. OLDINGI holat                   (faqat o'qish, moliya barmoq izi)
+#   4. ZAXIRA -> Telegram              (yuborilmasa TO'XTAYDI)
+#   5. migratsiyalar                   (idempotent)
+#   6. kassa/qarz migratsiya skriptlari (deploy zanjiridagi bilan bir xil)
+#   7. KEYINGI holat                   (iz OLDINGI bilan bir xil bo'lishi shart)
+#
+# Ishga tushirish: Actions -> "Production migratsiyasi" -> tasdiq: HA -> Run
+name: Production migratsiyasi
+
+on:
+  workflow_dispatch:
+    inputs:
+      tasdiq:
+        description: 'Bazaga YOZILADI. Davom etish uchun "HA" deb yozing'
+        required: true
+        default: ""
+
+concurrency:
+  group: migratsiya
+  cancel-in-progress: false
+
+jobs:
+  qollash:
+    name: Zaxira (Telegram) + migratsiya + tekshiruv
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Tasdiqni tekshirish
+        if: inputs.tasdiq != 'HA'
+        run: |
+          echo "::error::Tasdiq berilmadi — 'HA' deb yozish shart."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Bog'liqliklar
+        run: npm ci
+
+      # Sirlar YO'Q bo'lsa shu yerda to'xtaydi — bazaga hech qanday ulanish
+      # bo'lmaydi. Qiymatlar chiqarilmaydi, faqat "bor/yo'q".
+      - name: Sirlarni tekshirish
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_CHAT_ID: ${{ secrets.BACKUP_CHAT_ID }}
+          BACKUP_BOT_TOKEN: ${{ secrets.BACKUP_BOT_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          xato=0
+          if [ -z "$DATABASE_URL" ]; then echo "::error::DATABASE_URL sozlanmagan"; xato=1; fi
+          if [ -z "$BACKUP_CHAT_ID" ]; then echo "::error::BACKUP_CHAT_ID sozlanmagan"; xato=1; fi
+          if [ -z "$BACKUP_BOT_TOKEN" ] && [ -z "$TELEGRAM_BOT_TOKEN" ]; then
+            echo "::error::BACKUP_BOT_TOKEN yoki TELEGRAM_BOT_TOKEN sozlanmagan"; xato=1
+          fi
+          if [ "$xato" = "1" ]; then
+            echo "::error::Zaxirasiz migratsiya qilinmaydi — baza O'ZGARTIRILMADI."
+            exit 1
+          fi
+          echo "Kerakli sirlar sozlangan."
+
+      - name: OLDINGI holat (faqat o'qish)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: node scripts/production-holat.mjs
+
+      # Loyihaning o'z himoyasi: surat oladi va Telegramga yuboradi;
+      # yuborilmasa exit 1 — keyingi qadamlar ishga tushmaydi.
+      - name: ZAXIRA -> Telegram (majburiy)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          BACKUP_CHAT_ID: ${{ secrets.BACKUP_CHAT_ID }}
+          BACKUP_BOT_TOKEN: ${{ secrets.BACKUP_BOT_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: node scripts/deploy-zaxira.mjs
+
+      - name: Migratsiyalarni qo'llash
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: node scripts/db-migrate.mjs
+
+      - name: Kassa va qarz migratsiya skriptlari
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: |
+          node -r ts-node/register scripts/kassa-migratsiya.ts
+          node -r ts-node/register scripts/qarz-migratsiya.ts
+
+      - name: KEYINGI holat (iz o'zgarmagani tekshiriladi)
+        if: always()
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: node scripts/production-holat.mjs
+
+      - name: Yakun
+        if: success()
+        run: |
+          echo "### ✅ Migratsiya qo'llandi" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Zaxira Telegram kanalida (artefakt yuklanmadi — repo ommaviy)." >> $GITHUB_STEP_SUMMARY
+          echo "Log'dagi OLDINGI va KEYINGI \`UMUMIY MOLIYA IZI\` bir xil bo'lishi shart." >> $GITHUB_STEP_SUMMARY
