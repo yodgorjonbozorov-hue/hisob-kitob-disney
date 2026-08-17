@@ -1,0 +1,64 @@
+# PRODUCTION HOLATINI TEKSHIRISH — FAQAT O'QISH.
+#
+# Nega kerak: production deploy'ini avtomatlashtirish uchun avval ikki savolga
+# javob kerak — (1) Actions'da qaysi sirlar sozlangan, (2) bazada nechta
+# migratsiya kutmoqda. Ikkalasi ham BAZAGA YOZMASDAN aniqlanadi.
+#
+# Bu workflow ATAYLAB:
+#   · bazaga BIRORTA ham yozuv yozmaydi (faqat SELECT va PRAGMA);
+#   · sirlarning QIYMATINI hech qayerga chiqarmaydi (faqat "bor/yo'q");
+#   · artefakt YUKLAMAYDI — repozitoriya OMMAVIY, ya'ni artefakt va log
+#     hammaga ko'rinadi. Shu sababli pul summalari ham chiqarilmaydi:
+#     faqat "farq 0 mi" kabi xulosa va jadval nomlari.
+#
+# Ishga tushirish: Actions -> "Holatni tekshirish (faqat o'qish)" -> Run
+name: Holatni tekshirish (faqat o'qish)
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: holat-tekshir
+  cancel-in-progress: true
+
+jobs:
+  tekshir:
+    name: Sirlar + migratsiya holati (yozmaydi)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Bog'liqliklar
+        run: npm ci
+
+      # Sirlarning faqat BORLIGI tekshiriladi. Qiymatlar chiqarilmaydi.
+      - name: Sirlar ro'yxati (qiymatsiz)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          BACKUP_CHAT_ID: ${{ secrets.BACKUP_CHAT_ID }}
+          BACKUP_BOT_TOKEN: ${{ secrets.BACKUP_BOT_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: |
+          holat() { if [ -n "$2" ]; then echo "SIR $1 = SOZLANGAN"; else echo "SIR $1 = YO'Q"; fi; }
+          holat DATABASE_URL "$DATABASE_URL"
+          holat DATABASE_AUTH_TOKEN "$DATABASE_AUTH_TOKEN"
+          holat BACKUP_CHAT_ID "$BACKUP_CHAT_ID"
+          holat BACKUP_BOT_TOKEN "$BACKUP_BOT_TOKEN"
+          holat TELEGRAM_BOT_TOKEN "$TELEGRAM_BOT_TOKEN"
+
+      # Baza holati: ulanish, kutayotgan migratsiyalar, sxema bayroqlari.
+      # DATABASE_URL yo'q bo'lsa skript o'zi "aniqlanmadi" deb chiqadi va
+      # workflow YASHIL qoladi — bu tekshiruv, yiqilish emas.
+      - name: Baza holati (faqat SELECT)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: node scripts/production-holat.mjs
