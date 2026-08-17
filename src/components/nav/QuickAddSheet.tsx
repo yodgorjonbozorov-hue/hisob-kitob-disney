@@ -137,7 +137,7 @@ export function QuickAddSheet({
 
         <div className="sticky bottom-0 bg-app px-5 py-3 mt-3 flex gap-2 border-t border-line">
           <Button variant="secondary" size="lg" onClick={onClose} className="flex-1">Bekor</Button>
-          <Button size="lg" loading={loading} onClick={submit} className={`flex-[2] ${turi === "chiqim" ? "bg-expense" : ""}`}>Saqlash</Button>
+          <Button size="lg" variant={turi === "chiqim" ? "danger" : "primary"} loading={loading} onClick={submit} className="flex-[2]">Saqlash</Button>
         </div>
       </div>
     </div>
