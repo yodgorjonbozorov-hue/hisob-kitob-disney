@@ -3,6 +3,8 @@ import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { runBusinessTx } from "@/lib/db/businessTx";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { logAudit } from "@/lib/services/audit";
+import { mavjudQoldiqTx } from "@/lib/services/userKassa";
+import { shaxsiyKassaId } from "@/lib/services/kassaTanlash";
 import type { CreateAccountInput, TransferInput, UpdateAccountInput } from "@/lib/validation/account";
 
 /** Har yangi biznesda avtomatik ochiladigan kassa. */
@@ -98,6 +100,18 @@ export async function createTransfer(
       throw new BadRequestError("Nofaol kassa bilan pul ko'chirib bo'lmaydi");
     }
 
+    // KASSADA YO'Q PULNI KO'CHIRIB BO'LMAYDI. Kutilayotgan (tasdiqlanmagan)
+    // chiqimlar ham ayriladi — bir pul ikki marta jo'natilmasin.
+    const { mavjud } = await mavjudQoldiqTx(tx, businessId, data.fromAccountId);
+    if (mavjud < data.summa) {
+      const nomi = kassalar.find((k) => k.id === data.fromAccountId)?.nomi ?? "Kassa";
+      throw new BadRequestError(
+        `${nomi}da yetarli mablag' mavjud emas. ` +
+          `Mavjud: ${mavjud.toLocaleString("ru-RU")} so'm, ` +
+          `o'tkazilayotgan: ${data.summa.toLocaleString("ru-RU")} so'm`
+      );
+    }
+
     return tx.accountTransfer.create({
       data: {
         businessId,
@@ -137,7 +151,8 @@ export async function createTransfer(
 export async function resolveAccountId(
   businessId: string,
   accountId?: string | null,
-  tolovTuri?: string | null
+  tolovTuri?: string | null,
+  userId?: string | null
 ): Promise<string | null> {
   if (accountId) {
     const acc = await prisma.account.findFirst({
@@ -147,6 +162,9 @@ export async function resolveAccountId(
     if (!acc) throw new ForbiddenError("Kassa topilmadi yoki nofaol");
     return acc.id;
   }
+  // Shaxsiy kassa rejimi: naqd pul yozuvni kiritgan xodimning kassasiga tushadi.
+  const shaxsiy = await shaxsiyKassaId(prisma, businessId, userId, tolovTuri);
+  if (shaxsiy) return shaxsiy;
   if (tolovTuri === "naqd" || tolovTuri === "click") {
     const mosTurlar = tolovTuri === "naqd" ? ["naqd"] : ["plastik", "bank"];
     const mos = await prisma.account.findFirst({

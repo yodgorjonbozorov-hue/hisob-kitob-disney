@@ -110,6 +110,15 @@ export const DELETE = withTenant<{ params: { id: string } }>(async (request, { p
   if (permanent) {
     // Butunlay o'chirish — faqat admin. Avval kunlikdagi ulangan tushum olib tashlanadi.
     if (!isManager(user.rol)) throw new ForbiddenError("Butunlay o'chirish faqat direktor uchun");
+    // KASSAGA BOG'LANGAN YOZUV LEDGER QATORI — u o'chirilsa kassa qoldig'i
+    // sababsiz o'zgaradi va audit izi uziladi. Bunday yozuv faqat "savat"da
+    // (soft-delete) turadi; tuzatish kerak bo'lsa teskari yozuv kiritiladi.
+    if (existing.accountId) {
+      throw new ForbiddenError(
+        "Kassaga bog'langan moliyaviy yozuvni butunlay o'chirib bo'lmaydi — u kassa qoldig'ining bir qismi. " +
+          "Xato bo'lsa teskari (storno) yozuv kiriting."
+      );
+    }
     await kunlikSinxron({ ...existing, deletedAt: new Date() }, null);
     await prisma.transaction.delete({ where: { id: params.id } });
     dashboardYangilandi(existing.businessId);

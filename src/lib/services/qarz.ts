@@ -6,6 +6,7 @@ import { currentTenantId } from "@/lib/db/tenantContext";
 import { createTransactionTx } from "@/lib/services/transactionService";
 import { ensureCategoryTx } from "@/lib/services/inventory";
 import { ensureUserKassaTx } from "@/lib/services/userKassa";
+import { shaxsiyKassaId } from "@/lib/services/kassaTanlash";
 import { qarzLimitTekshirTx } from "@/lib/services/mijoz";
 import { logAudit } from "@/lib/services/audit";
 import { todayDateOnlyString, dateOnlyStringToUTCDate } from "@/lib/date";
@@ -362,7 +363,13 @@ async function tolovTx(
     // To'lov usuli tranzaksiyaning to'lov turiga o'giriladi: bank ham,
     // Click ham naqdsiz pul — kassa qoldig'ida ikkalasi "click" tarafida.
     const txTolovTuri = params.tolovTuri === "naqd" ? "naqd" : params.tolovTuri ? "click" : null;
-    accountId = await kassaniAniqlaTx(tx, params.businessId, params.accountId, txTolovTuri);
+    accountId = await kassaniAniqlaTx(
+      tx,
+      params.businessId,
+      params.accountId,
+      txTolovTuri,
+      params.userId
+    );
     const txn = await createTransactionTx(tx, params.userId, params.businessId, {
       turi: beriladigan ? "chiqim" : "kirim",
       categoryId,
@@ -489,7 +496,8 @@ async function kassaniAniqlaTx(
   tx: BusinessTx,
   businessId: string,
   accountId: string | null | undefined,
-  tolovTuri: string | null
+  tolovTuri: string | null,
+  userId?: string | null
 ): Promise<string | null> {
   if (accountId) {
     const acc = await tx.account.findFirst({
@@ -499,6 +507,10 @@ async function kassaniAniqlaTx(
     if (!acc) throw new ForbiddenError("Kassa topilmadi yoki nofaol");
     return acc.id;
   }
+  // Shaxsiy kassa rejimi: naqd qarz to'lovi to'lovni QABUL QILGAN xodimning
+  // kassasiga tushadi (odatdagi naqd yozuv bilan bir xil qoida).
+  const shaxsiy = await shaxsiyKassaId(tx, businessId, userId, tolovTuri);
+  if (shaxsiy) return shaxsiy;
   if (tolovTuri === "naqd" || tolovTuri === "click") {
     const mosTurlar = tolovTuri === "naqd" ? ["naqd"] : ["plastik", "bank"];
     const mos = await tx.account.findFirst({

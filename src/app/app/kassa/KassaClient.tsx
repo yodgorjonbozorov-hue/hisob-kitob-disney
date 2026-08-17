@@ -6,31 +6,39 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Money } from "@/components/ui/Money";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { formatDateUz } from "@/lib/format";
-import { ACCOUNT_TURI_NOMI, type AccountTuri } from "@/lib/validation/account";
-import type { AccountQoldiq, TransferDTO } from "@/lib/queries/accounts";
+import { formatToshkentVaqt } from "@/lib/format";
+import type { AccountQoldiq, KassaKunlik, TransferDTO } from "@/lib/queries/accounts";
+import { KassaKarta } from "./KassaKarta";
 import { KassaModal } from "./KassaModal";
 import { TransferModal } from "./TransferModal";
 
-/** Kassa turi belgisi — ro'yxatda darrov ajralib tursin. */
-const TURI_BELGI: Record<string, string> = { naqd: "💵", plastik: "💳", bank: "🏦" };
-
-export interface UserOption {
-  id: string;
-  ism: string;
-}
-
+/**
+ * KASSALAR PANELI.
+ *
+ * Barcha xodimlar barcha kassalarni KO'RADI (pul qayerda ekani sir emas),
+ * lekin BOSHQARUV amallari (kassa ochish/tahrirlash) faqat boshqaruvchida.
+ * Ruxsatlar serverda ham mustaqil tekshiriladi — bu yerdagi bayroqlar
+ * shunchaki keraksiz tugmani ko'rsatmaydi.
+ */
 export function KassaClient({
   qoldiqlar,
+  kunlik,
   transferlar,
-  userlar,
-  pro,
+  meniUserId,
+  meniKassam,
+  boshqaruvchi,
+  transferQila,
 }: {
   qoldiqlar: AccountQoldiq[];
+  /** accountId → bugungi kirim/chiqim. */
+  kunlik: Record<string, KassaKunlik>;
+  /** So'nggi YAKUNLANGAN o'tkazmalar. */
   transferlar: TransferDTO[];
-  /** Foydalanuvchiga o'tkazish (PRO) uchun qabul qiluvchilar. */
-  userlar: UserOption[];
-  pro: boolean;
+  meniUserId: string;
+  meniKassam: string | null;
+  boshqaruvchi: boolean;
+  /** "pul.berish" huquqi bormi. */
+  transferQila: boolean;
 }) {
   const router = useRouter();
   const [kassaModal, setKassaModal] = useState<AccountQoldiq | "yangi" | null>(null);
@@ -50,95 +58,76 @@ export function KassaClient({
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm text-muted">Jami qoldiq</p>
+            <p className="text-sm text-muted">Jami kassalar</p>
             <Money value={jami} size="display" tone={jami >= 0 ? "brand" : "expense"} />
           </div>
           <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => setTransferModal(true)}
-              disabled={faollar.length < 2 && !(pro && userlar.length > 0)}
-            >
-              Pul ko&apos;chirish
-            </Button>
-            <Button onClick={() => setKassaModal("yangi")}>Yangi kassa</Button>
+            {transferQila && (
+              <Button
+                variant="secondary"
+                onClick={() => setTransferModal(true)}
+                disabled={faollar.length < 2}
+              >
+                Pul o&apos;tkazish
+              </Button>
+            )}
+            {boshqaruvchi && <Button onClick={() => setKassaModal("yangi")}>Yangi kassa</Button>}
           </div>
         </div>
-        {faollar.length < 2 && !(pro && userlar.length > 0) && (
+        {faollar.length < 2 && transferQila && (
           <p className="text-2xs text-faint mt-3">
-            Pul ko&apos;chirish uchun kamida ikkita faol kassa kerak.
+            Pul o&apos;tkazish uchun kamida ikkita faol kassa kerak.
           </p>
         )}
       </Card>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {qoldiqlar.map((q) => (
-          <button
+          <KassaKarta
             key={q.id}
-            onClick={() => setKassaModal(q)}
-            className={`text-left bg-surface border rounded-2xl p-5 transition hover:border-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand ${
-              q.isActive ? "border-line" : "border-line opacity-60"
-            }`}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-medium text-fg truncate">
-                {q.userId ? "👤" : TURI_BELGI[q.turi] ?? "💰"} {q.nomi}
-              </p>
-              {!q.isActive && <span className="text-2xs text-faint shrink-0">nofaol</span>}
-            </div>
-            <p className="text-2xs text-faint mt-0.5">
-              {q.userId
-                ? `Shaxsiy kassa · ${q.egaIsm ?? "egasi o'chirilgan"}`
-                : ACCOUNT_TURI_NOMI[q.turi as AccountTuri] ?? q.turi}
-            </p>
-            <div className="mt-3">
-              <Money value={q.qoldiq} size="xl" tone={q.qoldiq >= 0 ? "neutral" : "expense"} />
-            </div>
-            <div className="mt-3 space-y-1 text-2xs text-muted tnum">
-              <p>
-                Kirim: <Money value={q.kirim} size="sm" tone="income" />
-              </p>
-              <p>
-                Chiqim: <Money value={q.chiqim} size="sm" tone="expense" />
-              </p>
-              {(q.kirganTransfer > 0 || q.chiqqanTransfer > 0) && (
-                <p>
-                  Ko&apos;chirish: +{q.kirganTransfer.toLocaleString("uz-UZ")} / −
-                  {q.chiqqanTransfer.toLocaleString("uz-UZ")}
-                </p>
-              )}
-            </div>
-          </button>
+            kassa={q}
+            kunlik={kunlik[q.id]}
+            meniki={q.userId === meniUserId}
+            onTahrir={boshqaruvchi ? () => setKassaModal(q) : undefined}
+          />
         ))}
       </div>
 
       <Card>
-        <h2 className="font-semibold text-fg mb-3">So&apos;nggi ko&apos;chirishlar</h2>
+        <h2 className="font-semibold text-fg mb-3">So&apos;nggi o&apos;tkazmalar</h2>
         {transferlar.length === 0 ? (
           <EmptyState
             icon="↔"
-            title="Hali pul ko'chirilmagan"
-            description="Kassadan bankka yoki aksincha pul o'tkazsangiz — shu yerda ko'rinadi."
+            title="Hali pul o'tkazilmagan"
+            description="Bir kassadan boshqasiga pul o'tkazsangiz — shu yerda ko'rinadi."
           />
         ) : (
           <ul className="divide-y divide-line">
-            {transferlar.map((t) => (
-              <li key={t.id} className="py-3 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className={`text-sm truncate ${t.holat === "bekor" ? "text-faint line-through" : "text-fg"}`}>
-                    {t.fromUserIsm && t.toUserIsm
-                      ? `${t.fromUserIsm} → ${t.toUserIsm}`
-                      : `${t.fromNomi} → ${t.toNomi}`}
-                  </p>
-                  <p className="text-2xs text-faint">
-                    {formatDateUz(new Date(t.sana))}
-                    {t.izoh ? ` · ${t.izoh}` : ""}
-                    {t.holat === "bekor" ? " · bekor qilingan" : ""}
-                  </p>
-                </div>
-                <Money value={t.summa} size="md" tone="neutral" />
-              </li>
-            ))}
+            {transferlar.map((t) => {
+              const bekor = t.holat === "bekor";
+              const rad = t.holat === "rad";
+              return (
+                <li key={t.id} className="py-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p
+                      className={`text-sm truncate ${
+                        bekor || rad ? "text-faint line-through" : "text-fg"
+                      }`}
+                    >
+                      {t.fromUserIsm ?? t.fromNomi} → {t.toUserIsm ?? t.toNomi}
+                    </p>
+                    <p className="text-2xs text-faint">
+                      {formatToshkentVaqt(new Date(t.createdAt))}
+                      {t.turi === "smena" ? " · Smena topshirish" : ""}
+                      {t.izoh ? ` · ${t.izoh}` : ""}
+                      {bekor ? " · bekor qilingan" : ""}
+                      {rad ? " · rad etilgan" : ""}
+                    </p>
+                  </div>
+                  <Money value={t.summa} size="md" tone="neutral" />
+                </li>
+              );
+            })}
           </ul>
         )}
       </Card>
@@ -153,7 +142,7 @@ export function KassaClient({
       {transferModal && (
         <TransferModal
           kassalar={faollar}
-          userlar={pro ? userlar : []}
+          meniKassam={meniKassam}
           onClose={() => setTransferModal(false)}
           onDone={yangilash}
         />

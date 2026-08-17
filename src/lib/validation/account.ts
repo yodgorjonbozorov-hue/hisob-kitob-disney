@@ -51,6 +51,49 @@ export const userTransferSchema = z.object({
   izoh: z.string().max(300).optional().nullable(),
 });
 
+/**
+ * O'TKAZMA HOLATLARI.
+ *
+ * Qoldiqqa faqat `QOLDIQ_HOLATLARI` kiradi. "bekor" ataylab ichida: uni
+ * qarama-qarshi storno qatori nolga chiqaradi (ledger append-only). "kutilmoqda"
+ * va "rad" esa hech qachon pul ko'chirmagan.
+ */
+export const TRANSFER_HOLATLARI = ["bajarildi", "kutilmoqda", "rad", "bekor"] as const;
+export type TransferHolat = (typeof TRANSFER_HOLATLARI)[number];
+export const QOLDIQ_HOLATLARI: readonly TransferHolat[] = ["bajarildi", "bekor"];
+
+/** O'tkazma turi — faqat ko'rsatish uchun, pul harakati ikkalasida bir xil. */
+export const TRANSFER_TURLARI = ["transfer", "smena"] as const;
+export type TransferTuri = (typeof TRANSFER_TURLARI)[number];
+
+export const TRANSFER_TURI_NOMI: Record<TransferTuri, string> = {
+  transfer: "Pul o'tkazish",
+  smena: "Smena topshirish",
+};
+
+/**
+ * Kassadan kassaga o'tkazma yaratish (yangi oqim).
+ *
+ * `toAccountId` — qabul qiluvchi kassa. Yuboruvchi kassa berilmasa, shaxsiy
+ * kassa rejimidagi bizneste joriy foydalanuvchining kassasi olinadi.
+ */
+export const kassaTransferSchema = z.object({
+  fromAccountId: z.string().min(1).optional().nullable(),
+  toAccountId: z.string().min(1, "Qaysi kassaga o'tkazilishini tanlang"),
+  summa: z.number().int().positive("Summa musbat bo'lishi kerak"),
+  turi: z.enum(TRANSFER_TURLARI).optional(),
+  izoh: z.string().max(300).optional().nullable(),
+});
+
+/** Kutilayotgan o'tkazma bo'yicha qaror. */
+export const transferQarorSchema = z.object({
+  amal: z.enum(["qabul", "rad", "bekor"]),
+  qarorIzoh: z.string().max(300).optional().nullable(),
+});
+
+export type KassaTransferInput = z.infer<typeof kassaTransferSchema>;
+export type TransferQarorInput = z.infer<typeof transferQarorSchema>;
+
 export type CreateAccountInput = z.infer<typeof createAccountSchema>;
 export type UpdateAccountInput = z.infer<typeof updateAccountSchema>;
 export type TransferInput = z.infer<typeof transferSchema>;

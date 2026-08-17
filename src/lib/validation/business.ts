@@ -10,6 +10,11 @@ export const createBusinessSchema = z.object({
    * va sotmaydigan bizneslar yonma-yon bo'lishi mumkin.
    */
   omborli: z.boolean().optional(),
+  /**
+   * Shaxsiy kassa rejimi: naqd yozuv uni KIRITGAN xodimning kassasiga tushadi.
+   * Yoqilganda biznesning har faol xodimiga kassa ochiladi (route'da).
+   */
+  shaxsiyKassa: z.boolean().optional(),
 });
 
 export const updateBusinessSchema = z.object({
@@ -17,6 +22,11 @@ export const updateBusinessSchema = z.object({
   isActive: z.boolean().optional(),
   turi: z.enum(["umumiy", "avto"]).optional(),
   omborli: z.boolean().optional(),
+  /**
+   * Shaxsiy kassa rejimi: naqd yozuv uni KIRITGAN xodimning kassasiga tushadi.
+   * Yoqilganda biznesning har faol xodimiga kassa ochiladi (route'da).
+   */
+  shaxsiyKassa: z.boolean().optional(),
 });
 
 export type CreateBusinessInput = z.infer<typeof createBusinessSchema>;

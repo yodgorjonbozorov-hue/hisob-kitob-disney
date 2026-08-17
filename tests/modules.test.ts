@@ -84,8 +84,11 @@ test("computeNav: CASHIER — yozuvlar, qarzlar, smena va (omborli bo'lsa) sotuv
   const items = registry.computeNav({ rol: "CASHIER", yoqilgan: new Set(["MOLIYA", "OMBOR", "BOSHQARUV"]), omborli: true });
   const hrefs = items.map((i: any) => i.href);
   // "Qarzlar" MOLIYA (core) modulida — shuning uchun "Sotuv" dan OLDIN turadi.
+  // "Kassalar" kassirga ham ochiq: u boshqa kassalarda qancha pul borligini
+  // ko'rishi va ularga pul o'tkazishi kerak (boshqaruv amallari huquq bilan).
   assert.deepEqual(hrefs, [
     "/app/tranzaksiyalar",
+    "/app/kassa",
     "/app/qarzlar",
     "/app/kassam",
     "/app/sotuv",
