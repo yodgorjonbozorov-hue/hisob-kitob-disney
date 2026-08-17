@@ -13,11 +13,13 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
     return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
   }
 
-  // Avto rejimi ombor tizimisiz ishlamaydi — birga yoqiladi.
-  const omborli = parsed.data.turi === "avto" ? { omborli: true } : {};
+  // Avto rejimi ombor tizimisiz ishlamaydi — birga yoqiladi (so'rovdagi qiymatdan ustun).
+  // Umumiy rejimga qaytganda `omborli` o'z-o'zidan o'chmaydi: tovar savdosi
+  // rejimdan mustaqil, uni faqat direktor qo'lda o'chiradi.
+  const avtoMajburiy = parsed.data.turi === "avto" ? { omborli: true } : {};
   const business = await prisma.business.update({
     where: { id: params.id },
-    data: { ...parsed.data, ...omborli },
+    data: { ...parsed.data, ...avtoMajburiy },
   });
 
   return NextResponse.json(business);

@@ -1,53 +1,59 @@
 "use client";
 
-import { useState, FormEvent } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { Modal } from "@/components/ui/Modal";
-import { BIZNES_TURLARI, isAvto } from "@/lib/biznesTuri";
-
-interface BusinessDTO {
-  id: string;
-  nomi: string;
-  isActive: boolean;
-  turi: string;
-  kategoriyalar: number;
-  tranzaksiyalar: number;
-}
+import { isAvto } from "@/lib/biznesTuri";
+import { YangiBiznesModal } from "./YangiBiznesModal";
+import type { BusinessDTO, YangiBiznes } from "./turlar";
 
 export function BusinessesClient({ initialBusinesses }: { initialBusinesses: BusinessDTO[] }) {
   const router = useRouter();
   const [businesses, setBusinesses] = useState(initialBusinesses);
   const [modalOpen, setModalOpen] = useState(false);
 
-  async function toggleActive(b: BusinessDTO) {
+  /** PATCH yuborib, javobdagi maydonlarni jadvalga qaytaradi. */
+  async function patch(b: BusinessDTO, data: Record<string, unknown>) {
     const res = await fetch(`/api/businesses/${b.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isActive: !b.isActive }),
+      body: JSON.stringify(data),
     });
-    if (res.ok) {
-      const updated = await res.json();
-      setBusinesses((prev) => prev.map((x) => (x.id === updated.id ? { ...x, isActive: updated.isActive } : x)));
-      router.refresh();
+    if (!res.ok) {
+      alert((await res.json()).error ?? "Saqlab bo'lmadi");
+      return;
     }
+    const updated: BusinessDTO = await res.json();
+    setBusinesses((prev) =>
+      prev.map((x) =>
+        x.id === updated.id
+          ? { ...x, isActive: updated.isActive, turi: updated.turi, omborli: updated.omborli }
+          : x
+      )
+    );
+    router.refresh();
   }
 
   /** Biznes rejimi: umumiy ombor ↔ avto (olib-sotar). */
-  async function toggleTuri(b: BusinessDTO) {
-    const turi = isAvto(b.turi) ? "umumiy" : "avto";
-    const res = await fetch(`/api/businesses/${b.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ turi }),
-    });
-    if (res.ok) {
-      const updated = await res.json();
-      setBusinesses((prev) => prev.map((x) => (x.id === updated.id ? { ...x, turi: updated.turi } : x)));
-      router.refresh();
+  function toggleTuri(b: BusinessDTO) {
+    return patch(b, { turi: isAvto(b.turi) ? "umumiy" : "avto" });
+  }
+
+  /**
+   * Ombor va sotuvni shu bizneste yoqish/o'chirish. OMBOR moduli tenantda
+   * yoqilgan bo'lsa ham, nav'da "Ombor"/"Sotuv" faqat shu bayroq bilan chiqadi.
+   */
+  function toggleOmbor(b: BusinessDTO) {
+    if (isAvto(b.turi)) {
+      alert("Avto rejimi ombor tizimisiz ishlamaydi. Avval rejimni \"Umumiy\" ga o'tkazing.");
+      return;
     }
+    if (b.omborli && !confirm(`"${b.nomi}" da ombor va sotuv bo'limlari yopilsinmi?\n\nMahsulot va sotuv ma'lumotlari o'chmaydi — qayta yoqsangiz joyida bo'ladi.`)) {
+      return;
+    }
+    return patch(b, { omborli: !b.omborli });
   }
 
   async function deleteBusiness(b: BusinessDTO) {
@@ -61,11 +67,8 @@ export function BusinessesClient({ initialBusinesses }: { initialBusinesses: Bus
     }
   }
 
-  function handleCreated(b: { id: string; nomi: string; isActive: boolean; turi: string }) {
-    setBusinesses((prev) => [
-      ...prev,
-      { ...b, kategoriyalar: 0, tranzaksiyalar: 0 },
-    ]);
+  function handleCreated(b: YangiBiznes) {
+    setBusinesses((prev) => [...prev, { ...b, kategoriyalar: 0, tranzaksiyalar: 0 }]);
     setModalOpen(false);
     router.refresh();
   }
@@ -82,6 +85,7 @@ export function BusinessesClient({ initialBusinesses }: { initialBusinesses: Bus
             <tr className="text-left text-faint text-xs uppercase">
               <th className="pb-2">Nomi</th>
               <th className="pb-2">Rejim</th>
+              <th className="pb-2">Ombor</th>
               <th className="pb-2 text-right">Kategoriyalar</th>
               <th className="pb-2 text-right">Tranzaksiyalar</th>
               <th className="pb-2">Holati</th>
@@ -97,6 +101,9 @@ export function BusinessesClient({ initialBusinesses }: { initialBusinesses: Bus
                     {isAvto(b.turi) ? "Avto" : "Umumiy"}
                   </Badge>
                 </td>
+                <td className="py-2.5">
+                  <Badge tone={b.omborli ? "kirim" : "neutral"}>{b.omborli ? "Yoqiq" : "O'chiq"}</Badge>
+                </td>
                 <td className="py-2.5 text-right text-muted">{b.kategoriyalar}</td>
                 <td className="py-2.5 text-right text-muted">{b.tranzaksiyalar}</td>
                 <td className="py-2.5">
@@ -104,13 +111,19 @@ export function BusinessesClient({ initialBusinesses }: { initialBusinesses: Bus
                 </td>
                 <td className="py-2.5 text-right whitespace-nowrap">
                   <button
+                    onClick={() => toggleOmbor(b)}
+                    className="text-xs font-medium text-muted hover:text-brand mr-3"
+                  >
+                    {b.omborli ? "Omborni o'chirish" : "Omborni yoqish"}
+                  </button>
+                  <button
                     onClick={() => toggleTuri(b)}
                     className="text-xs font-medium text-muted hover:text-brand mr-3"
                   >
                     {isAvto(b.turi) ? "Umumiy rejim" : "Avto rejim"}
                   </button>
                   <button
-                    onClick={() => toggleActive(b)}
+                    onClick={() => patch(b, { isActive: !b.isActive })}
                     className="text-xs font-medium text-muted hover:text-income mr-3"
                   >
                     {b.isActive ? "Nofaollashtirish" : "Faollashtirish"}
@@ -119,7 +132,7 @@ export function BusinessesClient({ initialBusinesses }: { initialBusinesses: Bus
                     onClick={() => deleteBusiness(b)}
                     className="text-xs font-medium text-muted hover:text-expense"
                   >
-                    O'chirish
+                    O&apos;chirish
                   </button>
                 </td>
               </tr>
@@ -128,83 +141,13 @@ export function BusinessesClient({ initialBusinesses }: { initialBusinesses: Bus
         </table>
       </Card>
 
-      {modalOpen && <NewBusinessModal onClose={() => setModalOpen(false)} onCreated={handleCreated} />}
+      <p className="text-xs text-faint">
+        &quot;Ombor&quot; ustuni — shu bizneste mahsulot qoldig&apos;i, sotuv va ombor kirimi yuritiladimi.
+        Menyuda &quot;Ombor&quot; va &quot;Sotuv&quot; ko&apos;rinishi uchun Sozlamalar → Modullar da
+        &quot;Ombor va sotuv&quot; moduli ham yoqilgan bo&apos;lishi kerak.
+      </p>
+
+      {modalOpen && <YangiBiznesModal onClose={() => setModalOpen(false)} onCreated={handleCreated} />}
     </div>
-  );
-}
-
-function NewBusinessModal({
-  onClose,
-  onCreated,
-}: {
-  onClose: () => void;
-  onCreated: (b: { id: string; nomi: string; isActive: boolean; turi: string }) => void;
-}) {
-  const [nomi, setNomi] = useState("");
-  const [turi, setTuri] = useState<"umumiy" | "avto">("umumiy");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-    const res = await fetch("/api/businesses", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nomi, turi }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error ?? "Xatolik yuz berdi");
-      setLoading(false);
-      return;
-    }
-    onCreated(data);
-  }
-
-  return (
-    <Modal open onClose={onClose} title="Yangi biznes">
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <input
-          type="text"
-          value={nomi}
-          onChange={(e) => setNomi(e.target.value)}
-          placeholder="Biznes nomi (masalan: Salyut)"
-          className="w-full rounded-lg border border-line px-3 py-2 text-sm"
-          autoFocus
-          required
-        />
-        <div>
-          <label className="block text-xs text-muted mb-1">Rejim</label>
-          <select
-            value={turi}
-            onChange={(e) => setTuri(e.target.value as "umumiy" | "avto")}
-            className="w-full rounded-lg border border-line px-3 py-2 text-sm bg-surface"
-          >
-            {BIZNES_TURLARI.map((t) => (
-              <option key={t.code} value={t.code}>
-                {t.nomi}
-              </option>
-            ))}
-          </select>
-          <p className="text-xs text-faint mt-1">
-            {BIZNES_TURLARI.find((t) => t.code === turi)?.tavsif}
-          </p>
-        </div>
-        <p className="text-xs text-faint">
-          Yangi biznes bo'sh boshlanadi — kategoriyalarni "Kategoriyalar" bo'limida qo'shasiz.
-        </p>
-        {error && <p className="text-expense text-sm">{error}</p>}
-        <div className="flex gap-2 justify-end pt-2">
-          <Button variant="secondary" type="button" onClick={onClose}>
-            Bekor qilish
-          </Button>
-          <Button type="submit" disabled={loading}>
-            {loading ? "Saqlanmoqda..." : "Qo'shish"}
-          </Button>
-        </div>
-      </form>
-    </Modal>
   );
 }

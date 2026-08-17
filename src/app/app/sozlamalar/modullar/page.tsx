@@ -15,18 +15,32 @@ export default async function ModullarPage() {
       redirect("/app");
     }
 
-    const rows = await prisma.tenantModule.findMany({ select: { code: true, isActive: true } });
+    const [rows, omborliBizneslar] = await Promise.all([
+      prisma.tenantModule.findMany({ select: { code: true, isActive: true } }),
+      prisma.business.count({ where: { omborli: true } }),
+    ]);
     const holatlar = new Map(rows.map((r) => [r.code, r.isActive]));
     const plan = planByCode(tenant.plan);
 
-    const kartalar = korinadiganModullar().map((m) => ({
-      code: m.code,
-      nomi: m.nomi,
-      tavsif: m.tavsif,
-      core: m.core,
-      tarifdaBor: m.core || (plan?.modullar.includes(m.code) ?? false),
-      yoqilgan: m.core || (holatlar.get(m.code) ?? false),
-    }));
+    const kartalar = korinadiganModullar().map((m) => {
+      const yoqilgan = m.core || (holatlar.get(m.code) ?? false);
+      // OMBOR moduli tenant darajasida, `Business.omborli` esa biznes darajasida.
+      // Ikkalasi ham kerak — modul yoqiq bo'lsa-yu biznes belgilanmagan bo'lsa,
+      // menyuda "Ombor"/"Sotuv" chiqmaydi va sabab ko'rinmay qoladi.
+      const ogohlantirish =
+        m.code === "OMBOR" && yoqilgan && omborliBizneslar === 0
+          ? "Modul yoqilgan, ammo hech bir bizneste ombor yuritish belgilanmagan — shuning uchun menyuda \"Ombor\" va \"Sotuv\" ko'rinmaydi. Bizneslar bo'limida kerakli biznes uchun \"Omborni yoqish\" tugmasini bosing."
+          : undefined;
+      return {
+        code: m.code,
+        nomi: m.nomi,
+        tavsif: m.tavsif,
+        core: m.core,
+        tarifdaBor: m.core || (plan?.modullar.includes(m.code) ?? false),
+        yoqilgan,
+        ogohlantirish,
+      };
+    });
 
     return (
       <div className="space-y-6 max-w-2xl">
