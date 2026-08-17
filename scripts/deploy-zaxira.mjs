@@ -36,6 +36,7 @@ import {
   hisobotSoni,
 } from "./lib/xom-surat.mjs";
 import { hujjatYubor } from "./lib/telegram.mjs";
+import { KALIT_ENV, kalitBormi } from "../src/lib/backup/shifr-asos.cjs";
 
 /** Build'ni to'xtatadi. `qoshimcha` — oxirida ko'rsatiladigan qo'shimcha satr. */
 function yiqit(sarlavha, satrlar, qoshimcha) {
@@ -138,6 +139,21 @@ async function main() {
     ]);
   }
 
+  // Surat butun bazani o'z ichiga oladi (parol hashlari ham) — kanalga OCHIQ
+  // chiqmasligi kerak (audit: Critical #2). Yuborishning o'zi ham shifrsiz
+  // ishlamaydi (`lib/telegram.mjs`); bu yerdagi tekshiruv sababni aniq aytish
+  // uchun. Kalitsiz zaxira yo'q, zaxirasiz esa migratsiya yo'q.
+  if (!kalitBormi()) {
+    toxta("Zaxirani shifrlab bo'lmaydi", [
+      `${KALIT_ENV} sozlanmagan yoki yaroqsiz (32 bayt kerak: hex yoki base64).`,
+      "Shifrlanmagan zaxira Telegramga YUBORILMAYDI — butun baza ochiq ketardi.",
+      "",
+      "Kalit yaratish:",
+      `  node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`,
+      "Keyin uni hosting env'iga qo'ying va ZAXIRADAN ALOHIDA saqlang.",
+    ]);
+  }
+
   const sana = surat.olingan.slice(0, 10);
   const izoh = [
     "🛟 Balansa — migratsiya oldidan zaxira",
@@ -146,8 +162,9 @@ async function main() {
     `Kutayotgan migratsiya: ${kutayotgan.length} ta`,
     kutayotgan.map((d) => `· ${d}`).join("\n"),
     "",
-    "Tiklash: npm run zaxira:xom -- --tikla <fayl.json>",
-    "(fayl gzip — avval oching: gunzip <fayl.json.gz>)",
+    `🔐 AES-256-GCM · kalit: ${KALIT_ENV} env sekreti`,
+    "Tiklash: npm run zaxira:xom -- --tikla <fayl.json.gz.enc>",
+    "(shifr va gzip o'zi ochiladi; kalitsiz fayl ochilmaydi)",
   ].join("\n");
 
   try {

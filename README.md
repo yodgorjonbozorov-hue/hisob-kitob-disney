@@ -292,7 +292,7 @@ git push -u origin main
 | `CRON_SECRET` | o'zingiz o'ylab topgan maxfiy satr |
 | `BACKUP_CHAT_ID` | kunlik zaxira yuboriladigan yopiq Telegram kanal id (qarang: [docs/MIGRATSIYA.md](docs/MIGRATSIYA.md)) |
 | `BACKUP_BOT_TOKEN` | zaxira kanaliga admin qilingan **alohida** bot tokeni |
-| `BACKUP_ENCRYPTION_KEY` | zaxira shifr kaliti (32 bayt, hex/base64) — **qo'yilmasa zaxira YUBORILMAYDI**. Yaratish: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Kalitni zaxiradan **alohida** saqlang |
+| `BACKUP_ENCRYPTION_KEY` | zaxira shifr kaliti (32 bayt, hex/base64) — **qo'yilmasa zaxira YUBORILMAYDI va kutayotgan migratsiyasi bor deploy TO'XTAYDI**. Yaratish: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Kalitni zaxiradan **alohida** saqlang |
 
 "Deploy" tugmasini bosing.
 
@@ -347,6 +347,11 @@ Kunlik zaxira cron'i (`/api/cron/backup`, 03:00) butun bazani JSON+gzip qilib, *
 Parol hashlari zaxira tanasida saqlanmaydi: ular alohida shifrlangan blokda ketadi.
 Qo'lda: `npm run backup`, tiklash: `npm run restore -- <fayl> --confirm` (fayl `.json`, `.json.gz`
 yoki `.json.gz.enc` bo'lishi mumkin — format o'zi aniqlanadi, `.enc` uchun kalit kerak).
+
+Deploy oldidan olinadigan **xom surat** (`scripts/deploy-zaxira.mjs`, migratsiya kutayotgan bo'lsa) ham
+xuddi shu kalit bilan shifrlanadi va `.json.gz.enc` bo'lib ketadi; tiklash:
+`npm run zaxira:xom -- --tikla <fayl.json.gz.enc>`. Kalit yo'q bo'lsa deploy to'xtaydi —
+ochiq baza kanalga chiqmaydi (chetlab o'tish: `ZAXIRASIZ_DAVOM=ha`, u holda zaxira umuman olinmaydi).
 To'liq tartib va server ko'chirish yo'riqnomasi — [docs/MIGRATSIYA.md](docs/MIGRATSIYA.md).
 
 ## Kelajakdagi ishlar (v1'da qasddan kiritilmagan)

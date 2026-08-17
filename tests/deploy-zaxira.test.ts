@@ -19,10 +19,20 @@ import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { createServer, Server } from "node:http";
 import { gunzipSync } from "node:zlib";
+import { randomBytes } from "node:crypto";
 import { readdirSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { deshifrla } from "@/lib/backup/crypto";
 
 const ESKI_OXIRGI = "20260804073000_bepul_tenant";
+
+/**
+ * Zaxira shifr kaliti. Telegramga ketadigan fayl endi AES-256-GCM bilan
+ * shifrlanadi, ya'ni yuborishni sinaydigan testlar kalitsiz o'tmaydi
+ * (bu ataylab: kalitsiz zaxira umuman yuborilmaydi).
+ */
+const KALIT = randomBytes(32).toString("hex");
+process.env.BACKUP_ENCRYPTION_KEY = KALIT;
 
 const ESKI_DB = "prisma/test-deploy-eski.db";
 const YANGI_DB = "prisma/test-deploy-yangi.db";
@@ -278,6 +288,7 @@ test("Telegram xato qaytarsa ham build yiqiladi", async () => {
     BACKUP_CHAT_ID: "-100123",
     BACKUP_BOT_TOKEN: "sinov-token",
     TELEGRAM_API_BASE: telegram.manzil(),
+    BACKUP_ENCRYPTION_KEY: KALIT,
   });
   telegram.javobKodi = 200;
 
@@ -302,17 +313,21 @@ test("zaxira yuboriladi va u haqiqiy, tiklanadigan surat", async () => {
     BACKUP_CHAT_ID: "-100123",
     BACKUP_BOT_TOKEN: "sinov-token",
     TELEGRAM_API_BASE: telegram.manzil(),
+    BACKUP_ENCRYPTION_KEY: KALIT,
   });
   assert.equal(res.status, 0, `${res.stdout}\n${res.stderr}`);
   assert.match(res.stdout, /Zaxira Telegram kanaliga yuborildi/);
   assert.equal(telegram.qabullar.length, oldin + 1);
 
   const kelgan = telegram.qabullar[telegram.qabullar.length - 1];
-  assert.match(kelgan.nom, /^balansa-migratsiya-oldidan-\d{4}-\d{2}-\d{2}\.json\.gz$/);
+  // Fayl SHIFRLANGAN ketadi (audit: Critical #2) — surat mazmuni faqat
+  // kalit bilan ochilgandan keyin tekshiriladi. Shifrlashning o'zi
+  // `tests/xom-zaxira-shifr.test.ts` da alohida qo'riqlanadi.
+  assert.match(kelgan.nom, /^balansa-migratsiya-oldidan-\d{4}-\d{2}-\d{2}\.json\.gz\.enc$/);
   assert.match(kelgan.izoh, /migratsiya oldidan zaxira/);
   assert.match(kelgan.izoh, /Jami yozuv: 16/);
 
-  const surat = JSON.parse(gunzipSync(kelgan.bayt).toString("utf8"));
+  const surat = JSON.parse(gunzipSync(deshifrla(kelgan.bayt)).toString("utf8"));
   assert.equal(surat.versiya, 1);
   assert.equal(surat.jadvallar.Transaction.qatorlar.length, 12);
   assert.equal(surat.jadvallar.Tenant.qatorlar.length, 1);
