@@ -7,12 +7,14 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { isAvto } from "@/lib/biznesTuri";
 import { YangiBiznesModal } from "./YangiBiznesModal";
+import { TozalashModal } from "./TozalashModal";
 import type { BusinessDTO, YangiBiznes } from "./turlar";
 
 export function BusinessesClient({ initialBusinesses }: { initialBusinesses: BusinessDTO[] }) {
   const router = useRouter();
   const [businesses, setBusinesses] = useState(initialBusinesses);
   const [modalOpen, setModalOpen] = useState(false);
+  const [tozalash, setTozalash] = useState<BusinessDTO | null>(null);
 
   /** PATCH yuborib, javobdagi maydonlarni jadvalga qaytaradi. */
   async function patch(b: BusinessDTO, data: Record<string, unknown>) {
@@ -129,6 +131,12 @@ export function BusinessesClient({ initialBusinesses }: { initialBusinesses: Bus
                     {b.isActive ? "Nofaollashtirish" : "Faollashtirish"}
                   </button>
                   <button
+                    onClick={() => setTozalash(b)}
+                    className="text-xs font-medium text-muted hover:text-debt mr-3"
+                  >
+                    Tozalash
+                  </button>
+                  <button
                     onClick={() => deleteBusiness(b)}
                     className="text-xs font-medium text-muted hover:text-expense"
                   >
@@ -148,6 +156,17 @@ export function BusinessesClient({ initialBusinesses }: { initialBusinesses: Bus
       </p>
 
       {modalOpen && <YangiBiznesModal onClose={() => setModalOpen(false)} onCreated={handleCreated} />}
+      {tozalash && (
+        <TozalashModal
+          biznes={tozalash}
+          onClose={() => setTozalash(null)}
+          onDone={(xabar) => {
+            setTozalash(null);
+            alert(xabar);
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

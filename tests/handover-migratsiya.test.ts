@@ -51,7 +51,7 @@ async function jami() {
 async function moliya() {
   return A(async () => {
     const r = await txQueries.listTransactions({ businessId: T.business.id });
-    return { kirim: r.totals.kirim, chiqim: r.totals.chiqim, soni: r.total };
+    return { kirim: r.totals.jamiKirim, chiqim: r.totals.jamiChiqim, soni: r.total };
   });
 }
 

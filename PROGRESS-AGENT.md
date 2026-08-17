@@ -2902,3 +2902,42 @@ kassa 11/11 · kunlik 27/27 · smena 14/14 · qarz 16/16 · tasdiqlash 20/20 ·
 atomik 6/6 · agregat 7/7 · backup 6/6 · soft-delete 8/8 · visibility 10/10 ·
 modules 15/15 · csv-import 13/13 · mijoz-xos 5/5 · postgres ✅ (init SQL
 `npm run pg:migratsiya` bilan qayta generatsiya qilindi).
+
+---
+
+## 2026-08-17 (3) — Biznesni boshlang'ich holatga qaytarish (test ma'lumotlarini tozalash)
+
+**Muammo:** mijoz tizimni sinab ko'radi (yozuv kiritadi, kassa ochadi, pul
+o'tkazadi), keyin haqiqiy ish boshlanishidan oldin bu raqamlar ketishi kerak.
+Yozuvni bittalab o'chirish ish bermaydi: kassaga bog'langan tranzaksiyani
+butunlay o'chirish ataylab taqiqlangan (u ledger qatori).
+
+**Yechim:** `Menyu → Bizneslar → Tozalash` — bir marta bosiladigan, uch
+qavat himoyalangan amal (`lib/services/tozalash.ts`).
+
+- Faqat **OWNER**; biznes nomi **qo'lda yoziladi**; hammasi bitta
+  tranzaksiyada (o'rtada uzilsa hech nima o'chmaydi).
+- **O'chadi:** yozuvlar, o'tkazmalar, sotuvlar, qarzlar, kunlik hisobotlar,
+  smenalar, xaridlar, HR hisob-kitoblari. Ombor qoldig'i (`Product.miqdor`)
+  ham nolga tushiriladi — u tranzaksiyalardan emas, ustunda saqlanadi.
+- **Qoladi:** kassalar, kategoriyalar, mahsulotlar, mijozlar, ta'minotchilar,
+  xodimlar, rollar va **audit jurnali** (tozalashning o'zi ham unga yoziladi).
+- Ixtiyoriy: umumiy (shaxsiy bo'lmagan) kassalarni ham o'chirish. Shaxsiy
+  kassalar HAR DOIM qoladi; shaxsiy kassa yo'q bo'lsa amal rad etiladi —
+  biznes kassasiz qolmasin.
+- **O'chirish tartibi** `ZAXIRA_JADVALLARI` ni TESKARI aylantirib olinadi:
+  u ro'yxat bog'liqlik tartibida va `tests/backup.test.ts` buni majburlaydi,
+  demak yangi model qo'shilganda alohida tartib yozish shart emas. Ro'yxatdagi
+  har nom o'sha ro'yxatda borligi modul yuklanganda tekshiriladi (yozuv
+  xatosi jimgina o'tib ketmasin).
+- Tugagach jami qoldiq 0 ekani tekshiriladi; 0 bo'lmasa tranzaksiya qaytariladi.
+
+**Tuzatildi:** `tests/kassa-transfer.test.ts` va `handover-migratsiya.test.ts`
+da `totals.kirim`/`totals.chiqim` yozilgan edi — haqiqiy maydonlar
+`jamiKirim`/`jamiChiqim`. Taqqoslash `undefined === undefined` bo'lib, o'sha
+ikki tekshiruv hech nimani tasdiqlamayotgan edi. Endi ular haqiqiy.
+
+**Tekshirildi:** build ✅ · YANGI tozalash 9/9 · kassa-transfer 20/20 ·
+handover-migratsiya 11/11 · kassa 11/11 · kassir-kassa 22/22 · pro 22/22 ·
+qarz 16/16 · selos-kg 21/21 · backup 6/6 · isolation 22/22 · modules 15/15 ·
+launch 7/7.
