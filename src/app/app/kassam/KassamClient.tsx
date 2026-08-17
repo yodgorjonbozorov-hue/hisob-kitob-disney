@@ -2,70 +2,120 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Money } from "@/components/ui/Money";
-import { Badge } from "@/components/ui/Badge";
-import { useToast } from "@/components/ui/Toast";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { formatToshkentVaqt } from "@/lib/format";
-import type { KassaHolatDTO, TopshiriqDTO } from "@/lib/queries/kassirKassa";
-import { KassaTarix } from "@/components/kassa/KassaTarix";
-import { TopshirishModal } from "./TopshirishModal";
+import type { KassaHarakat } from "@/lib/queries/kassaDetal";
+import { SmenaTopshirishModal, type TopshirishNishoni } from "./SmenaTopshirishModal";
 
 /**
- * "MENING KASSAM" kartasi.
+ * MENING KASSAM — xodimning o'z kassasidagi pul.
  *
- * Eng katta raqam — KASSADAGI QOLDIQ (talab 2): kassir har lahzada
- * qo'lida qancha pul borligini ko'rib turishi kerak, aks holda "menda
- * yo'q edi" bahsi paydo bo'ladi.
+ * Raqam ledgerdan keladi (Transaction + AccountTransfer), ya'ni Kassalar
+ * sahifasidagi bilan AYNI manba. Ilgari bu sahifa alohida hisobga tayanardi
+ * va bitta savolga ikki xil javob chiqardi — endi bitta haqiqat manbai bor.
  */
 export function KassamClient({
-  holat,
-  tarix,
+  accountId,
+  qoldiq,
+  bugungiKirim,
+  bugungiChiqim,
+  harakatlar,
+  nishonlar,
+  kutilayotganChiqim,
 }: {
-  holat: KassaHolatDTO;
-  tarix: TopshiriqDTO[];
+  accountId: string;
+  qoldiq: number;
+  bugungiKirim: number;
+  bugungiChiqim: number;
+  harakatlar: KassaHarakat[];
+  /** Kimga topshirish mumkin — boshqa faol kassalar. */
+  nishonlar: TopshirishNishoni[];
+  /** Tasdiq kutayotgan chiqim — hali kassada, lekin band. */
+  kutilayotganChiqim: number;
 }) {
   const router = useRouter();
-  const { toast } = useToast();
   const [modal, setModal] = useState(false);
-  const [bekorlanmoqda, setBekorlanmoqda] = useState(false);
-
-  const kutilayotgan = holat.kutilayotgan;
-
-  async function bekorQil() {
-    if (!kutilayotgan) return;
-    if (!confirm("Topshiriq bekor qilinsinmi? Pul kassangizda qoladi.")) return;
-    setBekorlanmoqda(true);
-    try {
-      const res = await fetch(`/api/kassa-topshirish/${kutilayotgan.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amal: "bekor" }),
-      });
-      if (!res.ok) {
-        toast({ message: (await res.json()).error ?? "Bekor qilib bo'lmadi", tone: "error" });
-        return;
-      }
-      toast({ message: "Topshiriq bekor qilindi", tone: "success" });
-      router.refresh();
-    } finally {
-      setBekorlanmoqda(false);
-    }
-  }
-
-  const qator = (label: string, value: number, tone?: "income" | "expense") => (
-    <div className="flex items-center justify-between gap-4 py-1">
-      <span className="text-sm text-muted">{label}</span>
-      <Money value={value} size="sm" tone={tone} />
-    </div>
-  );
 
   return (
     <div className="space-y-6">
+      <Card>
+        <p className="text-sm text-muted">Kassangizdagi pul</p>
+        <Money value={qoldiq} size="display" tone={qoldiq >= 0 ? "brand" : "expense"} />
+
+        <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-line">
+          <div>
+            <p className="text-2xs text-muted">Bugungi kirim</p>
+            <Money value={bugungiKirim} size="md" tone="income" />
+          </div>
+          <div>
+            <p className="text-2xs text-muted">Bugungi chiqim</p>
+            <Money value={bugungiChiqim} size="md" tone="expense" />
+          </div>
+        </div>
+
+        {kutilayotganChiqim > 0 && (
+          <p className="text-2xs text-debt mt-3">
+            {kutilayotganChiqim.toLocaleString("ru-RU")} so&apos;m tasdiq kutmoqda — qabul
+            qilinmaguncha kassangizda turadi, lekin qayta topshirib bo&apos;lmaydi.
+          </p>
+        )}
+
+        <div className="flex gap-2 mt-4">
+          <Button onClick={() => setModal(true)} disabled={qoldiq <= 0 || nishonlar.length === 0}>
+            Smenani topshirish
+          </Button>
+          <Link
+            href={`/app/kassa/${accountId}`}
+            className="rounded-lg bg-surface-2 px-3 py-2 text-sm font-medium text-muted hover:text-fg"
+          >
+            To&apos;liq tarix
+          </Link>
+        </div>
+        {nishonlar.length === 0 && (
+          <p className="text-2xs text-faint mt-2">
+            Topshirish uchun boshqa faol kassa yo&apos;q — direktor bilan bog&apos;laning.
+          </p>
+        )}
+      </Card>
+
+      <Card>
+        <h2 className="font-semibold text-fg mb-3">So&apos;nggi harakatlar</h2>
+        {harakatlar.length === 0 ? (
+          <EmptyState
+            icon="💵"
+            title="Hali harakat yo'q"
+            description="Naqd yozuv kiritsangiz yoki sizga pul o'tkazilsa — shu yerda ko'rinadi."
+          />
+        ) : (
+          <ul className="divide-y divide-line">
+            {harakatlar.map((h) => (
+              <li key={`${h.turi}-${h.id}`} className="py-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm text-fg truncate">{h.matn}</p>
+                  <p className="text-2xs text-faint">{formatToshkentVaqt(new Date(h.vaqt))}</p>
+                </div>
+                <p
+                  className={`text-sm font-semibold tnum shrink-0 ${
+                    h.summa >= 0 ? "text-income" : "text-expense"
+                  }`}
+                >
+                  {h.summa >= 0 ? "+" : "−"}
+                  {Math.abs(h.summa).toLocaleString("ru-RU")}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
       {modal && (
-        <TopshirishModal
-          qoldiq={holat.qoldiq}
+        <SmenaTopshirishModal
+          qoldiq={qoldiq - kutilayotganChiqim}
+          nishonlar={nishonlar}
           onClose={() => setModal(false)}
           onDone={() => {
             setModal(false);
@@ -73,85 +123,6 @@ export function KassamClient({
           }}
         />
       )}
-
-      <Card className="border-brand/30">
-        <p className="text-sm text-muted">Kassadagi qoldiq</p>
-        <div className="mt-1">
-          <Money
-            value={holat.qoldiq}
-            size="display"
-            tone={holat.qoldiq > 0 ? "brand" : holat.qoldiq < 0 ? "expense" : "neutral"}
-          />
-        </div>
-        <p className="text-xs text-faint mt-2">
-          Tizim hisoblagan summa. Kirim/chiqim hisobotlari bundan o&apos;zgarmaydi.
-        </p>
-
-        <div className="mt-4 pt-4 border-t border-line">
-          {qator("Kun boshidagi qoldiq", holat.boshlangich)}
-          {qator("Bugungi kirim (naqd)", holat.bugungiKirim, "income")}
-          {qator("Bugungi chiqim (naqd)", holat.bugungiChiqim, "expense")}
-          {holat.bugunBerilgan > 0 && qator("Bugun kassaga berildi", holat.bugunBerilgan, "income")}
-          {holat.bugunTopshirilgan > 0 &&
-            qator("Bugun topshirildi", holat.bugunTopshirilgan, "expense")}
-        </div>
-
-        {kutilayotgan ? (
-          <div className="mt-4 rounded-xl border border-line bg-surface-2 p-4 space-y-2">
-            <div className="flex items-center gap-2 flex-wrap">
-              <Badge tone="warning">Tasdiq kutilmoqda</Badge>
-              <span className="text-xs text-faint">
-                {formatToshkentVaqt(new Date(kutilayotgan.topshirilganAt))}
-              </span>
-            </div>
-            <p className="text-sm text-muted">
-              Topshirildi: <Money value={kutilayotgan.topshirilgan} size="sm" /> — direktor qabul
-              qilgach kassangiz yangilanadi.
-            </p>
-            {kutilayotgan.farq !== 0 && (
-              <p className="text-sm">
-                <span className={kutilayotgan.farq < 0 ? "text-expense" : "text-debt"}>
-                  {kutilayotgan.farq < 0 ? "Kamomad" : "Ortiqcha"}:{" "}
-                </span>
-                <Money value={Math.abs(kutilayotgan.farq)} size="sm" />
-              </p>
-            )}
-            <Button variant="secondary" size="sm" onClick={bekorQil} loading={bekorlanmoqda}>
-              Topshiriqni bekor qilish
-            </Button>
-          </div>
-        ) : (
-          <div className="mt-5">
-            <Button
-              size="lg"
-              className="w-full"
-              onClick={() => setModal(true)}
-              disabled={holat.qoldiq <= 0}
-            >
-              KASSANI TOPSHIRISH
-            </Button>
-            {holat.qoldiq <= 0 && (
-              <p className="text-xs text-faint mt-2 text-center">
-                {holat.qoldiq === 0
-                  ? "Kassangiz bo'sh — topshiriladigan pul yo'q."
-                  : "Kassangizda kamomad bor. Direktor bilan bog'laning."}
-              </p>
-            )}
-          </div>
-        )}
-      </Card>
-
-      {holat.qoldiq > 0 && !kutilayotgan && (
-        <Card className="border-debt/40">
-          <p className="font-medium text-fg">Kassangiz hali yopilmagan</p>
-          <p className="text-sm text-muted mt-1">
-            Kassangizda <Money value={holat.qoldiq} size="sm" /> bor. Kun oxirida uni
-            direktor/qabul qiluvchiga topshirishingiz kerak.
-          </p>
-        </Card>
-      )}
-
-      <KassaTarix tarix={tarix} />
     </div>
   );
 }

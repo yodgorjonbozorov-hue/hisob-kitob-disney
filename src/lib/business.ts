@@ -13,6 +13,8 @@ export interface BusinessDTO {
   omborli: boolean;
   /** "umumiy" | "avto" — ombor moduli qaysi rejimda ko'rinadi (lib/biznesTuri.ts). */
   turi: string;
+  /** Naqd yozuv xodimning shaxsiy kassasiga tushadimi (lib/services/kassaTanlash.ts). */
+  shaxsiyKassa: boolean;
 }
 
 /**
@@ -37,14 +39,14 @@ export async function getAccessibleBusinesses(session: SessionData): Promise<Bus
 const businessByIdCached = requestCache(async (id: string) =>
   prisma.business.findUnique({
     where: { id },
-    select: { id: true, nomi: true, isActive: true, omborli: true, turi: true },
+    select: { id: true, nomi: true, isActive: true, omborli: true, turi: true, shaxsiyKassa: true },
   })
 );
 
 const activeBusinessesCached = requestCache(async (_tenantId: string) =>
   prisma.business.findMany({
     where: { isActive: true },
-    select: { id: true, nomi: true, isActive: true, omborli: true, turi: true },
+    select: { id: true, nomi: true, isActive: true, omborli: true, turi: true, shaxsiyKassa: true },
     orderBy: { nomi: "asc" },
   })
 );

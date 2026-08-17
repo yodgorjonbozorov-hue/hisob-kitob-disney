@@ -22,8 +22,41 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
     data: { ...parsed.data, ...avtoMajburiy },
   });
 
+  // Shaxsiy kassa rejimi YOQILGANDA har faol xodimga kassa ochiladi. Aks holda
+  // rejim yoqilgan bo'lsa-yu kassalar yo'q bo'lsa, naqd pul avvalgidek umumiy
+  // kassaga tushib ketardi va rejim jimgina ishlamay turardi.
+  if (parsed.data.shaxsiyKassa === true) {
+    await shaxsiyKassalarniOch(business.id);
+  }
+
   return NextResponse.json(business);
 });
+
+/**
+ * Biznesning har faol xodimiga shaxsiy kassa ochadi (mavjudiga tegmaydi).
+ * Nom to'qnashsa raqam qo'shiladi — Account [businessId, nomi] unique.
+ */
+async function shaxsiyKassalarniOch(businessId: string): Promise<void> {
+  const [xodimlar, kassalar] = await Promise.all([
+    prisma.user.findMany({
+      where: { isActive: true, OR: [{ businessId }, { businessId: null }] },
+      select: { id: true, ism: true },
+    }),
+    prisma.account.findMany({ where: { businessId }, select: { nomi: true, userId: true } }),
+  ]);
+  const kassaBor = new Set(kassalar.map((k) => k.userId).filter(Boolean));
+  const bandNomlar = new Set(kassalar.map((k) => k.nomi));
+
+  for (const x of xodimlar) {
+    if (kassaBor.has(x.id)) continue;
+    let nomi = `${x.ism} kassasi`;
+    for (let i = 2; bandNomlar.has(nomi) && i <= 20; i++) nomi = `${x.ism} kassasi ${i}`;
+    bandNomlar.add(nomi);
+    await prisma.account.create({
+      data: { businessId, nomi, turi: "naqd", userId: x.id, tartib: 10 },
+    });
+  }
+}
 
 /**
  * Biznesni butunlay o'chirish — faqat direktor va faqat BO'SH biznes (yozuv/mahsulot/

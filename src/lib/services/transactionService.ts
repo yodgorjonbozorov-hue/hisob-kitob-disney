@@ -4,6 +4,7 @@ import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { kgSumma, kgToGram } from "@/lib/kg";
 import type { BusinessTx } from "@/lib/db/businessTx";
 import { resolveAccountId } from "@/lib/services/accounts";
+import { shaxsiyKassaId } from "@/lib/services/kassaTanlash";
 import { kunlikSinxron } from "@/lib/services/kunlik";
 
 export interface CreateTransactionData {
@@ -82,7 +83,7 @@ export async function createTransaction(userId: string, businessId: string, data
   const accountId =
     data.tolovTuri === "qarz"
       ? null
-      : await resolveAccountId(businessId, data.accountId, data.tolovTuri);
+      : await resolveAccountId(businessId, data.accountId, data.tolovTuri, userId);
 
   const created = await prisma.transaction.create({
     data: {
@@ -151,12 +152,16 @@ export async function createTransactionTx(
     });
     if (!acc) throw new ForbiddenError("Kassa topilmadi yoki nofaol");
   } else if (data.tolovTuri !== "qarz") {
-    const birinchi = await tx.account.findFirst({
-      where: { businessId, isActive: true },
-      orderBy: [{ tartib: "asc" }, { createdAt: "asc" }],
-      select: { id: true },
-    });
-    accountId = birinchi?.id ?? null;
+    // Shaxsiy kassa rejimida naqd pul xodimning o'z kassasiga tushadi.
+    accountId = await shaxsiyKassaId(tx, businessId, userId, data.tolovTuri);
+    if (!accountId) {
+      const birinchi = await tx.account.findFirst({
+        where: { businessId, isActive: true },
+        orderBy: [{ tartib: "asc" }, { createdAt: "asc" }],
+        select: { id: true },
+      });
+      accountId = birinchi?.id ?? null;
+    }
   }
 
   return tx.transaction.create({

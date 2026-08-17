@@ -2674,6 +2674,53 @@ crm 7/7 · ai 6/6 · automation 3/3.
 
 ---
 
+## 2026-08-17 — 3 kassali kassa boshqaruvi, tasdiqli o'tkazma va smena topshirish
+
+**Muammo (audit natijasi):** loyihada IKKI parallel kassa tizimi bor edi —
+`Account`/`AccountTransfer` (biznes kassalari ledgeri) va `CashHandover`
+(kassirning qo'lidagi pul). Ikkalasi "kassirda qancha pul bor" savoliga
+BOSHQA-BOSHQA javob berardi: `CashHandover` da topshirilgan pul kassirdan
+ayrilardi, lekin qabul qiluvchiga QO'SHILMASDI — ya'ni direktorning balansi
+yo'q edi va jami pul topshirish paytida kamayib ketardi.
+
+**Qaror (loyiha egasi bilan):** yagona haqiqat manbai — `Account` ledgeri.
+
+1. **Tasdiqli o'tkazma.** `AccountTransfer` ga `turi` ("transfer" | "smena")
+   va `holat = "kutilmoqda" | "rad"` qo'shildi. Qabul qiluvchi kassa boshqa
+   odamniki bo'lsa o'tkazma DARHOL yakunlanmaydi — u tasdiq kutadi.
+   Kutilayotgan qator qoldiqqa KIRMAYDI (pul yuboruvchida qoladi, limbo yo'q),
+   shuning uchun yangi o'tkazmada mavjud qoldiq = qoldiq − kutilayotgan chiqim.
+   `holat="bekor"` ataylab qoldiqda QOLADI (uni storno qatori nolga chiqaradi),
+   `"rad"` esa hech qachon kirmaydi.
+2. **Manfiy qoldiq yopildi.** `accounts.createTransfer` da balans tekshiruvi
+   umuman yo'q edi — kassada yo'q pulni ko'chirish mumkin edi.
+3. **Shaxsiy kassa rejimi** (`Business.shaxsiyKassa`, opt-in). Yoqilganda naqd
+   yozuv uni KIRITGAN xodimning kassasiga tushadi (`lib/services/kassaTanlash.ts`)
+   va har faol xodimga kassa ochiladi. O'chiq bizneslarda xatti-harakat bir
+   bitga ham o'zgarmaydi.
+4. **"Mening kassam" birlashtirildi** — endi Account ledgeridan o'qiydi va
+   "Smenani topshirish" `turi="smena"` o'tkazma yaratadi. Eski `CashHandover`
+   oqimi va tarixi tegilmadi (direktor panelida qoladi).
+5. **Kassir Kassalarni ko'radi** — nav va sahifa `kassa.korish` huquqi bilan;
+   boshqaruv amallari (kassa ochish/tahrirlash, rejim) faqat boshqaruvchida.
+6. **Yangi sahifalar:** `/app/kassa/[id]` (harakatlar tarixi — kirim, chiqim va
+   o'tkazmalar bitta vaqt o'qida), `/app/kassa/hisobot` (davr filtri bilan
+   kassalar kesimi; o'tkazma savdoga QO'SHILMAYDI).
+7. **Hard delete bloklandi** — kassaga bog'langan tranzaksiyani `?permanent=true`
+   bilan o'chirib bo'lmaydi (ledger qatori, audit izi uzilmasin).
+
+**Migratsiya:** `20260817090000_kassa_transfer_tasdiq` — faqat `ADD COLUMN` +
+bitta indeks. Mavjud qatorlar `turi='transfer'`, `holat='bajarildi'` bo'lib
+qoladi, qoldiqlar o'zgarmaydi.
+
+**Tekshirildi:** build ✅ · YANGI kassa-transfer 20/20 (spetsifikatsiyadagi
+12 test stsenariysi) · kassa 11/11 · kassir-kassa 22/22 · qarz 16/16 ·
+xarid 13/13 · atomik 6/6 · audit-qoldiq 10/10 · pro 22/22 · smena 14/14 ·
+kunlik 27/27 · isolation 22/22 · izolyatsiya-royxati 9/9 · migratsiya 10/10 ·
+backup 6/6 · modules 15/15 · visibility 10/10 · tolov 14/14 ·
+mijozlar 15/15 · launch 7/7.
+---
+
 ## 2026-08-17 — Sayt va ilova dizayni bir xillashtirildi (`claude/ios-design-unification-fd5bn6`)
 
 **Talab:** "iOS app dizaynini tekshir, website va mobile website dizaynini

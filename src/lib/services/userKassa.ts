@@ -4,7 +4,7 @@ import { currentTenantId } from "@/lib/db/tenantContext";
 import { isManager } from "@/lib/auth/roles";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { logAudit } from "@/lib/services/audit";
-import type { UserTransferInput } from "@/lib/validation/account";
+import { QOLDIQ_HOLATLARI, type UserTransferInput } from "@/lib/validation/account";
 
 /**
  * SHAXSIY KASSALAR VA FOYDALANUVCHIDAN FOYDALANUVCHIGA PUL O'TKAZISH (PRO).
@@ -62,12 +62,13 @@ export async function kassaQoldiqTx(
       where: { businessId, accountId, turi: "chiqim", deletedAt: null },
       _sum: { summa: true },
     }),
+    // "kutilmoqda"/"rad" qoldiqqa kirmaydi — pul hali (yoki umuman) ko'chmagan.
     tx.accountTransfer.aggregate({
-      where: { businessId, toAccountId: accountId },
+      where: { businessId, toAccountId: accountId, holat: { in: [...QOLDIQ_HOLATLARI] } },
       _sum: { summa: true },
     }),
     tx.accountTransfer.aggregate({
-      where: { businessId, fromAccountId: accountId },
+      where: { businessId, fromAccountId: accountId, holat: { in: [...QOLDIQ_HOLATLARI] } },
       _sum: { summa: true },
     }),
   ]);
@@ -77,6 +78,37 @@ export async function kassaQoldiqTx(
     (kirgan._sum.summa ?? 0) -
     (chiqqan._sum.summa ?? 0)
   );
+}
+
+/**
+ * Kassadan chiqishi KUTILAYOTGAN summa — qabul qiluvchi hali tasdiqlamagan
+ * o'tkazmalar. Ular qoldiqda turaveradi (pul limbo'da qolmasin), shuning
+ * uchun yangi o'tkazmada ular MAVJUD qoldiqdan ayriladi — aks holda bir pulni
+ * ikki marta jo'natish mumkin bo'lardi.
+ */
+export async function kutilayotganChiqimTx(
+  tx: BusinessTx,
+  businessId: string,
+  accountId: string
+): Promise<number> {
+  const kutayotgan = await tx.accountTransfer.aggregate({
+    where: { businessId, fromAccountId: accountId, holat: "kutilmoqda" },
+    _sum: { summa: true },
+  });
+  return kutayotgan._sum.summa ?? 0;
+}
+
+/** Yangi o'tkazma uchun HAQIQATDA sarflanadigan pul: qoldiq − kutilayotgan chiqim. */
+export async function mavjudQoldiqTx(
+  tx: BusinessTx,
+  businessId: string,
+  accountId: string
+): Promise<{ qoldiq: number; kutilayotgan: number; mavjud: number }> {
+  const [qoldiq, kutilayotgan] = await Promise.all([
+    kassaQoldiqTx(tx, businessId, accountId),
+    kutilayotganChiqimTx(tx, businessId, accountId),
+  ]);
+  return { qoldiq, kutilayotgan, mavjud: qoldiq - kutilayotgan };
 }
 
 interface UserTransferParams {
@@ -141,10 +173,12 @@ export async function createUserTransfer(params: UserTransferParams) {
       throw new BadRequestError("Bitta kassaning o'ziga o'tkazib bo'lmaydi");
     }
 
-    const qoldiq = await kassaQoldiqTx(tx, businessId, fromAccount.id);
-    if (qoldiq < data.summa && !isManager(params.actorRol)) {
+    // Kutilayotgan (hali tasdiqlanmagan) chiqim ham hisobga olinadi — aks
+    // holda bir pulni ikki marta jo'natish mumkin bo'lardi.
+    const { mavjud } = await mavjudQoldiqTx(tx, businessId, fromAccount.id);
+    if (mavjud < data.summa && !isManager(params.actorRol)) {
       throw new BadRequestError(
-        `Kassada yetarli mablag' yo'q (qoldiq: ${qoldiq.toLocaleString("uz")} so'm)`
+        `Kassada yetarli mablag' yo'q (mavjud: ${mavjud.toLocaleString("uz")} so'm)`
       );
     }
 

@@ -63,11 +63,13 @@ export async function getAccountBalances(businessId: string): Promise<AccountQol
       WHERE ${businessScope("t", businessId)} AND t."deletedAt" IS NULL
       GROUP BY t."accountId", t."turi"
     `),
+    // Qoldiqqa faqat haqiqatda ko'chgan pul kiradi: "kutilmoqda" hali qabul
+    // qilinmagan, "rad" esa umuman ko'chmagan (lib/validation/account.ts).
     businessQueryRaw<{ fromAccountId: string; toAccountId: string; summa: unknown }>(Prisma.sql`
       SELECT tr."fromAccountId" AS fromAccountId, tr."toAccountId" AS toAccountId, SUM(tr."summa") AS summa
       FROM "AccountTransfer" tr
       JOIN "Business" b ON b."id" = tr."businessId"
-      WHERE ${businessScope("tr", businessId)}
+      WHERE ${businessScope("tr", businessId)} AND tr."holat" IN ('bajarildi', 'bekor')
       GROUP BY tr."fromAccountId", tr."toAccountId"
     `),
   ]);
@@ -103,6 +105,39 @@ export async function getAccountBalances(businessId: string): Promise<AccountQol
   });
 }
 
+/** Bir kassaning bir kunlik kesimi (dashboard kartasi: "Bugungi savdo"). */
+export interface KassaKunlik {
+  kirim: number;
+  chiqim: number;
+}
+
+/**
+ * HAR KASSANING BUGUNGI KIRIM/CHIQIMI.
+ *
+ * Yozuvning `sana` si emas, `createdAt` i bo'yicha kesiladi: kassadagi pul
+ * yozuv qaysi kunga tegishli ekaniga emas, QACHON kiritilganiga qarab
+ * to'planadi (smena hisobi bilan bir xil qoida — lib/services/smena.ts).
+ */
+export async function getKassaKunlik(
+  businessId: string,
+  boshlanish: Date
+): Promise<Map<string, KassaKunlik>> {
+  const rows = await prisma.transaction.groupBy({
+    by: ["accountId", "turi"],
+    where: { businessId, deletedAt: null, createdAt: { gte: boshlanish } },
+    _sum: { summa: true },
+  });
+  const natija = new Map<string, KassaKunlik>();
+  for (const r of rows) {
+    if (!r.accountId) continue;
+    const kesim = natija.get(r.accountId) ?? { kirim: 0, chiqim: 0 };
+    if (r.turi === "kirim") kesim.kirim += r._sum.summa ?? 0;
+    else kesim.chiqim += r._sum.summa ?? 0;
+    natija.set(r.accountId, kesim);
+  }
+  return natija;
+}
+
 /** Biznesning jami kassa qoldig'i (dashboard kartasi uchun). */
 export async function getJamiKassaQoldiq(businessId: string): Promise<number> {
   const qoldiqlar = await getAccountBalances(businessId);
@@ -111,6 +146,8 @@ export async function getJamiKassaQoldiq(businessId: string): Promise<number> {
 
 export interface TransferDTO {
   id: string;
+  fromAccountId: string;
+  toAccountId: string;
   fromNomi: string;
   toNomi: string;
   summa: number;
@@ -119,19 +156,31 @@ export interface TransferDTO {
   /** User-to-user o'tkazma bo'lsa — kim kimga (ism snapshotlari). */
   fromUserIsm: string | null;
   toUserIsm: string | null;
-  /** "bajarildi" | "bekor" (storno bilan bekor qilingan). */
+  fromUserId: string | null;
+  toUserId: string | null;
+  /** "transfer" | "smena". */
+  turi: string;
+  /** "bajarildi" | "kutilmoqda" | "rad" | "bekor". */
   holat: string;
+  /** Qaror qabul qilgan (tasdiqlagan yoki rad etgan) foydalanuvchi. */
+  tasdiqlaganId: string | null;
+  tasdiqlaganIsm: string | null;
+  qarorIzoh: string | null;
+  createdAt: string;
 }
 
-export async function listTransfers(businessId: string, limit = 50): Promise<TransferDTO[]> {
-  const rows = await prisma.accountTransfer.findMany({
-    where: { businessId },
-    include: { fromAccount: { select: { nomi: true } }, toAccount: { select: { nomi: true } } },
-    orderBy: [{ sana: "desc" }, { createdAt: "desc" }],
-    take: limit,
-  });
-  return rows.map((t) => ({
+const TRANSFER_INCLUDE = {
+  fromAccount: { select: { nomi: true } },
+  toAccount: { select: { nomi: true } },
+} as const;
+
+type TransferRow = Prisma.AccountTransferGetPayload<{ include: typeof TRANSFER_INCLUDE }>;
+
+function transferDto(t: TransferRow): TransferDTO {
+  return {
     id: t.id,
+    fromAccountId: t.fromAccountId,
+    toAccountId: t.toAccountId,
     fromNomi: t.fromAccount.nomi,
     toNomi: t.toAccount.nomi,
     summa: t.summa,
@@ -139,6 +188,57 @@ export async function listTransfers(businessId: string, limit = 50): Promise<Tra
     izoh: t.izoh,
     fromUserIsm: t.fromUserIsm,
     toUserIsm: t.toUserIsm,
+    fromUserId: t.fromUserId,
+    toUserId: t.toUserId,
+    turi: t.turi,
     holat: t.holat,
-  }));
+    tasdiqlaganId: t.tasdiqlaganId,
+    tasdiqlaganIsm: t.tasdiqlaganIsm,
+    qarorIzoh: t.qarorIzoh,
+    createdAt: t.createdAt.toISOString(),
+  };
+}
+
+export async function listTransfers(businessId: string, limit = 50): Promise<TransferDTO[]> {
+  const rows = await prisma.accountTransfer.findMany({
+    where: { businessId },
+    include: TRANSFER_INCLUDE,
+    orderBy: [{ sana: "desc" }, { createdAt: "desc" }],
+    take: limit,
+  });
+  return rows.map(transferDto);
+}
+
+/**
+ * TASDIQ KUTAYOTGAN O'TKAZMALAR.
+ *
+ * Bu ro'yxat harakat talab qiladi, shuning uchun u qoldiqlar bilan bir
+ * so'rovda emas, alohida olinadi va panelda tepada ko'rsatiladi.
+ */
+export async function listKutilayotganTransferlar(
+  businessId: string,
+  limit = 50
+): Promise<TransferDTO[]> {
+  const rows = await prisma.accountTransfer.findMany({
+    where: { businessId, holat: "kutilmoqda" },
+    include: TRANSFER_INCLUDE,
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+  return rows.map(transferDto);
+}
+
+/** Berilgan kundan boshlab yakunlangan o'tkazmalar (direktor paneli: "bugungi transferlar"). */
+export async function listTransferlarKundan(
+  businessId: string,
+  boshlanish: Date,
+  limit = 50
+): Promise<TransferDTO[]> {
+  const rows = await prisma.accountTransfer.findMany({
+    where: { businessId, holat: "bajarildi", createdAt: { gte: boshlanish } },
+    include: TRANSFER_INCLUDE,
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+  return rows.map(transferDto);
 }

@@ -60,7 +60,16 @@ export const MODULLAR: ModulTarifi[] = [
       { href: "/app/tranzaksiyalar", label: "Yozuvlar", icon: "receipt", tartib: 11, rollar: HAMMA },
       { href: "/app/hisobot", label: "Oylik hisobot", icon: "report", tartib: 12, rollar: BOSHQARUVCHILAR },
       { href: "/app/byudjet", label: "Budjet", icon: "budget", tartib: 13, rollar: BOSHQARUVCHILAR },
-      { href: "/app/kassa", label: "Kassalar", icon: "wallet", tartib: 14, rollar: BOSHQARUVCHILAR },
+      // KASSALAR — kassirga ham ochiq: u boshqa kassalarda qancha pul borligini
+      // ko'rishi va ularga pul o'tkazishi kerak. Sahifadagi BOSHQARUV amallari
+      // (kassa ochish/o'chirish, rejim) baribir huquq bilan qulflangan.
+      {
+        href: "/app/kassa",
+        label: "Kassalar",
+        icon: "wallet",
+        tartib: 14,
+        rollar: ["OWNER", "ADMIN", "CASHIER"],
+      },
       // QARZLAR — MOLIYA ichida, OMBOR emas. Qarz ombordan mustaqil moliyaviy
       // majburiyat: ombori yo'q biznes ham "Kirim → Qarz" yozadi va uni
       // ko'radigan joyi bo'lishi shart.

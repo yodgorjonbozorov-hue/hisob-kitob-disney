@@ -140,6 +140,13 @@ model Business {
   // Biznes turi: "umumiy" | "avto". Avto — olib-sotarlar uchun (ombor → avtopark).
   // Faqat UI matnlari va sotuv qoidalariga ta'sir qiladi (lib/biznesTuri.ts).
   turi               String                 @default("umumiy")
+  /// SHAXSIY KASSA REJIMI. Yoqilganda har xodimning naqd yozuvi UMUMIY kassaga
+  /// emas, O'ZINING shaxsiy kassasiga (Account.userId) tushadi — "kimning
+  /// qo'lida qancha pul bor" savoliga ledger javob beradi.
+  ///
+  /// Bayroq ATAYLAB opt-in: yoqilmagan bizneslarda kassa tanlash mantig'i
+  /// avvalgidek qoladi (lib/services/accounts.ts → resolveAccountId).
+  shaxsiyKassa       Boolean                @default(false)
   createdAt          DateTime               @default(now())
   tenantId           String
   tenant             Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
@@ -332,10 +339,29 @@ model AccountTransfer {
   fromUserIsm   String?
   toUserId      String?
   toUserIsm     String?
-  /// "bajarildi" | "bekor". Bekor STORNO bilan amalga oshadi: qarama-qarshi
-  /// yo'nalishda yangi transfer yoziladi (ledger append-only qoladi), asl
-  /// yozuv esa shu bayroq bilan belgilanadi.
+  /// "transfer" — oddiy pul ko'chirish; "smena" — smena topshirish
+  /// (kassir kassasini keyingi kassirga/direktorga topshiradi).
+  /// Faqat KO'RSATISH va hisobot uchun — pul harakati ikkalasida bir xil.
+  turi          String   @default("transfer")
+  /// "bajarildi" | "kutilmoqda" | "rad" | "bekor".
+  ///
+  /// QOLDIQQA KIRADIGANLAR: "bajarildi" va "bekor".
+  ///   - "kutilmoqda" — qabul qiluvchi hali tasdiqlamagan; pul YUBORUVCHIDA
+  ///     turaveradi (limbo bo'lmasin). Ikki marta sarflanmasligi uchun yangi
+  ///     o'tkazmada kutilayotgan chiqim mavjud qoldiqdan ayriladi.
+  ///   - "rad" — qabul qiluvchi rad etdi; pul umuman ko'chmagan.
+  ///   - "bekor" — STORNO bilan bekor qilingan: qarama-qarshi yo'nalishda
+  ///     yangi transfer yoziladi (ledger append-only), asl yozuv shu bayroq
+  ///     bilan belgilanadi. Shuning uchun u qoldiqda QOLADI — storno uni
+  ///     nolga chiqaradi.
   holat         String   @default("bajarildi")
+  /// Qabul qilgan/rad etgan foydalanuvchi. Ism — snapshot (tarix o'qiladigan qolsin).
+  tasdiqlaganId String?
+  tasdiqlaganIsm String?
+  tasdiqlanganAt DateTime?
+  radAt         DateTime?
+  /// Rad etish yoki bekor qilish sababi (qabul qiluvchi yozadi).
+  qarorIzoh     String?
   /// Bog'liq hujjat: "purchaseOrder" | "debt" | "storno" (+ relatedId).
   relatedType   String?
   relatedId     String?
@@ -344,6 +370,8 @@ model AccountTransfer {
   @@index([businessId, sana])
   @@index([businessId, fromUserId])
   @@index([businessId, toUserId])
+  /// Kutilayotgan o'tkazmalar paneli — eng ko'p o'qiladigan so'rov.
+  @@index([businessId, holat, createdAt])
 }
 
 model Category {

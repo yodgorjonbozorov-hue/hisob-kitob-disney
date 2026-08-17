@@ -114,6 +114,27 @@ export async function getNotifications(
         });
       }
     }
+
+    // MENGA YUBORILGAN O'TKAZMA. Pul hali yuboruvchining kassasida — men
+    // qabul qilmagunimcha u mening qoldig'imga qo'shilmaydi, shuning uchun
+    // bu eng ustuvor eslatma (lib/services/kassaTransfer.ts).
+    const mengaKutayotgan = await prisma.accountTransfer.findMany({
+      where: { businessId, holat: "kutilmoqda", toUserId: opts.userId },
+      select: { summa: true, fromUserIsm: true },
+    });
+    if (mengaKutayotgan.length > 0) {
+      const jami = mengaKutayotgan.reduce((a, t) => a + t.summa, 0);
+      const kimdan = mengaKutayotgan[0].fromUserIsm;
+      out.push({
+        severity: "warning",
+        title: "Sizga pul o'tkazilmoqda",
+        message:
+          mengaKutayotgan.length === 1
+            ? `${kimdan ?? "Hamkasbingiz"} sizga ${jami.toLocaleString("ru-RU")} so'm yubordi — qabul qiling`
+            : `${mengaKutayotgan.length} ta o'tkazma, jami ${jami.toLocaleString("ru-RU")} so'm qabul qilishingizni kutmoqda`,
+        href: "/app/kassam",
+      });
+    }
   }
 
   // Budjet oshishi (faqat admin)
