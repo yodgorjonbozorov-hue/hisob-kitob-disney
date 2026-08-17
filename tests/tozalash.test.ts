@@ -248,29 +248,40 @@ test("BOSHQA BIZNES tegilmaydi", async () => {
   assert.equal(soni, 1);
 });
 
-test("shaxsiy kassa yo'q bo'lsa umumiy kassani o'chirishga yo'l qo'yilmaydi", async () => {
-  // Shaxsiy kassani nofaol qilmasdan, uni butunlay o'chirib ko'ramiz —
-  // biznes kassasiz qolmasligi kerak.
+test("shaxsiy kassa yo'q bo'lsa u avtomatik ochiladi (biznes kassasiz qolmaydi)", async () => {
+  // Barcha shaxsiy kassani olib tashlaymiz va faqat umumiy kassa qoldiramiz —
+  // aynan mijozning holati: qo'lda yaratilgan kassalar, shaxsiysi yo'q.
   await rawPrisma.account.deleteMany({ where: { id: murodKassa } });
   await rawPrisma.account.create({
     data: { businessId: T.business.id, nomi: "Yangi umumiy", turi: "naqd", tartib: 0 },
   });
 
-  await assert.rejects(
-    () =>
-      A(async () =>
-        biznesTozala(T.business.id, direktor(), {
-          tasdiqNomi: T.business.nomi,
-          kassalarniOchir: true,
-        })
-      ),
-    /Shaxsiy kassa yo'q/
+  const natija = await A(async () =>
+    biznesTozala(T.business.id, direktor(), {
+      tasdiqNomi: T.business.nomi,
+      kassalarniOchir: true,
+    })
   );
 
-  const qolgan = await A(async () =>
-    prisma.account.count({ where: { businessId: T.business.id } })
+  // Umumiy kassa o'chdi, o'rniga har faol xodimga shaxsiy kassa ochildi.
+  assert.deepEqual(natija.ochirilganKassalar, ["Yangi umumiy"]);
+  assert.deepEqual(natija.yaratilganKassalar.sort(), ["Direktor kassasi", "Murod kassasi"]);
+
+  const qolganlar = await A(async () =>
+    prisma.account.findMany({ where: { businessId: T.business.id } })
   );
-  assert.equal(qolgan, 1, "kassa o'chirilmasligi kerak");
+  assert.equal(qolganlar.length, 2, "biznes kassasiz qolmasligi kerak");
+  assert.ok(
+    qolganlar.every((k: any) => k.userId),
+    "qolgan kassalarning hammasi shaxsiy bo'lishi kerak"
+  );
+
+  // Rejim ham yoqilgan bo'lishi kerak — aks holda naqd yana umumiy kassaga
+  // tushib ketardi, lekin umumiy kassa endi yo'q.
+  const biznes = await A(async () =>
+    prisma.business.findUnique({ where: { id: T.business.id }, select: { shaxsiyKassa: true } })
+  );
+  assert.equal(biznes.shaxsiyKassa, true);
 });
 
 test("tozalash ro'yxati zaxira ro'yxati bilan mos (yozuv xatosi bo'lmasin)", async () => {

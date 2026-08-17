@@ -1,5 +1,6 @@
 import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { runBusinessTx, type BusinessTx } from "@/lib/db/businessTx";
+import { currentTenantId } from "@/lib/db/tenantContext";
 import { ZAXIRA_JADVALLARI } from "@/lib/backup/dump";
 import { logAudit } from "@/lib/services/audit";
 
@@ -76,6 +77,8 @@ export interface TozalashNatija {
   jami: number;
   /** O'chirilgan kassalar (shaxsiy bo'lmaganlari, so'ralgan bo'lsa). */
   ochirilganKassalar: string[];
+  /** Yangi ochilgan shaxsiy kassalar (rejim shu yerda yoqilgan bo'lsa). */
+  yaratilganKassalar: string[];
   /** Tozalashdan keyingi jami kassa qoldig'i — 0 bo'lishi SHART. */
   keyingiQoldiq: number;
 }
@@ -139,21 +142,31 @@ export async function biznesTozala(
     if (mahsulot.count > 0) ochirilgan["product.miqdor→0"] = mahsulot.count;
 
     // Kassalar: SHAXSIY kassalar (Account.userId) har doim qoladi — ular
-    // xodimga biriktirilgan sozlama. So'ralganda faqat umumiy kassalar
-    // o'chiriladi va kamida bittasi qolishi shart emas: shaxsiylari bor.
+    // xodimga biriktirilgan sozlama.
+    //
+    // Shaxsiy kassa umuman bo'lmasa amal RAD ETILMAYDI, balki avval har faol
+    // xodimga kassa ochiladi va shaxsiy kassa rejimi yoqiladi. Aks holda
+    // foydalanuvchi "avval rejimni yoq, keyin tozala" degan tartibni o'zi
+    // eslab qolishi kerak bo'lardi — va tartibni buzsa xato oladi.
     const ochirilganKassalar: string[] = [];
+    const yaratilganKassalar: string[] = [];
     if (opts.kassalarniOchir) {
+      const shaxsiy = await tx.account.count({ where: { businessId, userId: { not: null } } });
+      if (shaxsiy === 0) {
+        yaratilganKassalar.push(...(await shaxsiyKassalarniOchTx(tx, businessId)));
+        if (yaratilganKassalar.length === 0) {
+          throw new BadRequestError(
+            "Shaxsiy kassa ochish uchun faol xodim topilmadi — umumiy kassalarni " +
+              "o'chirsak biznes kassasiz qolardi."
+          );
+        }
+        await tx.business.updateMany({ where: { id: businessId }, data: { shaxsiyKassa: true } });
+      }
+
       const umumiy = await tx.account.findMany({
         where: { businessId, userId: null },
         select: { id: true, nomi: true },
       });
-      const shaxsiy = await tx.account.count({ where: { businessId, userId: { not: null } } });
-      if (shaxsiy === 0) {
-        throw new BadRequestError(
-          "Shaxsiy kassa yo'q — umumiy kassalarni o'chirsak biznes kassasiz qolardi. " +
-            "Avval \"Shaxsiy kassa rejimi\" ni yoqing."
-        );
-      }
       for (const k of umumiy) {
         await tx.account.deleteMany({ where: { id: k.id, businessId } });
         ochirilganKassalar.push(k.nomi);
@@ -167,7 +180,7 @@ export async function biznesTozala(
       throw new Error(`Tozalashdan keyin qoldiq 0 emas (${keyingiQoldiq}) — amal bekor qilindi`);
     }
 
-    return { ochirilgan, jami, ochirilganKassalar, keyingiQoldiq };
+    return { ochirilgan, jami, ochirilganKassalar, yaratilganKassalar, keyingiQoldiq };
   });
 
   await logAudit({
@@ -180,9 +193,42 @@ export async function biznesTozala(
       jami: natija.jami,
       jadvallar: natija.ochirilgan,
       kassalar: natija.ochirilganKassalar,
+      yangiKassalar: natija.yaratilganKassalar,
     },
   });
   return natija;
+}
+
+/**
+ * Har faol xodimga shaxsiy kassa ochadi (tranzaksiya ichida).
+ *
+ * `api/businesses/[id]` dagi bir xil amalning tranzaksiya varianti: u yerda
+ * rejim tugmasi bosilganda, bu yerda esa tozalash paytida chaqiriladi.
+ * Nom to'qnashsa raqam qo'shiladi — Account [businessId, nomi] UNIQUE.
+ */
+async function shaxsiyKassalarniOchTx(tx: BusinessTx, businessId: string): Promise<string[]> {
+  const tenantId = currentTenantId();
+  // runBusinessTx kelishuvi: xom `tx` — tenant/business sharti QO'LDA.
+  const xodimlar = await tx.user.findMany({
+    where: { tenantId, isActive: true, OR: [{ businessId }, { businessId: null }] },
+    select: { id: true, ism: true },
+    orderBy: { ism: "asc" },
+  });
+  const band = new Set(
+    (await tx.account.findMany({ where: { businessId }, select: { nomi: true } })).map((a) => a.nomi)
+  );
+
+  const yaratilgan: string[] = [];
+  for (const x of xodimlar) {
+    let nomi = `${x.ism} kassasi`;
+    for (let i = 2; band.has(nomi) && i <= 20; i++) nomi = `${x.ism} kassasi ${i}`;
+    band.add(nomi);
+    await tx.account.create({
+      data: { businessId, nomi, turi: "naqd", userId: x.id, tartib: 10 },
+    });
+    yaratilgan.push(nomi);
+  }
+  return yaratilgan;
 }
 
 /** Tozalashdan keyingi jami kassa qoldig'i — nol ekanini tasdiqlash uchun. */

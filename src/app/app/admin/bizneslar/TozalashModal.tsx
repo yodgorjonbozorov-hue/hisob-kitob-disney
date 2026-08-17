@@ -43,11 +43,15 @@ export function TozalashModal({
         setXato(data.error ?? "Tozalab bo'lmadi");
         return;
       }
-      const kassalar =
+      const ochirilgan =
         data.ochirilganKassalar?.length > 0
-          ? ` · o'chirilgan kassalar: ${data.ochirilganKassalar.join(", ")}`
+          ? `\nO'chirilgan kassalar: ${data.ochirilganKassalar.join(", ")}`
           : "";
-      onDone(`${data.jami} ta yozuv o'chirildi, qoldiq 0${kassalar}`);
+      const yaratilgan =
+        data.yaratilganKassalar?.length > 0
+          ? `\nYangi shaxsiy kassalar: ${data.yaratilganKassalar.join(", ")}`
+          : "";
+      onDone(`${data.jami} ta yozuv o'chirildi, qoldiq 0${ochirilgan}${yaratilgan}`);
     } catch {
       setXato("Serverga ulanib bo'lmadi");
     } finally {
@@ -82,8 +86,9 @@ export function TozalashModal({
           <span>
             Umumiy kassalar ham o&apos;chirilsin
             <span className="block text-xs text-faint">
-              Xodimlarga biriktirilgan shaxsiy kassalar har doim qoladi. Belgilansa qo&apos;lda
-              yaratilgan kassalar (&quot;Naqd kassa&quot; kabi) o&apos;chiriladi.
+              Qo&apos;lda yaratilgan kassalar (&quot;Naqd kassa&quot; kabi) o&apos;chiriladi.
+              Shaxsiy kassa hali yo&apos;q bo&apos;lsa, har faol xodimga avtomatik ochiladi va
+              shaxsiy kassa rejimi yoqiladi — tartib bilan ovora bo&apos;lish shart emas.
             </span>
           </span>
         </label>
