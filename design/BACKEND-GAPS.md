@@ -207,15 +207,26 @@ bildirishnoma soni — **9 ta**.
 
 ## E. VEB ILOVAGA TAVSIYA (brief bo'yicha tegilmadi)
 
-| Topilma | Fayl | Tavsiya |
-|---|---|---|
-| `--income` `#16a34a` oq fonda **3.30:1** — WCAG AA dan o'tmaydi | `src/app/globals.css:44` | `#15803d` (5.02:1) |
-| `--debt` `#d97706` — **3.19:1** | `src/app/globals.css:49` | `#b45309` (5.02:1) |
-| `--fg-faint` `#94a3b8` — **2.56:1** | `src/app/globals.css:21` | `#78899e` (3.58:1) |
-| dark `--fg-faint`, `--fg-muted` | `globals.css:66-68` | Yorqinlashtirish |
+> **HOLAT: TUZATILDI** (2026-08-17). Loyiha egasi ruxsati bilan
+> `src/app/globals.css` da qo'llandi. Tekshiruv: `node design/render/veb-kontrast.mjs`
 
-Bu **kirim summasining rangi** — ilovaning eng muhim raqami. Yorqin
-quyoshda telefon ekranida o'qish qiyin bo'ladi.
+Dastlab men bu ro'yxatni **iOS tokenlaridan** chiqargan edim va bitta xato
+qilgandim: `--fg-faint` ni `#94a3b8` deb yozgandim, aslida vebda u
+`#64748B` (4.76:1 — **o'tadi**). `#94a3b8` — mening iOS uchun qo'shgan
+`label-4` tokenim, vebda umuman yo'q.
+
+Vebning HAQIQIY tokenlari alohida tekshirilganda **beshta** yiqilish
+topildi — ikkitasi men avval aytmagan:
+
+| Token | Eski | Nisbat | Yangi | Nisbat | Ta'sir |
+|---|---|---:|---|---:|---|
+| `--income` (light) | `#16A34A` | **3.30** ❌ | `#15803D` | **5.02** ✅ | **Har bir pul summasi** (`components/ui/Money.tsx` — barcha summalar shu komponentdan o'tadi) |
+| `--debt` (light) | `#D97706` | **3.19** ❌ | `#B45309` | **5.02** ✅ | Qarz summalari |
+| `--warning` (light) | `#F59E0B` | **2.15** ❌ | `#A16207` | **4.92** ✅ | Hozircha matn sifatida ishlatilmaydi |
+| `--info` (light) | `#0EA5E9` | **2.77** ❌ | `#0369A1` | **5.93** ✅ | ⇡ |
+| `--fg-faint` (dark) | `#688480` | **4.15** ❌ | `#7B9A95` | **5.50** ✅ | `text-faint` — **205 joyda** |
+
+Endi 18/18 juft AA dan o'tadi (light va dark).
 
 ---
 

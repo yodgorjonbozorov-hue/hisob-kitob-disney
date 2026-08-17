@@ -38,17 +38,25 @@
   --brand-wash: 204 251 241;    /* #CCFBF1 badge foni, tanlangan qator */
   --brand-fg: 255 255 255;
 
-  --income: 22 163 74;          /* #16A34A */
+  /* KONTRAST TUZATISHI: #16A34A oq karta ustida 3.30:1 edi — WCAG AA
+     (4.5:1) dan o'tmasdi. Bu PUL SUMMASINING rangi (components/ui/Money.tsx
+     barcha summalarni shu bilan chizadi), ya'ni yorqin quyoshda telefon
+     ekranida o'qilmasdi. #15803D — 5.02:1 (app foni ustida 4.58:1). */
+  --income: 21 128 61;          /* #15803D */
   --income-soft: 220 252 231;   /* #DCFCE7 */
   --income-fg: 21 128 61;       /* #15803D badge matni */
   --expense: 220 38 38;         /* #DC2626 */
   --expense-soft: 254 226 226;  /* #FEE2E2 */
   --expense-fg: 185 28 28;      /* #B91C1C */
-  --debt: 217 119 6;            /* #D97706 (warning oilasi) */
+  /* KONTRAST: #D97706 → 3.19:1 edi. #B45309 — 5.02:1. */
+  --debt: 180 83 9;             /* #B45309 (warning oilasi) */
   --debt-soft: 254 243 199;     /* #FEF3C7 */
   --debt-fg: 180 83 9;          /* #B45309 */
-  --warning: 245 158 11;        /* #F59E0B obuna / budjet ogohlantirishi */
-  --info: 14 165 233;           /* #0EA5E9 neytral xabar */
+  /* KONTRAST: #F59E0B → 2.15:1 (eng yomoni). Hozircha matn sifatida
+     ishlatilmaydi, lekin token to'g'ri bo'lishi kerak. #A16207 — 4.92:1. */
+  --warning: 161 98 7;          /* #A16207 obuna / budjet ogohlantirishi */
+  /* KONTRAST: #0EA5E9 → 2.77:1. #0369A1 — 5.93:1. */
+  --info: 3 105 161;            /* #0369A1 neytral xabar */
 
   color-scheme: light;
 }
@@ -61,7 +69,9 @@
   --border-strong: 52 84 80;
   --fg: 226 240 238;
   --fg-muted: 148 172 168;
-  --fg-faint: 104 132 128;
+  /* KONTRAST: #688480 elevated fon ustida 4.15:1 edi (AA dan o'tmasdi).
+     `text-faint` 205 joyda ishlatiladi. #7B9A95 — 5.50:1. */
+  --fg-faint: 123 154 149;      /* #7B9A95 */
 
   /* Brend semantikasi qorong'i fon uchun yorqinroq pog'onaga siljiydi */
   --brand: 45 212 191;          /* brand-400 #2DD4BF */
