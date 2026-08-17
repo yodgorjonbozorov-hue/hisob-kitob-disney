@@ -16,7 +16,15 @@ import { currentAktor } from "./tenantContext";
  *  - `create`dagi businessId tekshiruvi uchun qo'shimcha so'rov ketmasligi.
  */
 
-export type AuditAmal = "create" | "update" | "delete" | "restore";
+/**
+ * Audit amallari.
+ *
+ * "skip" — amal ATAYLAB bajarilmadi (masalan takroriy yozuv tasdiqlangan
+ * kunga tushgani uchun o'tkazib yuborildi). Bu xato emas, qaror; shuning
+ * uchun u ham jurnalda ko'rinishi kerak — aks holda "nega bu oy ijara
+ * yozilmagan?" degan savolga javob topilmasdi.
+ */
+export type AuditAmal = "create" | "update" | "delete" | "restore" | "skip";
 
 /** Audit yozuviga tushmaydigan maydonlar (sir yoki shovqin). */
 const YASHIRIN_MAYDONLAR = new Set(["parolHash", "parol", "linkCode", "linkCodeExpiresAt"]);

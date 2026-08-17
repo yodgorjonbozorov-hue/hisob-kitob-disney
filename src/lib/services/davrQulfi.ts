@@ -115,6 +115,31 @@ async function smenaQulfiTx(
 // ---------------------------------------------------------------------------
 
 /**
+ * Kun qulflanganmi — XATO TASHLAMAYDIGAN variant.
+ *
+ * Fon jarayonlari (cron) uchun kerak: u yerda qulf "xato" emas, KUTILGAN
+ * holat — bitta yozuv o'tkazib yuboriladi va aylanish davom etadi. Xatoni
+ * ushlab ko'rish (`try/catch`) o'rniga holat ochiq so'raladi, chunki
+ * boshqa (kutilmagan) xatolar bilan chalkashib ketmasligi kerak.
+ *
+ * @returns qulflangan kun ma'lumoti yoki null (kun ochiq).
+ */
+export async function kunlikQulfHolati(
+  businessId: string,
+  sana: Date
+): Promise<KunlikQulf | null> {
+  return prisma.dailyReport.findFirst({
+    where: { businessId, sana, holat: QULFLOVCHI_HOLAT },
+    select: { sana: true },
+  });
+}
+
+/** Qulflangan kun sanasini "YYYY-MM-DD" ko'rinishida beradi (log/audit uchun). */
+export function qulfSanasi(qulf: KunlikQulf): string {
+  return utcDateToDateOnlyString(qulf.sana);
+}
+
+/**
  * YANGI yozuv uchun: `sana` tasdiqlangan kunga tushmasin.
  *
  * @param amal xato matnida ishlatiladigan fe'l ("kiritish", "o'chirish"...).
@@ -136,10 +161,7 @@ export async function assertYangiYozuvDavri(
   sana: Date,
   amal = "kiritish"
 ): Promise<void> {
-  const qulf = await prisma.dailyReport.findFirst({
-    where: { businessId, sana, holat: QULFLOVCHI_HOLAT },
-    select: { sana: true },
-  });
+  const qulf = await kunlikQulfHolati(businessId, sana);
   if (qulf) throw kunlikXatosi(qulf, amal);
 }
 

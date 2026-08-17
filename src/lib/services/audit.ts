@@ -51,7 +51,8 @@ export type AuditEntity =
   | "dailyTransaction"
   | "dailyReportSetting"
   | "smena"
-  | "cashHandover";
+  | "cashHandover"
+  | "recurringTransaction";
 
 interface AuditInput {
   businessId?: string | null;

@@ -15,6 +15,7 @@ const ACTION_LABEL: Record<string, string> = {
   update: "O'zgartirildi",
   delete: "O'chirildi",
   restore: "Tiklandi",
+  skip: "O'tkazib yuborildi",
 };
 const ENTITY_LABEL: Record<string, string> = {
   transaction: "Tranzaksiya",
@@ -24,12 +25,14 @@ const ENTITY_LABEL: Record<string, string> = {
   debt: "Qarz",
   business: "Biznes",
   budget: "Budjet",
+  recurringTransaction: "Takroriy yozuv",
 };
 const ACTION_TONE: Record<string, "kirim" | "chiqim" | "warning" | "neutral"> = {
   create: "kirim",
   update: "warning",
   delete: "chiqim",
   restore: "neutral",
+  skip: "warning",
 };
 
 function summarize(before: string | null, after: string | null): string {
