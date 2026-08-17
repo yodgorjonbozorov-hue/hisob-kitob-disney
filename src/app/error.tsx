@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
-import Link from "next/link";
+import { RefreshCw, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { LinkButton } from "@/components/ui/LinkButton";
 import { BRAND } from "@/lib/brand";
 
 /**
@@ -30,8 +31,18 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
   return (
     <div className="min-h-[60vh] flex items-center justify-center px-4 py-16">
       <div className="w-full max-w-md text-center">
-        <p className="text-4xl mb-4">{yangilanish ? "🔄" : "⚠️"}</p>
-        <h1 className="text-xl font-semibold text-fg">
+        <span
+          className={`inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-4 ${
+            yangilanish ? "bg-brand-wash text-brand" : "bg-debt-soft text-debt-fg"
+          }`}
+        >
+          {yangilanish ? (
+            <RefreshCw className="w-7 h-7" strokeWidth={1.75} aria-hidden="true" />
+          ) : (
+            <TriangleAlert className="w-7 h-7" strokeWidth={1.75} aria-hidden="true" />
+          )}
+        </span>
+        <h1 className="font-heading text-lg font-semibold text-fg">
           {yangilanish ? "Tizim yangilandi" : "Kutilmagan xatolik"}
         </h1>
         <p className="text-sm text-muted mt-2">
@@ -44,9 +55,9 @@ export default function Error({ error, reset }: { error: Error & { digest?: stri
           <Button onClick={() => (yangilanish ? window.location.reload() : reset())}>
             {yangilanish ? "Sahifani yangilash" : "Qayta urinish"}
           </Button>
-          <Link href="/app">
-            <Button variant="secondary">Bosh sahifa</Button>
-          </Link>
+          <LinkButton href="/app" variant="secondary">
+            Bosh sahifa
+          </LinkButton>
         </div>
 
         {error.digest && <p className="text-2xs text-faint mt-6">Xato kodi: {error.digest}</p>}

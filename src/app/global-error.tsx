@@ -24,7 +24,23 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
         }}
       >
         <div style={{ maxWidth: 420, textAlign: "center" }}>
-          <p style={{ fontSize: 36, margin: "0 0 12px" }}>⚠️</p>
+          {/* Ikonka inline SVG — bu oxirgi chora ekrani, hech qanday paketga tayanmaydi. */}
+          <svg
+            width="40"
+            height="40"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#5EEAD4"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ margin: "0 auto 12px" }}
+            aria-hidden="true"
+          >
+            <path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" />
+            <path d="M12 9v4" />
+            <path d="M12 17h.01" />
+          </svg>
           <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Tizimda vaqtincha nosozlik</h1>
           <p style={{ fontSize: 14, color: "#9CB8B4", marginTop: 8, lineHeight: 1.5 }}>
             Sahifani ochib bo&apos;lmadi. Ma&apos;lumotlaringiz saqlanib qoldi — bir necha soniyadan

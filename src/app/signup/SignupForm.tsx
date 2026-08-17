@@ -2,6 +2,8 @@
 
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/Button";
+import { INPUT_CLASS, LABEL_CLASS } from "@/components/ui/fieldStyles";
 
 export default function SignupForm() {
   const router = useRouter();
@@ -40,65 +42,59 @@ export default function SignupForm() {
     }
   }
 
-  const inputCls =
-    "w-full rounded-lg border border-line px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand";
-
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-fg mb-1">Kompaniya nomi</label>
+        <label className={LABEL_CLASS}>Kompaniya nomi</label>
         <input
           type="text"
           value={kompaniya}
           onChange={(e) => setKompaniya(e.target.value)}
           placeholder="Masalan: Baraka Market"
-          className={inputCls}
+          className={INPUT_CLASS}
           autoFocus
           required
         />
       </div>
       <div>
-        <label className="block text-sm font-medium text-fg mb-1">Ismingiz</label>
+        <label className={LABEL_CLASS}>Ismingiz</label>
         <input
           type="text"
           value={ism}
           onChange={(e) => setIsm(e.target.value)}
           placeholder="Ism Familiya"
-          className={inputCls}
+          className={INPUT_CLASS}
           required
         />
       </div>
       <div>
-        <label className="block text-sm font-medium text-fg mb-1">Telefon raqam (login)</label>
+        <label className={LABEL_CLASS}>Telefon raqam (login)</label>
         <input
           type="tel"
           value={telefon}
           onChange={(e) => setTelefon(e.target.value)}
           placeholder="+998 90 123 45 67"
-          className={inputCls}
+          className={INPUT_CLASS}
           required
         />
       </div>
       <div>
-        <label className="block text-sm font-medium text-fg mb-1">Parol</label>
+        <label className={LABEL_CLASS}>Parol</label>
         <input
           type="password"
           value={parol}
           onChange={(e) => setParol(e.target.value)}
           placeholder="Kamida 8 belgi"
           minLength={8}
-          className={inputCls}
+          className={INPUT_CLASS}
           required
         />
       </div>
       {error && <p className="text-expense text-sm">{error}</p>}
-      <button
-        type="submit"
-        disabled={loading}
-        className="w-full bg-income hover:brightness-110 disabled:opacity-60 text-white font-medium rounded-lg py-2.5 transition"
-      >
-        {loading ? "Yaratilmoqda..." : "Bepul boshlash (14 kun)"}
-      </button>
+      {/* Brend rangi — yashil EMAS: yashil bu tizimda "pul kirdi" degani. */}
+      <Button type="submit" size="lg" loading={loading} className="w-full">
+        {loading ? "Yaratilmoqda…" : "Bepul boshlash (14 kun)"}
+      </Button>
       <p className="text-2xs text-faint text-center">
         Ro'yxatdan o'tish bilan siz ma'lumotlaringiz faqat sizning kompaniyangizga ko'rinishini kafolatlaydigan
         tizimda hisob ochasiz.

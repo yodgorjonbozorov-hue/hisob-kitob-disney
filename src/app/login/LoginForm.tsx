@@ -2,6 +2,8 @@
 
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/Button";
+import { INPUT_CLASS, LABEL_CLASS } from "@/components/ui/fieldStyles";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -37,7 +39,7 @@ export default function LoginForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label htmlFor="login" className="block text-sm font-medium text-fg mb-1">
+        <label htmlFor="login" className={LABEL_CLASS}>
           Login
         </label>
         <input
@@ -45,7 +47,7 @@ export default function LoginForm() {
           type="text"
           value={login}
           onChange={(e) => setLogin(e.target.value)}
-          className="w-full rounded-lg border border-line px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand"
+          className={INPUT_CLASS}
           // Telefon klaviaturasi birinchi harfni kattalashtirmasin va loginni
           // "to'g'rilab" yubormasin — aks holda kirish bekorga rad etiladi.
           autoCapitalize="none"
@@ -57,7 +59,7 @@ export default function LoginForm() {
         />
       </div>
       <div>
-        <label htmlFor="parol" className="block text-sm font-medium text-fg mb-1">
+        <label htmlFor="parol" className={LABEL_CLASS}>
           Parol
         </label>
         <input
@@ -65,7 +67,7 @@ export default function LoginForm() {
           type="password"
           value={parol}
           onChange={(e) => setParol(e.target.value)}
-          className="w-full rounded-lg border border-line px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand"
+          className={INPUT_CLASS}
           autoCapitalize="none"
           autoCorrect="off"
           spellCheck={false}
@@ -74,13 +76,10 @@ export default function LoginForm() {
         />
       </div>
       {error && <p className="text-expense text-sm">{error}</p>}
-      <button
-        type="submit"
-        disabled={loading}
-        className="w-full bg-income hover:brightness-110 disabled:opacity-60 text-white font-medium rounded-lg py-2.5 transition"
-      >
-        {loading ? "Kirilmoqda..." : "Kirish"}
-      </button>
+      {/* Brend rangi — yashil EMAS: yashil bu tizimda "pul kirdi" degani. */}
+      <Button type="submit" size="lg" loading={loading} className="w-full">
+        {loading ? "Kirilmoqda…" : "Kirish"}
+      </Button>
     </form>
   );
 }
