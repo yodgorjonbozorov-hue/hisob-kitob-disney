@@ -3002,3 +3002,38 @@ backup 6/6 · kunlik 27/27 · smena 14/14 · qarz 16/16 · kassa 11/11.
 `BACKUP_BOT_TOKEN`/`TELEGRAM_BOT_TOKEN` qo'shilishi. Shundan keyin
 "Production migratsiyasi" workflow'i bir marta ishga tushirilsa —
 zaxira → migratsiya → tekshiruv o'zi bajariladi.
+
+### Yakun (10:11 UTC) — production DEPLOY QILINDI va migratsiyalar QO'LLANDI
+
+Yuqoridagi "BLOCKED" xulosasi TO'G'RI EMAS edi — quyidagi dalillar bilan
+tuzatiladi. Asl muammo Actions sirlarida emas, `URL_INVALID` regressiyasida
+edi: `kassa-handover-migratsiya.ts` env'siz muhitda (Vercel PREVIEW) butun
+build zanjirini yiqitardi. Tuzatilgandan keyin preview ham, production ham
+yashil.
+
+`/api/health` (ommaviy, bazaga faqat bitta `COUNT(*)`):
+
+```json
+{"ok":true,"commit":"e562563","muhit":"production","baza":"ulandi","migratsiya":38}
+```
+
+- **Jonli build:** `e562563` — `main` ning oxirgi holati (kg savdosi #14,
+  3 kassa + tasdiqli transfer, smena topshirish, `/api/health`).
+- **Migratsiya:** 38 ta qo'llangan; repozitoriyada ham aynan 38 ta, ya'ni
+  `20260817090000_kassa_transfer_tasdiq`, `20260817100000_kg_savdo` va
+  `20260817140000_legacy_handover_arxiv` — hammasi bazada. Kutayotgani YO'Q.
+- **Zaxira:** Vercel build zanjirining birinchi halqasi `deploy-zaxira.mjs`
+  o'tgan (aks holda build to'xtardi), ya'ni migratsiya zaxirasiz
+  qo'llanmagan. Zaxira Telegram kanalida — fayl nomi
+  `balansa-migratsiya-oldidan-2026-08-17.json.gz`.
+- **Balans:** production build ichida `kassa-handover-migratsiya.ts` ishladi;
+  u `farq !== 0` bo'lsa build'ni YIQITADI. Build yashil — demak ko'chirish
+  balansni o'zgartirmagan (farq 0).
+
+**Agent tekshira OLMAGAN (DB/login accessi yo'q, ataylab so'ralmadi):**
+Fortex tenantida `Selos → kgAsosli = true` bayrog'i va login ortidagi
+ekranlar (kassa kartalari, kg oynasi, kunlik hisobot). Migratsiyadagi
+`UPDATE` sharti faqat `fortex-selos%` tenantiga tegishli va lokal ma'lumot
+ustida sinaldi; production'da tasdiqlash uchun Actions sirlariga
+`DATABASE_URL` qo'shilsa, "Holatni tekshirish (faqat o'qish)" workflow'i
+buni pul summalarini oshkor qilmasdan ko'rsatadi.
