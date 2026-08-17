@@ -10,6 +10,8 @@ interface ModulKarta {
   core: boolean;
   tarifdaBor: boolean;
   yoqilgan: boolean;
+  /** Modul yoqiq, ammo ishlashi uchun yana bir sozlama kerak bo'lsa — sabab matni. */
+  ogohlantirish?: string;
 }
 
 export function ModullarClient({ kartalar }: { kartalar: ModulKarta[] }) {
@@ -59,6 +61,11 @@ export function ModullarClient({ kartalar }: { kartalar: ModulKarta[] }) {
               )}
             </div>
             <p className="text-sm text-muted mt-1">{m.tavsif}</p>
+            {m.ogohlantirish && (
+              <p className="text-xs text-expense-fg bg-expense-soft border border-expense/40 rounded-lg px-3 py-2 mt-2">
+                {m.ogohlantirish}
+              </p>
+            )}
           </div>
           {m.core ? (
             <span className="text-xs text-faint shrink-0 mt-1">doim yoqiq</span>
