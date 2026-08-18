@@ -9,9 +9,7 @@
 // tegmaydi — mavjud tenant akkauntini superadminga ko'tarib yubormaslik uchun.
 // Idempotent: xesh allaqachon o'rnatilgan bo'lsa jimgina o'tkazib yuboriladi.
 import "dotenv/config";
-import { PrismaClient } from "@prisma/client";
-import { PrismaLibSQL } from "@prisma/adapter-libsql";
-import { createClient } from "@libsql/client";
+import { prismaKlient } from "./lib/prisma-klient.mjs";
 
 const LOGIN = "umar_narziyev";
 const PAROL_XESH = "$2a$10$vcQUydO.WMA38yNzhsE.EOB1DFxzCccNE6UXNRk2J8z1aS7L4g1PG";
@@ -23,11 +21,22 @@ if (!process.env.DATABASE_URL) {
   process.exit(0);
 }
 
-const prisma = new PrismaClient({
-  adapter: new PrismaLibSQL(
-    createClient({ url: process.env.DATABASE_URL, authToken: process.env.DATABASE_AUTH_TOKEN })
-  ),
-});
+// Adapter `DATABASE_URL` sxemasiga qarab tanlanadi (SQLite/Turso yoki
+// PostgreSQL) — aks holda Postgres deploy'ida shu qator butun build
+// zanjirini to'xtatib qo'yardi.
+//
+// try/catch SHART: klient qurilishi TOP-LEVEL await ichida, ya'ni xato
+// pastdagi `.catch()` ga umuman yetib bormaydi va jarayon 1-kod bilan
+// tugab, `&&` bilan bog'langan butun build zanjirini uzib qo'yardi.
+// Bu skriptning qoidasi esa boshqacha: konfiguratsiya xatosi deploy'ni
+// yiqitmaydi, sabab log'da qoladi.
+let prisma;
+try {
+  prisma = await prismaKlient();
+} catch (e) {
+  console.error(`bir-martalik-parol: klient qurilmadi — ${e.message}`);
+  process.exit(0);
+}
 
 async function main() {
   const existing = await prisma.user.findUnique({ where: { login: LOGIN } });

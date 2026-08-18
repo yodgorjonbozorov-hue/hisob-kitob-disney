@@ -17,9 +17,7 @@
 // mavjud tenant akkauntini superadminga ko'tarib yubormaslik uchun.
 import "dotenv/config";
 import bcrypt from "bcryptjs";
-import { PrismaClient } from "@prisma/client";
-import { PrismaLibSQL } from "@prisma/adapter-libsql";
-import { createClient } from "@libsql/client";
+import { prismaKlient } from "./lib/prisma-klient.mjs";
 
 const login = process.env.SUPERADMIN_LOGIN?.trim();
 const parol = process.env.SUPERADMIN_PAROL;
@@ -37,11 +35,22 @@ if (!process.env.DATABASE_URL) skip("DATABASE_URL yo'q");
 if (!login || !parol) skip("SUPERADMIN_LOGIN/SUPERADMIN_PAROL qo'yilmagan");
 if (parol.length < 8) skip("SUPERADMIN_PAROL kamida 8 belgi bo'lishi kerak");
 
-const prisma = new PrismaClient({
-  adapter: new PrismaLibSQL(
-    createClient({ url: process.env.DATABASE_URL, authToken: process.env.DATABASE_AUTH_TOKEN })
-  ),
-});
+// Adapter `DATABASE_URL` sxemasiga qarab tanlanadi (SQLite/Turso yoki
+// PostgreSQL) — aks holda Postgres deploy'ida shu qator butun build
+// zanjirini to'xtatib qo'yardi.
+//
+// try/catch SHART: klient qurilishi TOP-LEVEL await ichida, ya'ni xato
+// pastdagi `.catch()` ga umuman yetib bormaydi va jarayon 1-kod bilan
+// tugab, `&&` bilan bog'langan butun build zanjirini uzib qo'yardi.
+// Bu skriptning qoidasi esa boshqacha: konfiguratsiya xatosi deploy'ni
+// yiqitmaydi, sabab log'da qoladi.
+let prisma;
+try {
+  prisma = await prismaKlient();
+} catch (e) {
+  console.error(`superadmin bootstrap: klient qurilmadi — ${e.message}`);
+  process.exit(0);
+}
 
 async function main() {
   const existing = await prisma.user.findUnique({ where: { login } });

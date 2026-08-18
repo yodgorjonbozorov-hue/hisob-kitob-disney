@@ -19,7 +19,12 @@ import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import { dirname } from "node:path";
 import { klient, suratOl, suratTikla, jamiYozuv } from "./lib/xom-surat.mjs";
+import * as pg from "./lib/pg-surat.cjs";
 import { deshifrla, shifrlanganmi } from "../src/lib/backup/shifr-asos.cjs";
+import { isPostgres } from "../src/lib/db/provider.cjs";
+
+/** PostgreSQL yo'li `pg_dump`/`pg_restore` ga tayanadi (`lib/pg-surat.cjs`). */
+const POSTGRES = isPostgres(process.env.DATABASE_URL);
 
 /** Gzip fayllari shu ikki bayt bilan boshlanadi. */
 const GZIP_SARLAVHA = [0x1f, 0x8b];
@@ -39,6 +44,8 @@ function suratniOqi(yol) {
 }
 
 async function ol(yol) {
+  if (POSTGRES) return olPg(yol);
+
   const surat = await suratOl(klient());
 
   mkdirSync(dirname(yol), { recursive: true });
@@ -52,7 +59,35 @@ async function ol(yol) {
   }
 }
 
+/** PostgreSQL surati — `pg_dump` (custom format, o'zi siqilgan). */
+async function olPg(yol) {
+  const { bayt, jadvallar } = await pg.suratOl();
+  const maqsad = yol.endsWith(".json") ? yol.replace(/\.json$/, ".dump") : yol;
+
+  mkdirSync(dirname(maqsad), { recursive: true });
+  writeFileSync(maqsad, bayt);
+
+  console.log(`\n✅ PostgreSQL surati tayyor: ${maqsad}`);
+  console.log(`   ${jadvallar} jadval, ${(bayt.byteLength / 1024).toFixed(0)} KB (pg_dump custom)`);
+}
+
+/** PostgreSQL tiklash — `pg_restore` (shifrlangan bo'lsa avval ochiladi). */
+function tiklaPg(yol) {
+  let buf = readFileSync(yol);
+  const shifrlangan = shifrlanganmi(buf);
+  if (shifrlangan) {
+    buf = deshifrla(buf);
+    console.log("🔐 Shifrlangan zaxira ochildi (AES-256-GCM).");
+  }
+
+  console.log(`Tiklanmoqda (pg_restore): ${yol}\n`);
+  pg.suratTikla(buf);
+  console.log("\n✅ Tiklandi.");
+}
+
 async function tikla(yol) {
+  if (POSTGRES) return tiklaPg(yol);
+
   const { surat, shifrlangan } = suratniOqi(yol);
   if (shifrlangan) console.log("🔐 Shifrlangan zaxira ochildi (AES-256-GCM).");
   console.log(`Tiklanmoqda: ${yol} (${surat.olingan})\n`);

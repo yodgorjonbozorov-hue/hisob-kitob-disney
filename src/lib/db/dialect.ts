@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { isPostgres as asosIsPostgres } from "./provider.cjs";
 
 /**
  * BAZA DIALEKTI — SQLite va PostgreSQL orasidagi farqlarning YAGONA joyi.
@@ -14,9 +15,15 @@ import { Prisma } from "@prisma/client";
  * o'qib bo'lmaydi.
  */
 
-/** `postgresql://` yoki `postgres://` — Postgres; qolgani (file:, libsql:) SQLite. */
+/**
+ * `postgresql://` yoki `postgres://` — Postgres; qolgani (file:, libsql:) SQLite.
+ *
+ * Qoidaning O'ZI `./provider.cjs` da: aynan shu aniqlash build/deploy
+ * skriptlarida (`scripts/*.mjs`, oddiy `node`) ham kerak va ular `.ts`
+ * faylni import qila olmaydi. Ikki nusxa bir kun ajralib ketardi.
+ */
 export function isPostgres(url = process.env.DATABASE_URL): boolean {
-  return /^postgres(ql)?:\/\//i.test(url ?? "");
+  return asosIsPostgres(url);
 }
 
 /**

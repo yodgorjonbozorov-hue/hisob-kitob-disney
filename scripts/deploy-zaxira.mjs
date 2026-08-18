@@ -27,16 +27,22 @@
  */
 import "dotenv/config";
 import { gzipSync } from "node:zlib";
-import {
-  klient,
-  suratOl,
-  jamiYozuv,
-  kutayotganMigratsiyalar,
-  ilovaJadvallari,
-  hisobotSoni,
-} from "./lib/xom-surat.mjs";
+import * as sqlite from "./lib/xom-surat.mjs";
+import * as pg from "./lib/pg-surat.cjs";
 import { hujjatYubor } from "./lib/telegram.mjs";
 import { KALIT_ENV, kalitBormi } from "../src/lib/backup/shifr-asos.cjs";
+import { isPostgres } from "../src/lib/db/provider.cjs";
+
+/**
+ * Provayder qatlamini tanlaydi.
+ *
+ * Ikkala modul ham bir xil nomli TEKSHIRUV funksiyalarini beradi
+ * (`ilovaJadvallari`, `hisobotSoni`, `kutayotganMigratsiyalar`), shuning
+ * uchun quyidagi mantiq ikki shoxga bo'linmaydi — faqat ulanish va surat
+ * olish usuli farq qiladi.
+ */
+const POSTGRES = isPostgres(process.env.DATABASE_URL);
+const qatlam = POSTGRES ? pg : sqlite;
 
 /** Build'ni to'xtatadi. `qoshimcha` — oxirida ko'rsatiladigan qo'shimcha satr. */
 function yiqit(sarlavha, satrlar, qoshimcha) {
@@ -65,6 +71,16 @@ function toxta(sarlavha, satrlar) {
   yiqit(sarlavha, satrlar, "Bilib turib zaxirasiz davom etish uchun: ZAXIRASIZ_DAVOM=ha");
 }
 
+/** Yopilishi kerak bo'lgan Postgres ulanishi (SQLite yo'lida null). */
+let ulanish = null;
+
+/** Ochiq ulanishni yopadi — jarayon tugay olsin. */
+async function ulanishniYop() {
+  if (!ulanish) return;
+  await ulanish.end().catch(() => {});
+  ulanish = null;
+}
+
 async function main() {
   // Env'siz lokal build (masalan `npm run build` toza mashinada) — migratsiya
   // ham o'tkazib yuboriladi, demak himoya qiladigan narsa yo'q.
@@ -73,18 +89,21 @@ async function main() {
     return;
   }
 
-  const c = klient();
+  const c = POSTGRES ? await pg.pgKlient() : sqlite.klient();
+  // `pg` ulanishi ochiq qolsa Node jarayoni tugamaydi va build OSILIB qoladi
+  // (libsql klientida bunday muammo yo'q). Shuning uchun uni oxirida yopamiz.
+  ulanish = POSTGRES ? c : null;
 
   // Butunlay bo'sh baza — yangi muhitni birinchi marta ko'tarish. Himoya
   // qiladigan ma'lumot yo'q, demak zaxira ham talab qilinmaydi (aks holda
   // yangi muhit Telegram sozlanmaguncha umuman ko'tarilmasdi).
-  const jadvallar = await ilovaJadvallari(c);
+  const jadvallar = await qatlam.ilovaJadvallari(c);
   if (jadvallar.length === 0) {
     console.log("Baza bo'sh — zaxira qiladigan narsa yo'q.");
     return;
   }
 
-  const kutayotgan = await kutayotganMigratsiyalar(c);
+  const kutayotgan = await qatlam.kutayotganMigratsiyalar(c);
 
   if (kutayotgan.length === 0) {
     console.log("Kutayotgan migratsiya yo'q — zaxira shart emas.");
@@ -99,7 +118,7 @@ async function main() {
   //
   // Bu YAGONA to'xtash — u ZAXIRASIZ_DAVOM bilan chetlab o'tilmaydi: bu yerda
   // masala zaxirada emas, migratsiyaning o'zi buzuq holatda ishga tushishida.
-  if ((await hisobotSoni(c)) === 0) {
+  if ((await qatlam.hisobotSoni(c)) === 0) {
     yiqit("Migratsiya hisoboti baza holatiga mos kelmaydi", [
       `Bazada ${jadvallar.length} ta jadval bor, lekin hisobot bo'sh.`,
       "Shu holatda migratsiya o'rtada yiqilib, yarim qo'llangan baza qoladi.",
@@ -114,14 +133,45 @@ async function main() {
   for (const d of kutayotgan) console.log(`   · ${d}`);
   console.log("\nMigratsiyadan OLDIN zaxira olinmoqda...");
 
-  const surat = await suratOl(c);
-  const yozuvlar = jamiYozuv(surat);
-  const bayt = gzipSync(Buffer.from(JSON.stringify(surat)));
+  // SURAT — provayderga qarab.
+  //
+  // SQLite: sxemani bilmaydigan JSON surat, keyin gzip (`xom-surat.mjs`).
+  // Postgres: `pg_dump --format=custom` — u O'ZI siqilgan, shuning uchun
+  // QAYTA gzip qilinmaydi (siqilgan ustiga siqish faqat vaqt yeydi).
+  let bayt;
+  let nom;
+  let tavsif;
+  let sana = new Date().toISOString().slice(0, 10);
 
-  console.log(
-    `   ${Object.keys(surat.jadvallar).length} jadval, ${yozuvlar} yozuv, ` +
-      `${(bayt.byteLength / 1024).toFixed(0)} KB`
-  );
+  if (POSTGRES) {
+    let dump;
+    try {
+      dump = await pg.suratOl(process.env.DATABASE_URL);
+    } catch (e) {
+      // `pg_dump` yo'q yoki yiqildi — zaxira YO'Q, demak migratsiya ham yo'q.
+      toxta("Zaxira olinmadi", [
+        e.message,
+        "",
+        "PostgreSQL zaxirasi `pg_dump` ga tayanadi. Build muhitida u bo'lishi shart",
+        "(masalan Docker/CI image'iga `postgresql-client` qo'shing).",
+      ]);
+    }
+    bayt = dump.bayt;
+    nom = `balansa-migratsiya-oldidan-${sana}.dump`;
+    tavsif = `${dump.jadvallar} jadval (pg_dump, custom format)`;
+    console.log(`   ${tavsif}, ${(bayt.byteLength / 1024).toFixed(0)} KB`);
+  } else {
+    const surat = await sqlite.suratOl(c);
+    const yozuvlar = sqlite.jamiYozuv(surat);
+    bayt = gzipSync(Buffer.from(JSON.stringify(surat)));
+    sana = surat.olingan.slice(0, 10);
+    nom = `balansa-migratsiya-oldidan-${sana}.json.gz`;
+    tavsif = `Jami yozuv: ${yozuvlar}`;
+    console.log(
+      `   ${Object.keys(surat.jadvallar).length} jadval, ${yozuvlar} yozuv, ` +
+        `${(bayt.byteLength / 1024).toFixed(0)} KB`
+    );
+  }
 
   const chatId = process.env.BACKUP_CHAT_ID;
   // `||`, `??` emas: hosting panellarida o'zgaruvchi ko'pincha BO'SH QATOR
@@ -154,27 +204,21 @@ async function main() {
     ]);
   }
 
-  const sana = surat.olingan.slice(0, 10);
   const izoh = [
     "🛟 Balansa — migratsiya oldidan zaxira",
+    `Baza: ${POSTGRES ? "PostgreSQL" : "SQLite/Turso"}`,
     `Sana: ${sana}`,
-    `Jami yozuv: ${yozuvlar}`,
+    tavsif,
     `Kutayotgan migratsiya: ${kutayotgan.length} ta`,
     kutayotgan.map((d) => `· ${d}`).join("\n"),
     "",
     `🔐 AES-256-GCM · kalit: ${KALIT_ENV} env sekreti`,
-    "Tiklash: npm run zaxira:xom -- --tikla <fayl.json.gz.enc>",
-    "(shifr va gzip o'zi ochiladi; kalitsiz fayl ochilmaydi)",
+    `Tiklash: npm run zaxira:xom -- --tikla <fayl${POSTGRES ? ".dump" : ".json.gz"}.enc>`,
+    "(shifr o'zi ochiladi; kalitsiz fayl ochilmaydi)",
   ].join("\n");
 
   try {
-    await hujjatYubor({
-      token,
-      chatId,
-      bayt,
-      nom: `balansa-migratsiya-oldidan-${sana}.json.gz`,
-      izoh,
-    });
+    await hujjatYubor({ token, chatId, bayt, nom, izoh });
   } catch (e) {
     toxta("Zaxira yuborilmadi", [
       e.message,
@@ -187,4 +231,9 @@ async function main() {
   console.log("\n✅ Zaxira Telegram kanaliga yuborildi. Migratsiya davom etadi.\n");
 }
 
-main().catch((e) => toxta("Zaxira olinmadi", [e.message]));
+main()
+  .then(ulanishniYop)
+  .catch(async (e) => {
+    await ulanishniYop();
+    toxta("Zaxira olinmadi", [e.message]);
+  });
