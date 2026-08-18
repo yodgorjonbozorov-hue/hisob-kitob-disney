@@ -3190,3 +3190,67 @@ da hamma element darhol ochiq, sanoq yo'q (brauzerda tekshirildi).
 - `npm run test:isolation` — 22/22, `npm run test:izolyatsiya-royxati` — 9/9.
 - Playwright (1440 yorug'/qorong'i va 390 px): gorizontal siljish yo'q, mobil
   menyu ochiladi/Esc bilan yopiladi, sanoq to'g'ri qiymatda tugaydi.
+
+---
+
+## Ikki qizil test tuzatildi: `test:postgres` va `test:smoke` (2026-08-18)
+
+### 1. `test:postgres` — Postgres init migratsiyasi sxemadan orqada qolgan
+
+`prisma/migrations-postgres/` hozircha ISHLATILMAYDI (Turso'dan Postgres'ga
+ko'chish keyingi bosqich), shu bois u jimgina eskiradi: sxemaga ustun
+qo'shilsa, bu fayl o'zi yangilanmaydi. `AccountTransfer.legacyCashHandoverId`
+(kassa topshirig'i migratsiyasida qo'shilgan) fayldan tushib qolgan edi.
+
+Yechim: `npm run pg:migratsiya` — fayl qayta generatsiya qilindi. Diff atigi
+4 satr: ustun va uning unique indeksi. Bazaga tegilmadi (skript
+`migrate diff --from-empty` bilan ishlaydi, hech qayerga ulanmaydi).
+
+### 2. `test:smoke` — ildiz sabab: test SERVER JARAYONINI OQIZARDI
+
+Belgi: 7 ta testdan 4–5 tasi tasodifiy yiqilardi, sarlavha o'rniga
+"Tizim yangilandi" (ya'ni `app/error.tsx` dagi `ChunkLoadError` ekrani)
+chiqardi. Birinchi qarashda ilova nosozligiga o'xshardi.
+
+Ildiz sabab boshqa joyda edi:
+
+```ts
+server = spawn("npx", ["next", "start", "-p", "3100"]); // ikki jarayon
+server.kill("SIGTERM");                                 // faqat `npx` o'lardi
+```
+
+`npx` — o'ram; haqiqiy server uning BOLASI. O'ramga SIGTERM yuborilganda
+bola tirik qolib, 3100-portni ushlab turaverardi (`ps` da PPID=1 bilan
+osilgan `next-server` jarayonlari topildi — biri 38 daqiqa yashagan).
+Keyingi yurishda `next start` portga bog'lana olmay o'lardi (`stdio: "ignore"`
+bo'lgani uchun jimgina), testlar esa ESKI serverga urardi. Oradа `.next`
+qayta qurilgan bo'lsa, eski serverning xotirasidagi bo'lak nomlari diskda
+yo'q — natijada `ChunkLoadError` va "Tizim yangilandi".
+
+Shuning uchun to'plam har safar boshqacha yiqilardi va boshqa portda qo'lda
+takrorlaganda hamma narsa yashil chiqardi.
+
+Yechim (uchtasi birga):
+1. `detached: true` + `process.kill(-pid)` — butun jarayon guruhi o'chadi.
+2. `before()` da port bandligi tekshiriladi: band bo'lsa test DARHOL va
+   tushunarli xabar bilan yiqiladi, begona serverga urib ketmaydi.
+3. `process.once("exit"/"SIGINT")` — xavfsizlik to'ri: yurish uzilib qolsa
+   ham server ortdan o'chadi.
+
+Yo'l-yo'lakay yana ikki nuqta:
+- `xatosiz()` faqat "Application error" va `lib/copy.ts` dagi
+  "Nimadir noto'g'ri ketdi" ni qidirardi — ya'ni `app/error.tsx`
+  ("Kutilmagan xatolik") va `app/global-error.tsx` ("Tizimda vaqtincha
+  nosozlik") ekranlari TESTDAN O'TIB KETARDI. Ro'yxat to'ldirildi.
+- "Kirim qo'shiladi" testi endi `POST /api/transactions` javobini kutadi va
+  uning holatini tekshiradi. Avval faqat yozuv ro'yxatda paydo bo'lishi
+  kutilardi: so'rov yiqilsa "20s da ko'rinmadi" degan taymaut chiqib,
+  sababi ko'rinmasdi.
+- `och()` prefetch bekor qilinishidan kelib chiqadigan bir martalik
+  `ChunkLoadError` ni tanib, sahifani qayta ochadi (uch urinishda ham ketmasa
+  — yiqiladi).
+
+### Natija
+
+53 ta test to'plamining HAMMASI yashil. `test:smoke` ketma-ket 7 marta
+yurgizildi — har safar 7/7, ortidan osilgan jarayon qolmadi.

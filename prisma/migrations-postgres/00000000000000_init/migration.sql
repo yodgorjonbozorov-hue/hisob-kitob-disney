@@ -175,6 +175,7 @@ CREATE TABLE "AccountTransfer" (
     "toUserIsm" TEXT,
     "turi" TEXT NOT NULL DEFAULT 'transfer',
     "holat" TEXT NOT NULL DEFAULT 'bajarildi',
+    "legacyCashHandoverId" TEXT,
     "tasdiqlaganId" TEXT,
     "tasdiqlaganIsm" TEXT,
     "tasdiqlanganAt" TIMESTAMP(3),
@@ -869,6 +870,9 @@ CREATE INDEX "Account_businessId_isActive_tartib_idx" ON "Account"("businessId",
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Account_businessId_nomi_key" ON "Account"("businessId", "nomi");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AccountTransfer_legacyCashHandoverId_key" ON "AccountTransfer"("legacyCashHandoverId");
 
 -- CreateIndex
 CREATE INDEX "AccountTransfer_businessId_sana_idx" ON "AccountTransfer"("businessId", "sana");

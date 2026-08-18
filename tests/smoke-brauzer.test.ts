@@ -23,6 +23,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
+import { connect } from "node:net";
 import type { Browser, Page } from "playwright";
 
 const PORT = 3100;
@@ -44,6 +45,29 @@ const sabab = qurilgan ? undefined : "`.next` yo'q — avval `npm run build` qil
 
 let server: ChildProcess | undefined;
 let browser: Browser | undefined;
+
+/** Portda kimdir tinglayaptimi (ulanib ko'rish orqali — ruxsat talab qilmaydi). */
+function portBandmi(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const soket = connect({ port, host: "127.0.0.1" });
+    const tugat = (natija: boolean) => {
+      soket.destroy();
+      resolve(natija);
+    };
+    soket.once("connect", () => tugat(true));
+    soket.once("error", () => tugat(false));
+    soket.setTimeout(1000, () => tugat(false));
+  });
+}
+
+/** Port bo'shaguncha kutadi (server o'chishi bir necha yuz ms oladi). */
+async function portBoshaguncha(port: number, soniya: number) {
+  const chegara = Date.now() + soniya * 1000;
+  while (Date.now() < chegara) {
+    if (!(await portBandmi(port))) return;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+}
 
 async function kut(url: string, soniya: number) {
   const chegara = Date.now() + soniya * 1000;
@@ -69,9 +93,20 @@ before(async () => {
   });
   assert.equal(tayyorla.status, 0, `baza tayyorlanmadi:\n${tayyorla.stdout}\n${tayyorla.stderr}`);
 
+  // Port band bo'lsa JIM QOLMAYMIZ. Aks holda `next start` bog'lana olmay
+  // o'ladi, testlar esa BOSHQA (eski) serverga urib, tushunarsiz xatolar
+  // beradi — eski server xotirasidagi bo'lak nomlari diskdagi yangi
+  // build bilan mos kelmaydi va sahifa "Tizim yangilandi" ga tushadi.
+  assert.equal(await portBandmi(PORT), false, `${PORT}-port band — avvalgi yurishdan qolgan server o'chirilmagan`);
+
+  // `detached: true` — bolalar bilan BITTA jarayon guruhi. `npx` faqat
+  // o'ram: unga SIGTERM yuborilsa `next-server` bolasi tirik qoladi va
+  // portni ushlab turadi (aynan shu narsa testni beqaror qilgan edi).
+  // Guruhga yuborilgan signal esa butun daraxtni o'chiradi.
   // Windows'da `npx` bajariladigan fayl emas (`npx.cmd`) — shell orqali topiladi.
   server = spawn("npx", ["next", "start", "-p", String(PORT)], {
     shell: process.platform === "win32",
+    detached: process.platform !== "win32",
     env: {
       ...process.env,
       DATABASE_URL: "file:./prisma/e2e.db",
@@ -83,6 +118,15 @@ before(async () => {
     stdio: "ignore",
   });
 
+  // Xavfsizlik to'ri: `after()` bajarilmay qolsa ham (uzilgan yurish, SIGINT)
+  // server ortdan o'chadi — aks holda u portni ushlab, KEYINGI yurishni
+  // buzadi. `once` — takror ro'yxatga olinmasin.
+  process.once("exit", ochir);
+  process.once("SIGINT", () => {
+    ochir();
+    process.exit(130);
+  });
+
   await kut(`${ASOS}/login`, 90);
 
   const { chromium } = await import("playwright");
@@ -92,17 +136,38 @@ before(async () => {
   });
 });
 
+/**
+ * Serverni BUTUN JARAYON DARAXTI bilan o'chiradi.
+ *
+ * `spawn("npx", ...)` ikki jarayon yaratadi: `npx` o'rami va uning bolasi
+ * `next-server`. O'ramga SIGTERM yuborilsa bola TIRIK QOLADI va portni
+ * ushlab turadi. Keyingi yurishda `next start` bog'lana olmaydi, testlar esa
+ * ESKI serverga uradi — build yangilangan bo'lsa uning xotirasidagi bo'lak
+ * nomlari diskda yo'q va sahifalar "Tizim yangilandi" ga tushadi. Aynan shu
+ * narsa smoke to'plamini "gohida qizil" qilib qo'ygan edi.
+ */
+function ochir() {
+  if (!server?.pid) return;
+  if (process.platform === "win32") {
+    // shell:true bilan spawn qilinganda kill() faqat qobiq (shell)ni o'ldiradi.
+    spawnSync("taskkill", ["/pid", String(server.pid), "/T", "/F"]);
+    return;
+  }
+  try {
+    // Manfiy PID = butun jarayon guruhi (`detached: true` shuning uchun).
+    process.kill(-server.pid, "SIGTERM");
+  } catch {
+    server.kill("SIGTERM");
+  }
+}
+
 after(async () => {
   if (browser) await browser.close();
-  if (server?.pid) {
-    if (process.platform === "win32") {
-      // shell:true bilan spawn qilinganda kill() faqat qobiq (shell)ni o'ldiradi,
-      // next server bolasi tirik qoladi — butun daraxtni taskkill o'chiradi.
-      spawnSync("taskkill", ["/pid", String(server.pid), "/T", "/F"]);
-    } else {
-      server.kill("SIGTERM");
-    }
-  }
+  if (!server?.pid) return;
+  ochir();
+  // Port haqiqatan bo'shaganiga ishonch hosil qilamiz — keyingi yurish
+  // band portga urilib qolmasin.
+  await portBoshaguncha(PORT, 10);
 });
 
 /** Yangi, sessiyasiz sahifa. */
@@ -112,18 +177,49 @@ async function yangiSahifa(): Promise<Page> {
 }
 
 /**
- * Sahifani ochadi va javobni qaytaradi.
+ * `app/error.tsx` dagi TIKLANISH ekrani sarlavhasi — JS bo'lagi yuklanmaganda
+ * chiqadi (`ChunkLoadError`).
  *
- * Qayta urinish BOR: Next.js klient routeri fon prefetch'i bilan navigatsiyani
- * bekor qilishi mumkin (`net::ERR_ABORTED`) — bu ilovaning nosozligi emas,
- * lekin testni beqaror qiladi. Uch marta urinib ham ochilmasa — bu haqiqiy
- * muammo va xato sifatida qaytadi.
+ * Yon menyuda ~30 havola bor va Next.js ularni fonda oldindan yuklaydi; test
+ * darhol keyingi sahifaga o'tsa, brauzer o'sha so'rovlarni bekor qiladi
+ * (`net::ERR_ABORTED`). Odatda bu zararsiz, lekin bekor qilingani
+ * `chunks/app/app/<modul>/error-*.js` bo'lsa React bo'lakni topa olmaydi.
+ *
+ * Chin foydalanuvchida `error.tsx` sahifani bir marta o'zi yangilaydi va
+ * hammasi joyiga tushadi. Test yangilanishni kutmaydi, shuning uchun shu
+ * ekranni tanib sahifani qayta ochamiz — ikkinchi urinishda bo'lak keshda.
+ *
+ * Uch urinishda ham ketmasa — bu chin muammo (masalan diskda yo'q bo'lak) va
+ * test yiqiladi.
+ */
+const TIKLANISH = "Tizim yangilandi";
+
+/** Xato ekranlari sarlavhalari — `xatosiz()` shularning birortasini kechirmaydi. */
+const XATO_EKRANLARI = [
+  "Application error", // Next.js o'zining ingliz ekrani
+  "Kutilmagan xatolik", // app/error.tsx
+  "Tizimda vaqtincha nosozlik", // app/global-error.tsx
+  "Nimadir noto'g'ri ketdi", // lib/copy.ts xatoSarlavha
+];
+
+/**
+ * Sahifani ochadi, chizilguncha kutadi va javobni qaytaradi.
+ *
+ * Ikki xil beqarorlikni yopadi, ikkalasi ham prefetch bekor qilinishidan:
+ *  1. `page.goto` ning o'zi `net::ERR_ABORTED` bilan yiqilishi;
+ *  2. sahifa o'rniga TIKLANISH ekranining chizilishi (yuqoridagi izoh).
  */
 async function och(page: Page, yol: string) {
   let oxirgi: unknown;
   for (let i = 0; i < 3; i++) {
     try {
-      return await page.goto(`${ASOS}${yol}`, { waitUntil: "domcontentloaded" });
+      const javob = await page.goto(`${ASOS}${yol}`, { waitUntil: "domcontentloaded" });
+      if (await tiklanishEkranimi(page)) {
+        oxirgi = new Error(`${yol}: "${TIKLANISH}" ekrani uch urinishda ham ketmadi`);
+        await page.waitForTimeout(500);
+        continue;
+      }
+      return javob;
     } catch (e) {
       oxirgi = e;
       await page.waitForTimeout(700);
@@ -132,11 +228,28 @@ async function och(page: Page, yol: string) {
   throw oxirgi;
 }
 
-/** Sahifada Next.js xato ekrani yo'qligini tekshiradi. */
+/**
+ * Sahifa chizildimi va u TIKLANISH ekranimi.
+ *
+ * `h1` ni kutamiz — ilovadagi HAR bir sahifada (kirish sahifasida ham) u bor,
+ * ya'ni bu "sahifa chizildi" belgisi. `h1` umuman kelmasa `false` qaytadi:
+ * bu boshqa muammo va uni chaqiruvchi testning o'z tekshiruvi ushlaydi.
+ */
+async function tiklanishEkranimi(page: Page): Promise<boolean> {
+  try {
+    await page.waitForSelector("h1", { timeout: 15_000 });
+  } catch {
+    return false;
+  }
+  return (await page.locator("h1").first().innerText()).trim() === TIKLANISH;
+}
+
+/** Sahifada xato ekrani yo'qligini tekshiradi. */
 async function xatosiz(page: Page) {
   const matn = (await page.locator("body").innerText()).slice(0, 4000);
-  assert.ok(!matn.includes("Application error"), "sahifa Application error ko'rsatdi");
-  assert.ok(!matn.includes("Nimadir noto'g'ri ketdi"), "sahifa xato holatiga tushdi");
+  for (const ekran of XATO_EKRANLARI) {
+    assert.ok(!matn.includes(ekran), `sahifa xato holatiga tushdi: "${ekran}"`);
+  }
 }
 
 async function kir(page: Page) {
@@ -149,6 +262,9 @@ async function kir(page: Page) {
   // Sahifa chizilib bo'lguncha kutamiz — aks holda keyingi navigatsiya
   // yarim yuklangan sahifani uzib qo'yadi.
   await page.waitForSelector("h1", { timeout: 60_000 });
+  // Kirishdan keyingi birinchi chizish eng ko'p prefetch keltiradi, ya'ni
+  // TIKLANISH ekrani aynan shu yerda ehtimolli — `och` bilan qayta ochamiz.
+  if (await tiklanishEkranimi(page)) await och(page, "/app");
 }
 
 // ---------- Kirish ----------
@@ -279,9 +395,23 @@ test("kirim qo'shiladi va ro'yxatda ko'rinadi", { skip: sabab }, async () => {
 
   await page.locator("form input[placeholder='0']").first().fill("125000");
   await page.locator("form input[type='text']").last().fill(izoh);
-  await page.getByRole("button", { name: "Qo'shish" }).click();
 
-  await page.waitForSelector(`text=${izoh}`, { timeout: 20_000 });
+  // Tugmani bosish bilan BIRGA server javobini kutamiz. Avval faqat yozuv
+  // ro'yxatda paydo bo'lishi kutilardi — so'rov yiqilsa yoki formada xato
+  // chiqsa test "20s da ko'rinmadi" deb yiqilardi va SABABI ko'rinmasdi.
+  const [javob] = await Promise.all([
+    page.waitForResponse(
+      (r) => r.url().endsWith("/api/transactions") && r.request().method() === "POST",
+      { timeout: 30_000 }
+    ),
+    page.getByRole("button", { name: "Qo'shish" }).click(),
+  ]);
+  assert.ok(
+    javob.ok(),
+    `kirim saqlanmadi: HTTP ${javob.status()} — ${(await javob.text()).slice(0, 300)}`
+  );
+
+  await page.waitForSelector(`text=${izoh}`, { timeout: 30_000 });
   await xatosiz(page);
   await page.context().close();
 });
