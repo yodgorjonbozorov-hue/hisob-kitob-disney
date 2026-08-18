@@ -3118,3 +3118,75 @@ sahifa chegarasiga tushsa brauzerda jamlash yolg'on raqam berardi.
 `npm run test:kategoriya` — 11 ta test: topshiriqdagi 1–5 stsenariylari,
 karta === tafsilot invarianti (qarz bo'lganda ham), Yozuvlar sahifasi
 regressiyasi, kunlik jamlar, qidiruv, sahifalash, bo'sh davr.
+
+---
+
+## Bosh sahifa (landing) — Claude Design maketi bo'yicha qayta yozildi (2026-08-18)
+
+### Manba
+
+Claude Design handoff to'plami: `Balansa Landing.dc.html` (+ `support.js` —
+prototip ishga tushirgichi, mahsulot kodiga ko'chirilmaydi). Maket HTML/CSS
+prototipi, shu bois vizual natija ko'chirildi, prototipning ichki tuzilishi
+emas.
+
+### Nima o'zgardi
+
+`src/app/page.tsx` avvalgi qisqa landing o'rniga 12 bo'limli sahifaga
+aylandi: hero → tanish holat → kunlik hisobot → Telegram → imkoniyatlar
+(bento) → rollar → hisobotlar → boshlash → narx → savollar → yakuniy CTA →
+footer. Bo'limlar `src/components/landing/` ostida (har biri 250 satrdan
+kichik).
+
+Bu sahifa `PublicShell` ni ishlatmaydi — maketda hero ustidan suzadigan
+QORONG'I panel va qorong'i footer bor. Kirish/ro'yxat/maxfiylik sahifalari
+avvalgidek `PublicShell` da qoldi (natijada `PublicShell` ning `cta`
+parametri hozircha chaqiruvchisiz turibdi — ataylab o'chirilmadi).
+
+### Dizayn tokenlari
+
+Maketdagi `--bg/--card/--sunk/--fg/--line/--in/--out/--warn` va grafik
+palitrasi loyihaning MAVJUD tokenlariga tushirildi (`bg-app`, `bg-surface`,
+`bg-surface-2`, `text-fg/muted/faint`, `income/expense/debt`, `chart-1…5`) —
+shu bois qorong'i mavzu ilova bilan bir xil palitrada qoladi. Yangi token
+faqat bitta: `shadow-lift` (maketdagi ikki qatlamli yumshoq soya,
+`--shadow-lift` orqali mavzuga qarab almashadi).
+
+Hero, yakuniy CTA, footer va telefon maketi — mavzudan QAT'I NAZAR qorong'i,
+u yerda ranglar to'g'ridan-to'g'ri hex bilan yozilgan.
+
+O'lchamlar maketdagi px qiymatlarida (`text-[44px]`, `rounded-[24px]`):
+loyihaning type-scale'i ilova ekranlari uchun sozlangan va marketing
+sahifasining o'lchamlari bilan mos kelmaydi. Moslashuv chegarasi — maketdagi
+container-query bilan bir xil 900px (`max-[900px]:`).
+
+### Prototipdan ATAYLAB ko'chirilmagani
+
+- Aktiv spetsifikatsiyalari (`V1 · ekran yozuvi 1280×800…`, `I3 · WebP ≤80 KB`)
+  — ular ishlab chiqarish uchun izoh, sayt matni emas.
+- Maketdagi `+998 90 000 00 00` — o'rin egallovchi raqam. `ALOQA.telefon`
+  (`lib/brand.ts`) `null` qilib qo'yildi; chin raqam yozilsa footerda o'zi
+  paydo bo'ladi.
+- Tarif narxlari maketda 299 000 / 400 000 edi. Sayt to'lov sahifasidan
+  BOSHQA raqam ko'rsatmasligi uchun narx va tarif nomi `lib/billing/plans.ts`
+  dan olinadi (STANDARD 199 000, PRO 399 000).
+- Prototipdagi placeholder logo o'rniga chin `Logo` komponenti (`inverted`).
+- Rollar jadvali ustunlari `lib/auth/roles.ts` dagi `ROL_LABEL` dan.
+
+### Harakat (animatsiya)
+
+`LandingMotion` — bitta klient komponent: IntersectionObserver bilan
+bo'limlarni ochadi va pul summalarini sanaydi (maketdagi skript bilan bir xil
+chegara: threshold 0.15, 900 ms, ease-out-cubic).
+
+`data-anim="on"` ni FAQAT shu skript qo'yadi — JS yuklanmasa CSS `opacity:0`
+umuman qo'llanmaydi va kontent boshidanoq ko'rinadi. `prefers-reduced-motion`
+da hamma element darhol ochiq, sanoq yo'q (brauzerda tekshirildi).
+
+### Tekshiruv
+
+- `npx next build` — o'tdi (`npm run build` ning `next build` bosqichi; undan
+  oldingi zaxira/migratsiya bosqichlari bazani talab qiladi).
+- `npm run test:isolation` — 22/22, `npm run test:izolyatsiya-royxati` — 9/9.
+- Playwright (1440 yorug'/qorong'i va 390 px): gorizontal siljish yo'q, mobil
+  menyu ochiladi/Esc bilan yopiladi, sanoq to'g'ri qiymatda tugaydi.

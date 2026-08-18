@@ -93,6 +93,8 @@ const config: Config = {
       boxShadow: {
         card: "0 1px 2px 0 rgb(12 26 33 / 0.04)",
         raised: "0 8px 28px 0 rgb(12 26 33 / 0.12)",
+        // Landing kartochkalari — mavzuga qarab almashadi (globals.css).
+        lift: "var(--shadow-lift)",
       },
       keyframes: {
         "slide-up": {
