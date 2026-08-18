@@ -21,11 +21,18 @@ export function Modal({
   open,
   onClose,
   title,
+  size = "md",
   children,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
+  /**
+   * `md` — forma oynasi (asosiy holat). `lg` — ro'yxat oynasi: uzun
+   * ro'yxatlar (kategoriya tafsiloti) tor ustunda o'qilmaydi.
+   * Mobil ko'rinish ikkalasida ham bir xil — pastdan chiqadigan varaq.
+   */
+  size?: "md" | "lg";
   children: React.ReactNode;
 }) {
   const panel = useRef<HTMLDivElement>(null);
@@ -100,7 +107,9 @@ export function Modal({
       <div
         ref={panel}
         onClick={(e) => e.stopPropagation()}
-        className="bg-surface text-fg w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-xl p-6 pb-safe max-h-[92vh] overflow-y-auto animate-slide-up sm:animate-fade-in"
+        className={`bg-surface text-fg w-full ${
+          size === "lg" ? "sm:max-w-2xl" : "sm:max-w-md"
+        } sm:rounded-2xl rounded-t-2xl shadow-xl p-6 pb-safe max-h-[92vh] overflow-y-auto animate-slide-up sm:animate-fade-in`}
       >
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-fg">{title}</h3>

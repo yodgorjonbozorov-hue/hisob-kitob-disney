@@ -23,6 +23,11 @@ export const GET = withTenant(async (request, _ctx, { session: user }) => {
     turi: searchParams.get("turi"),
     categoryId: searchParams.get("categoryId"),
     q: searchParams.get("q"),
+    // Kategoriya tafsiloti shu bayroq bilan keladi: ro'yxat yig'indisi bosh
+    // sahifadagi kategoriya summasi bilan bir xil bo'lishi uchun qarzga
+    // yozilgan yozuvlar chiqarib tashlanadi (lib/qarzFiltr.ts).
+    realPul: searchParams.get("realPul") === "1",
+    kunlikJami: searchParams.get("kunlik") === "1",
     minSumma: searchParams.get("minSumma") ? parseInt(searchParams.get("minSumma")!, 10) : null,
     maxSumma: searchParams.get("maxSumma") ? parseInt(searchParams.get("maxSumma")!, 10) : null,
     page: parseInt(searchParams.get("page") ?? "1", 10),
