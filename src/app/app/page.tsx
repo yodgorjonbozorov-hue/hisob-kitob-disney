@@ -3,11 +3,17 @@ import { prisma } from "@/lib/prisma";
 import { Card } from "@/components/ui/Card";
 import { StatCard } from "@/components/ui/StatCard";
 import { MonthSelector } from "@/components/MonthSelector";
-import { CategoryBars } from "@/components/charts/CategoryBars";
 import { TrendChart } from "@/components/charts/TrendChart";
 import { DailyDynamicsChart } from "@/components/charts/DailyDynamicsChart";
-import { formatMoneyCompact, formatSomLabel } from "@/lib/format";
-import { currentMonthString, todayDateOnlyString, todayTashkentDateOnlyString } from "@/lib/date";
+import { formatMoneyCompact, formatSomLabel, formatMonthLabel } from "@/lib/format";
+import {
+  currentMonthString,
+  todayDateOnlyString,
+  todayTashkentDateOnlyString,
+  monthRangeUTC,
+  utcDateToDateOnlyString,
+  parseMonthString,
+} from "@/lib/date";
 import { requireTenantPage } from "@/lib/auth/tenant";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { isManager } from "@/lib/auth/roles";
@@ -28,6 +34,7 @@ import { getProBugun } from "@/lib/queries/proDashboard";
 import { getKgSavdo } from "@/lib/queries/selos";
 import { bugunPaneliKorinadi, kgSavdoKorinadi } from "@/lib/mijozXos";
 import { KassaHome } from "./KassaHome";
+import { KategoriyaBloki } from "./KategoriyaBloki";
 import { SelosBugunKartasi } from "./SelosBugunKartasi";
 
 export default async function DashboardPage({
@@ -114,6 +121,14 @@ export default async function DashboardPage({
     // Bugungi kg savdosi (yozuvlardan): jami kg, tushum va sotuvchilar kesimi.
     kgPanel ? getKgSavdo(businessId, todayTashkentDateOnlyString()) : Promise.resolve(null),
   ]);
+
+  // Kategoriya tafsiloti uchun oy oralig'i, "YYYY-MM-DD" (ikkala chet kiradi).
+  // `monthRangeUTC.to` — keyingi oy boshi, shuning uchun bir kun ayiriladi.
+  const { from: oyBosh, to: oyKeyingi } = monthRangeUTC(month);
+  const oyFrom = utcDateToDateOnlyString(oyBosh);
+  const oyTo = utcDateToDateOnlyString(new Date(oyKeyingi.getTime() - 24 * 60 * 60 * 1000));
+  const { year: oyYil, monthIndex0: oyIndeks } = parseMonthString(month);
+  const oyNomi = formatMonthLabel(oyYil, oyIndeks);
 
   return (
     <div className="space-y-6">
@@ -243,16 +258,16 @@ export default async function DashboardPage({
         </Card>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card>
-          <h2 className="font-medium text-fg mb-4">Kirim — kategoriya bo'yicha</h2>
-          <CategoryBars data={kirimBreakdown} emptyLabel="Bu oyda kirim yo'q" />
-        </Card>
-        <Card>
-          <h2 className="font-medium text-fg mb-4">Chiqim — kategoriya bo'yicha</h2>
-          <CategoryBars data={chiqimBreakdown} emptyLabel="Bu oyda chiqim yo'q" />
-        </Card>
-      </div>
+      {/* Har kategoriya qatori bosiladi — o'sha kategoriyaning yozuvlari
+          ochiladi. Oy oralig'i ham uzatiladi: oynadagi jami kartadagi
+          summa bilan bir xil davrga tegishli bo'lishi shart. */}
+      <KategoriyaBloki
+        kirim={kirimBreakdown}
+        chiqim={chiqimBreakdown}
+        oyFrom={oyFrom}
+        oyTo={oyTo}
+        oyNomi={oyNomi}
+      />
 
       <Card>
         <h2 className="font-semibold text-fg mb-3">So'nggi 6 oy dinamikasi</h2>

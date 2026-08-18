@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { qidiruvRejimi } from "@/lib/db/dialect";
-import { dateOnlyStringToUTCDate } from "@/lib/date";
+import { dateOnlyStringToUTCDate, utcDateToDateOnlyString } from "@/lib/date";
 import { qarzsiz } from "@/lib/qarzFiltr";
 import type { Prisma } from "@prisma/client";
 
@@ -18,6 +18,22 @@ export interface TransactionListParams {
    * Direktor uchun `null` (hammasi). Qiymatni `transactionScopeUserId` beradi.
    */
   userId?: string | null;
+  /**
+   * REAL PUL REJIMI. Berilsa, qarzga yozilgan yozuvlar RO'YXATDAN ham
+   * chiqariladi (`lib/qarzFiltr.ts`), nafaqat jamilardan.
+   *
+   * Nega kerak: bosh sahifadagi kategoriya taqsimoti (`getCategoryBreakdown`)
+   * qarzni HISOBGA OLMAYDI. Agar tafsilot ro'yxati qarzli yozuvlarni ham
+   * ko'rsatsa, ro'yxat yig'indisi kartadagi summadan katta chiqadi — bir
+   * ekranda ikki xil haqiqat. Shuning uchun kategoriya tafsiloti shu
+   * bayroq bilan chaqiriladi.
+   *
+   * Yozuvlar sahifasida esa bayroq YOQILMAYDI: u ataylab hamma yozuvni
+   * ko'rsatadi va qarzni pastda alohida qator sifatida beradi.
+   */
+  realPul?: boolean;
+  /** Kunlik jamlar ham qaytarilsinmi (sana bo'yicha guruhlangan ro'yxat uchun). */
+  kunlikJami?: boolean;
   page?: number;
   pageSize?: number;
 }
@@ -46,9 +62,11 @@ export async function listTransactions(params: TransactionListParams) {
   const page = Math.max(1, params.page ?? 1);
   const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 20));
 
-  const where = buildTransactionWhere(params);
+  const xomWhere = buildTransactionWhere(params);
+  // Ro'yxat va sanoq shu shartdan; jamilar HAR DOIM qarzsiz (pastda).
+  const where = params.realPul ? qarzsiz(xomWhere) : xomWhere;
 
-  const [items, total, sums, kassaSums, kassalar] = await Promise.all([
+  const [items, total, sums, kassaSums, kassalar, kunlik] = await Promise.all([
     prisma.transaction.findMany({
       where,
       include: {
@@ -66,20 +84,31 @@ export async function listTransactions(params: TransactionListParams) {
     // Qarzga yozilgan yozuv `qarzKirim` da alohida ko'rsatiladi.
     prisma.transaction.groupBy({
       by: ["turi"],
-      where: qarzsiz(where),
+      where: qarzsiz(xomWhere),
       _sum: { summa: true },
     }),
     // KIRIMNING to'lov bo'limlari taqsimoti — pastdagi "Naqd / Click / Qarz"
     // qatorlari uchun. Aniq tolovTuri ustun; null (eski yozuvlar) — kassa turidan.
     prisma.transaction.groupBy({
       by: ["tolovTuri", "accountId"],
-      where: { ...where, turi: "kirim" },
+      where: { ...xomWhere, turi: "kirim" },
       _sum: { summa: true },
     }),
     prisma.account.findMany({
       where: { businessId: params.businessId },
       select: { id: true, turi: true },
     }),
+    // KUNLIK JAMLAR — sahifadan EMAS, butun filtrlangan to'plamdan.
+    // Brauzerda sahifadagi yozuvlarni jamlash mumkin edi, lekin kun ikki
+    // sahifa chegarasiga tushsa "kunlik jami" yolg'on chiqardi.
+    params.kunlikJami
+      ? prisma.transaction.groupBy({
+          by: ["sana"],
+          where,
+          _sum: { summa: true },
+          _count: { _all: true },
+        })
+      : Promise.resolve(null),
   ]);
 
   // Ikkalasi ham QARZSIZ to'plamdan — "Sof balans" qarzga berilgan savdo
@@ -115,7 +144,16 @@ export async function listTransactions(params: TransactionListParams) {
     qarzKirim,
   };
 
-  return { items, total, page, pageSize, totals };
+  // "YYYY-MM-DD" -> { summa, soni }. Guruhlangan ro'yxat sarlavhalari uchun.
+  const kunlikJamlar = kunlik
+    ? kunlik.map((k) => ({
+        sana: utcDateToDateOnlyString(k.sana),
+        summa: k._sum.summa ?? 0,
+        soni: k._count._all,
+      }))
+    : null;
+
+  return { items, total, page, pageSize, totals, kunlik: kunlikJamlar };
 }
 
 export type TransactionListResult = Awaited<ReturnType<typeof listTransactions>>;
