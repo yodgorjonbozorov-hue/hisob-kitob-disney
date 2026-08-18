@@ -5,6 +5,11 @@
  *   npm run zaxira:xom -- <fayl>             -> ko'rsatilgan faylga
  *   npm run zaxira:xom -- --tikla <fayl>     -> shu fayldan tiklaydi
  *
+ * UZOQDAGI bazaga (production: `libsql://`, `postgresql://`) tiklash uchun
+ * `--tasdiq` MAJBURIY: bu buyruq maqsad bazaning USTIGA yozadi va noto'g'ri
+ * env bilan bir marta chaqirish production ma'lumotini yo'q qilardi.
+ * Lokal `file:` bazada tasdiq so'ralmaydi (kundalik ish sekinlashmasin).
+ *
  * Tiklashda fayl formati O'ZI aniqlanadi — qo'shimcha buyruq kerak emas:
  *   .json            — oddiy JSON
  *   .json.gz         — gzip
@@ -85,7 +90,33 @@ function tiklaPg(yol) {
   console.log("\n✅ Tiklandi.");
 }
 
+/**
+ * Uzoqdagi (production) bazaga tiklashda ochiq tasdiq talab qiladi.
+ *
+ * Tiklash — maqsad bazani BUTUNLAY almashtiradi. `restore.ts` da bunday
+ * himoya (`--confirm`) allaqachon bor edi, bu skriptda esa YO'Q edi:
+ * `DATABASE_URL` production'ni ko'rsatib turganda bitta chaqiruv butun
+ * bazani zaxira nusxasi bilan almashtirib yuborardi.
+ */
+function tasdiqniTekshir() {
+  const url = process.env.DATABASE_URL ?? "";
+  const lokal = url.startsWith("file:");
+  if (lokal || process.argv.includes("--tasdiq")) return;
+
+  const yashirin = url.replace(/:\/\/[^@]*@/, "://***@").replace(/authToken=[^&]*/i, "authToken=***");
+  console.error(
+    "\n❌ UZOQDAGI bazaga tiklash tasdiqsiz bajarilmaydi.\n\n" +
+      `   Maqsad: ${yashirin}\n` +
+      "   Bu amal maqsad bazadagi ma'lumotni ZAXIRA NUSXASI bilan ALMASHTIRADI.\n\n" +
+      "   Ataylab qilayotgan bo'lsangiz:\n" +
+      "     npm run zaxira:xom -- --tikla <fayl> --tasdiq\n\n" +
+      "   Baza O'ZGARTIRILMADI.\n"
+  );
+  process.exit(1);
+}
+
 async function tikla(yol) {
+  tasdiqniTekshir();
   if (POSTGRES) return tiklaPg(yol);
 
   const { surat, shifrlangan } = suratniOqi(yol);

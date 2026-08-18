@@ -38,9 +38,27 @@ if (!process.env.DATABASE_URL) {
  * Postgres'ga qo'llashga urinib, tushunarsiz xato bilan yiqilardi (yoki
  * yomoni — yarim qo'llardi). Shuning uchun aniq xabar bilan to'xtaymiz.
  */
-function postgresMigratsiya() {
+/** Sxemadagi datasource provayderi ("sqlite" | "postgresql" | null). */
+function sxemaProvayderi() {
   const sxema = existsSync(SXEMA) ? readFileSync(SXEMA, "utf8") : "";
-  if (/provider\s*=\s*"sqlite"/.test(sxema)) {
+  return /provider\s*=\s*"(sqlite|postgresql)"/.exec(sxema)?.[1] ?? null;
+}
+
+/**
+ * Prisma CLI ni MAHALLIY o'rnatilganidan chaqiradi.
+ *
+ * `npx prisma` loyihaning `node_modules` idan topolmasa INTERNETDAN eng
+ * so'nggi versiyani tortadi. Tekshirildi: bunday holatda Prisma 7.x tushadi
+ * va loyihaning 5.x sxemasini "validation error" bilan rad etadi. Migratsiya
+ * qo'llaydigan vositaning versiyasi tasodifga qolmasligi kerak.
+ */
+function prismaBinari() {
+  const mahalliy = join("node_modules", ".bin", "prisma");
+  return existsSync(mahalliy) ? mahalliy : null;
+}
+
+function postgresMigratsiya() {
+  if (sxemaProvayderi() === "sqlite") {
     console.error(
       "\n❌ DATABASE_URL PostgreSQL'ni ko'rsatmoqda, lekin prisma/schema.prisma hali " +
         '`provider = "sqlite"`.\n\n' +
@@ -54,8 +72,19 @@ function postgresMigratsiya() {
     process.exit(1);
   }
 
+  const bin = prismaBinari();
+  if (!bin) {
+    console.error(
+      "\n❌ Prisma CLI topilmadi (node_modules/.bin/prisma).\n\n" +
+        "   `npm ci` bajarilganiga ishonch hosil qiling. Internetdan tortib olingan\n" +
+        "   boshqa versiya bilan migratsiya qo'llash XAVFLI — versiya sxemaga mos\n" +
+        "   kelmasligi mumkin.\n\n   Baza O'ZGARTIRILMADI.\n"
+    );
+    process.exit(1);
+  }
+
   console.log("PostgreSQL — `prisma migrate deploy` ishlatiladi.");
-  const res = spawnSync("npx", ["prisma", "migrate", "deploy"], {
+  const res = spawnSync(bin, ["migrate", "deploy"], {
     stdio: "inherit",
     env: process.env,
   });
@@ -69,6 +98,25 @@ function postgresMigratsiya() {
 
 if (isPostgres(process.env.DATABASE_URL)) {
   postgresMigratsiya();
+}
+
+// TESKARI YO'NALISH QO'RIQCHISI. Sxema Postgres'ga o'tkazilgan, lekin
+// `DATABASE_URL` hali `file:`/`libsql:` bo'lsa — quyidagi SQLite yo'li
+// `prisma/migrations/` dagi POSTGRES SQL'ini libsql orqali qo'llashga
+// urinadi. Tekshirildi: u YARIM QO'LLANADI (47 jadval yaratilib, keyin
+// `near "CONSTRAINT": syntax error` bilan to'xtadi) va hisobotga hech narsa
+// yozilmaydi — qo'lda tozalashsiz tuzatib bo'lmaydigan holat.
+if (sxemaProvayderi() === "postgresql") {
+  console.error(
+    "\n❌ prisma/schema.prisma PostgreSQL uchun sozlangan, lekin DATABASE_URL " +
+      "SQLite/Turso bazasini ko'rsatmoqda.\n\n" +
+      "   Bu holatda Postgres migratsiyalari SQLite'ga YARIM qo'llanadi —\n" +
+      "   baza qo'lda tozalashsiz tuzatib bo'lmaydigan holatga tushadi.\n\n" +
+      "   Yechim: DATABASE_URL ni Postgres bazasiga qarating, yoki sxemani\n" +
+      "   va prisma/migrations papkasini SQLite holatiga qaytaring.\n\n" +
+      "   Baza O'ZGARTIRILMADI.\n"
+  );
+  process.exit(1);
 }
 
 const client = createClient({
