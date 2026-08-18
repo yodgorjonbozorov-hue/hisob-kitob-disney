@@ -3079,3 +3079,42 @@ hisoblanadi. Qo'lda yuritiladigan "joriy balans" ustuni yo'q va qo'shilmadi.
 `npm run test:qarzdorlik` — 16 ta test, jumladan topshiriqdagi 1–5
 stsenariylari (1 mln → 3 mln → 2,5 mln → 2 mln → 0), tenant izolyatsiyasi,
 takror to'lov, bekor qilingan qarz, manfiy qoldiqning oldini olish.
+
+---
+
+## Kategoriya taqsimoti bosiladigan bo'ldi (2026-08-17)
+
+Bosh sahifadagi "Kirim/Chiqim — kategoriya bo'yicha" qatorlari endi bosiladi
+va o'sha kategoriyaning yozuvlarini ochadi.
+
+### Eng muhim nuqta — ikki ekranda bitta raqam
+
+`getCategoryBreakdown` (karta) qarzga yozilgan savdoni HISOBGA OLMAYDI
+(`lib/qarzFiltr.ts`), lekin `listTransactions` real-pul filtrini faqat
+JAMILARGA qo'llardi — ro'yxatga emas. Tafsilotni shundayligicha ochsak,
+ro'yxatda kartada yo'q yozuvlar chiqib, yig'indi kartadan katta bo'lardi.
+
+Shuning uchun `listTransactions` ga `realPul` bayrog'i qo'shildi: yoqilsa
+qarzli yozuvlar ro'yxatdan ham, sanoqdan ham chiqadi. Kategoriya tafsiloti
+`realPul=1` bilan chaqiriladi. Yozuvlar sahifasi esa bayroqsiz qoladi —
+u ataylab hamma yozuvni ko'rsatadi va qarzni pastda alohida qator qiladi
+(regressiya testi bilan qotirilgan).
+
+### Kunlik jamlar
+
+`kunlikJami` bayrog'i sana bo'yicha `groupBy` qo'shadi. Jam butun
+filtrlangan to'plamdan olinadi, sahifadagi yozuvlardan emas: kun ikki
+sahifa chegarasiga tushsa brauzerda jamlash yolg'on raqam berardi.
+
+### Yangi endpoint YO'Q
+
+`GET /api/transactions` allaqachon `turi`, `categoryId`, `from`, `to`, `q`,
+`page`, `pageSize` ni qo'llab-quvvatlardi va `businessId` +
+`transactionScopeUserId` ni majburlardi. Unga ikkita ixtiyoriy parametr
+(`realPul`, `kunlik`) qo'shildi, xolos.
+
+### Test
+
+`npm run test:kategoriya` — 11 ta test: topshiriqdagi 1–5 stsenariylari,
+karta === tafsilot invarianti (qarz bo'lganda ham), Yozuvlar sahifasi
+regressiyasi, kunlik jamlar, qidiruv, sahifalash, bo'sh davr.

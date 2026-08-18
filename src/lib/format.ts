@@ -132,6 +132,15 @@ export function formatToshkentVaqt(date: Date): string {
   return `${d}.${m}.${t.getUTCFullYear()} ${soat}:${daq}`;
 }
 
+/**
+ * FAQAT SOAT — "19:42", Asia/Tashkent. Sana alohida sarlavhada ko'rinadigan
+ * guruhlangan ro'yxatlarda kerak (kategoriya tafsiloti): har qatorda to'liq
+ * sanani takrorlash o'qishni sekinlashtiradi.
+ */
+export function formatToshkentSoat(date: Date): string {
+  return formatToshkentVaqt(date).split(" ")[1];
+}
+
 /** Sana + oy nomi bilan: "24 Iyul 2026". DateOnly (UTC) qiymat uchun. */
 export function formatDate(date: Date): string {
   const d = date.getUTCDate();
