@@ -104,6 +104,17 @@ function pgDumpBormi() {
 }
 
 /**
+ * `pg_restore` tizimda bormi.
+ *
+ * Alohida tekshiriladi, chunki ZAXIRA bilan UNDAN QAYTISH — ikki xil
+ * vosita. `pg_dump` bor-u `pg_restore` yo'q muhitda zaxira olinaveradi,
+ * lekin u kerak bo'lgan kuni ochilmaydi — ya'ni zaxira yo'q bilan barobar.
+ */
+function pgRestoreBormi() {
+  return spawnSync("pg_restore", ["--version"], { encoding: "utf8" }).status === 0;
+}
+
+/**
  * Butun bazani `pg_dump` bilan suratga oladi.
  *
  * Format — `custom` (`-Fc`): u O'ZI siqilgan va `pg_restore` bilan tanlab
@@ -144,7 +155,7 @@ async function suratOl(url = process.env.DATABASE_URL) {
  * ma'no). `--single-transaction`: o'rtada uzilsa baza yarim holatda qolmaydi.
  */
 function suratTikla(bayt, url = process.env.DATABASE_URL) {
-  if (spawnSync("pg_restore", ["--version"], { encoding: "utf8" }).status !== 0) {
+  if (!pgRestoreBormi()) {
     throw new Error("pg_restore topilmadi — postgresql-client o'rnating.");
   }
   const res = spawnSync(
@@ -165,5 +176,6 @@ exports.ilovaJadvallari = ilovaJadvallari;
 exports.hisobotSoni = hisobotSoni;
 exports.kutayotganMigratsiyalar = kutayotganMigratsiyalar;
 exports.pgDumpBormi = pgDumpBormi;
+exports.pgRestoreBormi = pgRestoreBormi;
 exports.suratOl = suratOl;
 exports.suratTikla = suratTikla;

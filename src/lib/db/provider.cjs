@@ -18,4 +18,27 @@ function isPostgres(url) {
   return /^postgres(ql)?:\/\//i.test(url ?? "");
 }
 
+/**
+ * Ulanish satrini LOGGA CHIQARISH uchun xavfsiz ko'rinishga keltiradi.
+ *
+ * NEGA (audit: P0-3). `DATABASE_URL` — sir. U parol (`postgresql://user:PAROL@host`)
+ * yoki token (`libsql://...?authToken=...`) saqlaydi. Skriptlar esa "qaysi bazaga
+ * ulanyapmiz" deb uni chop etadi — va CI logi OMMAVIY bo'lishi mumkin. GitHub
+ * sekret maskalashi bu yerda yetarli emas: u faqat TO'LIQ sekret matnini
+ * to'sadi, URL ning bir bo'lagini (masalan faqat parolni) emas.
+ *
+ * Har skript o'zicha maskalasa bittasi esdan chiqadi — shuning uchun qoida
+ * `isPostgres` bilan bir joyda turadi.
+ *
+ * Maskalanadi: `user:parol@`, `authToken=...`, `password=...`.
+ * Qoladi: sxema, host, port, baza nomi — nosozlikni tushunish uchun shu yetarli.
+ */
+function yashirUrl(url) {
+  if (!url) return "(sozlanmagan)";
+  return String(url)
+    .replace(/\/\/[^/@]*@/, "//***@")
+    .replace(/([?&](authToken|password|sslpassword)=)[^&]*/gi, "$1***");
+}
+
 exports.isPostgres = isPostgres;
+exports.yashirUrl = yashirUrl;

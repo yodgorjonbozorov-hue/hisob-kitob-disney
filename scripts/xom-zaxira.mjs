@@ -26,7 +26,7 @@ import { dirname } from "node:path";
 import { klient, suratOl, suratTikla, jamiYozuv } from "./lib/xom-surat.mjs";
 import * as pg from "./lib/pg-surat.cjs";
 import { deshifrla, shifrlanganmi } from "../src/lib/backup/shifr-asos.cjs";
-import { isPostgres } from "../src/lib/db/provider.cjs";
+import { isPostgres, yashirUrl } from "../src/lib/db/provider.cjs";
 
 /** PostgreSQL yo'li `pg_dump`/`pg_restore` ga tayanadi (`lib/pg-surat.cjs`). */
 const POSTGRES = isPostgres(process.env.DATABASE_URL);
@@ -103,10 +103,9 @@ function tasdiqniTekshir() {
   const lokal = url.startsWith("file:");
   if (lokal || process.argv.includes("--tasdiq")) return;
 
-  const yashirin = url.replace(/:\/\/[^@]*@/, "://***@").replace(/authToken=[^&]*/i, "authToken=***");
   console.error(
     "\n❌ UZOQDAGI bazaga tiklash tasdiqsiz bajarilmaydi.\n\n" +
-      `   Maqsad: ${yashirin}\n` +
+      `   Maqsad: ${yashirUrl(url)}\n` +
       "   Bu amal maqsad bazadagi ma'lumotni ZAXIRA NUSXASI bilan ALMASHTIRADI.\n\n" +
       "   Ataylab qilayotgan bo'lsangiz:\n" +
       "     npm run zaxira:xom -- --tikla <fayl> --tasdiq\n\n" +

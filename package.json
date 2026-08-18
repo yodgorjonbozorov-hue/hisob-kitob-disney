@@ -75,6 +75,7 @@
     "test:xom-zaxira-shifr": "node -r ts-node/register tests/xom-zaxira-shifr.test.ts",
     "test:pg-build": "node -r ts-node/register tests/pg-build-zanjiri.test.ts",
     "test:pg-xavfsizlik": "node -r ts-node/register tests/pg-migratsiya-xavfsizligi.test.ts",
+    "test:ci-migratsiya": "node -r ts-node/register tests/ci-migratsiya.test.ts",
     "test:postgres": "node -r ts-node/register tests/postgres.test.ts",
     "e2e:tayyorla": "node scripts/e2e-tayyorla.mjs",
     "test:smoke": "node -r ts-node/register tests/smoke-brauzer.test.ts",

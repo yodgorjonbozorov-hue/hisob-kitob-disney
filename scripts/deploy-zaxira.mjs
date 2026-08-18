@@ -32,6 +32,7 @@ import * as pg from "./lib/pg-surat.cjs";
 import { hujjatYubor } from "./lib/telegram.mjs";
 import { KALIT_ENV, kalitBormi } from "../src/lib/backup/shifr-asos.cjs";
 import { isPostgres } from "../src/lib/db/provider.cjs";
+import { RUXSAT_ENV, migratsiyaRuxsati } from "./lib/rejim.cjs";
 
 /**
  * Provayder qatlamini tanlaydi.
@@ -86,6 +87,20 @@ async function main() {
   // ham o'tkazib yuboriladi, demak himoya qiladigan narsa yo'q.
   if (!process.env.DATABASE_URL) {
     console.log("DATABASE_URL yo'q — deploy zaxirasi o'tkazib yuborildi.");
+    return;
+  }
+
+  // POSTGRES + BUILD MUHITI: zaxira bu yerda OLINMAYDI (audit: P0-3).
+  //
+  // Postgres zaxirasi `pg_dump` ga tayanadi, Vercel build image'ida esa u
+  // yo'q. Shuning uchun Postgres'da zaxira+migratsiya CI'ga ko'chirilgan
+  // (`migratsiya.yml`, u yerda `postgresql-client` bor). Build hech narsa
+  // qilmaydi — kutayotgan migratsiya bo'lsa keyingi qadam (`db-migrate.mjs`)
+  // deploy'ni to'xtatadi. SQLite yo'liga bu qoida TEGMAYDI.
+  if (POSTGRES && !migratsiyaRuxsati()) {
+    console.log(
+      `PostgreSQL: zaxira CI'da olinadi (${RUXSAT_ENV}=ha) — build bosqichida o'tkazib yuborildi.`
+    );
     return;
   }
 

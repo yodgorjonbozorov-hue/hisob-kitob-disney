@@ -10,6 +10,12 @@
  * Ya'ni Postgres'ga birinchi deploy build bosqichida to'xtardi. Bu test
  * o'sha yo'lni HAQIQIY PostgreSQL bilan yuritadi.
  *
+ * P0-3 DAN KEYINGI O'ZGARISH. Postgres zaxirasi `pg_dump` ga tayanadi,
+ * Vercel build image'ida esa u yo'q — shuning uchun zaxira va migratsiya
+ * build'dan CI'ga ko'chdi (`MIGRATSIYA_RUXSAT=ha`). Quyidagi Postgres
+ * zaxira testlari o'sha bayroq bilan, ya'ni CI rejimida ishlaydi;
+ * bayroqsiz (build) xatti-harakat esa alohida test bilan qamralgan.
+ *
  * Ishga tushirish:
  *   PG_TEST_URL="postgresql://postgres@127.0.0.1:5432/balansa_test" \
  *     npm run test:pg-build
@@ -101,7 +107,15 @@ function ajrat(tana: Buffer, chegara: string) {
   return { nom, izoh, bayt };
 }
 
-/** `deploy-zaxira.mjs` ni berilgan env bilan ishga tushiradi (asinxron — server shu jarayonda). */
+/**
+ * `deploy-zaxira.mjs` ni berilgan env bilan ishga tushiradi (asinxron — server shu jarayonda).
+ *
+ * `MIGRATSIYA_RUXSAT` ataylab BO'SH: P0-3 dan keyin bu bayroq Postgres'da
+ * zaxira/migratsiya QAYERDA bajarilishini belgilaydi. Bo'sh = Vercel build
+ * (bazaga tegilmaydi), `ha` = migratsiya CI'si. Quyidagi testlar Postgres
+ * zaxirasining O'ZINI tekshiradi, ya'ni ular CI rejimida ishlaydi va
+ * bayroqni ochiq ko'rsatib beradi.
+ */
 function ishga(skript: string, env: Record<string, string | undefined>) {
   const bola = spawn(process.execPath, [`scripts/${skript}`], {
     env: {
@@ -112,6 +126,7 @@ function ishga(skript: string, env: Record<string, string | undefined>) {
       TELEGRAM_API_BASE: "",
       ZAXIRASIZ_DAVOM: "",
       BACKUP_ENCRYPTION_KEY: "",
+      MIGRATSIYA_RUXSAT: "",
       ...env,
     },
   });
@@ -268,12 +283,41 @@ test("pg_dump -> pg_restore aylanma yo'li ma'lumotni saqlaydi", { skip: sabab },
 
 // ───────────── deploy-zaxira.mjs — Postgres yo'li ─────────────
 
+test(
+  "deploy-zaxira: BUILD rejimida (bayroqsiz) Postgres zaxirasi olinmaydi (P0-3)",
+  { skip: sabab },
+  async () => {
+    // Vercel build muhitida `pg_dump` YO'Q. Ilgari bu yerda butun build
+    // to'xtardi. Endi build zaxirani umuman olmaydi — u CI'da olinadi.
+    await sxemaQur();
+    await hisobotQur([pgSurat.migratsiyaRoyxati()[0]]);
+
+    const oldin = telegram.qabullar.length;
+    const res = await ishga("deploy-zaxira.mjs", {
+      DATABASE_URL: PG,
+      // MIGRATSIYA_RUXSAT ataylab bo'sh — bu build bosqichi.
+      BACKUP_CHAT_ID: "-100123",
+      BACKUP_BOT_TOKEN: "sinov-token",
+      TELEGRAM_API_BASE: telegram.manzil(),
+      BACKUP_ENCRYPTION_KEY: KALIT,
+    });
+
+    assert.equal(res.status, 0, `build to'xtamasligi kerak:\n${res.stdout}\n${res.stderr}`);
+    assert.match(res.stdout, /zaxira CI'da olinadi/);
+    assert.equal(telegram.qabullar.length, oldin, "build bosqichida hech narsa yuborilmaydi");
+  }
+);
+
 test("deploy-zaxira: bo'sh Postgres bazasi — zaxira talab qilinmaydi", { skip: sabab }, async () => {
   await c.query("DROP SCHEMA IF EXISTS public CASCADE");
   await c.query("CREATE SCHEMA public");
 
   const oldin = telegram.qabullar.length;
-  const res = await ishga("deploy-zaxira.mjs", { DATABASE_URL: PG, TELEGRAM_API_BASE: telegram.manzil() });
+  const res = await ishga("deploy-zaxira.mjs", {
+    DATABASE_URL: PG,
+    MIGRATSIYA_RUXSAT: "ha",
+    TELEGRAM_API_BASE: telegram.manzil(),
+  });
 
   assert.equal(res.status, 0, res.stderr);
   assert.match(res.stdout, /Baza bo'sh/);
@@ -284,7 +328,7 @@ test("deploy-zaxira: hisobot bazaga mos kelmasa TO'XTAYDI", { skip: sabab }, asy
   // Jadvallar bor, `_prisma_migrations` bo'sh — yarim qurilgan baza.
   await sxemaQur();
 
-  const res = await ishga("deploy-zaxira.mjs", { DATABASE_URL: PG });
+  const res = await ishga("deploy-zaxira.mjs", { DATABASE_URL: PG, MIGRATSIYA_RUXSAT: "ha" });
   assert.notEqual(res.status, 0);
   assert.match(res.stderr, /hisoboti baza holatiga mos kelmaydi/);
 });
@@ -296,6 +340,7 @@ test("deploy-zaxira: kalitsiz Postgres zaxirasi YUBORILMAYDI (fail-closed)", { s
   const oldin = telegram.qabullar.length;
   const res = await ishga("deploy-zaxira.mjs", {
     DATABASE_URL: PG,
+    MIGRATSIYA_RUXSAT: "ha",
     BACKUP_CHAT_ID: "-100123",
     BACKUP_BOT_TOKEN: "sinov-token",
     TELEGRAM_API_BASE: telegram.manzil(),
@@ -318,6 +363,7 @@ test("deploy-zaxira: Postgres zaxirasi SHIFRLANGAN holda Telegramga ketadi", { s
   const oldin = telegram.qabullar.length;
   const res = await ishga("deploy-zaxira.mjs", {
     DATABASE_URL: PG,
+    MIGRATSIYA_RUXSAT: "ha",
     BACKUP_CHAT_ID: "-100123",
     BACKUP_BOT_TOKEN: "sinov-token",
     TELEGRAM_API_BASE: telegram.manzil(),

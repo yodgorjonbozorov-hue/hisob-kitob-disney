@@ -76,11 +76,18 @@ function pgLoyihaQur(opts: { nodeModules: boolean }) {
   return papka;
 }
 
-/** `db-migrate.mjs` ni berilgan papkadan turib ishga tushiradi. */
+/**
+ * `db-migrate.mjs` ni berilgan papkadan turib ishga tushiradi.
+ *
+ * P0-3 DAN KEYIN: Postgres'da bazaga YOZADIGAN yo'l `MIGRATSIYA_RUXSAT=ha`
+ * bayrog'i ostida turadi (busiz skript faqat kutayotganlarni O'QIYDI va
+ * deploy'ni to'xtatadi). Shu bois yozishni kutadigan testlar bayroqni
+ * OSHKORA beradi — qaysi rejim sinalayotgani test matnidan ko'rinib tursin.
+ */
 function migratsiya(cwd: string, env: Record<string, string | undefined>) {
   return spawnSync(process.execPath, [join(ILDIZ, "scripts/db-migrate.mjs")], {
     cwd,
-    env: { ...process.env, ...env },
+    env: { ...process.env, MIGRATSIYA_RUXSAT: "", ...env },
     encoding: "utf8",
   });
 }
@@ -136,7 +143,10 @@ test("mahalliy Prisma CLI bo'lmasa migratsiya BOSHLANMAYDI", () => {
   const papka = pgLoyihaQur({ nodeModules: false });
 
   try {
-    const res = migratsiya(papka, { DATABASE_URL: "postgresql://x:y@127.0.0.1:1/yoq" });
+    const res = migratsiya(papka, {
+      DATABASE_URL: "postgresql://x:y@127.0.0.1:1/yoq",
+      MIGRATSIYA_RUXSAT: "ha",
+    });
     assert.equal(res.status, 1);
     assert.match(res.stderr, /Prisma CLI topilmadi/);
     assert.match(res.stderr, /Baza O'ZGARTIRILMADI/);
@@ -219,7 +229,7 @@ test("PG -> PG normal migratsiya ishlaydi", { skip: sabab }, async () => {
 
   const papka = pgLoyihaQur({ nodeModules: true });
   try {
-    const res = migratsiya(papka, { DATABASE_URL: PG });
+    const res = migratsiya(papka, { DATABASE_URL: PG, MIGRATSIYA_RUXSAT: "ha" });
     assert.equal(res.status, 0, `${res.stdout}\n${res.stderr}`);
     assert.match(res.stdout, /Migratsiya tugadi/);
 
@@ -238,7 +248,7 @@ test("buzuq migratsiya: FALSE SUCCESS yo'q va baza yarim qolmaydi", { skip: saba
 
   const papka = pgLoyihaQur({ nodeModules: true });
   try {
-    assert.equal(migratsiya(papka, { DATABASE_URL: PG }).status, 0);
+    assert.equal(migratsiya(papka, { DATABASE_URL: PG, MIGRATSIYA_RUXSAT: "ha" }).status, 0);
 
     // Ataylab buzuq migratsiya qo'shamiz.
     const buzuq = join(papka, "prisma/migrations/00000000000001_buzuq");
@@ -248,7 +258,7 @@ test("buzuq migratsiya: FALSE SUCCESS yo'q va baza yarim qolmaydi", { skip: saba
       'CREATE TABLE "Yangi" ("id" TEXT NOT NULL);\nBU SQL EMAS;\n'
     );
 
-    const res = migratsiya(papka, { DATABASE_URL: PG });
+    const res = migratsiya(papka, { DATABASE_URL: PG, MIGRATSIYA_RUXSAT: "ha" });
     assert.equal(res.status, 1, "yiqilgan migratsiya muvaffaqiyat deb ko'rsatilmasligi kerak");
 
     // Postgres migratsiyani TRANZAKSIYADA qo'llaydi — yarim qolmaydi.

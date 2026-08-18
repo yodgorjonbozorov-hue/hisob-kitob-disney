@@ -1,13 +1,27 @@
-# Migratsiyalarni TELEFONDAN qo'llash.
+# Migratsiyalarni QO'LLASH — production bazaga yozadigan YAGONA sanktsiyalangan yo'l.
 #
 # GitHub mobil ilovasi yoki brauzeridan:
 #   Actions -> "Migratsiya qo'llash" -> "Run workflow" -> tasdiq: HA -> Run
 #
-# Nega alohida workflow kerak (Vercel deploy'ning o'zi ham migratsiya
-# qo'llaydi va `scripts/deploy-zaxira.mjs` orqali avval zaxira oladi):
-# u yerdagi zaxira Telegram kanaliga ketadi. Bu yerda esa xom surat
-# GitHub artefakti sifatida saqlanadi (30 kun) va migratsiya deploy'dan
-# ajratilgan holda, xohlagan paytda ishga tushiriladi.
+# NEGA MIGRATSIYA BUILD'DA EMAS, SHU YERDA (audit: P0-3).
+# Ilgari zaxira va migratsiya `npm run build` zanjirida turardi, ya'ni ular
+# Vercel BUILD muhitida bajarilardi. PostgreSQL zaxirasi esa `pg_dump` ga
+# tayanadi va Vercel build image'ida u YO'Q. Natijada Postgres'ga o'tilganda
+# har deploy build bosqichida to'xtardi — yoki `ZAXIRASIZ_DAVOM=ha` bilan
+# chetlab o'tilib, ZAXIRASIZ migratsiya qilinardi. Ikkalasi ham yaroqsiz.
+#
+# Endi Postgres'da bazaga yozadigan har qanday amal FAQAT shu workflow'da,
+# `MIGRATSIYA_RUXSAT=ha` bayrog'i ostida bajariladi. Vercel build esa
+# bazaga TEGMAYDI: u faqat kutayotgan migratsiya bor-yo'qligini o'qiydi va
+# bo'lsa deploy'ni to'xtatadi (`scripts/db-migrate.mjs`).
+#
+# DEPLOY BILAN BOG'LIQLIK. Bu workflow yiqilsa migratsiyalar QO'LLANMAY
+# qoladi. Shu holatda keyingi Vercel build ham TO'XTAYDI — chunki u
+# kutayotgan migratsiyani ko'radi. Ya'ni sxemasi bazadan oldinda ketgan
+# ilova production'ga chiqib ketolmaydi.
+#
+# `ZAXIRASIZ_DAVOM=ha` bu yerda ATAYLAB ISHLATILMAYDI: zaxirasiz migratsiya
+# — qaytish yo'lisiz migratsiya.
 name: Migratsiya qo'llash
 
 on:
@@ -33,8 +47,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
+    # Bazaga yozishga ruxsat SHU WORKFLOW darajasida beriladi. Skriptlar
+    # (`db-migrate.mjs`, `deploy-zaxira.mjs`, `apply-hammasi.mjs`) shu
+    # bayroqsiz Postgres bazaga yozmaydi.
+    env:
+      MIGRATSIYA_RUXSAT: ha
+
     steps:
-      - name: Tasdiqni tekshirish
+      # ---- 1. Preflight: tasdiq ----
+      - name: 1. Tasdiqni tekshirish
         if: inputs.tasdiq != 'HA'
         run: |
           echo "::error::Tasdiq berilmadi. Bazaga yozadigan amal — tasodifan"
@@ -50,47 +71,116 @@ jobs:
 
       - name: Bog'liqliklar
         run: npm ci
-        env:
-          # Prisma generate postinstall'da ishlaydi; ulanish shart emas.
-          PRISMA_SKIP_POSTINSTALL_GENERATE: "false"
 
-      - name: Sirlar borligini tekshirish
+      # ---- 2. PostgreSQL klienti ----
+      # Versiya HARDCODE QILINMAYDI: runner image'ida `postgresql-client`
+      # odatda allaqachon bor, shuning uchun avval mavjudligi tekshiriladi
+      # va faqat yo'q bo'lsa o'rnatiladi. Bu qadam muvaffaqiyatsiz bo'lsa
+      # ham to'xtatmaymiz — haqiqiy qaror keyingi qadamda (preflight)
+      # `pg_dump`/`pg_restore` ISHLAYAPTIMI degan tekshiruv bilan olinadi.
+      - name: 2. PostgreSQL klienti
+        continue-on-error: true
+        run: |
+          if command -v pg_dump >/dev/null && command -v pg_restore >/dev/null; then
+            echo "postgresql-client allaqachon bor:"
+            pg_dump --version
+            pg_restore --version
+          else
+            echo "postgresql-client topilmadi — o'rnatilmoqda."
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends postgresql-client
+            pg_dump --version || true
+          fi
+
+      # ---- 3. Preflight: URL, provayder, vositalar, sirlar, kutayotganlar ----
+      # Bu qadam BAZAGA YOZMAYDI. Mantiqi `scripts/migratsiya-preflight.mjs`
+      # da — YAML ichidagi shell blokini na lokal sinab, na test bilan
+      # qamrab bo'lardi, bu esa to'xtatuvchi mantiq uchun yaroqsiz.
+      - name: 3. Preflight (URL, provayder, pg_dump, sirlar, kutayotganlar)
+        id: preflight
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: |
-          if [ -z "$DATABASE_URL" ]; then
-            echo "::error::DATABASE_URL sekret sozlanmagan."
-            echo "::error::Settings -> Secrets and variables -> Actions -> New repository secret"
-            exit 1
-          fi
-          echo "DATABASE_URL sozlangan."
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: node scripts/migratsiya-preflight.mjs
 
-      # Faqat zaxira: migratsiyaga tegmasdan surat olish (xohlagan paytda).
-      - name: Faqat zaxira
+      # Zaxira fayli nomi OLDINDAN belgilanadi, shunda keyingi qadamlar
+      # (tekshiruv, migratsiya) aynan SHU faylga murojaat qiladi. Nomda
+      # ulanish satrining birorta bo'lagi YO'Q — faqat run raqami.
+      - name: 4. Zaxira fayl nomi
+        id: fayl
+        run: |
+          if [ "${{ steps.preflight.outputs.provayder }}" = "postgresql" ]; then
+            echo "yol=prisma/backups/ci-${{ github.run_number }}.dump" >> "$GITHUB_OUTPUT"
+          else
+            echo "yol=prisma/backups/ci-${{ github.run_number }}.json" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ---- 5. ZAXIRA ----
+      # Bu qadam yiqilsa keyingi hech narsa bajarilmaydi (GitHub Actions
+      # standart xatti-harakati: `if: success()` nazarda tutilgan).
+      # Ya'ni ZAXIRASIZ MIGRATSIYA MUMKIN EMAS.
+      - name: 5. Zaxira (xom surat)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: npm run zaxira:xom -- "${{ steps.fayl.outputs.yol }}"
+
+      # ---- 6. ZAXIRA TEKSHIRUVI ----
+      # "Skript 0 kod qaytardi" — zaxira ishlaydi degani emas. Fayl o'qib
+      # ko'riladi (`pg_restore --list` yoki JSON). Bazaga ulanmaydi.
+      #
+      # `--jadvallar` — preflight sanagan MANBA jadvallar soni. Suratda
+      # undan kam bo'lsa zaxira to'liq emas. Baza hali bo'sh bo'lsa (0)
+      # bo'sh surat kutilgan holat va migratsiya davom etadi.
+      - name: 6. Zaxira tekshiruvi
+        run: |
+          node scripts/zaxira-tekshir.mjs "${{ steps.fayl.outputs.yol }}" \
+            --jadvallar "${{ steps.preflight.outputs.jadvallar }}"
+
+      # Faqat-zaxira rejimida mantiqiy (Prisma) zaxira ham olinadi. To'liq
+      # oqimda uni `apply-hammasi.mjs` migratsiyadan KEYIN o'zi oladi —
+      # o'shanda baza va kod sxemasi mos keladi.
+      - name: 6b. Mantiqiy zaxira (faqat-zaxira rejimida)
         if: inputs.faqat_zaxira
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
-        run: |
-          npm run zaxira:xom
-          npm run backup
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: npm run backup
 
-      # To'liq oqim: xom surat -> migratsiyalar -> kassa -> tekshiruv -> zaxira.
-      # Skript o'zi fail-fast: birortasi yiqilsa keyingilari ishga tushmaydi.
-      - name: Migratsiyalarni qo'llash
+      # ---- 7. MIGRATSIYA ----
+      # `apply-hammasi.mjs` o'zi ham fail-fast: migratsiya yiqilsa kassa
+      # migratsiyasi va tekshiruv umuman ishga tushmaydi. `--surat` bilan
+      # 5-qadamdagi TEKSHIRILGAN surat beriladi — ikkinchi dump olinmaydi.
+      - name: 7. Migratsiya + kassa migratsiyasi + tekshiruv
         if: ${{ !inputs.faqat_zaxira }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
-        run: npm run apply:hammasi
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: npm run apply:hammasi -- --surat "${{ steps.fayl.outputs.yol }}"
 
-      # Zaxiralar HAR DOIM yuklanadi — jarayon yiqilgan bo'lsa ular ayniqsa kerak.
-      - name: Zaxiralarni saqlash
+      # ---- 8. ARTEFAKTNI SHIFRLASH ----
+      # Artefakt — oddiy ZIP: repozitoriyga kirish huquqi bo'lgan HAR KIM
+      # yuklab oladi. Telegramga ketadigan zaxira allaqachon shifrlanadi,
+      # artefakt esa OCHIQ ketardi (audit: P0-3). `if: always()` — jarayon
+      # yiqilgan bo'lsa ham papkada ochiq zaxira qolmasin.
+      - name: 8. Zaxirani shifrlash (artefakt uchun)
+        if: always()
+        env:
+          BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: node scripts/zaxira-shifrla.mjs prisma/backups
+
+      # Faqat `.enc` yuklanadi. Naqsh ataylab tor: 8-qadam qandaydir sababga
+      # ko'ra bajarilmay qolsa, ochiq fayl artefaktga TUSHMAYDI — artefakt
+      # bo'sh bo'lib qoladi (`if-no-files-found: warn`).
+      - name: 9. Zaxirani saqlash (shifrlangan)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: zaxira-${{ github.run_number }}
-          path: prisma/backups/
+          path: prisma/backups/*.enc
           retention-days: 30
           if-no-files-found: warn
 
@@ -99,7 +189,13 @@ jobs:
         run: |
           echo "### ✅ Migratsiya tugadi" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Zaxiralar \`zaxira-${{ github.run_number }}\` artefaktida (30 kun)." >> $GITHUB_STEP_SUMMARY
+          echo "Provayder: \`${{ steps.preflight.outputs.provayder }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Zaxira \`zaxira-${{ github.run_number }}\` artefaktida (AES-256-GCM, 30 kun)." >> $GITHUB_STEP_SUMMARY
+          echo "Ochish uchun \`BACKUP_ENCRYPTION_KEY\` kerak:" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo 'npm run zaxira:xom -- --tikla <fayl>.enc --tasdiq' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Keyingi qadamlar:" >> $GITHUB_STEP_SUMMARY
           echo "1. Ilovani qayta deploy qiling" >> $GITHUB_STEP_SUMMARY
@@ -110,7 +206,11 @@ jobs:
         run: |
           echo "### ❌ Migratsiya yiqildi" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Skript fail-fast: keyingi qadamlar bajarilmadi." >> $GITHUB_STEP_SUMMARY
+          echo "Qadamlar fail-fast: birortasi yiqilsa keyingilari bajarilmadi." >> $GITHUB_STEP_SUMMARY
           echo "Log'ni o'qing — xato sababi va yechimi yozilgan." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Zaxira olingan bo'lsa \`zaxira-${{ github.run_number }}\` artefaktida." >> $GITHUB_STEP_SUMMARY
+          echo "**Deploy holati:** migratsiya qo'llanmagani uchun keyingi Vercel build ham" >> $GITHUB_STEP_SUMMARY
+          echo "to'xtaydi (\`scripts/db-migrate.mjs\` kutayotgan migratsiyani ko'radi)." >> $GITHUB_STEP_SUMMARY
+          echo "Ya'ni sxemasi bazadan oldinda ketgan ilova production'ga CHIQMAYDI." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Zaxira olingan bo'lsa \`zaxira-${{ github.run_number }}\` artefaktida (shifrlangan)." >> $GITHUB_STEP_SUMMARY

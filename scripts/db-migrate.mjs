@@ -19,6 +19,8 @@ import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { isPostgres } from "../src/lib/db/provider.cjs";
+import { RUXSAT_ENV, migratsiyaRuxsati } from "./lib/rejim.cjs";
+import { pgKlient, kutayotganMigratsiyalar } from "./lib/pg-surat.cjs";
 
 const MIGRATIONS_DIR = "prisma/migrations";
 const SXEMA = "prisma/schema.prisma";
@@ -57,7 +59,45 @@ function prismaBinari() {
   return existsSync(mahalliy) ? mahalliy : null;
 }
 
-function postgresMigratsiya() {
+/**
+ * Build muhitida: bazaga YOZMASDAN kutayotgan migratsiya bor-yo'qligini
+ * tekshiradi. `pg_dump` ham, yozish huquqi ham kerak emas — faqat o'qish.
+ */
+async function kutayotganlarniTekshir() {
+  let kutayotgan;
+  try {
+    const c = await pgKlient();
+    try {
+      kutayotgan = await kutayotganMigratsiyalar(c);
+    } finally {
+      await c.end();
+    }
+  } catch (e) {
+    console.error(
+      `\n❌ Bazaga ulanib bo'lmadi — kutayotgan migratsiyalarni tekshirib bo'lmadi.\n\n` +
+        `   ${e.message}\n\n   Baza O'ZGARTIRILMADI.\n`
+    );
+    process.exit(1);
+  }
+
+  if (kutayotgan.length === 0) {
+    console.log("PostgreSQL: kutayotgan migratsiya yo'q — build davom etadi.");
+    process.exit(0);
+  }
+
+  console.error(
+    `\n❌ ${kutayotgan.length} ta migratsiya hali qo'llanmagan:\n\n` +
+      kutayotgan.map((d) => `     · ${d}`).join("\n") +
+      "\n\n   PostgreSQL migratsiyasi build ichida BAJARILMAYDI — u zaxira bilan\n" +
+      "   birga CI'da qo'llanadi (GitHub -> Actions -> \"Migratsiya qo'llash\").\n\n" +
+      "   Avval o'sha workflow'ni ishga tushiring, keyin qayta deploy qiling.\n" +
+      `   (CI o'zini ${RUXSAT_ENV}=ha bilan tanitadi.)\n\n` +
+      "   Baza O'ZGARTIRILMADI.\n"
+  );
+  process.exit(1);
+}
+
+async function postgresMigratsiya() {
   if (sxemaProvayderi() === "sqlite") {
     console.error(
       "\n❌ DATABASE_URL PostgreSQL'ni ko'rsatmoqda, lekin prisma/schema.prisma hali " +
@@ -70,6 +110,19 @@ function postgresMigratsiya() {
         "   Baza O'ZGARTIRILMADI.\n"
     );
     process.exit(1);
+  }
+
+  // BUILD MUHITIDA MIGRATSIYA QILINMAYDI (audit: P0-3).
+  //
+  // Postgres migratsiyasi CI'da (`migratsiya.yml`) bajariladi: u yerda
+  // `pg_dump` bor va zaxira olinadi. Vercel build esa faqat ilovani
+  // yig'adi. Bu yerda ikki narsa ta'minlanadi:
+  //   1. production migratsiyasi build ichida JIMGINA ishga tushmaydi;
+  //   2. sxemasi bazadan OLDINDA bo'lgan ilova deploy bo'lib ketmaydi —
+  //      kutayotgan migratsiya bo'lsa build to'xtaydi.
+  if (!migratsiyaRuxsati()) {
+    await kutayotganlarniTekshir();
+    return;
   }
 
   const bin = prismaBinari();
@@ -97,7 +150,7 @@ function postgresMigratsiya() {
 }
 
 if (isPostgres(process.env.DATABASE_URL)) {
-  postgresMigratsiya();
+  await postgresMigratsiya();
 }
 
 // TESKARI YO'NALISH QO'RIQCHISI. Sxema Postgres'ga o'tkazilgan, lekin
