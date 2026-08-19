@@ -3427,3 +3427,17 @@ Faqat `business.omborli` va OMBOR moduli yoqiq bo'lganda. Ombori yo'q
 biznesda karta umuman chiqmaydi — "0 dona" deb turish chalg'itardi. Bu
 qarz kartasidagi holatdan FARQ QILADI: u yerda ma'lumot bor edi, karta esa
 uni yashirardi.
+
+### Qiymat qo'shildi (2026-08-19)
+
+Kartada endi ombor QIYMATI ham bor: `Σ(miqdor × kelganNarx)` + mahsulotga
+yozilgan xarajatlar. Prisma'ning `_sum` i ikki ustunni ko'paytira olmaydi,
+shuning uchun xom so'rov (`getProductProfitability` dagi kabi naqsh),
+tenant sharti SQL ichida — `businessScope`.
+
+Xarajatlar ATAYLAB qo'shiladi: Ombor sahifasidagi "Ombor qiymati" AYNI shu
+qoidadan hisoblanadi, ya'ni karta va sahifa hech qachon ikki xil pul raqami
+ko'rsatmaydi. Test buni majburlaydi.
+
+Miqdor birliklar bo'ylab qo'shilmaydi, QIYMAT esa qo'shilaveradi — pul
+hamma birlik uchun bir xil so'm.
