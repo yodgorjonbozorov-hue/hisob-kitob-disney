@@ -36,8 +36,8 @@ export default async function ModullarSahifasi() {
       </Bolim>
 
       <Bolim sarlavha="Batafsil" izoh="Tarifda mavjud bo'lgan mijozlarga nisbatan qamrov">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="jadval-siljish">
+          <table className="w-full text-sm min-w-[32rem]">
             <thead>
               <tr className="border-b border-line">
                 <th className="px-3 py-2 text-left text-2xs uppercase tracking-wide text-faint">Modul</th>

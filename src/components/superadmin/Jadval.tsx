@@ -45,7 +45,7 @@ export function Jadval<T>({
   return (
     <>
       {/* Desktop: jadval */}
-      <div className="hidden lg:block overflow-x-auto rounded-xl border border-line bg-surface">
+      <div className="hidden lg:block jadval-siljish rounded-xl border border-line bg-surface">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-line bg-surface-2/60">

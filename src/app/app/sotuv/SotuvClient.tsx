@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { Jadval, type Ustun } from "@/components/ui/Jadval";
 import { formatSomLabel, formatDateUZ } from "@/lib/format";
 import { isAvto, omborMatn } from "@/lib/biznesTuri";
 import type { ProductKassirDTO, SaleDTO } from "@/lib/queries/inventory";
@@ -36,6 +37,47 @@ export function SotuvClient({
   const [sales, setSales] = useState(initialSales);
   const [bekorId, setBekorId] = useState<string | null>(null);
 
+  // Ustun ta'rifi BITTA — desktop jadval ham, mobil kartochka ham shundan.
+  const ustunlar: Ustun<SaleDTO>[] = [
+    {
+      kalit: "sana",
+      sarlavha: "Sana",
+      className: "whitespace-nowrap",
+      katak: (s) => formatDateUZ(new Date(s.sana)),
+    },
+    {
+      kalit: "mahsulot",
+      sarlavha: M.birlikBosh,
+      katak: (s) => (
+        <span className={s.bekorQilingan ? "opacity-60 line-through" : ""}>
+          {s.productNomi}
+          {!avto && <span className="text-faint"> × {s.miqdor}</span>}
+          {s.bekorQilingan && (
+            <span className="block text-2xs text-expense no-underline">
+              Bekor qilindi{s.bekorSabab ? `: ${s.bekorSabab}` : ""}
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      kalit: "summa",
+      sarlavha: "Summa",
+      raqam: true,
+      className: "font-medium",
+      katak: (s) => formatSomLabel(s.jamiSumma),
+    },
+    {
+      kalit: "tolov",
+      sarlavha: "To'lov",
+      katak: (s) => (
+        <Badge tone={s.tolovTuri === "naqd" ? "kirim" : "neutral"}>
+          {s.tolovTuri === "naqd" ? "Naqd" : "Qarz"}
+        </Badge>
+      ),
+    },
+  ];
+
   return (
     <>
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -51,70 +93,28 @@ export function SotuvClient({
       />
 
       <Card>
-        <h2 className="font-semibold text-fg mb-3">So'nggi sotuvlar</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-faint text-xs uppercase">
-                <th className="pb-2">Sana</th>
-                <th className="pb-2">{M.birlikBosh}</th>
-                <th className="pb-2 text-right">Summa</th>
-                <th className="pb-2">To&apos;lov</th>
-                <th className="pb-2" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {sales.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="text-center text-faint py-6">
-                    Hali sotuv yo'q
-                  </td>
-                </tr>
-              )}
-              {sales.map((s) => (
-                <tr key={s.id} className={s.bekorQilingan ? "opacity-50 line-through" : ""}>
-                  <td className="py-2 whitespace-nowrap">{formatDateUZ(new Date(s.sana))}</td>
-                  <td className="py-2">
-                    {s.productNomi}
-                    {!avto && <span className="text-faint"> × {s.miqdor}</span>}
-                    {s.bekorQilingan && (
-                      <span className="block text-2xs text-expense no-underline">
-                        Bekor qilindi{s.bekorSabab ? `: ${s.bekorSabab}` : ""}
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-2 text-right font-medium">{formatSomLabel(s.jamiSumma)}</td>
-                  <td className="py-2">
-                    <Badge tone={s.tolovTuri === "naqd" ? "kirim" : "neutral"}>
-                      {s.tolovTuri === "naqd" ? "Naqd" : "Qarz"}
-                    </Badge>
-                  </td>
-                  <td className="py-2 text-right whitespace-nowrap">
-                    {!s.bekorQilingan && (
-                      <a
-                        href={`/api/sales/${s.id}/receipt`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-2xs text-brand hover:underline"
-                      >
-                        Chek
-                      </a>
-                    )}
-                    {bekorQilaOladi && !s.bekorQilingan && (
-                      <button
-                        type="button"
-                        onClick={() => setBekorId(s.id)}
-                        className="text-2xs text-expense hover:underline ml-3"
-                      >
-                        Bekor qilish
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <h2 className="font-semibold text-fg mb-3">So&apos;nggi sotuvlar</h2>
+        <Jadval
+          ustunlar={ustunlar}
+          qatorlar={sales}
+          kalit={(s) => s.id}
+          amallar={(s) => [
+            ...(!s.bekorQilingan
+              ? [
+                  {
+                    label: "Chek",
+                    href: `/api/sales/${s.id}/receipt`,
+                    yangiOyna: true,
+                    tur: "asosiy" as const,
+                  },
+                ]
+              : []),
+            ...(bekorQilaOladi && !s.bekorQilingan
+              ? [{ label: "Bekor qilish", onClick: () => setBekorId(s.id), tur: "xavf" as const }]
+              : []),
+          ]}
+          bosh={<p className="text-center text-faint py-6 text-sm">Hali sotuv yo&apos;q</p>}
+        />
       </Card>
     </div>
 

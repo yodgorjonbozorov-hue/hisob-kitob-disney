@@ -19,7 +19,7 @@ export default async function CrmPage() {
     return (
       <div className="space-y-4">
         <div>
-          <h1 className="text-2xl font-bold text-fg">CRM</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-fg">CRM</h1>
           <p className="text-sm text-muted mt-1">
             Biznes: <span className="font-medium text-fg">{business?.nomi ?? "—"}</span> · Bitimlarni
             bosqichlar bo'ylab yuriting

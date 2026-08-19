@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
+import { Jadval, type Ustun } from "@/components/ui/Jadval";
 import { formatSom, formatSomLabel, parseSomInput } from "@/lib/format";
 import { omborMatn, isAvto } from "@/lib/biznesTuri";
 import type { ProductAdminDTO, OmborStats } from "@/lib/queries/inventory";
@@ -51,23 +52,134 @@ export function OmborClient({
     }
   }
 
+  /** Kutilayotgan foyda — mashinaga qilingan xarajatlardan keyin. */
+  function kutilayotganFoyda(p: ProductAdminDTO) {
+    return p.sotuvNarx > 0 ? p.sotuvNarx - p.kelganNarx - p.xarajat : 0;
+  }
+
+  // Ustun ta'rifi BITTA — desktop jadval ham, mobil kartochka ham shundan.
+  // Avto (olib-sotar) rejimida ustunlar boshqacha: yil, davlat raqami, xarajat.
+  const ustunlar: Ustun<ProductAdminDTO>[] = [
+    {
+      kalit: "nomi",
+      sarlavha: avto ? "Mashina" : "Nomi",
+      className: "font-medium",
+      katak: (p) => (
+        <span className={p.isActive ? "" : "opacity-50"}>
+          {p.nomi}
+          {avto && p.avtoRang && <span className="ml-2 text-2xs text-faint">{p.avtoRang}</span>}
+        </span>
+      ),
+    },
+    ...(avto
+      ? [
+          { kalit: "yil", sarlavha: "Yil", raqam: true, className: "text-muted", katak: (p: ProductAdminDTO) => p.avtoYil ?? "—" },
+          { kalit: "raqam", sarlavha: "Davlat raqami", className: "text-muted", katak: (p: ProductAdminDTO) => p.avtoRaqam ?? "—" },
+        ]
+      : []),
+    {
+      kalit: "tannarx",
+      sarlavha: avto ? "Olingan narx" : "Tannarx",
+      raqam: true,
+      katak: (p) => formatSomLabel(p.kelganNarx),
+    },
+    ...(avto
+      ? [
+          {
+            kalit: "xarajat",
+            sarlavha: "Xarajat",
+            raqam: true,
+            katak: (p: ProductAdminDTO) =>
+              p.xarajat > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setXarajatFor(p)}
+                  className="tnum text-expense hover:underline"
+                  title="Xarajatlarni ko'rish"
+                >
+                  {formatSomLabel(p.xarajat)}
+                </button>
+              ) : (
+                <span className="text-faint">—</span>
+              ),
+          },
+        ]
+      : []),
+    {
+      kalit: "sotuvNarx",
+      sarlavha: "Sotuv narxi",
+      raqam: true,
+      katak: (p) =>
+        p.sotuvNarx > 0 ? formatSomLabel(p.sotuvNarx) : <span className="text-faint">qo&apos;yilmagan</span>,
+    },
+    ...(avto
+      ? [
+          {
+            // Sotilgan mashina uchun haqiqiy foyda quyidagi "sof foyda" jadvalida.
+            kalit: "foyda",
+            sarlavha: "Kutilayotgan foyda",
+            raqam: true,
+            katak: (p: ProductAdminDTO) => (
+              <span
+                className={`font-medium ${
+                  p.sotuvNarx === 0 || p.miqdor === 0
+                    ? "text-faint"
+                    : kutilayotganFoyda(p) >= 0
+                      ? "text-income"
+                      : "text-expense"
+                }`}
+              >
+                {p.miqdor > 0 && p.sotuvNarx > 0 ? formatSomLabel(kutilayotganFoyda(p)) : "—"}
+              </span>
+            ),
+          },
+        ]
+      : []),
+    {
+      kalit: "qoldiq",
+      sarlavha: M.qoldiq,
+      raqam: true,
+      katak: (p) =>
+        avto ? (
+          <Badge tone={p.miqdor > 0 ? "kirim" : "neutral"}>{p.miqdor > 0 ? "Sotuvda" : "Sotildi"}</Badge>
+        ) : (
+          <span className={`font-medium ${p.miqdor > 0 ? "text-fg" : "text-expense"}`}>
+            {p.miqdor > 0 ? formatSom(p.miqdor) : "Qolmadi"}
+          </span>
+        ),
+    },
+    ...(avto
+      ? []
+      : [
+          {
+            kalit: "holati",
+            sarlavha: "Holati",
+            katak: (p: ProductAdminDTO) => (
+              <Badge tone={p.isActive ? "kirim" : "neutral"}>{p.isActive ? "Faol" : "Nofaol"}</Badge>
+            ),
+          },
+        ]),
+  ];
+
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Telefonda 3 ta karta ustma-ust turib ekranni yeb qo'yardi —
+          endi 2 ustun, uchinchisi pastda to'liq kenglikda. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
         <Card>
           <p className="text-muted text-sm mb-1">{M.turlarSoni}</p>
-          <p className="text-2xl font-bold text-fg">{stats.turlarSoni}</p>
+          <p className="text-xl sm:text-2xl font-bold text-fg break-words">{stats.turlarSoni}</p>
         </Card>
         <Card>
           <p className="text-muted text-sm mb-1">{M.jamiQoldiq}</p>
-          <p className="text-2xl font-bold text-fg">
+          <p className="text-xl sm:text-2xl font-bold text-fg break-words">
             {formatSom(stats.jamiQoldiq)}
             {avto && <span className="text-base font-medium text-muted"> {M.dona}</span>}
           </p>
         </Card>
-        <Card>
+        <Card className="col-span-2 sm:col-span-1">
           <p className="text-muted text-sm mb-1">{M.omborQiymati}</p>
-          <p className="text-2xl font-bold text-fg">{formatSomLabel(stats.omborQiymati)}</p>
+          <p className="text-xl sm:text-2xl font-bold text-fg break-words">{formatSomLabel(stats.omborQiymati)}</p>
         </Card>
       </div>
 
@@ -101,126 +213,27 @@ export function OmborClient({
       )}
 
       <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-faint text-xs uppercase">
-                <th className="pb-2">{avto ? "Mashina" : "Nomi"}</th>
-                {avto && <th className="pb-2">Yil</th>}
-                {avto && <th className="pb-2">Davlat raqami</th>}
-                <th className="pb-2 text-right">{avto ? "Olingan narx" : "Tannarx"}</th>
-                {avto && <th className="pb-2 text-right">Xarajat</th>}
-                <th className="pb-2 text-right">Sotuv narxi</th>
-                {avto && <th className="pb-2 text-right">Kutilayotgan foyda</th>}
-                <th className="pb-2 text-right">{M.qoldiq}</th>
-                {!avto && <th className="pb-2">Holati</th>}
-                <th className="pb-2 text-right">Amallar</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {products.length === 0 && (
-                <tr>
-                  <td colSpan={avto ? 9 : 6} className="text-center text-faint py-6">
-                    {M.bosh}
-                  </td>
-                </tr>
-              )}
-              {products.map((p) => {
-                // Kutilayotgan foyda mashinaga qilingan xarajatlardan keyin.
-                const kutilayotganFoyda = p.sotuvNarx > 0 ? p.sotuvNarx - p.kelganNarx - p.xarajat : 0;
-                return (
-                <tr key={p.id} className={p.isActive ? "" : "opacity-50"}>
-                  <td className="py-2.5 font-medium">
-                    {p.nomi}
-                    {avto && p.avtoRang && <span className="ml-2 text-2xs text-faint">{p.avtoRang}</span>}
-                  </td>
-                  {avto && <td className="py-2.5 text-muted tnum">{p.avtoYil ?? "—"}</td>}
-                  {avto && <td className="py-2.5 text-muted">{p.avtoRaqam ?? "—"}</td>}
-                  <td className="py-2.5 text-right">{formatSomLabel(p.kelganNarx)}</td>
-                  {avto && (
-                    <td className="py-2.5 text-right">
-                      {p.xarajat > 0 ? (
-                        <button
-                          onClick={() => setXarajatFor(p)}
-                          className="tnum text-expense hover:underline"
-                          title="Xarajatlarni ko'rish"
-                        >
-                          {formatSomLabel(p.xarajat)}
-                        </button>
-                      ) : (
-                        <span className="text-faint">—</span>
-                      )}
-                    </td>
-                  )}
-                  <td className="py-2.5 text-right">
-                    {p.sotuvNarx > 0 ? formatSomLabel(p.sotuvNarx) : <span className="text-faint">qo'yilmagan</span>}
-                  </td>
-                  {avto && (
-                    // Sotilgan mashina uchun haqiqiy foyda quyidagi "sof foyda" jadvalida.
-                    <td
-                      className={`py-2.5 text-right tnum font-medium ${
-                        p.sotuvNarx === 0 || p.miqdor === 0
-                          ? "text-faint"
-                          : kutilayotganFoyda >= 0
-                            ? "text-income"
-                            : "text-expense"
-                      }`}
-                    >
-                      {p.miqdor > 0 && p.sotuvNarx > 0 ? formatSomLabel(kutilayotganFoyda) : "—"}
-                    </td>
-                  )}
-                  {avto ? (
-                    <td className="py-2.5 text-right">
-                      <Badge tone={p.miqdor > 0 ? "kirim" : "neutral"}>
-                        {p.miqdor > 0 ? "Sotuvda" : "Sotildi"}
-                      </Badge>
-                    </td>
-                  ) : (
-                    <td className={`py-2.5 text-right font-medium ${p.miqdor > 0 ? "text-fg" : "text-expense"}`}>
-                      {p.miqdor > 0 ? formatSom(p.miqdor) : "Qolmadi"}
-                    </td>
-                  )}
-                  {!avto && (
-                    <td className="py-2.5">
-                      <Badge tone={p.isActive ? "kirim" : "neutral"}>{p.isActive ? "Faol" : "Nofaol"}</Badge>
-                    </td>
-                  )}
-                  <td className="py-2.5 text-right whitespace-nowrap">
-                    {avto && (
-                      <button
-                        onClick={() => setXarajatFor(p)}
-                        className="text-xs font-medium text-expense hover:brightness-125 mr-3"
-                      >
-                        Xarajat
-                      </button>
-                    )}
-                    {(!avto || p.miqdor === 0) && (
-                      <button
-                        onClick={() => setStockFor(p)}
-                        className="text-xs font-medium text-income hover:text-income-fg mr-3"
-                      >
-                        {M.kirim}
-                      </button>
-                    )}
-                    <button
-                      onClick={() => setEditing(p)}
-                      className="text-xs font-medium text-muted hover:text-fg mr-3"
-                    >
-                      {avto ? "Tahrirlash" : "Narx"}
-                    </button>
-                    <button
-                      onClick={() => toggleActive(p)}
-                      className="text-xs font-medium text-muted hover:text-expense"
-                    >
-                      {p.isActive ? "Nofaol" : "Faol"}
-                    </button>
-                  </td>
-                </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <Jadval
+          ustunlar={ustunlar}
+          qatorlar={products}
+          kalit={(p) => p.id}
+          minKenglik="min-w-[56rem]"
+          amallar={(p) => [
+            ...(avto
+              ? [{ label: "Xarajat", onClick: () => setXarajatFor(p), tur: "xavf" as const }]
+              : []),
+            ...(!avto || p.miqdor === 0
+              ? [{ label: M.kirim, onClick: () => setStockFor(p), tur: "ijobiy" as const }]
+              : []),
+            { label: avto ? "Tahrirlash" : "Narx", onClick: () => setEditing(p), tur: "oddiy" as const },
+            {
+              label: p.isActive ? "Nofaol qilish" : "Faol qilish",
+              onClick: () => void toggleActive(p),
+              tur: "ogoh" as const,
+            },
+          ]}
+          bosh={<p className="text-center text-faint py-6 text-sm">{M.bosh}</p>}
+        />
       </Card>
 
       {newOpen &&

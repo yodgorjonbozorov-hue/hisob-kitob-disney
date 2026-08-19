@@ -32,7 +32,7 @@ export default async function RollarPage() {
 
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-fg">Rollar va huquqlar</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-fg">Rollar va huquqlar</h1>
         <RollarClient
           pro={pro}
           initialRoles={roles.map((r) => ({

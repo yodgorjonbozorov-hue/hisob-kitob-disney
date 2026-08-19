@@ -58,12 +58,14 @@ export function BottomNav({ ism, rol, tabs, menyu }: Props) {
     return (
       <Link
         href={href}
-        className={`flex flex-col items-center justify-center gap-0.5 flex-1 min-h-[52px] text-2xs ${
+        className={`flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 px-0.5 min-h-[52px] text-2xs ${
           active ? "text-brand" : "text-muted"
         }`}
       >
         <TabIcon name={icon} active={active} />
-        <span>{label}</span>
+        {/* Uzun yorliq (masalan "Bildirishnomalar") qo'shni tabni siqib
+            qo'ymasin — kesiladi, ikonka esa doim joyida qoladi. */}
+        <span className="w-full truncate text-center leading-tight">{label}</span>
       </Link>
     );
   };
@@ -96,13 +98,13 @@ export function BottomNav({ ism, rol, tabs, menyu }: Props) {
             ))}
             <button
               onClick={() => setMenuOpen(true)}
-              className={`flex flex-col items-center justify-center gap-0.5 flex-1 min-h-[52px] text-2xs ${
+              className={`flex flex-col items-center justify-center gap-0.5 flex-1 min-w-0 px-0.5 min-h-[52px] text-2xs ${
                 menuOpen ? "text-brand" : "text-muted"
               }`}
               aria-label="Menyu"
             >
               <TabIcon name="menu" />
-              <span>Menyu</span>
+              <span className="w-full truncate text-center leading-tight">Menyu</span>
             </button>
           </div>
         </div>

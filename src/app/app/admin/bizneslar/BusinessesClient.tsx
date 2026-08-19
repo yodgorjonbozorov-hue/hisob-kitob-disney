@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { Jadval, type Ustun } from "@/components/ui/Jadval";
 import { isAvto } from "@/lib/biznesTuri";
 import { YangiBiznesModal } from "./YangiBiznesModal";
 import { TozalashModal } from "./TozalashModal";
@@ -106,6 +107,37 @@ export function BusinessesClient({ initialBusinesses }: { initialBusinesses: Bus
     router.refresh();
   }
 
+  // Ustun ta'rifi BITTA — desktop jadval ham, mobil kartochka ham shundan.
+  const ustunlar: Ustun<BusinessDTO>[] = [
+    { kalit: "nomi", sarlavha: "Nomi", katak: (b) => b.nomi, className: "font-medium" },
+    {
+      kalit: "rejim",
+      sarlavha: "Rejim",
+      katak: (b) => (
+        <Badge tone={isAvto(b.turi) ? "kirim" : "neutral"}>
+          {isAvto(b.turi) ? "Avto" : "Umumiy"}
+        </Badge>
+      ),
+    },
+    {
+      kalit: "ombor",
+      sarlavha: "Ombor",
+      katak: (b) => <Badge tone={b.omborli ? "kirim" : "neutral"}>{b.omborli ? "Yoqiq" : "O'chiq"}</Badge>,
+    },
+    {
+      kalit: "kassa",
+      sarlavha: "Kassa",
+      katak: (b) => <Badge tone={b.magazin ? "kirim" : "neutral"}>{b.magazin ? "Yoqiq" : "O'chiq"}</Badge>,
+    },
+    { kalit: "kategoriyalar", sarlavha: "Kategoriyalar", raqam: true, katak: (b) => b.kategoriyalar },
+    { kalit: "tranzaksiyalar", sarlavha: "Tranzaksiyalar", raqam: true, katak: (b) => b.tranzaksiyalar },
+    {
+      kalit: "holati",
+      sarlavha: "Holati",
+      katak: (b) => <Badge tone={b.isActive ? "kirim" : "neutral"}>{b.isActive ? "Faol" : "Nofaol"}</Badge>,
+    },
+  ];
+
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
@@ -113,81 +145,24 @@ export function BusinessesClient({ initialBusinesses }: { initialBusinesses: Bus
       </div>
 
       <Card>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-faint text-xs uppercase">
-              <th className="pb-2">Nomi</th>
-              <th className="pb-2">Rejim</th>
-              <th className="pb-2">Ombor</th>
-              <th className="pb-2">Kassa</th>
-              <th className="pb-2 text-right">Kategoriyalar</th>
-              <th className="pb-2 text-right">Tranzaksiyalar</th>
-              <th className="pb-2">Holati</th>
-              <th className="pb-2 text-right">Amal</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line">
-            {businesses.map((b) => (
-              <tr key={b.id}>
-                <td className="py-2.5 font-medium">{b.nomi}</td>
-                <td className="py-2.5">
-                  <Badge tone={isAvto(b.turi) ? "kirim" : "neutral"}>
-                    {isAvto(b.turi) ? "Avto" : "Umumiy"}
-                  </Badge>
-                </td>
-                <td className="py-2.5">
-                  <Badge tone={b.omborli ? "kirim" : "neutral"}>{b.omborli ? "Yoqiq" : "O'chiq"}</Badge>
-                </td>
-                <td className="py-2.5">
-                  <Badge tone={b.magazin ? "kirim" : "neutral"}>{b.magazin ? "Yoqiq" : "O'chiq"}</Badge>
-                </td>
-                <td className="py-2.5 text-right text-muted">{b.kategoriyalar}</td>
-                <td className="py-2.5 text-right text-muted">{b.tranzaksiyalar}</td>
-                <td className="py-2.5">
-                  <Badge tone={b.isActive ? "kirim" : "neutral"}>{b.isActive ? "Faol" : "Nofaol"}</Badge>
-                </td>
-                <td className="py-2.5 text-right whitespace-nowrap">
-                  <button
-                    onClick={() => toggleOmbor(b)}
-                    className="text-xs font-medium text-muted hover:text-brand mr-3"
-                  >
-                    {b.omborli ? "Omborni o'chirish" : "Omborni yoqish"}
-                  </button>
-                  <button
-                    onClick={() => toggleMagazin(b)}
-                    className="text-xs font-medium text-muted hover:text-brand mr-3"
-                  >
-                    {b.magazin ? "Kassani o'chirish" : "Kassani yoqish"}
-                  </button>
-                  <button
-                    onClick={() => toggleTuri(b)}
-                    className="text-xs font-medium text-muted hover:text-brand mr-3"
-                  >
-                    {isAvto(b.turi) ? "Umumiy rejim" : "Avto rejim"}
-                  </button>
-                  <button
-                    onClick={() => patch(b, { isActive: !b.isActive })}
-                    className="text-xs font-medium text-muted hover:text-income mr-3"
-                  >
-                    {b.isActive ? "Nofaollashtirish" : "Faollashtirish"}
-                  </button>
-                  <button
-                    onClick={() => setTozalash(b)}
-                    className="text-xs font-medium text-muted hover:text-debt mr-3"
-                  >
-                    Tozalash
-                  </button>
-                  <button
-                    onClick={() => deleteBusiness(b)}
-                    className="text-xs font-medium text-muted hover:text-expense"
-                  >
-                    O&apos;chirish
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Jadval
+          ustunlar={ustunlar}
+          qatorlar={businesses}
+          kalit={(b) => b.id}
+          minKenglik="min-w-[60rem]"
+          amallar={(b) => [
+            { label: b.omborli ? "Omborni o'chirish" : "Omborni yoqish", onClick: () => void toggleOmbor(b), tur: "asosiy" },
+            { label: b.magazin ? "Kassani o'chirish" : "Kassani yoqish", onClick: () => void toggleMagazin(b), tur: "asosiy" },
+            { label: isAvto(b.turi) ? "Umumiy rejim" : "Avto rejim", onClick: () => void toggleTuri(b), tur: "asosiy" },
+            {
+              label: b.isActive ? "Nofaollashtirish" : "Faollashtirish",
+              onClick: () => void patch(b, { isActive: !b.isActive }),
+              tur: "ijobiy",
+            },
+            { label: "Tozalash", onClick: () => setTozalash(b), tur: "ogoh" },
+            { label: "O'chirish", onClick: () => void deleteBusiness(b), tur: "xavf" },
+          ]}
+        />
       </Card>
 
       <p className="text-xs text-faint">

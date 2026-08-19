@@ -58,7 +58,7 @@ export default async function ModullarPage() {
     return (
       <div className="space-y-6 max-w-2xl">
         <div>
-          <h1 className="text-2xl font-bold text-fg">Modullar</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-fg">Modullar</h1>
           <p className="text-sm text-muted mt-1">
             Biznesingizga kerakli bo'limlarni yoqing. O'chirilgan modul ma'lumotlari o'chmaydi —
             qayta yoqsangiz hammasi joyida bo'ladi.

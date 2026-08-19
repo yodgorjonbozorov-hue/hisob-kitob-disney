@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Money } from "@/components/ui/Money";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Jadval, type Ustun } from "@/components/ui/Jadval";
 import type { SupplierDTO } from "@/lib/queries/xarid";
 
 interface UserOption {
@@ -25,6 +26,39 @@ export function TaminotchilarClient({
   const router = useRouter();
   const [modal, setModal] = useState<SupplierDTO | "yangi" | null>(null);
 
+  // Ustun ta'rifi BITTA — desktop jadval ham, mobil kartochka ham shundan.
+  const ustunlar: Ustun<SupplierDTO>[] = [
+    {
+      kalit: "nomi",
+      sarlavha: "Nomi",
+      katak: (s) => (
+        <span className={s.isActive ? "" : "opacity-50"}>
+          {s.nomi}
+          {s.manzil && <span className="block text-2xs text-faint font-normal">{s.manzil}</span>}
+          {!s.isActive && <span className="block text-2xs text-faint font-normal">nofaol</span>}
+        </span>
+      ),
+    },
+    { kalit: "tel", sarlavha: "Telefon", katak: (s) => s.tel ?? "—" },
+    {
+      kalit: "xarid",
+      sarlavha: "Jami xarid",
+      raqam: true,
+      katak: (s) => <Money value={s.jamiXarid} size="sm" tone="neutral" />,
+    },
+    {
+      kalit: "buyurtma",
+      sarlavha: "Ochiq buyurtma",
+      raqam: true,
+      katak: (s) =>
+        s.ochiqBuyurtma > 0 ? (
+          <span className="text-debt font-medium">{s.ochiqBuyurtma}</span>
+        ) : (
+          <span className="text-faint">—</span>
+        ),
+    },
+  ];
+
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
@@ -32,58 +66,20 @@ export function TaminotchilarClient({
       </div>
 
       <Card>
-        {suppliers.length === 0 ? (
-          <EmptyState
-            icon="🏭"
-            title="Hali ta'minotchi yo'q"
-            description="Tovarni kimdan olayotganingizni yozib qo'ying — keyin xarid buyurtmasi va hisob-kitob shu yerdan yuritiladi."
-            action={<Button onClick={() => setModal("yangi")}>Birinchi ta&apos;minotchi</Button>}
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-faint text-xs uppercase">
-                  <th className="pb-2">Nomi</th>
-                  <th className="pb-2">Telefon</th>
-                  <th className="pb-2 text-right">Jami xarid</th>
-                  <th className="pb-2 text-right">Ochiq buyurtma</th>
-                  <th className="pb-2 text-right">Amallar</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {suppliers.map((s) => (
-                  <tr key={s.id} className={s.isActive ? "" : "opacity-50"}>
-                    <td className="py-2.5 font-medium">
-                      {s.nomi}
-                      {s.manzil && <span className="block text-2xs text-faint">{s.manzil}</span>}
-                    </td>
-                    <td className="py-2.5">{s.tel ?? "—"}</td>
-                    <td className="py-2.5 text-right">
-                      <Money value={s.jamiXarid} size="sm" tone="neutral" />
-                    </td>
-                    <td className="py-2.5 text-right tnum">
-                      {s.ochiqBuyurtma > 0 ? (
-                        <span className="text-debt font-medium">{s.ochiqBuyurtma}</span>
-                      ) : (
-                        <span className="text-faint">—</span>
-                      )}
-                    </td>
-                    <td className="py-2.5 text-right">
-                      <button
-                        type="button"
-                        onClick={() => setModal(s)}
-                        className="text-2xs text-brand hover:underline"
-                      >
-                        Tahrirlash
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <Jadval
+          ustunlar={ustunlar}
+          qatorlar={suppliers}
+          kalit={(s) => s.id}
+          amallar={(s) => [{ label: "Tahrirlash", onClick: () => setModal(s), tur: "asosiy" }]}
+          bosh={
+            <EmptyState
+              icon="🏭"
+              title="Hali ta'minotchi yo'q"
+              description="Tovarni kimdan olayotganingizni yozib qo'ying — keyin xarid buyurtmasi va hisob-kitob shu yerdan yuritiladi."
+              action={<Button onClick={() => setModal("yangi")}>Birinchi ta&apos;minotchi</Button>}
+            />
+          }
+        />
       </Card>
 
       {modal && (

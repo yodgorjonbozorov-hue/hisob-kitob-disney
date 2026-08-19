@@ -25,7 +25,7 @@ export default async function BudjetPage({ searchParams }: { searchParams: { mon
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-fg">Budjet</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-fg">Budjet</h1>
           <p className="text-sm text-muted mt-1">
             Biznes: <span className="font-medium text-fg">{business?.nomi ?? "—"}</span> · Kategoriya bo'yicha
             oylik xarajat limiti

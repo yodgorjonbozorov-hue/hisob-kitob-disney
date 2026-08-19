@@ -26,7 +26,7 @@ export default async function KontaktlarPage() {
     return (
       <div className="space-y-4 max-w-3xl">
         <div>
-          <h1 className="text-2xl font-bold text-fg">Kontaktlar</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-fg">Kontaktlar</h1>
           <p className="text-sm text-muted mt-1">
             Biznes: <span className="font-medium text-fg">{business?.nomi ?? "—"}</span> · {contacts.length} ta kontakt
           </p>

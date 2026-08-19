@@ -23,7 +23,7 @@ export default async function KassamPage() {
     if (!businessId) {
       return (
         <div className="space-y-6">
-          <h1 className="text-2xl font-bold text-fg">Mening kassam</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-fg">Mening kassam</h1>
           <p className="text-muted">Sizga biznes biriktirilmagan. Admin bilan bog&apos;laning.</p>
         </div>
       );
@@ -35,7 +35,7 @@ export default async function KassamPage() {
     if (!meniki) {
       return (
         <div className="space-y-6">
-          <h1 className="text-2xl font-bold text-fg">Mening kassam</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-fg">Mening kassam</h1>
           <p className="text-sm text-muted">
             Sizda shaxsiy kassa ochilmagan — naqd pul biznesning umumiy kassasiga tushmoqda.
             Direktor <span className="text-fg font-medium">Kassalar → Shaxsiy kassa rejimi</span> ni
@@ -71,7 +71,7 @@ export default async function KassamPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-fg">Mening kassam</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-fg">Mening kassam</h1>
           <p className="text-sm text-muted mt-1">
             {xodim?.ism ?? session.ism} · {business?.nomi ?? "—"} · Qo&apos;lingizdagi naqd pul
           </p>
