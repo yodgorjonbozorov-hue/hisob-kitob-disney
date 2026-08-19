@@ -19,16 +19,72 @@ export interface BusinessDTO {
   magazin: boolean;
 }
 
+const BIZNES_SELECT = {
+  id: true,
+  nomi: true,
+  isActive: true,
+  omborli: true,
+  turi: true,
+  shaxsiyKassa: true,
+  magazin: true,
+} as const;
+
+/**
+ * Xodim biriktirilgan biznes id'lari (`UserBusiness`).
+ *
+ * BO'SH massiv = CHEKLOV YO'Q (direktor/administrator yoki ko'p-biznesli
+ * sotuvchi) — bu holat `null` bilan emas, bo'sh ro'yxat bilan ifodalanadi,
+ * chunki chaqiruvchilar uni `length` orqali o'qiydi.
+ *
+ * Ruxsatning YAGONA manbai shu jadval — sessiyadagi `businessId` emas.
+ * Sabab: direktor xodimning bizneslarini o'zgartirsa, sessiya (cookie, 7 kun)
+ * eskirib qolardi. Bu yerda esa har so'rovda bazadan o'qiladi.
+ */
+export async function biriktirilganBiznesIdlari(userId: string): Promise<string[]> {
+  const rows = await prisma.userBusiness.findMany({
+    where: { userId },
+    select: { businessId: true },
+  });
+  return rows.map((r) => r.businessId);
+}
+
+/** Bir request ichida bir necha marta chaqiriladi (layout + sahifa) — dedupe. */
+const biriktirilganCached = requestCache(biriktirilganBiznesIdlari);
+
+/**
+ * Foydalanuvchining RUXSAT RO'YXATI. Bo'sh = cheklov yo'q.
+ *
+ * FAIL-CLOSED zaxira yo'li: biriktiruv jadvalida qatori bo'lmasa, LEKIN
+ * sessiyada eski `businessId` bo'lsa — o'sha bitta biznes qaytariladi.
+ * Sabab: hisob boshqa yo'l bilan yaratilgan bo'lishi mumkin (seed, e2e
+ * skripti, qo'lda SQL) — u holda "qator yo'q" ni "cheklov yo'q" deb o'qish
+ * xodimga barcha bizneslarni OCHIB YUBORARDI. Bu yerda aksincha: cheklov
+ * saqlanadi. (Direktor/administratorda `businessId` baribir NULL.)
+ */
+async function ruxsatEtilganIdlar(session: SessionData): Promise<string[]> {
+  const biriktirilgan = await biriktirilganCached(session.userId ?? "");
+  if (biriktirilgan.length > 0) return biriktirilgan;
+  return session.businessId ? [session.businessId] : [];
+}
+
 /**
  * Foydalanuvchi kira oladigan bizneslar:
- * - Biznesga biriktirilgan foydalanuvchi (businessId bor — kassir yoki biznesga
- *   bog'langan sotuvchi) → faqat o'z biznesi.
+ * - Biriktirilgan xodim (`UserBusiness` da qatori bor — kassir yoki sotuvchi)
+ *   → faqat o'sha bizneslar. Bir nechta bo'lishi mumkin: bir jamoa ikki
+ *   biznesni yuritganda (masalan gullar va sovg'a qutilari alohida hisob
+ *   yuritiladi) xodim ikkalasiga ham biriktiriladi va ular orasida almashadi.
  * - Biriktirilmagan (direktor/admin, ko'p-biznesli sotuvchi) → barcha faol biznes.
  */
 export async function getAccessibleBusinesses(session: SessionData): Promise<BusinessDTO[]> {
-  if (session.businessId) {
-    const b = await businessByIdCached(session.businessId);
-    return b ? [b] : [];
+  const biriktirilgan = await ruxsatEtilganIdlar(session);
+  if (biriktirilgan.length > 0) {
+    // Nofaol biznes ham ro'yxatda qoladi (avvalgi xatti-harakat: biriktirilgan
+    // xodim o'z biznesini nofaol bo'lsa ham ko'rardi).
+    return prisma.business.findMany({
+      where: { id: { in: biriktirilgan } },
+      select: BIZNES_SELECT,
+      orderBy: { nomi: "asc" },
+    });
   }
   return activeBusinessesCached(session.tenantId ?? "");
 }
@@ -39,39 +95,62 @@ export async function getAccessibleBusinesses(session: SessionData): Promise<Bus
  * Tenant filtri baribir prisma extension'da — bu faqat dedupe.
  */
 const businessByIdCached = requestCache(async (id: string) =>
-  prisma.business.findUnique({
-    where: { id },
-    select: { id: true, nomi: true, isActive: true, omborli: true, turi: true, shaxsiyKassa: true, magazin: true },
-  })
+  prisma.business.findUnique({ where: { id }, select: BIZNES_SELECT })
 );
 
 const activeBusinessesCached = requestCache(async (_tenantId: string) =>
-  prisma.business.findMany({
-    where: { isActive: true },
-    select: { id: true, nomi: true, isActive: true, omborli: true, turi: true, shaxsiyKassa: true, magazin: true },
-    orderBy: { nomi: "asc" },
-  })
+  prisma.business.findMany({ where: { isActive: true }, select: BIZNES_SELECT, orderBy: { nomi: "asc" } })
 );
 
 /**
  * Joriy so'rov uchun aktiv biznes id'sini hal qiladi.
- * - Biznesga biriktirilgan foydalanuvchi (businessId bor): DOIM o'z biznesi
- *   (o'zgartira olmaydi) — kassir yoki biznesga bog'langan sotuvchi. Yozuvlari
- *   doim shu biznesga tushadi (adashmaydi).
- * - Biriktirilmagan (direktor/ko'p-biznesli sotuvchi): `active_business` cookie
- *   (mavjud va faol bo'lsa), aks holda birinchi faol biznes.
+ * - AYNAN BITTA biznesga biriktirilgan xodim: DOIM o'sha biznes (o'zgartira
+ *   olmaydi) — yozuvlari doim shu biznesga tushadi, adashmaydi.
+ * - BIR NECHTA biznesga biriktirilgan xodim: `active_business` cookie, agar u
+ *   biriktirilganlar ichida bo'lsa; aks holda birinchi biriktirilgan biznes.
+ * - Biriktirilmagan (direktor/ko'p-biznesli sotuvchi): cookie (mavjud va faol
+ *   bo'lsa), aks holda birinchi faol biznes.
  * Hech qanday biznes bo'lmasa null qaytaradi.
  */
 export async function resolveActiveBusinessId(session: SessionData): Promise<string | null> {
-  if (session.businessId) {
-    return session.businessId;
+  const biriktirilgan = await ruxsatEtilganIdlar(session);
+  if (biriktirilgan.length === 1) {
+    return biriktirilgan[0];
+  }
+  if (biriktirilgan.length > 1) {
+    return cheklanganAktivCached(biriktirilgan.join(","));
   }
   return cookieBusinessIdCached(session.tenantId ?? "");
 }
 
+/** Cookie'dan o'qiladigan aktiv biznes (bo'lmasa/nomos bo'lsa — null). */
+async function cookieBiznesId(): Promise<string | null> {
+  return (await cookies()).get(ACTIVE_BUSINESS_COOKIE)?.value ?? null;
+}
+
+/**
+ * Bir nechta biznesga biriktirilgan xodim uchun aktiv biznes.
+ *
+ * Kalit sifatida id'lar ro'yxati beriladi (kesh faqat shu ro'yxat uchun
+ * o'rinli): cookie ruxsat etilganlar ichida bo'lsa — o'sha, aks holda
+ * birinchi FAOL biznes (hammasi nofaol bo'lsa — birinchisi).
+ */
+const cheklanganAktivCached = requestCache(async (idlarCsv: string): Promise<string | null> => {
+  const idlar = idlarCsv.split(",").filter(Boolean);
+  const cookieId = await cookieBiznesId();
+  if (cookieId && idlar.includes(cookieId)) return cookieId;
+
+  const bizneslar = await prisma.business.findMany({
+    where: { id: { in: idlar } },
+    select: { id: true, isActive: true },
+    orderBy: { nomi: "asc" },
+  });
+  return bizneslar.find((b) => b.isActive)?.id ?? bizneslar[0]?.id ?? null;
+});
+
 /** Cookie'dagi aktiv biznesni hal qilish — bir request ichida bir marta bajariladi. */
 const cookieBusinessIdCached = requestCache(async (_tenantId: string): Promise<string | null> => {
-  const cookieId = (await cookies()).get(ACTIVE_BUSINESS_COOKIE)?.value;
+  const cookieId = await cookieBiznesId();
   if (cookieId) {
     const exists = await prisma.business.findFirst({
       where: { id: cookieId, isActive: true },
@@ -87,6 +166,15 @@ const cookieBusinessIdCached = requestCache(async (_tenantId: string): Promise<s
   });
   return first?.id ?? null;
 });
+
+/**
+ * Foydalanuvchi shu biznesga kira oladimi (ko'p-bizneslik ruxsat ro'yxati).
+ * Cheklovsiz xodim (direktor/administrator) uchun har doim true.
+ */
+export async function biznesRuxsatiBormi(session: SessionData, businessId: string): Promise<boolean> {
+  const idlar = await ruxsatEtilganIdlar(session);
+  return idlar.length === 0 || idlar.includes(businessId);
+}
 
 export async function getActiveBusiness(session: SessionData): Promise<BusinessDTO | null> {
   const id = await resolveActiveBusinessId(session);

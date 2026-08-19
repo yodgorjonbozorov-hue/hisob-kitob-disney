@@ -2,30 +2,30 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Rol } from "@/lib/auth/session";
-
 interface BusinessOption {
   id: string;
   nomi: string;
 }
 
 /**
- * Admin uchun biznes tanlash dropdown'i; tanlanganda cookie o'rnatiladi va sahifa yangilanadi.
- * Kassir uchun faqat biznes nomi ko'rsatiladi (o'zgartira olmaydi).
+ * Biznes tanlash dropdown'i; tanlanganda cookie o'rnatiladi va sahifa yangilanadi.
+ *
+ * Ro'yxat — foydalanuvchiga OCHIQ bizneslar (lib/business.ts). Bitta biznes
+ * bo'lsa tanlash o'rniga shunchaki nomi ko'rsatiladi. KASSIR ham bir nechta
+ * biznesga biriktirilgan bo'lsa almasha oladi: bir jamoa ikki biznesni
+ * yuritganda (hisob-kitob alohida) shu kerak bo'ladi.
  */
 export function BusinessSwitcher({
   businesses,
   activeId,
-  rol,
 }: {
   businesses: BusinessOption[];
   activeId: string | null;
-  rol: Rol;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
-  if (rol === "CASHIER" || businesses.length <= 1) {
+  if (businesses.length <= 1) {
     const nomi = businesses.find((b) => b.id === activeId)?.nomi ?? businesses[0]?.nomi ?? "—";
     return (
       <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-2 text-fg text-sm font-medium border border-line">

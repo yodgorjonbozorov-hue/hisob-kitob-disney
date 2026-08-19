@@ -66,7 +66,7 @@ export default function Sidebar({ ism, rol, businesses, activeBusinessId, navIte
       </div>
       <div className="px-3 pt-4">
         <p className="text-2xs text-faint px-1 mb-1.5 uppercase tracking-wide">Biznes</p>
-        <BusinessSwitcher businesses={businesses} activeId={activeBusinessId} rol={rol} />
+        <BusinessSwitcher businesses={businesses} activeId={activeBusinessId} />
       </div>
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
         {item("/app/bildirishnomalar", "Bildirishnomalar", Bell, notifCount)}

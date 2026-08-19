@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireManager } from "@/lib/auth/guard";
 import { withTenant } from "@/lib/auth/tenant";
 import { updateBusinessSchema } from "@/lib/validation/business";
+import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
 
 export const PATCH = withTenant<{ params: { id: string } }>(async (request, { params }, { session: user }) => {
   requireManager(user.rol);
@@ -39,7 +40,8 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
 async function shaxsiyKassalarniOch(businessId: string): Promise<void> {
   const [xodimlar, kassalar] = await Promise.all([
     prisma.user.findMany({
-      where: { isActive: true, OR: [{ businessId }, { businessId: null }] },
+      // Ko'p-bizneslik: shu biznesga biriktirilganlar + biriktirilmaganlar.
+      where: { isActive: true, ...biznesXodimlariWhere(businessId) },
       select: { id: true, ism: true },
     }),
     prisma.account.findMany({ where: { businessId }, select: { nomi: true, userId: true } }),

@@ -1,4 +1,5 @@
 import { InlineKeyboard, InputFile, type Context } from "grammy";
+import type { User } from "@prisma/client";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { prisma } from "@/lib/prisma";
 import { getMonthlyReport } from "@/lib/queries/report";
@@ -6,16 +7,15 @@ import { MonthlyReportDocument } from "@/lib/pdf/MonthlyReportDocument";
 import { buildMonthlyReportWorkbook } from "@/lib/excel/monthlyReportWorkbook";
 import { formatSomLabel, formatPercent, uzOyNomi } from "@/lib/format";
 import { currentMonthString, parseMonthString } from "@/lib/date";
+import { botBizneslar, botBiznesRuxsati } from "./bizneslar";
 
 /**
  * /hisobot uchun biznes tanlash. Bitta biznes bo'lsa to'g'ridan-to'g'ri hisobot yuboradi.
- * Faqat admin uchun chaqiriladi (bot/index.ts'da rol tekshirilgan).
+ * Faqat admin uchun chaqiriladi (bot/index.ts'da rol tekshirilgan), lekin
+ * ro'yxat baribir xodimga OCHIQ bizneslar bilan cheklanadi (ko'p-bizneslik).
  */
-export async function startMonthlyReport(ctx: Context) {
-  const businesses = await prisma.business.findMany({
-    where: { isActive: true },
-    orderBy: { nomi: "asc" },
-  });
+export async function startMonthlyReport(ctx: Context, user: User) {
+  const businesses = await botBizneslar(user);
   if (businesses.length === 0) {
     await ctx.reply("Hali biznes yaratilmagan.");
     return;
@@ -34,11 +34,13 @@ export async function startMonthlyReport(ctx: Context) {
 }
 
 /** rbiz:<businessId> callback — tanlangan biznes uchun joriy oy hisobotini yuboradi. */
-export async function handleReportBusinessCallback(ctx: Context) {
+export async function handleReportBusinessCallback(ctx: Context, user: User) {
   const data = ctx.callbackQuery?.data ?? "";
   const businessId = data.startsWith("rbiz:") ? data.slice(5) : null;
   await ctx.answerCallbackQuery();
   if (!businessId) return;
+  // Ko'p-bizneslik: tugma xodimga OCHIQ biznesniki bo'lishi shart.
+  if (!(await botBiznesRuxsati(user, businessId))) return;
   await sendMonthlyReportText(ctx, businessId, currentMonthString());
 }
 

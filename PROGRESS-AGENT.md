@@ -3626,3 +3626,69 @@ Qator `productId` bilan keladi, ya'ni foydalanuvchi boshqa biznesning
 mahsulot idsini yuborishi mumkin. Servis idlarni `businessId` sharti bilan
 bir marta o'qiydi va topilmaganlarini `topilmadi` deb SANAYDI — jimgina
 o'tkazib yuborilmaydi.
+
+## Ko'p-bizneslik — bir xodim bir nechta biznesda (2026-08-19)
+
+**Talab (loyiha egasi):** "Disney Flowers va Disney Giftbox sotuvchilar bitta,
+ammo biznes ikkita qildik — hisob-kitob chalkashmasligi uchun. Endi
+foydalanuvchilarni bitta emas, ko'p biznesga (1-2 ta) biriktirish
+funksiyasini kirit."
+
+### Muammo
+
+`User.businessId` — bitta ustun, ya'ni xodim FAQAT bitta biznesga
+biriktirilardi. Bir jamoa ikki biznesni yuritganda har bir biznesga alohida
+login ochishga to'g'ri kelardi (ikkita parol, ikki marta kirish, yozuvlar
+ikki hisobga bo'linib ketishi).
+
+### Yechim
+
+Yangi `UserBusiness` jadvali (`userId` + `businessId`, UNIQUE juftlik).
+Ruxsatning YAGONA manbai shu jadval:
+
+- qatorlari bor xodim — FAQAT o'sha bizneslarga kiradi va ular orasida
+  almashadi (biznes almashtirgich endi kassirga ham ochiq);
+- qatori yo'q xodim — cheklovsiz (direktor/administratordagi kabi).
+
+`User.businessId` ustuni JOYIDA QOLDI, lekin ma'nosi torroq: u endi
+"qulaylik nusxasi" — aynan bitta biznes bo'lsa o'sha id, aks holda NULL.
+Shu bois unga tayanadigan eski kod (bot, sessiya) xato ruxsat BERMAYDI: u
+faqat "bitta biznesga qotirilganmi" savoliga javob beradi.
+
+### FAIL-CLOSED nuqta
+
+`UserBusiness` da qator yo'q + `businessId` to'lgan bo'lsa (seed, e2e
+skripti, qo'lda SQL bilan yaratilgan hisob) — "qator yo'q" ni "cheklov yo'q"
+deb o'qish xodimga barcha bizneslarni OCHIB YUBORARDI. `lib/business.ts`
+bunday holatda o'sha bitta biznes bilan CHEKLAYDI. Test buni qo'riqlaydi.
+
+Xuddi shu tuzoq "shu bizneste kim ishlaydi" so'rovlarida ham bor edi:
+`OR: [{ businessId }, { businessId: null }]` naqshi ko'p biznesga
+biriktirilgan xodimni (unda `businessId` NULL) "biriktirilmagan" deb
+hisoblardi. Uch joyda (`listKunlikNomzodlar`, shaxsiy kassa ochish x2)
+`biznesXodimlariWhere()` bilan almashtirildi.
+
+### O'zgargan joylar
+
+- `prisma/schema.prisma` + migratsiya `20260819120000_kop_biznes_biriktiruv`
+  (faqat YANGI JADVAL; mavjud `businessId` qiymatlari ko'chiriladi, hech
+  narsa o'chirilmaydi);
+- `lib/db/tenantDb.ts` (`BUSINESS_SCOPED`) va `lib/backup/dump.ts`
+  (`ZAXIRA_JADVALLARI` — `user`/`business` dan KEYIN);
+- `lib/business.ts` — ruxsat ro'yxati, aktiv biznes, `biznesRuxsatiBormi`;
+- `lib/services/userBiznes.ts` — biriktirish qoidalari bir joyda;
+- `api/users` (POST/PATCH) — `businessIds` massivi (eski `businessId` ham
+  ishlaydi), `api/me/active-business` — ruxsat tekshiruvi;
+- admin UI — checkbox bilan ko'p biznes tanlash (`BiznesTanlash.tsx`),
+  `UsersClient.tsx` 481 → 331 satr (yangi user oynasi alohida faylga);
+- bot — `bot/bizneslar.ts`: har oqim ("qaysi biznes uchun?") xodimga OCHIQ
+  bizneslar bilan cheklanadi, callback tugmalari ham tekshiriladi.
+
+### Tekshirildi
+
+`npm run build` ✅ · `test:kop-biznes` (18 ta, yangi) ✅ · `test:isolation`
+✅ · `test:izolyatsiya-royxati` ✅ · `test:backup` ✅ · `test:migratsiya` ✅ ·
+`test:kunlik` · `test:tozalash` · `test:kassa` · `test:kassir-kassa` ·
+`test:signup` · `test:superadmin` · `test:superadmin2` · `test:visibility` ·
+`test:bot-holat` · `test:bot-avto` · `test:pro` · `test:postgres` ·
+`test:launch` ✅

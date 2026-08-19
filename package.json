@@ -52,6 +52,7 @@
     "test:narx-toldirish": "node -r ts-node/register tests/narx-toldirish.test.ts",
     "test:bot-holat": "node -r ts-node/register tests/bot-holat.test.ts",
     "test:visibility": "node -r ts-node/register tests/visibility.test.ts",
+    "test:kop-biznes": "node -r ts-node/register tests/kop-biznes.test.ts",
     "test:signup": "node -r ts-node/register tests/signup.test.ts",
     "test:billing": "node -r ts-node/register tests/billing.test.ts",
     "test:superadmin": "node -r ts-node/register tests/superadmin.test.ts",

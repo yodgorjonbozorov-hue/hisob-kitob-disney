@@ -1,9 +1,9 @@
 import { InlineKeyboard, type Context } from "grammy";
 import type { User } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
 import { createDeal } from "@/lib/crm/service";
 import { formatMoney, parseSomInput } from "@/lib/format";
 import { flowStore } from "./conversationStore";
+import { botBizneslar, botBiznesRuxsati } from "./bizneslar";
 
 /**
  * TELEGRAM LEAD KANALI (BOS-5): xodim botdan 30 soniyada yangi mijoz + bitim
@@ -37,16 +37,8 @@ export function clearLeadFlow(chatId: string): Promise<void> {
 export async function startLeadFlow(ctx: Context, user: User) {
   const chatId = String(ctx.chat!.id);
 
-  if (user.businessId) {
-    await leadConversations.set(chatId, { step: "ism", businessId: user.businessId });
-    await ctx.reply("Yangi lead 📇\nMijoz ismini yozing:");
-    return;
-  }
-
-  const businesses = await prisma.business.findMany({
-    where: { isActive: true },
-    orderBy: { nomi: "asc" },
-  });
+  // Ko'p-bizneslik: xodimga OCHIQ bizneslar (bot/bizneslar.ts).
+  const businesses = await botBizneslar(user);
   if (businesses.length === 0) {
     await ctx.reply("Hali biznes yaratilmagan.");
     return;
@@ -67,7 +59,7 @@ export async function startLeadFlow(ctx: Context, user: User) {
 }
 
 /** lbiz:<businessId> callback. */
-export async function handleLeadBusinessCallback(ctx: Context) {
+export async function handleLeadBusinessCallback(ctx: Context, user: User) {
   const chatId = String(ctx.chat!.id);
   const flow = await leadConversations.get(chatId);
   const data = ctx.callbackQuery?.data ?? "";
@@ -78,14 +70,14 @@ export async function handleLeadBusinessCallback(ctx: Context) {
     return;
   }
 
-  // Tenant-scoped tekshiruv: begona biznes id o'tmaydi.
-  const business = await prisma.business.findFirst({ where: { id: businessId, isActive: true }, select: { id: true } });
-  if (!business) {
-    await ctx.answerCallbackQuery({ text: "Biznes topilmadi" });
+  // Ko'p-bizneslik: tugma xodimga OCHIQ biznesniki bo'lishi shart (begona
+  // yoki eskirgan id shu yerda to'xtaydi).
+  if (!(await botBiznesRuxsati(user, businessId))) {
+    await ctx.answerCallbackQuery({ text: "Bu biznesga ruxsatingiz yo'q" });
     return;
   }
 
-  await leadConversations.set(chatId, { step: "ism", businessId: business.id });
+  await leadConversations.set(chatId, { step: "ism", businessId });
   await ctx.answerCallbackQuery();
   await ctx.editMessageText("Yangi lead 📇\nMijoz ismini yozing:");
 }

@@ -152,5 +152,11 @@ async function magazinniTayyorla(c, tenantId) {
             VALUES ('u_kassir_salyut','Salyut kassiri','kassir-salyut',?,'CASHIER',1,?,0,?, 'biz_salyut')`,
       args: [String(kassirHash), new Date().toISOString(), tenantId],
     });
+    // Ko'p-bizneslik ruxsat ro'yxati (UserBusiness) — kassir Salyut biznesida.
+    await c.execute({
+      sql: `INSERT OR IGNORE INTO "UserBusiness" ("id","userId","businessId","createdAt")
+            VALUES ('ub_kassir_salyut','u_kassir_salyut','biz_salyut',?)`,
+      args: [new Date().toISOString()],
+    });
   }
 }

@@ -2,6 +2,7 @@ import { InlineKeyboard, type Context } from "grammy";
 import type { User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { flowStore } from "./conversationStore";
+import { botBizneslar } from "./bizneslar";
 import { chekniOqi, MAX_RASM_BAYT } from "@/lib/ai/chekOcr";
 import { AiSozlanmaganError } from "@/lib/ai/claude";
 import { aiLimitTekshir } from "@/lib/ai/limit";
@@ -37,19 +38,19 @@ export function clearChekFlow(chatId: string): Promise<void> {
   return chekFlow.delete(chatId);
 }
 
-/** Foydalanuvchining faol biznesi: kassirda biriktirilgani, boshqada birinchisi. */
+/**
+ * Foydalanuvchining faol biznesi: biriktirilganlardan birinchisi, biriktirilmagan
+ * bo'lsa umuman birinchisi (ko'p-bizneslik — bot/bizneslar.ts).
+ *
+ * Chek oqimi biznes tanlash bosqichiga ega emas: chek suratini yuborish
+ * imkon qadar tez bo'lishi kerak. Bir nechta biznesga biriktirilgan xodim
+ * uchun bu ro'yxatdagi birinchi biznes bo'ladi va tasdiq matnida biznes nomi
+ * ko'rsatiladi (adashsa — ilovadan kiritadi).
+ */
 async function biznesniAniqla(user: User): Promise<{ id: string; nomi: string } | null> {
-  if (user.businessId) {
-    return prisma.business.findFirst({
-      where: { id: user.businessId, isActive: true },
-      select: { id: true, nomi: true },
-    });
-  }
-  return prisma.business.findFirst({
-    where: { isActive: true },
-    orderBy: { nomi: "asc" },
-    select: { id: true, nomi: true },
-  });
+  const bizneslar = await botBizneslar(user);
+  const b = bizneslar[0];
+  return b ? { id: b.id, nomi: b.nomi } : null;
 }
 
 async function kategoriyalarniKorsat(ctx: Context, businessId: string, taklif: string | null) {

@@ -117,6 +117,16 @@ CREATE TABLE "User" (
 );
 
 -- CreateTable
+CREATE TABLE "UserBusiness" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "UserBusiness_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AppSetting" (
     "key" TEXT NOT NULL,
     "value" TEXT NOT NULL,
@@ -960,6 +970,15 @@ CREATE INDEX "User_roleId_idx" ON "User"("roleId");
 CREATE INDEX "User_rol_idx" ON "User"("rol");
 
 -- CreateIndex
+CREATE INDEX "UserBusiness_userId_idx" ON "UserBusiness"("userId");
+
+-- CreateIndex
+CREATE INDEX "UserBusiness_businessId_idx" ON "UserBusiness"("businessId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "UserBusiness_userId_businessId_key" ON "UserBusiness"("userId", "businessId");
+
+-- CreateIndex
 CREATE INDEX "AiConversation_tenantId_updatedAt_idx" ON "AiConversation"("tenantId", "updatedAt");
 
 -- CreateIndex
@@ -1369,6 +1388,12 @@ ALTER TABLE "User" ADD CONSTRAINT "User_businessId_fkey" FOREIGN KEY ("businessI
 
 -- AddForeignKey
 ALTER TABLE "User" ADD CONSTRAINT "User_roleId_fkey" FOREIGN KEY ("roleId") REFERENCES "Role"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "UserBusiness" ADD CONSTRAINT "UserBusiness_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "UserBusiness" ADD CONSTRAINT "UserBusiness_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Account" ADD CONSTRAINT "Account_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

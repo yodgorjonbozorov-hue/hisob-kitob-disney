@@ -3,6 +3,7 @@ import { runBusinessTx, type BusinessTx } from "@/lib/db/businessTx";
 import { currentTenantId } from "@/lib/db/tenantContext";
 import { ZAXIRA_JADVALLARI } from "@/lib/backup/dump";
 import { logAudit } from "@/lib/services/audit";
+import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
 
 /**
  * BIZNESNI BOSHLANG'ICH HOLATGA QAYTARISH ("test ma'lumotlarini tozalash").
@@ -210,7 +211,8 @@ async function shaxsiyKassalarniOchTx(tx: BusinessTx, businessId: string): Promi
   const tenantId = currentTenantId();
   // runBusinessTx kelishuvi: xom `tx` — tenant/business sharti QO'LDA.
   const xodimlar = await tx.user.findMany({
-    where: { tenantId, isActive: true, OR: [{ businessId }, { businessId: null }] },
+    // Ko'p-bizneslik: shu biznesga biriktirilganlar + biriktirilmaganlar.
+    where: { tenantId, isActive: true, ...biznesXodimlariWhere(businessId) },
     select: { id: true, ism: true },
     orderBy: { ism: "asc" },
   });

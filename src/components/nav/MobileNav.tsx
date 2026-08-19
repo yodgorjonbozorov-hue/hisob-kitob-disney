@@ -13,6 +13,7 @@ interface BusinessOption {
 
 interface Props {
   ism: string;
+  /** Chaqiruvchi layout beradi; bu panelda ishlatilmaydi (biznes almashtirgich ruxsatni serverdan oladi). */
   rol: Rol;
   businesses: BusinessOption[];
   activeBusinessId: string | null;
@@ -23,7 +24,7 @@ interface Props {
  * Mobil yuqori panel (top app bar): brend + biznes almashtirgich + qo'ng'iroq.
  * Navigatsiya pastki tab-bar (BottomNav) orqali. Faqat < lg.
  */
-export default function MobileNav({ rol, businesses, activeBusinessId }: Props) {
+export default function MobileNav({ businesses, activeBusinessId }: Props) {
   // Badge soni sahifani bloklamasdan keyin yuklanadi.
   const notifCount = useNotifCount();
   return (
@@ -33,7 +34,7 @@ export default function MobileNav({ rol, businesses, activeBusinessId }: Props) 
           <Logo variant="icon" height={26} />
         </Link>
         <div className="flex-1 min-w-0">
-          <BusinessSwitcher businesses={businesses} activeId={activeBusinessId} rol={rol} />
+          <BusinessSwitcher businesses={businesses} activeId={activeBusinessId} />
         </div>
         <Link href="/app/bildirishnomalar" aria-label="Bildirishnomalar" className="relative shrink-0 w-9 h-9 flex items-center justify-center text-muted">
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
