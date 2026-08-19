@@ -188,6 +188,8 @@ export interface OmborBirlikDTO {
   miqdor: number;
   /** Shu birlikdagi, qoldig'i bor mahsulot turlari soni. */
   turlar: number;
+  /** Shu birlikdagi qoldiqning tannarx qiymati (so'm). */
+  qiymat: number;
 }
 
 export interface OmborKartasiDTO {
@@ -200,10 +202,16 @@ export interface OmborKartasiDTO {
   birliklar: OmborBirlikDTO[];
   /** Eng ko'p mahsulot turiga ega birlik — kartadagi katta raqam shundan. */
   asosiy: OmborBirlikDTO | null;
+  /**
+   * BUTUN OMBOR QIYMATI (so'm) — Σ(miqdor × kelganNarx) + mahsulotga
+   * yozilgan xarajatlar. Miqdordan farqli o'laroq PUL birliklar bo'ylab
+   * qo'shilaveradi: 500 dona ning va 120 kg ning qiymati bir xil so'm.
+   */
+  jamiQiymat: number;
 }
 
 /**
- * BOSH SAHIFADAGI "OMBORDAGI MAHSULOTLAR" KARTASI — bitta `groupBy`.
+ * BOSH SAHIFADAGI "OMBORDAGI MAHSULOTLAR" KARTASI — bitta xom so'rov.
  *
  * QOLDIQ MANBASI: `Product.miqdor`. Bu tizimda qoldiqning YAGONA manbasi —
  * xizmat qatlami uni har harakatda atomik yangilaydi:
@@ -214,26 +222,53 @@ export interface OmborKartasiDTO {
  * Shuning uchun bu yerda harakatlarni QAYTA jamlash shart emas va parallel
  * hisob yaratilmaydi — aks holda ikki xil qoldiq paydo bo'lardi.
  *
- * `miqdor > 0` sharti: nolga tushgan (sotilib bo'lingan) mahsulot "omborda
- * mavjud" emas, shuning uchun turlar soniga ham kirmaydi.
+ * NEGA XOM SO'ROV: qiymat `miqdor × kelganNarx` ko'paytmasi, Prisma'ning
+ * `_sum` i ikki ustunni ko'paytira olmaydi (`getProductProfitability` da
+ * ham shu sabab). Tenant sharti SQL ichida — `businessScope`.
  *
- * ESLATMA: bu son Ombor sahifasidagi "Mahsulot turlari" dan farq qilishi
- * mumkin — u BARCHA faol mahsulotlarni sanaydi, bu esa faqat qoldig'i
- * borlarini.
+ * XARAJATLAR: sotilmagan mahsulotga (ayniqsa avto rejimida — ta'mirlash,
+ * bo'yoq) qilingan xarajat ham omborga tikilgan puldir. Ombor sahifasidagi
+ * "Ombor qiymati" AYNI shu qoidadan hisoblanadi, shuning uchun karta va
+ * sahifa hech qachon ikki xil raqam ko'rsatmaydi (test buni majburlaydi).
+ *
+ * `miqdor > 0` sharti: nolga tushgan (sotilib bo'lingan) mahsulot "omborda
+ * mavjud" emas, shuning uchun turlar soniga ham, qiymatga ham kirmaydi.
+ *
+ * ESLATMA: turlar soni Ombor sahifasidagi "Mahsulot turlari" dan farq
+ * qilishi mumkin — u BARCHA faol mahsulotlarni sanaydi, bu esa faqat
+ * qoldig'i borlarini.
  */
 export async function getOmborKartasi(businessId: string): Promise<OmborKartasiDTO> {
-  const guruhlar = await prisma.product.groupBy({
-    by: ["birlik"],
-    where: { businessId, isActive: true, miqdor: { gt: 0 } },
-    _sum: { miqdor: true },
-    _count: { _all: true },
-  });
+  const rows = await businessQueryRaw<{
+    birlik: string;
+    miqdor: unknown;
+    turlar: unknown;
+    qiymat: unknown;
+    xarajat: unknown;
+  }>(Prisma.sql`
+    SELECT
+      p."birlik"                          AS birlik,
+      SUM(p."miqdor")                     AS miqdor,
+      COUNT(*)                            AS turlar,
+      SUM(p."miqdor" * p."kelganNarx")    AS qiymat,
+      COALESCE(SUM((
+        SELECT SUM(e."summa") FROM "ProductExpense" e
+        WHERE e."productId" = p."id" AND e."businessId" = p."businessId"
+      )), 0)                              AS xarajat
+    FROM "Product" p
+    JOIN "Business" b ON b."id" = p."businessId"
+    WHERE ${businessScope("p", businessId)}
+      AND p."isActive" = ${true}
+      AND p."miqdor" > 0
+    GROUP BY p."birlik"
+  `);
 
-  const birliklar = guruhlar
-    .map((g) => ({
-      birlik: g.birlik,
-      miqdor: g._sum.miqdor ?? 0,
-      turlar: g._count._all,
+  const birliklar = rows
+    .map((r) => ({
+      birlik: r.birlik,
+      miqdor: songa(r.miqdor),
+      turlar: songa(r.turlar),
+      qiymat: songa(r.qiymat) + songa(r.xarajat),
     }))
     .filter((b) => b.miqdor > 0)
     // Eng ko'p tur yuqorida; teng bo'lsa miqdori kattasi.
@@ -243,6 +278,7 @@ export async function getOmborKartasi(businessId: string): Promise<OmborKartasiD
     turlarSoni: birliklar.reduce((a, b) => a + b.turlar, 0),
     birliklar,
     asosiy: birliklar[0] ?? null,
+    jamiQiymat: birliklar.reduce((a, b) => a + b.qiymat, 0),
   };
 }
 

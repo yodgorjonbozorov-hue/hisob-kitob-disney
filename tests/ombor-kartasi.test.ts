@@ -8,7 +8,9 @@
  *   2. TURLI BIRLIKLAR QO'SHILMAYDI: "500 dona + 120 kg = 620" ma'nosiz.
  *      Karta har birlikni alohida qaytaradi.
  *   3. Turlar soni — qoldig'i BOR unique mahsulotlar.
- *   4. Tenant/biznes izolyatsiyasi.
+ *   4. QIYMAT (Σ miqdor × kelganNarx + xarajatlar) — Ombor sahifasidagi
+ *      "Ombor qiymati" bilan AYNAN teng: ikkalasi bitta qoidadan.
+ *   5. Tenant/biznes izolyatsiyasi.
  *
  * Ishga tushirish: npm run test:ombor-kartasi
  */
@@ -107,6 +109,7 @@ test("mahsulotsiz ombor: 0 tur, birliklar bo'sh, asosiy null", async () => {
   assert.equal(k.turlarSoni, 0);
   assert.deepEqual(k.birliklar, []);
   assert.equal(k.asosiy, null);
+  assert.equal(k.jamiQiymat, 0);
 });
 
 // ---------------------------------------------------------------------------
@@ -136,6 +139,39 @@ test("turli birliklar BITTA raqamga qo'shilmaydi", async () => {
   const notogri = k.birliklar.reduce((a: number, b: any) => a + b.miqdor, 0);
   assert.equal(notogri, 1_408);
   assert.notEqual(k.asosiy.miqdor, notogri, "birliklar qo'shib yuborilmagan");
+});
+
+// ---------------------------------------------------------------------------
+// Qiymat — miqdor × tannarx
+// ---------------------------------------------------------------------------
+
+test("qiymat miqdor × tannarx bo'yicha hisoblanadi", async () => {
+  // Olma 500×1000, Non 748×1000, Guruch 120×1000, Moy 40×1000.
+  const k = await karta();
+
+  assert.equal(birlik(k, "dona").qiymat, 1_248_000, "(500 + 748) × 1000");
+  assert.equal(birlik(k, "kg").qiymat, 120_000);
+  assert.equal(birlik(k, "litr").qiymat, 40_000);
+
+  // PUL birliklar bo'ylab qo'shilaveradi — miqdordan farqli o'laroq.
+  assert.equal(k.jamiQiymat, 1_408_000);
+});
+
+test("har xil tannarxli mahsulotlar to'g'ri jamlanadi", async () => {
+  const qimmat = await mahsulot("Qimmat", "dona", 3, 250_000);
+  assert.ok(qimmat.id);
+
+  const k = await karta();
+  assert.equal(birlik(k, "dona").miqdor, 1_251, "1248 + 3");
+  assert.equal(
+    birlik(k, "dona").qiymat,
+    1_248_000 + 750_000,
+    "har mahsulot O'Z tannarxi bilan"
+  );
+  assert.equal(k.jamiQiymat, 2_158_000);
+
+  // Testning qolganiga xalaqit bermasin.
+  await A(async () => rawPrisma.product.delete({ where: { id: qimmat.id } }));
 });
 
 // ---------------------------------------------------------------------------
@@ -279,6 +315,33 @@ test("karta qoldig'i Ombor sahifasidagi qoldiq bilan bir manbadan", async () => 
   // ya'ni ikkalasi ham AYNI `Product.miqdor` dan o'qiydi.
   const kartaJami = k.birliklar.reduce((a: number, b: any) => a + b.miqdor, 0);
   assert.equal(kartaJami, stats.jamiQoldiq, "manba bitta: Product.miqdor");
+
+  // QIYMAT esa AYNAN teng bo'lishi shart — ikki ekranda ikki xil pul
+  // raqami chiqishi mumkin emas.
+  assert.equal(k.jamiQiymat, stats.omborQiymati, "karta qiymati = Ombor sahifasi qiymati");
+});
+
+test("mahsulotga yozilgan xarajat ham ombor qiymatiga kiradi", async () => {
+  const oldin = await karta();
+  await A(async () =>
+    rawPrisma.productExpense.create({
+      data: {
+        businessId: T.business.id,
+        productId: P["Olma"].id,
+        turi: "tamirlash",
+        summa: 300_000,
+        izoh: "Saralash",
+        userId: T.user.id,
+      },
+    })
+  );
+
+  const keyin = await karta();
+  assert.equal(keyin.jamiQiymat, oldin.jamiQiymat + 300_000);
+  assert.equal(keyin.birliklar.length, oldin.birliklar.length, "birliklar o'zgarmadi");
+
+  const stats = await A(async () => invQ.getOmborStats(T.business.id));
+  assert.equal(keyin.jamiQiymat, stats.omborQiymati, "Ombor sahifasi bilan hamon teng");
 });
 
 // ---------------------------------------------------------------------------
@@ -306,4 +369,5 @@ test("boshqa biznesning mahsulotlari kartaga kirmaydi", async () => {
   );
   assert.equal(begona.turlarSoni, 1);
   assert.equal(begona.asosiy.miqdor, 999_999);
+  assert.equal(begona.jamiQiymat, 999_999, "999 999 × 1");
 });

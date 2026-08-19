@@ -240,19 +240,24 @@ export default async function DashboardPage({
             href="/app/ombor"
             className="col-span-2 lg:col-span-1"
           >
-            <p className="text-2xs mt-1 tnum text-muted">
-              {ombor.turlarSoni} ta mahsulot turi
-            </p>
             {/* Boshqa birliklar ALOHIDA qatorda: "500 dona + 120 kg" ni
                 bitta raqamga qo'shish matematik jihatdan noto'g'ri. */}
-            {ombor.birliklar.length > 1 && (
-              <p className="text-2xs mt-0.5 tnum text-faint truncate">
-                {ombor.birliklar
+            <p className="text-2xs mt-1 tnum text-muted truncate">
+              {ombor.turlarSoni} ta tur
+              {ombor.birliklar.length > 1 &&
+                ` · ${ombor.birliklar
                   .slice(1)
                   .map((b) => `${formatSom(b.miqdor)} ${b.birlik}`)
-                  .join(" · ")}
-              </p>
-            )}
+                  .join(" · ")}`}
+            </p>
+            {/* QIYMAT — miqdordan farqli o'laroq pul birliklar bo'ylab
+                qo'shilaveradi, shuning uchun bitta raqam. */}
+            <p
+              className="text-2xs mt-0.5 tnum text-brand font-medium"
+              title={formatSomLabel(ombor.jamiQiymat)}
+            >
+              Qiymati: {formatMoneyCompact(ombor.jamiQiymat)} so&apos;m
+            </p>
           </StatCard>
         )}
       </div>
