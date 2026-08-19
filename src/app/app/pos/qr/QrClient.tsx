@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -23,6 +24,7 @@ export function QrClient({ mahsulotlar }: { mahsulotlar: KodliMahsulotDTO[] }) {
   const [barcode, setBarcode] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [xato, setXato] = useState<string | null>(null);
+  const [xabar, setXabar] = useState<string | null>(null);
   const [koroq, setKoroq] = useState<{ kod: string; turi: "qr" | "barcode"; nomi: string } | null>(
     null
   );
@@ -56,6 +58,36 @@ export function QrClient({ mahsulotlar }: { mahsulotlar: KodliMahsulotDTO[] }) {
     }
   }
 
+  /**
+   * KODSIZ TOVARLARNING HAMMASIGA QR — 100+ tovarli do'kon uchun.
+   *
+   * Bittalab bosish amalda bajarib bo'lmaydigan ish edi. Amal idempotent:
+   * kodi borlar tegilmaydi, shuning uchun ikki marta bosish zararsiz.
+   */
+  async function hammasigaQr() {
+    setBusy("hammasi");
+    setXato(null);
+    try {
+      const res = await fetch("/api/pos/mahsulot/qr-hammasi", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setXato(data.error ?? "Xatolik yuz berdi");
+        return;
+      }
+      setXabar(
+        data.yaratildi > 0
+          ? `${data.yaratildi} ta tovarga QR yaratildi.` +
+              (data.qolgan > 0 ? ` Yana ${data.qolgan} tasi qoldi — tugmani qayta bosing.` : "")
+          : "Kodsiz tovar topilmadi — hammasida kod bor."
+      );
+      router.refresh();
+    } catch {
+      setXato("Serverga ulanib bo'lmadi");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function qrYarat(productId: string) {
     setBusy(productId);
     setXato(null);
@@ -76,6 +108,30 @@ export function QrClient({ mahsulotlar }: { mahsulotlar: KodliMahsulotDTO[] }) {
 
   return (
     <div className="space-y-3">
+      <div className="bg-surface rounded-2xl border border-line p-4 flex flex-wrap items-center gap-2 justify-between">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-fg">Ko&apos;p tovar bilan ishlash</p>
+          <p className="text-xs text-muted mt-0.5">
+            Kodsiz tovarlarga bir yo&apos;la QR yarating, so&apos;ng yorliqlarni stiker
+            printerida chop eting.
+          </p>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <Button variant="secondary" loading={busy === "hammasi"} onClick={hammasigaQr}>
+            Kodsiz tovarlarga QR yaratish
+          </Button>
+          <Link href="/app/pos/qr/chop">
+            <Button>Yorliqlarni chop etish</Button>
+          </Link>
+        </div>
+      </div>
+
+      {xabar && (
+        <p className="text-sm text-income-fg bg-income-soft border border-income/40 rounded-lg px-3 py-2">
+          {xabar}
+        </p>
+      )}
+
       <input
         value={qidiruv}
         onChange={(e) => setQidiruv(e.target.value)}
