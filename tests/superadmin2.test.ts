@@ -242,7 +242,12 @@ test("modul: O'CHIRISH MA'LUMOTNI O'CHIRMAYDI va qayta yoqilsa qaytadi", async (
 
 test("modul bog'liqligi: XARID uchun OMBOR shart, OMBOR esa XARID yoqiqda o'chmaydi", async () => {
   assert.deepEqual(bogliqlik.talabQiladi("XARID"), ["OMBOR"]);
-  assert.deepEqual(bogliqlik.tayanadiganlar("OMBOR"), ["XARID"]);
+  // OMBOR'ga BIR NECHTA modul tayanadi (XARID va MAGAZIN — kassa ham
+  // mahsulot/qoldiqni o'sha modulda yuritadi). Tartibga bog'lanmaymiz:
+  // yangi bog'liqlik qo'shilganda test sababsiz qizil bo'lmasin.
+  const omborgaTayananlar = bogliqlik.tayanadiganlar("OMBOR");
+  assert.ok(omborgaTayananlar.includes("XARID"));
+  assert.ok(omborgaTayananlar.includes("MAGAZIN"));
 
   // OMBOR o'chiq holatda XARID yoqilmaydi.
   await modullar.modulniOzgartir(tA.tenant.id, "OMBOR", false);
