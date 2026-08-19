@@ -11,6 +11,7 @@ import { formatSom, formatSomLabel, parseSomInput } from "@/lib/format";
 import { omborMatn, isAvto } from "@/lib/biznesTuri";
 import type { ProductAdminDTO, OmborStats } from "@/lib/queries/inventory";
 import { TogrilashModal } from "./TogrilashModal";
+import { ImportModal } from "./ImportModal";
 import { BIRLIKLAR } from "@/lib/validation/inventory";
 
 export function OmborClient({
@@ -33,6 +34,7 @@ export function OmborClient({
   const [xarajatFor, setXarajatFor] = useState<ProductAdminDTO | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   // Ombor to'g'rilash (Faza 4.3): inventarizatsiya yoki hisobdan chiqarish.
   const [togrilash, setTogrilash] = useState<"inventarizatsiya" | "chiqarish" | null>(null);
 
@@ -195,6 +197,12 @@ export function OmborClient({
             <Button variant="secondary" onClick={() => setBulkOpen(true)}>
               {M.koproq}
             </Button>
+            <a href="/api/products/export?format=xlsx" download>
+              <Button variant="ghost">Excel eksport</Button>
+            </a>
+            <Button variant="secondary" onClick={() => setImportOpen(true)}>
+              Fayldan yuklash
+            </Button>
           </>
         )}
         <Button onClick={() => setNewOpen(true)}>{M.yangi}</Button>
@@ -243,6 +251,12 @@ export function OmborClient({
           <NewProductModal onClose={() => setNewOpen(false)} onDone={refresh} />
         ))}
       {bulkOpen && <BulkProductsModal onClose={() => setBulkOpen(false)} onDone={refresh} />}
+      {importOpen && (
+        <ImportModal
+          onClose={() => setImportOpen(false)}
+          onDone={refresh}
+        />
+      )}
       {editing && (
         <EditPriceModal product={editing} avto={avto} onClose={() => setEditing(null)} onDone={refresh} />
       )}
