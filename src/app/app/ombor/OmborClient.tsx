@@ -11,6 +11,7 @@ import { formatSom, formatSomLabel, parseSomInput } from "@/lib/format";
 import { omborMatn, isAvto } from "@/lib/biznesTuri";
 import type { ProductAdminDTO, OmborStats } from "@/lib/queries/inventory";
 import { TogrilashModal } from "./TogrilashModal";
+import Link from "next/link";
 import { ImportModal } from "./ImportModal";
 import { BIRLIKLAR } from "@/lib/validation/inventory";
 
@@ -197,6 +198,9 @@ export function OmborClient({
             <Button variant="secondary" onClick={() => setBulkOpen(true)}>
               {M.koproq}
             </Button>
+            <Link href="/app/ombor/narxlar">
+              <Button variant="secondary">Narx va qoldiq</Button>
+            </Link>
             <a href="/api/products/export?format=xlsx" download>
               <Button variant="ghost">Excel eksport</Button>
             </a>

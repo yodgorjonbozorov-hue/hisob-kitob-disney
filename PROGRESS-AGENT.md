@@ -3581,3 +3581,48 @@ Bir yurishda 500 qator. Sababi texnik: import bitta tranzaksiyada ishlaydi
 va `runBusinessTx` 15 soniya beradi. Chegara jimgina kesib tashlanmaydi —
 ochiq xato bo'lib ko'rinadi. Katalog bir marta o'qiladi va xotirada
 xaritaga solinadi, aks holda 500 qator 1500 so'rov bo'lardi.
+
+## Narx va qoldiqni ilova ichida to'ldirish (2026-08-19)
+
+Import katalogni ko'chiradi, lekin Bito eksporti narx ham, qoldiq ham
+bermaydi. Mijoz narxlarni Excel'da emas, ILOVANING O'ZIDA to'ldirmoqchi.
+Mavjud yo'l bu ish uchun yaramasdi:
+
+- narx faqat `EditPriceModal` orqali, bitta tovar uchun — 221 tovar
+  221 marta modal ochib yopish demakdir;
+- qoldiq esa `StockEntryModal` (ombor kirimi) orqali, u XARID hisoblanadi
+  va chiqim tranzaksiya yozadi. Ko'chirilgan tovar allaqachon sotib olingan
+  — bu yo'l bilan to'ldirish hisobotda bir kunda soxta "xarid" yaratardi.
+
+Shuning uchun `/app/ombor/narxlar` sahifasi: bitta jadval, har qatorda
+tannarx / sotuv narxi / qoldiq, bitta "Saqlash". Ombor sahifasidan
+"Narx va qoldiq" tugmasi bilan ochiladi.
+
+Fayllar: `src/lib/services/narxToldirish.ts`,
+`src/app/api/products/narxlar/route.ts` (PATCH),
+`src/app/app/ombor/narxlar/{page,NarxlarClient,NarxQatori}.tsx`,
+`tests/narx-toldirish.test.ts` (7 test).
+
+### Qoldiq pul yozmaydi
+
+Import servisidagi qoida bu yerda ham amal qiladi: qoldiq `StockAdjustment`
+(turi `inventarizatsiya`, sabab "Narx va qoldiqni to'ldirish") bo'lib
+tushadi. Test tranzaksiya va `StockEntry` soni NOL qolishini majburlaydi.
+
+Sahifada bu ochiq yozilgan: yangi XARID uchun Ombor sahifasidagi "Kirim"
+ishlatiladi — u xarid chiqimini yozadi. Ikki yo'lni chalkashtirmaslik
+foydalanuvchining zimmasiga qoldirilmadi.
+
+### Faqat o'zgargani yuboriladi
+
+Client `ozgarganlar` ni hisoblaydi va serverga faqat farqi bor qatorlarni
+yuboradi; server ham qiymatni bazadagisi bilan solishtiradi. Aks holda
+"Saqlash" har bosilganda 221 ta keraksiz `update` va 221 ta ma'nosiz
+inventarizatsiya izi paydo bo'lardi. Test buni majburlaydi.
+
+### Begona id
+
+Qator `productId` bilan keladi, ya'ni foydalanuvchi boshqa biznesning
+mahsulot idsini yuborishi mumkin. Servis idlarni `businessId` sharti bilan
+bir marta o'qiydi va topilmaganlarini `topilmadi` deb SANAYDI — jimgina
+o'tkazib yuborilmaydi.

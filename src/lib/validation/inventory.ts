@@ -155,3 +155,22 @@ export const mahsulotImportQatorSchema = z.object({
 });
 
 export type MahsulotImportQatorInput = z.infer<typeof mahsulotImportQatorSchema>;
+
+/**
+ * NARX VA QOLDIQNI OMMAVIY TO'LDIRISH (ombor jadvalidan).
+ *
+ * Har maydon ixtiyoriy: foydalanuvchi faqat o'zgartirgan katagi keladi.
+ * `null` — "bu maydonga tegilmasin" degani, 0 esa haqiqiy qiymat.
+ */
+export const narxToldirishQatorSchema = z.object({
+  productId: z.string().min(1),
+  kelganNarx: z.number().int().min(0).max(100_000_000_000).nullable().optional(),
+  sotuvNarx: z.number().int().min(0).max(100_000_000_000).nullable().optional(),
+  miqdor: z.number().int().min(0, "Qoldiq manfiy bo'lmasligi kerak").max(10_000_000).nullable().optional(),
+});
+
+export const narxToldirishSchema = z.object({
+  qatorlar: z.array(narxToldirishQatorSchema).min(1, "O'zgartirilgan qator yo'q").max(500),
+});
+
+export type NarxToldirishInput = z.infer<typeof narxToldirishSchema>;
