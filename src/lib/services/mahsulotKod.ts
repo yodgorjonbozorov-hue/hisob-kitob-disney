@@ -157,3 +157,47 @@ export async function qrKodYarat(params: { businessId: string; productId: string
   }
   throw new BadRequestError("QR kod yaratib bo'lmadi — qaytadan urinib ko'ring");
 }
+
+/**
+ * OMMAVIY QR YARATISH — kodsiz tovarlarning HAMMASIGA bir amalda.
+ *
+ * Nega kerak: 100+ tovarli do'konda har mahsulot uchun alohida tugma bosish
+ * amalda bajarib bo'lmaydigan ish. Yangi do'kon Balansa'ga ko'chganda esa
+ * aynan shu holat — katalog to'la, kod esa hech qayerda yo'q.
+ *
+ * QAMROV: faqat FAOL va HECH QANDAY kodi yo'q tovarlar. Zavod shtrix-kodi
+ * bor tovarga QR yaratilmaydi — uning kodi allaqachon quti ustida va
+ * skaner uni o'qiy oladi, ortiqcha stiker chop etishning hojati yo'q.
+ *
+ * IDEMPOTENT: qayta ishga tushirilsa allaqachon kodi borlar tegilmaydi,
+ * ya'ni tugmani ikki marta bosish zararsiz.
+ */
+export async function qrKodHammasiga(params: {
+  businessId: string;
+  /** Bir yurishdagi chegara — kutilmagan katta katalogda uzoq ishlab qolmasin. */
+  chegara?: number;
+}): Promise<{ yaratildi: number; qolgan: number }> {
+  const chegara = params.chegara ?? 500;
+
+  const kodsizlar = await prisma.product.findMany({
+    where: {
+      businessId: params.businessId,
+      isActive: true,
+      barcode: null,
+      qrKod: null,
+    },
+    select: { id: true },
+    orderBy: { createdAt: "asc" },
+    take: chegara + 1,
+  });
+
+  const ishlanadi = kodsizlar.slice(0, chegara);
+  let yaratildi = 0;
+  for (const p of ishlanadi) {
+    // Har biri alohida — bittasida to'qnashuv bo'lsa qolgani davom etadi.
+    const natija = await qrKodYarat({ businessId: params.businessId, productId: p.id });
+    if (natija.yangi) yaratildi++;
+  }
+
+  return { yaratildi, qolgan: Math.max(0, kodsizlar.length - ishlanadi.length) };
+}

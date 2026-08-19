@@ -896,3 +896,103 @@ test("39. MAGAZIN yoqiq bo'lsa OMBOR o'chirilmaydi (jimgina sinmasin)", async ()
   assert.ok(yoqilgan.has("OMBOR"));
   assert.ok(yoqilgan.has("MAGAZIN"));
 });
+
+// =========================================================================
+// YORLIQ CHOP ETISH (stiker printeri) va OMMAVIY QR
+// =========================================================================
+
+test("40. Ommaviy QR: kodsiz tovarlarga yaratadi, kodlilarga TEGMAYDI", async () => {
+  const bizniki = { businessId: dokon.business.id };
+
+  // Zavod kodi bor tovar — unga QR YARATILMASLIGI kerak (kodi quti ustida).
+  const zavodKodli = await mahsulot("Zavod kodli tovar", 9_000, 10, "4609999999991");
+  // Kodsiz uchta tovar.
+  const kodsizlar = [
+    await mahsulot("Kodsiz A", 3_000, 10),
+    await mahsulot("Kodsiz B", 4_000, 10),
+    await mahsulot("Kodsiz C", 5_000, 10),
+  ];
+  // Allaqachon QR'i bor tovar — u QAYTA yaratilmasligi kerak.
+  const qrli = await mahsulot("Allaqachon QR'li", 6_000, 10);
+  const oldingi = await D(() =>
+    mahsulotKod.qrKodYarat({ businessId: dokon.business.id, productId: qrli.id })
+  );
+
+  const natija = await D(() => mahsulotKod.qrKodHammasiga(bizniki));
+  assert.ok(natija.yaratildi >= 3, `kamida 3 ta yaratilishi kerak, bo'ldi: ${natija.yaratildi}`);
+  assert.equal(natija.qolgan, 0);
+
+  for (const p of kodsizlar) {
+    const keyin = await rawPrisma.product.findUnique({ where: { id: p.id } });
+    assert.ok(kod.balansaQrMi(keyin.qrKod), `${keyin.nomi}: QR yaratilmadi`);
+  }
+  // Zavod kodli tovar tegilmagan.
+  const z = await rawPrisma.product.findUnique({ where: { id: zavodKodli.id } });
+  assert.equal(z.qrKod, null, "zavod shtrix-kodi bor tovarga QR yaratilmasligi kerak");
+  // Mavjud QR o'zgarmagan (chop etilgan stikerlar amal qilaveradi).
+  const q = await rawPrisma.product.findUnique({ where: { id: qrli.id } });
+  assert.equal(q.qrKod, oldingi.qrKod);
+
+  // IDEMPOTENT: ikkinchi yurishda yangi kod yaratilmaydi.
+  const ikkinchi = await D(() => mahsulotKod.qrKodHammasiga(bizniki));
+  assert.equal(ikkinchi.yaratildi, 0, "takroriy bosish yangi kod yaratmasligi kerak");
+});
+
+test("41. Ommaviy QR boshqa biznesga o'tib ketmaydi", async () => {
+  // Agentlik biznesida kodsiz tovar bo'lsin.
+  const agencyProduct = await A(() =>
+    prisma.product.create({
+      data: {
+        businessId: agency.business.id,
+        nomi: "Agentlik kodsiz tovari",
+        sotuvNarx: 50_000,
+        miqdor: 5,
+      },
+    })
+  );
+  // Do'kon uchun ommaviy yaratish — agentlik tovariga TEGMASLIGI kerak.
+  await D(() => mahsulotKod.qrKodHammasiga({ businessId: dokon.business.id }));
+  const keyin = await rawPrisma.product.findUnique({ where: { id: agencyProduct.id } });
+  assert.equal(keyin.qrKod, null, "boshqa biznesning tovariga kod yozilmasligi kerak");
+});
+
+test("42. Yorliq o'lchamlari stiker printeriga mos", async () => {
+  const { YORLIQ_OLCHAMLARI, yorliqByCode, STANDART_YORLIQ, MAKS_YORLIQ } = await import(
+    "@/lib/magazin/yorliq"
+  );
+
+  assert.ok(YORLIQ_OLCHAMLARI.length >= 3);
+  assert.ok(yorliqByCode(STANDART_YORLIQ), "standart o'lcham katalogda bo'lishi kerak");
+  // Noma'lum kod berilsa ham yiqilmaydi — birinchi o'lcham qaytadi.
+  assert.equal(yorliqByCode("yoq-olcham").code, YORLIQ_OLCHAMLARI[0].code);
+
+  for (const y of YORLIQ_OLCHAMLARI) {
+    // QR yorliqdan chiqib ketmasligi kerak: chetida "sokin zona" (quiet zone)
+    // bo'lmasa skaner kodni umuman o'qiy olmaydi.
+    assert.ok(
+      y.qrMm < y.balandMm - 2,
+      `${y.code}: QR (${y.qrMm}mm) balandlikka (${y.balandMm}mm) sig'maydi`
+    );
+    assert.ok(y.qrMm < y.kengMm - 2, `${y.code}: QR kenglikka sig'maydi`);
+    // 2D skanerlar uchun amaliy minimal o'lcham.
+    assert.ok(y.qrMm >= 12, `${y.code}: QR juda kichik (${y.qrMm}mm) — skanerlanmaydi`);
+  }
+
+  assert.ok(MAKS_YORLIQ > 0 && MAKS_YORLIQ <= 1000);
+});
+
+test("43. Yorliq QR'i skanerlanadigan kod qaytaradi", async () => {
+  // Chop etilgan stikerdagi QR aynan mahsulot kalitini saqlashi va u
+  // kassada topilishi kerak — zanjirning ikki uchi.
+  const p = await mahsulot("Yorliq sinovi", 7_000, 10);
+  const { qrKod } = await D(() =>
+    mahsulotKod.qrKodYarat({ businessId: dokon.business.id, productId: p.id })
+  );
+
+  const svg = kod.qrSvg(qrKod, { olcham: 200 });
+  assert.ok(svg.startsWith("<svg"), "QR chizilishi kerak");
+  assert.ok(svg.includes("viewBox"), "viewBox bo'lishi kerak — yorliq o'lchamiga cho'ziladi");
+
+  const topildi = await D(() => mahsulotKod.kodBoyichaMahsulot(dokon.business.id, qrKod));
+  assert.equal(topildi.id, p.id, "stikerdagi kod kassada shu tovarni ochishi kerak");
+});
