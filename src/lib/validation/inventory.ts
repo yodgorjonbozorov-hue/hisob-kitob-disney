@@ -132,3 +132,45 @@ export const adjustStockSchema = z.object({
   miqdor: z.number().int().min(0, "Miqdor manfiy bo'lmasligi kerak"),
   sabab: z.string().trim().min(3, "Sababni yozing").max(300),
 });
+
+/**
+ * MAHSULOT IMPORTI — bitta fayl qatorining sxemasi.
+ *
+ * `nullable` maydonlar: ustun faylda BOR, lekin katak bo'sh degani.
+ * `undefined` esa ustunning o'zi yo'qligini bildiradi — yangilashda bunday
+ * maydonga TEGILMAYDI (aks holda narxsiz fayl butun katalog narxini nolga
+ * tushirib yuborardi).
+ */
+export const mahsulotImportQatorSchema = z.object({
+  nomi: z.string().trim().min(1, "Nomi bo'sh").max(100),
+  sku: z.string().trim().max(40).nullable().optional(),
+  barcode: z.string().trim().max(64).nullable().optional(),
+  kategoriya: z.string().trim().max(100).nullable().optional(),
+  birlik: z.enum(BIRLIKLAR).optional(),
+  kelganNarx: z.number().int().min(0, "Tannarx manfiy bo'lmasligi kerak").max(100_000_000_000).nullable().optional(),
+  sotuvNarx: z.number().int().min(0, "Sotuv narxi manfiy bo'lmasligi kerak").max(100_000_000_000).nullable().optional(),
+  miqdor: z.number().int().min(0, "Qoldiq manfiy bo'lmasligi kerak").max(10_000_000).nullable().optional(),
+  minQoldiq: z.number().int().min(0).max(1_000_000).nullable().optional(),
+  izoh: z.string().trim().max(500).nullable().optional(),
+});
+
+export type MahsulotImportQatorInput = z.infer<typeof mahsulotImportQatorSchema>;
+
+/**
+ * NARX VA QOLDIQNI OMMAVIY TO'LDIRISH (ombor jadvalidan).
+ *
+ * Har maydon ixtiyoriy: foydalanuvchi faqat o'zgartirgan katagi keladi.
+ * `null` — "bu maydonga tegilmasin" degani, 0 esa haqiqiy qiymat.
+ */
+export const narxToldirishQatorSchema = z.object({
+  productId: z.string().min(1),
+  kelganNarx: z.number().int().min(0).max(100_000_000_000).nullable().optional(),
+  sotuvNarx: z.number().int().min(0).max(100_000_000_000).nullable().optional(),
+  miqdor: z.number().int().min(0, "Qoldiq manfiy bo'lmasligi kerak").max(10_000_000).nullable().optional(),
+});
+
+export const narxToldirishSchema = z.object({
+  qatorlar: z.array(narxToldirishQatorSchema).min(1, "O'zgartirilgan qator yo'q").max(500),
+});
+
+export type NarxToldirishInput = z.infer<typeof narxToldirishSchema>;
