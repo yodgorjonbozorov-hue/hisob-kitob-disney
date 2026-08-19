@@ -4,6 +4,7 @@ import { requireManager } from "@/lib/auth/guard";
 import { resolveActiveBusinessId, requireOmborli } from "@/lib/business";
 import { adjustStock } from "@/lib/services/stockAdjust";
 import { adjustStockSchema } from "@/lib/validation/inventory";
+import { dashboardYangilandi } from "@/lib/cache";
 
 /**
  * Inventarizatsiya yoki hisobdan chiqarish — faqat direktor/admin.
@@ -31,5 +32,8 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
     userId: user.userId,
   });
 
+  // Ombor qoldig'i o'zgardi — bosh sahifadagi "Ombordagi mahsulotlar"
+  // kartasi eskirib qolmasin.
+  dashboardYangilandi(businessId);
   return NextResponse.json(natija, { status: 201 });
 }, { module: "OMBOR" });

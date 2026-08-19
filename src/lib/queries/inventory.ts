@@ -181,6 +181,71 @@ export async function getOmborStats(businessId: string): Promise<OmborStats> {
   };
 }
 
+export interface OmborBirlikDTO {
+  /** "dona" | "kg" | "litr" | "metr" | "quti" | "paket" (Product.birlik). */
+  birlik: string;
+  /** Shu birlikdagi jami qoldiq. */
+  miqdor: number;
+  /** Shu birlikdagi, qoldig'i bor mahsulot turlari soni. */
+  turlar: number;
+}
+
+export interface OmborKartasiDTO {
+  /** Qoldig'i BOR unique mahsulotlar soni (turlar). */
+  turlarSoni: number;
+  /**
+   * Qoldiq BIRLIKLAR BO'YICHA — ataylab bitta raqamga qo'shilmaydi.
+   * "500 dona + 120 kg = 620" matematik jihatdan ma'nosiz.
+   */
+  birliklar: OmborBirlikDTO[];
+  /** Eng ko'p mahsulot turiga ega birlik — kartadagi katta raqam shundan. */
+  asosiy: OmborBirlikDTO | null;
+}
+
+/**
+ * BOSH SAHIFADAGI "OMBORDAGI MAHSULOTLAR" KARTASI — bitta `groupBy`.
+ *
+ * QOLDIQ MANBASI: `Product.miqdor`. Bu tizimda qoldiqning YAGONA manbasi —
+ * xizmat qatlami uni har harakatda atomik yangilaydi:
+ *   ombor kirimi / xarid qabuli  → increment (StockEntry bilan birga);
+ *   sotuv                        → decrement (`miqdor: { gte }` qulfi bilan);
+ *   sotuvni bekor qilish (qaytarish) → increment;
+ *   inventarizatsiya / hisobdan chiqarish → StockAdjustment yozib, yangi qiymat.
+ * Shuning uchun bu yerda harakatlarni QAYTA jamlash shart emas va parallel
+ * hisob yaratilmaydi — aks holda ikki xil qoldiq paydo bo'lardi.
+ *
+ * `miqdor > 0` sharti: nolga tushgan (sotilib bo'lingan) mahsulot "omborda
+ * mavjud" emas, shuning uchun turlar soniga ham kirmaydi.
+ *
+ * ESLATMA: bu son Ombor sahifasidagi "Mahsulot turlari" dan farq qilishi
+ * mumkin — u BARCHA faol mahsulotlarni sanaydi, bu esa faqat qoldig'i
+ * borlarini.
+ */
+export async function getOmborKartasi(businessId: string): Promise<OmborKartasiDTO> {
+  const guruhlar = await prisma.product.groupBy({
+    by: ["birlik"],
+    where: { businessId, isActive: true, miqdor: { gt: 0 } },
+    _sum: { miqdor: true },
+    _count: { _all: true },
+  });
+
+  const birliklar = guruhlar
+    .map((g) => ({
+      birlik: g.birlik,
+      miqdor: g._sum.miqdor ?? 0,
+      turlar: g._count._all,
+    }))
+    .filter((b) => b.miqdor > 0)
+    // Eng ko'p tur yuqorida; teng bo'lsa miqdori kattasi.
+    .sort((a, b) => b.turlar - a.turlar || b.miqdor - a.miqdor);
+
+  return {
+    turlarSoni: birliklar.reduce((a, b) => a + b.turlar, 0),
+    birliklar,
+    asosiy: birliklar[0] ?? null,
+  };
+}
+
 export interface ProductProfitDTO {
   productId: string;
   nomi: string;

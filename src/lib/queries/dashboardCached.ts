@@ -7,6 +7,7 @@ import {
 } from "@/lib/queries/dashboard";
 import { getQarzJamlari } from "@/lib/queries/qarz";
 import { getTolovTaqsimoti } from "@/lib/queries/tolovTaqsimoti";
+import { getOmborKartasi } from "@/lib/queries/inventory";
 
 /**
  * Dashboard so'rovlarining KESHLANGAN variantlari (60 s).
@@ -36,3 +37,9 @@ export const getQarzJamlariKesh = keshlangan("dashboard:qarz-jamlari", getQarzJa
  * bekor qilinadi.
  */
 export const getTolovTaqsimotiKesh = keshlangan("dashboard:tolov-taqsimoti", getTolovTaqsimoti);
+/**
+ * "Ombordagi mahsulotlar" kartasi. Ombor harakatlari (kirim, sotuv,
+ * to'g'rilash) `dashboardYangilandi(businessId)` chaqiradi — qoldiq
+ * o'zgarishi kartada darhol ko'rinadi.
+ */
+export const getOmborKartasiKesh = keshlangan("dashboard:ombor-kartasi", getOmborKartasi);

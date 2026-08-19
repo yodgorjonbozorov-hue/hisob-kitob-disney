@@ -4,6 +4,7 @@ import { withTenant } from "@/lib/auth/tenant";
 import { stockEntrySchema } from "@/lib/validation/inventory";
 import { resolveActiveBusinessId, requireOmborli } from "@/lib/business";
 import { createStockEntry } from "@/lib/services/inventory";
+import { dashboardYangilandi } from "@/lib/cache";
 
 /** Ombor kirimi — mahsulot qoldig'ini oshiradi (admin). */
 export const POST = withTenant(async (request, _ctx, { session: user }) => {
@@ -28,5 +29,8 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
     userId: user.userId,
   });
 
+  // Ombor qoldig'i o'zgardi — bosh sahifadagi "Ombordagi mahsulotlar"
+  // kartasi eskirib qolmasin.
+  dashboardYangilandi(businessId);
   return NextResponse.json(entry, { status: 201 });
 }, { module: "OMBOR" });

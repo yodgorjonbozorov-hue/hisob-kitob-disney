@@ -19,6 +19,7 @@ export function StatCard({
   href,
   onClick,
   title,
+  className = "",
   children,
 }: {
   label: string;
@@ -30,6 +31,8 @@ export function StatCard({
   /** `href` o'rniga — kartani bosganda oyna ochish uchun (klient komponentda). */
   onClick?: () => void;
   title?: string;
+  /** Grid ichidagi joylashuv uchun (masalan `col-span-2 lg:col-span-1`). */
+  className?: string;
   children?: React.ReactNode;
 }) {
   const dir = changeDirection(changePct);
@@ -68,7 +71,7 @@ export function StatCard({
     </>
   );
 
-  const asos = "bg-surface rounded-2xl shadow-card border border-line p-4 sm:p-5";
+  const asos = `bg-surface rounded-2xl shadow-card border border-line p-4 sm:p-5 ${className}`;
   const bosiladi =
     "transition hover:border-brand hover:shadow-md active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand";
 

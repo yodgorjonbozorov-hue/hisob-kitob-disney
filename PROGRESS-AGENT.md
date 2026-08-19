@@ -3385,3 +3385,45 @@ jami va kartadagi raqam — uchalasi teng bo'lishi shart.
 
 Repozitoriyada ESLint konfiguratsiyasi yo'q — `npm run lint` interaktiv
 sozlash so'raydi. Lint aslida `next build` ichidagi bosqichda ishlaydi.
+
+---
+
+## Bosh sahifaga "Ombordagi mahsulotlar" kartasi (2026-08-19)
+
+### Qoldiq manbasi — mavjud tizim, parallel hisob YO'Q
+
+Loyihada qoldiqning yagona manbasi `Product.miqdor`. Xizmat qatlami uni har
+harakatda atomik yangilaydi: ombor kirimi va xarid qabuli oshiradi, sotuv
+`miqdor: { gte }` qulfi bilan kamaytiradi, sotuvni bekor qilish qaytaradi,
+inventarizatsiya/hisobdan chiqarish esa `StockAdjustment` yozib yangi
+qiymatni qo'yadi. Karta o'sha ustunni o'qiydi — harakatlarni qayta jamlaydigan
+ikkinchi hisob yaratilmadi.
+
+**Warehouse modeli YO'Q** — biznesda bitta yashirin ombor, ya'ni ombor
+konteksti = `businessId`.
+
+### Birliklar ATAYLAB qo'shilmaydi
+
+`Product.birlik` — dona/kg/litr/metr/quti/paket. Mavjud `getOmborStats`
+hammasini bitta songa qo'shadi (Ombor sahifasidagi "Jami qoldiq (dona)") —
+bu 500 dona + 120 kg = 620 degan ma'nosiz raqam. Yangi
+`getOmborKartasi` birliklar bo'yicha `groupBy` qiladi: kartadagi katta
+raqam eng ko'p TURGA ega birlikdan, qolganlari ostidagi qatorda.
+
+### Turlar soni
+
+Faqat qoldig'i BOR faol mahsulotlar. Bu Ombor sahifasidagi "Mahsulot
+turlari" dan farq qiladi — u barcha faol mahsulotlarni sanaydi.
+
+### Kesh
+
+`products` va `stock` route'lari ilgari `dashboardYangilandi` chaqirmasdi —
+ular dashboardga ta'sir qilmasdi. Endi qoldiq bosh sahifada ko'ringani
+uchun to'rtala mutatsiya route'iga kesh bekor qilish qo'shildi.
+
+### Karta ko'rinish sharti
+
+Faqat `business.omborli` va OMBOR moduli yoqiq bo'lganda. Ombori yo'q
+biznesda karta umuman chiqmaydi — "0 dona" deb turish chalg'itardi. Bu
+qarz kartasidagi holatdan FARQ QILADI: u yerda ma'lumot bor edi, karta esa
+uni yashirardi.
