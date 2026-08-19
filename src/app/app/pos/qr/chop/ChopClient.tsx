@@ -121,7 +121,7 @@ export function ChopClient({
       {/* --- Boshqaruv (chop etishda ko'rinmaydi) --- */}
       <div className="chop-yashir space-y-4">
         <div>
-          <h1 className="text-2xl font-bold text-fg">Yorliqlarni chop etish</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-fg">Yorliqlarni chop etish</h1>
           <p className="text-sm text-muted mt-1">
             Biznes: <span className="font-medium text-fg">{biznesNomi}</span> · QR biriktirilgan{" "}
             {jamiQrli} ta tovar
