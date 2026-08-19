@@ -5,14 +5,20 @@ import { StatCard } from "@/components/ui/StatCard";
 import { PulOqimiTafsilot } from "@/components/pul/PulOqimiTafsilot";
 import { formatMoneyCompact, formatSomLabel } from "@/lib/format";
 import type { TolovTaqsimotiDTO } from "@/lib/queries/tolovTaqsimoti";
+import {
+  YASHIRIN_COOKIE,
+  yashirinMatn,
+  type PulKarta,
+  type YashirinHolat,
+} from "@/lib/pulYashirish";
 
 /**
- * "JAMI KIRIM" va "JAMI CHIQIM" kartalari — bosiladigan.
+ * "JAMI KIRIM", "JAMI CHIQIM" va "SOF FOYDA" kartalari.
  *
- * Ikkalasi bitta klient komponentda, chunki tafsilot varag'i ham bitta:
- * qaysi karta bosilgani `ochiq` holatida saqlanadi. Qolgan kartalar
- * (Sof foyda, Menga qarzdor) server komponentida qoladi — ular klient
- * kodiga muhtoj emas.
+ * Uchalasi bitta klient komponentda, chunki ikkita narsani bo'lishadi:
+ * tafsilot varag'i (qaysi karta bosilgani `ochiq` holatida) va PUL
+ * YASHIRISH holati. Qolgan kartalar (Menga qarzdor, Ombor) server
+ * komponentida qoladi — ular klient kodiga muhtoj emas.
  *
  * Taqsimot serverda hisoblanadi va prop sifatida keladi: oyna ochilganda
  * qo'shimcha so'rov ketmaydi va undagi jami kartadagi summa bilan bir xil
@@ -21,26 +27,50 @@ import type { TolovTaqsimotiDTO } from "@/lib/queries/tolovTaqsimoti";
 export function PulOqimiKartalari({
   kirimSumma,
   chiqimSumma,
+  sofFoyda,
   kirimChangePct,
   chiqimChangePct,
+  foydaChangePct,
   kirimTaqsimot,
   chiqimTaqsimot,
   oyFrom,
   oyTo,
   oyNomi,
+  yashirinBoshlangich,
 }: {
   kirimSumma: number;
   chiqimSumma: number;
+  sofFoyda: number;
   kirimChangePct: number | null;
   chiqimChangePct: number | null;
+  foydaChangePct: number | null;
   kirimTaqsimot: TolovTaqsimotiDTO;
   chiqimTaqsimot: TolovTaqsimotiDTO;
   oyFrom: string;
   oyTo: string;
   oyNomi: string;
+  /** Serverda cookie'dan o'qilgan holat — birinchi chizishdayoq to'g'ri. */
+  yashirinBoshlangich: YashirinHolat;
 }) {
   const [ochiq, setOchiq] = useState<"kirim" | "chiqim" | null>(null);
+  const [yashirin, setYashirin] = useState<YashirinHolat>(yashirinBoshlangich);
   const taqsimot = ochiq === "chiqim" ? chiqimTaqsimot : kirimTaqsimot;
+
+  /**
+   * Tanlov darhol ekranda, keyin cookie'ga yoziladi.
+   *
+   * `router.refresh()` ATAYLAB chaqirilmaydi: holat shu yerda turibdi,
+   * qayta yuklash faqat sekinlashtirardi. Cookie esa KEYINGI ochilishda
+   * server to'g'ri chizishi uchun kerak.
+   */
+  function almashtir(karta: PulKarta) {
+    setYashirin((oldin) => {
+      const yangi = { ...oldin, [karta]: !oldin[karta] };
+      // Bir yil — tanlov brauzerda qoladi, har kuni qayta bosish shart emas.
+      document.cookie = `${YASHIRIN_COOKIE}=${yashirinMatn(yangi)}; path=/; max-age=31536000; samesite=lax`;
+      return yangi;
+    });
+  }
 
   return (
     <>
@@ -52,6 +82,8 @@ export function PulOqimiKartalari({
         goodWhenUp
         accent="income"
         onClick={() => setOchiq("kirim")}
+        yashirin={yashirin.kirim}
+        onYashir={() => almashtir("kirim")}
       />
       <StatCard
         label="Jami chiqim"
@@ -61,6 +93,18 @@ export function PulOqimiKartalari({
         goodWhenUp={false}
         accent="expense"
         onClick={() => setOchiq("chiqim")}
+        yashirin={yashirin.chiqim}
+        onYashir={() => almashtir("chiqim")}
+      />
+      <StatCard
+        label="Sof foyda"
+        value={formatMoneyCompact(sofFoyda)}
+        title={formatSomLabel(sofFoyda)}
+        changePct={foydaChangePct}
+        goodWhenUp
+        accent={sofFoyda >= 0 ? "income" : "expense"}
+        yashirin={yashirin.foyda}
+        onYashir={() => almashtir("foyda")}
       />
 
       {ochiq && (

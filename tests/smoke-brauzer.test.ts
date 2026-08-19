@@ -433,3 +433,67 @@ test("modullar sozlamalarda ko'rinadi", { skip: sabab }, async () => {
   await xatosiz(page);
   await page.context().close();
 });
+
+test("PUL KARTALARINI KO'Z tugmasi yashiradi va tanlov saqlanadi", { skip: sabab }, async () => {
+  /*
+   * Direktor bosh sahifani xodimlar oldida ochadi — oylik aylanma va sof
+   * foyda yonidagi odamga ko'rinmasligi kerak.
+   *
+   * Eng muhim shart: tanlov COOKIE'da saqlanadi va SERVERDA o'qiladi.
+   * Agar u faqat brauzerda saqlansa, sahifa avval haqiqiy summa bilan
+   * chizilib keyin yashirilardi — summa har yuklanishda bir lahza
+   * ko'rinib ketardi va yashirishning ma'nosi qolmasdi. Shu bois test
+   * qayta yuklangandan keyin DARHOL (JS kutmasdan) yashirin ekanini
+   * tekshiradi.
+   */
+  const page = await yangiSahifa();
+  await kir(page);
+
+  const koz = (nomi: string) =>
+    page.getByRole("button", { name: new RegExp(`^${nomi}: summani`) });
+
+  // Uchala kartada ham ko'z tugmasi bor.
+  for (const nomi of ["Jami kirim", "Jami chiqim", "Sof foyda"]) {
+    assert.equal(await koz(nomi).count(), 1, `"${nomi}" kartasida ko'z tugmasi yo'q`);
+  }
+
+  assert.ok(
+    !(await page.locator("main").innerText()).includes("•••"),
+    "boshida hech narsa yashirilmagan bo'lishi kerak"
+  );
+
+  await koz("Jami kirim").click();
+  await koz("Sof foyda").click();
+  await page.waitForTimeout(300);
+
+  const yashirilgan = await page.locator("main").innerText();
+  assert.ok(yashirilgan.includes("•••"), "bosilgandan keyin summa yashirilishi kerak");
+
+  // Cookie yozildimi — keyingi ochilishda server shu asosda chizadi.
+  const cookies = await page.context().cookies();
+  const c = cookies.find((x) => x.name === "pul_yashirin");
+  assert.ok(c, "tanlov cookie'ga yozilmadi");
+  assert.match(c!.value, /kirim/);
+  assert.match(c!.value, /foyda/);
+
+  // `domcontentloaded` — JS ishga tushishini KUTMAYMIZ: serverdan kelgan
+  // HTML'ning o'zida summa bo'lmasligi kerak.
+  await page.reload({ waitUntil: "domcontentloaded" });
+  assert.ok(
+    (await page.locator("main").innerText()).includes("•••"),
+    "qayta yuklashda summa bir lahzaga ham ko'rinmasligi kerak"
+  );
+
+  // Qaytarib ochish ham ishlaydi.
+  await page.waitForSelector("h1", { timeout: 30_000 });
+  await koz("Jami kirim").click();
+  await koz("Sof foyda").click();
+  await page.waitForTimeout(300);
+  assert.ok(
+    !(await page.locator("main").innerText()).includes("•••"),
+    "ko'z qayta bosilganda summa ko'rinishi kerak"
+  );
+
+  await xatosiz(page);
+  await page.context().close();
+});

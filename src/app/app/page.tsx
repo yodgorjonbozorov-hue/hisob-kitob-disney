@@ -14,6 +14,7 @@ import {
   utcDateToDateOnlyString,
   parseMonthString,
 } from "@/lib/date";
+import { cookies } from "next/headers";
 import { requireTenantPage } from "@/lib/auth/tenant";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { isManager } from "@/lib/auth/roles";
@@ -40,6 +41,7 @@ import type { OmborKartasiDTO } from "@/lib/queries/inventory";
 import { KassaHome } from "./KassaHome";
 import { KategoriyaBloki } from "./KategoriyaBloki";
 import { PulOqimiKartalari } from "./PulOqimiKartalari";
+import { YASHIRIN_COOKIE, yashirinniOqi } from "@/lib/pulYashirish";
 import { SelosBugunKartasi } from "./SelosBugunKartasi";
 
 export default async function DashboardPage({
@@ -145,6 +147,10 @@ export default async function DashboardPage({
   const { year: oyYil, monthIndex0: oyIndeks } = parseMonthString(month);
   const oyNomi = formatMonthLabel(oyYil, oyIndeks);
 
+  // Pul kartalarining "ko'z" holati COOKIE'da. Serverda o'qilishi shart:
+  // aks holda summa avval ko'rinib, keyin yashirilardi.
+  const yashirin = yashirinniOqi((await cookies()).get(YASHIRIN_COOKIE)?.value);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -184,26 +190,24 @@ export default async function DashboardPage({
           ombor ? "lg:grid-cols-5" : "lg:grid-cols-4"
         }`}
       >
-        {/* Ikkala karta ham bosiladi — to'lov turlari bo'yicha taqsimot
-            ochiladi. Taqsimot serverda, karta bilan BITTA oy oralig'ida
-            hisoblanadi: yig'indisi kartadagi raqamga teng bo'lishi shart. */}
+        {/* Kirim va chiqim kartalari bosiladi — to'lov turlari bo'yicha
+            taqsimot ochiladi. Taqsimot serverda, karta bilan BITTA oy
+            oralig'ida hisoblanadi: yig'indisi kartadagi raqamga teng
+            bo'lishi shart. Uchala kartada ko'z tugmasi bor (summani
+            yashirish), shuning uchun "Sof foyda" ham shu komponentda. */}
         <PulOqimiKartalari
           kirimSumma={summary.jamiKirim}
           chiqimSumma={summary.jamiChiqim}
+          sofFoyda={summary.sofFoyda}
           kirimChangePct={summary.changePct.kirim}
           chiqimChangePct={summary.changePct.chiqim}
+          foydaChangePct={summary.changePct.sofFoyda}
           kirimTaqsimot={kirimTaqsimot}
           chiqimTaqsimot={chiqimTaqsimot}
           oyFrom={oyFrom}
           oyTo={oyTo}
           oyNomi={oyNomi}
-        />
-        <StatCard
-          label="Sof foyda"
-          value={formatMoneyCompact(summary.sofFoyda)}
-          changePct={summary.changePct.sofFoyda}
-          goodWhenUp
-          accent={summary.sofFoyda >= 0 ? "income" : "expense"}
+          yashirinBoshlangich={yashirin}
         />
         {/* Yagona bosiladigan karta — qarzdorlar ro'yxatiga olib kiradi.
             Raqam har yuklashda yozuvlardan qayta hisoblanadi (qo'lda

@@ -3741,3 +3741,44 @@ hisoblardi. Uch joyda (`listKunlikNomzodlar`, shaxsiy kassa ochish x2)
 `test:signup` · `test:superadmin` · `test:superadmin2` · `test:visibility` ·
 `test:bot-holat` · `test:bot-avto` · `test:pro` · `test:postgres` ·
 `test:launch` ✅
+
+## Bosh sahifadagi pul kartalarida "ko'z" tugmasi (2026-08-19)
+
+Direktor bosh sahifani xodimlar yoki mijozlar oldida ochadi. Oylik aylanma
+va sof foyda — yonidagi odam ko'rmasligi kerak bo'lgan raqamlar. Endi
+"Jami kirim", "Jami chiqim" va "Sof foyda" kartalarining sarlavhasi yonida
+ko'z tugmasi bor: bosilganda summa o'rniga `•••` chiqadi.
+
+### Nega cookie, localStorage emas
+
+Tanlov SERVERDA o'qilishi shart. `localStorage` bo'lsa sahifa avval
+haqiqiy summa bilan chizilib, keyin JS ishga tushgach yashirilardi — ya'ni
+summa har yuklanishda bir lahza KO'RINIB ketardi va yashirishning ma'nosi
+qolmasdi. Cookie (`pul_yashirin`, bir yil) bosh sahifada o'qiladi va
+boshlang'ich holat sifatida beriladi.
+
+Toggle bosilganda `router.refresh()` ATAYLAB chaqirilmaydi: holat klientda
+turibdi, qayta yuklash faqat sekinlashtirardi. Cookie esa keyingi
+ochilish uchun yoziladi.
+
+### "Sof foyda" kartasi klientga ko'chdi
+
+U server komponentida edi. Ko'z tugmasi holat talab qilgani uchun
+`PulOqimiKartalari` ichiga olindi — kirim/chiqim bilan bitta oila, holat
+ham bitta joyda. "Menga qarzdor" va "Ombor" kartalari serverda qoldi.
+
+### Tugma tugma ichida bo'lmaydi
+
+Kirim/chiqim kartalarining O'ZI bosiladi (to'lov taqsimoti ochiladi).
+Butun kartani `<button>` qilib qo'yib ichiga yana bitta tugma joylashtirib
+bo'lmaydi — HTML buni taqiqlaydi va brauzer bosishlarni chalkashtiradi.
+Shuning uchun ko'z tugmasi bor kartada tashqarisi oddiy `div`, bosiladigan
+qism — summa bloki, ko'z esa sarlavha qatorida. Ko'zsiz kartalar
+oldingidek ishlaydi.
+
+Yashiringanda `title` (hover ipuchi) BERILMAYDI — aks holda sichqonchani
+ustiga olib borish bilan aynan yashirilgan summa ko'rinib qolardi.
+
+Test: `tests/smoke-brauzer.test.ts` — qayta yuklashda `domcontentloaded`
+holatida ham summa yashirin qolishi tekshiriladi (ya'ni serverdan kelgan
+HTML'da yo'q).

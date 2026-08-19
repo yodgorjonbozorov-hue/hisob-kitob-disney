@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { Eye, EyeOff } from "lucide-react";
 import { formatPercent, changeDirection } from "@/lib/format";
+import { YASHIRIN_BELGI } from "@/lib/pulYashirish";
 
 /**
  * KPI kartasi: sarlavha + katta qiymat (tabular) + o'tgan davrga nisbatan Δ.
@@ -20,6 +22,8 @@ export function StatCard({
   onClick,
   title,
   className = "",
+  yashirin = false,
+  onYashir,
   children,
 }: {
   label: string;
@@ -33,6 +37,13 @@ export function StatCard({
   title?: string;
   /** Grid ichidagi joylashuv uchun (masalan `col-span-2 lg:col-span-1`). */
   className?: string;
+  /** Summa yashiringanmi — o'rniga nuqtalar chiqadi. */
+  yashirin?: boolean;
+  /**
+   * Berilsa — sarlavha yonida ko'z tugmasi chiqadi (klient komponentda).
+   * Berilmasa karta oldingidek, hech qanday tugmasiz ishlaydi.
+   */
+  onYashir?: () => void;
   children?: React.ReactNode;
 }) {
   const dir = changeDirection(changePct);
@@ -48,18 +59,28 @@ export function StatCard({
     neutral: "text-fg",
   }[accent];
 
-  const ichi = (
+  const sarlavha = (
+    <p className="text-muted text-sm mb-1 flex items-center gap-1">
+      {label}
+      {(href || onClick) && (
+        <span aria-hidden className="text-faint">
+          ›
+        </span>
+      )}
+    </p>
+  );
+
+  const summa = (
     <>
-      <p className="text-muted text-sm mb-1 flex items-center gap-1">
-        {label}
-        {(href || onClick) && (
-          <span aria-hidden className="text-faint">
-            ›
-          </span>
-        )}
-      </p>
-      <p className={`text-xl sm:text-2xl font-semibold tnum ${accentClass}`} title={title}>
-        {value}
+      <p
+        /* Yashiringanda nuqtalar SO'NIQ rangda: yashil/qizil nuqtalar
+           qiymatdek ko'rinib, "nimadir yozilgan" degan taassurot berardi. */
+        className={`text-xl sm:text-2xl font-semibold tnum ${yashirin ? "text-faint" : accentClass}`}
+        /* Yashiringanda `title` BERILMAYDI: aks holda sichqonchani ustiga
+           olib borish bilan aynan yashirilgan summa ko'rinib qolardi. */
+        title={yashirin ? undefined : title}
+      >
+        {yashirin ? YASHIRIN_BELGI : value}
       </p>
       {changePct !== null && (
         <p className={`text-2xs mt-1 flex items-center gap-1 tnum ${deltaClass}`}>
@@ -71,9 +92,59 @@ export function StatCard({
     </>
   );
 
+  const ichi = (
+    <>
+      {sarlavha}
+      {summa}
+    </>
+  );
+
   const asos = `bg-surface rounded-2xl shadow-card border border-line p-4 sm:p-5 ${className}`;
   const bosiladi =
     "transition hover:border-brand hover:shadow-md active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand";
+
+  /*
+   * KO'Z TUGMASI BO'LGAN KARTA.
+   *
+   * Butun kartani `<button>` qilib qo'yib, ichiga yana bitta tugma
+   * joylashtirib bo'lmaydi (HTML buni taqiqlaydi, brauzer esa bosishlarni
+   * chalkashtiradi). Shuning uchun tashqarisi oddiy `div`, bosiladigan
+   * qism — summa bloki, ko'z esa sarlavha qatorida yonida turadi.
+   */
+  if (onYashir) {
+    const kozTugmasi = (
+      <button
+        type="button"
+        onClick={onYashir}
+        aria-pressed={yashirin}
+        title={yashirin ? "Summani ko'rsatish" : "Summani yashirish"}
+        aria-label={`${label}: ${yashirin ? "summani ko'rsatish" : "summani yashirish"}`}
+        className="shrink-0 -m-2 p-2 text-faint hover:text-fg transition"
+      >
+        {yashirin ? <EyeOff size={16} /> : <Eye size={16} />}
+      </button>
+    );
+
+    return (
+      <div className={asos}>
+        <div className="flex items-start justify-between gap-2">
+          {sarlavha}
+          {kozTugmasi}
+        </div>
+        {href ? (
+          <Link href={href} className={`block rounded-xl ${bosiladi}`}>
+            {summa}
+          </Link>
+        ) : onClick ? (
+          <button type="button" onClick={onClick} className={`block w-full text-left rounded-xl ${bosiladi}`}>
+            {summa}
+          </button>
+        ) : (
+          summa
+        )}
+      </div>
+    );
+  }
 
   if (href) {
     return (
