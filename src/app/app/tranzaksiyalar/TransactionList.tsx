@@ -62,7 +62,7 @@ export function TransactionList({
   return (
     <div className="bg-surface rounded-2xl shadow-sm border border-line overflow-hidden">
       {/* Desktop: jadval */}
-      <div className="hidden lg:block overflow-x-auto">
+      <div className="hidden lg:block jadval-siljish">
         <table className="w-full text-sm">
           <thead className="bg-surface-2 text-muted text-xs uppercase">
             <tr>

@@ -68,7 +68,7 @@ export default async function FoydalanuvchilarPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-fg">Foydalanuvchilar</h1>
+      <h1 className="text-xl sm:text-2xl font-bold text-fg">Foydalanuvchilar</h1>
       <UsersClient
         initialUsers={usersDTO}
         currentUserId={session.userId}

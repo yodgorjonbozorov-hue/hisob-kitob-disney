@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Money } from "@/components/ui/Money";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Jadval, type Ustun } from "@/components/ui/Jadval";
 import type { MijozDTO } from "@/lib/queries/mijoz";
 import { MijozModal } from "./MijozModal";
 
@@ -28,6 +29,58 @@ export function MijozlarClient({
       )
     : mijozlar;
 
+  // Ustun ta'rifi BITTA — desktop jadval ham, mobil kartochka ham shundan.
+  const ustunlar: Ustun<MijozDTO>[] = [
+    {
+      kalit: "mijoz",
+      sarlavha: "Mijoz",
+      katak: (m) => (
+        <>
+          <Link href={`/app/mijozlar/${m.id}`} className="text-brand hover:underline">
+            {m.ism}
+          </Link>
+          {m.tel && <span className="block text-2xs text-faint font-normal">{m.tel}</span>}
+        </>
+      ),
+    },
+    {
+      kalit: "sotuv",
+      sarlavha: "Jami sotuv",
+      raqam: true,
+      katak: (m) => (
+        <>
+          <Money value={m.jamiSotuv} size="sm" tone="neutral" />
+          <span className="block text-2xs text-faint tnum">{m.sotuvSoni} ta sotuv</span>
+        </>
+      ),
+    },
+    {
+      kalit: "qarz",
+      sarlavha: "Ochiq qarz",
+      raqam: true,
+      katak: (m) =>
+        m.ochiqQarz > 0 ? (
+          <Money value={m.ochiqQarz} size="sm" tone="expense" />
+        ) : (
+          <span className="text-faint">—</span>
+        ),
+    },
+    {
+      kalit: "limit",
+      sarlavha: "Limit",
+      raqam: true,
+      katak: (m) =>
+        m.qarzLimit === null ? (
+          <span className="text-faint">chegarasiz</span>
+        ) : (
+          <span className={m.limitToldi ? "text-expense font-medium" : ""}>
+            {m.qarzLimit.toLocaleString("uz-UZ")}
+            {m.limitToldi && <span className="block text-2xs">limit to&apos;ldi</span>}
+          </span>
+        ),
+    },
+  ];
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2 justify-between">
@@ -35,76 +88,26 @@ export function MijozlarClient({
           value={qidiruv}
           onChange={(e) => setQidiruv(e.target.value)}
           placeholder="Ism yoki telefon bo'yicha qidirish"
-          className="flex-1 min-w-[200px] px-3 py-2 rounded-lg bg-surface-2 border border-line text-fg"
+          className="flex-1 min-w-0 sm:min-w-[200px] px-3 min-h-[44px] rounded-lg bg-surface-2 border border-line text-fg"
         />
         <Button onClick={() => setModal("yangi")}>Yangi mijoz</Button>
       </div>
 
       <Card>
-        {korinadigan.length === 0 ? (
-          <EmptyState
-            icon="🧑‍💼"
-            title={q ? "Hech narsa topilmadi" : "Hali mijoz yo'q"}
-            description="Mijoz kartochkasi barcha sotuv, qarz va bitimlarni bitta joyda ko'rsatadi. Qarz limiti esa qarzning nazoratsiz o'sishini to'xtatadi."
-            action={q ? undefined : <Button onClick={() => setModal("yangi")}>Birinchi mijoz</Button>}
-          />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-faint text-xs uppercase">
-                  <th className="pb-2">Mijoz</th>
-                  <th className="pb-2 text-right">Jami sotuv</th>
-                  <th className="pb-2 text-right">Ochiq qarz</th>
-                  <th className="pb-2 text-right">Limit</th>
-                  <th className="pb-2 text-right">Amallar</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {korinadigan.map((m) => (
-                  <tr key={m.id}>
-                    <td className="py-2.5 font-medium">
-                      <Link href={`/app/mijozlar/${m.id}`} className="text-brand hover:underline">
-                        {m.ism}
-                      </Link>
-                      {m.tel && <span className="block text-2xs text-faint">{m.tel}</span>}
-                    </td>
-                    <td className="py-2.5 text-right">
-                      <Money value={m.jamiSotuv} size="sm" tone="neutral" />
-                      <span className="block text-2xs text-faint tnum">{m.sotuvSoni} ta sotuv</span>
-                    </td>
-                    <td className="py-2.5 text-right">
-                      {m.ochiqQarz > 0 ? (
-                        <Money value={m.ochiqQarz} size="sm" tone="expense" />
-                      ) : (
-                        <span className="text-faint">—</span>
-                      )}
-                    </td>
-                    <td className="py-2.5 text-right tnum">
-                      {m.qarzLimit === null ? (
-                        <span className="text-faint">chegarasiz</span>
-                      ) : (
-                        <span className={m.limitToldi ? "text-expense font-medium" : ""}>
-                          {m.qarzLimit.toLocaleString("uz-UZ")}
-                          {m.limitToldi && <span className="block text-2xs">limit to&apos;ldi</span>}
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-2.5 text-right">
-                      <button
-                        type="button"
-                        onClick={() => setModal(m)}
-                        className="text-2xs text-brand hover:underline"
-                      >
-                        Tahrirlash
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <Jadval
+          ustunlar={ustunlar}
+          qatorlar={korinadigan}
+          kalit={(m) => m.id}
+          amallar={(m) => [{ label: "Tahrirlash", onClick: () => setModal(m), tur: "asosiy" }]}
+          bosh={
+            <EmptyState
+              icon="🧑‍💼"
+              title={q ? "Hech narsa topilmadi" : "Hali mijoz yo'q"}
+              description="Mijoz kartochkasi barcha sotuv, qarz va bitimlarni bitta joyda ko'rsatadi. Qarz limiti esa qarzning nazoratsiz o'sishini to'xtatadi."
+              action={q ? undefined : <Button onClick={() => setModal("yangi")}>Birinchi mijoz</Button>}
+            />
+          }
+        />
       </Card>
 
       {modal && (

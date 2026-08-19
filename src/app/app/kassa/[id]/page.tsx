@@ -40,7 +40,7 @@ export default async function KassaDetalPage({ params }: { params: { id: string 
           <Link href="/app/kassa" className="text-2xs text-muted hover:text-brand">
             ← Kassalar
           </Link>
-          <h1 className="text-2xl font-bold text-fg mt-1">{kassa.nomi}</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-fg mt-1">{kassa.nomi}</h1>
           <p className="text-sm text-muted mt-1">
             {kassa.userId
               ? `Shaxsiy kassa · ${kassa.egaIsm ?? "egasi o'chirilgan"}`

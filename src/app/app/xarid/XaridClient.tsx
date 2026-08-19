@@ -166,7 +166,8 @@ export function XaridClient({
 
                   {yoyilgan && (
                     <div className="border-t border-line p-3 space-y-3">
-                      <table className="w-full text-2xs">
+                      <div className="jadval-siljish">
+                      <table className="w-full text-2xs min-w-[22rem]">
                         <thead className="text-faint uppercase text-left">
                           <tr>
                             <th className="pb-1">Mahsulot</th>
@@ -188,6 +189,7 @@ export function XaridClient({
                           ))}
                         </tbody>
                       </table>
+                      </div>
 
                       {o.izoh && <p className="text-2xs text-muted">{o.izoh}</p>}
 

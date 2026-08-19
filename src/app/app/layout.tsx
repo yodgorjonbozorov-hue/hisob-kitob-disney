@@ -62,7 +62,9 @@ export default async function ProtectedLayout({
 
   return (
     <ToastProvider>
-      <div className="min-h-screen flex flex-col md:flex-row">
+      {/* `w-full` + `overflow-x-clip`: keng kontent (jadval) sahifani
+          gorizontal siljitmaydi — siljish faqat jadval konteynerida. */}
+      <div className="min-h-screen w-full overflow-x-clip flex flex-col md:flex-row">
         <Sidebar
           ism={session.ism}
           rol={session.rol}
@@ -77,7 +79,9 @@ export default async function ProtectedLayout({
           activeBusinessId={activeBusinessId}
           omborli={activeOmborli}
         />
-        <main className="flex-1 p-4 md:p-8 pb-24 lg:pb-8">
+        {/* `min-w-0` — flex bolasi sukut bo'yicha kontentidan kichrayolmaydi;
+            usiz bitta keng jadval butun maketni cho'zib yuboradi. */}
+        <main className="flex-1 min-w-0 max-w-full p-4 md:p-8 pb-24 lg:pb-8">
           {session.impersonatedBy && <ImpersonationBanner ism={session.ism} />}
           <BillingBanner access={access} />
           {children}

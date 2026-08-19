@@ -48,7 +48,7 @@ export default async function OmborPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-fg">{M.modul}</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-fg">{M.modul}</h1>
         <p className="text-sm text-muted mt-1">
           Biznes: <span className="font-medium text-fg">{business.nomi}</span>
         </p>
@@ -86,8 +86,8 @@ export default async function OmborPage() {
       {profit.length > 0 && (
         <Card className="p-0 overflow-hidden">
           <h2 className="font-semibold text-fg px-5 pt-5 pb-3">{M.foydaSarlavha}</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="jadval-siljish">
+            <table className="w-full text-sm min-w-[38rem]">
               <thead className="bg-surface-2 text-muted text-xs uppercase">
                 <tr>
                   <th className="text-left px-5 py-2">{avto ? "Mashina" : "Mahsulot"}</th>

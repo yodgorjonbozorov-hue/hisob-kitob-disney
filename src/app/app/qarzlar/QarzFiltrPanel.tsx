@@ -46,7 +46,7 @@ export function QarzFiltrPanel({
 }) {
   return (
     <div className="space-y-2">
-      <div className="flex gap-2 overflow-x-auto pb-0.5">
+      <div className="flex gap-2 jadval-siljish pb-0.5">
         {YONALISHLAR.map((y) => (
           <button
             key={y.kod}

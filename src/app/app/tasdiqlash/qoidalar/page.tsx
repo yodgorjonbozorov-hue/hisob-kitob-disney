@@ -20,7 +20,7 @@ export default async function QoidalarPage() {
     if (!businessId) {
       return (
         <div className="space-y-6">
-          <h1 className="text-2xl font-bold text-fg">Tasdiq qoidalari</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-fg">Tasdiq qoidalari</h1>
           <p className="text-muted">Hali biznes yaratilmagan.</p>
         </div>
       );
@@ -38,7 +38,7 @@ export default async function QoidalarPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-fg">Tasdiq qoidalari</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-fg">Tasdiq qoidalari</h1>
           <p className="text-sm text-muted mt-1">
             Chegaradan KATTA chiqim tasdiq talab qiladi. Kategoriyasiz qoida barcha chiqimlarga
             tegishli; bir nechta qoida mos kelsa eng qattig&apos;i ishlaydi.

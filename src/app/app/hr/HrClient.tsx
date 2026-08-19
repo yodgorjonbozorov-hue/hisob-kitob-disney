@@ -127,8 +127,8 @@ export function HrClient({
               action={<Button onClick={() => setXodimModal("yangi")}>Xodim qo&apos;shish</Button>}
             />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            <div className="jadval-siljish">
+              <table className="w-full text-sm min-w-[34rem]">
                 <thead>
                   <tr className="text-left text-faint text-xs uppercase">
                     <th className="pb-2">Xodim</th>
@@ -203,8 +203,8 @@ export function HrClient({
             action={<Button onClick={() => setXodimModal("yangi")}>Birinchi xodim</Button>}
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="jadval-siljish">
+            <table className="w-full text-sm min-w-[32rem]">
               <thead>
                 <tr className="text-left text-faint text-xs uppercase">
                   <th className="pb-2">Ism</th>

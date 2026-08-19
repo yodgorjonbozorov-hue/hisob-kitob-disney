@@ -92,6 +92,10 @@
 
 html {
   font-family: var(--font-inter), "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  /* Telefon gorizontal holatga burilganda brauzer shrift o'lchamini o'zi
+     kattalashtirib yuboradi — maket buziladi. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -99,6 +103,12 @@ body {
   color: rgb(var(--fg));
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* SAHIFA HECH QACHON GORIZONTAL SILJIMAYDI.
+     `clip` (`hidden` emas) ataylab: `hidden` body'ni siljish konteyneriga
+     aylantiradi va yuqoridagi `sticky` panel yopishmay qoladi. `clip` esa
+     faqat kesadi — sticky joyida turaveradi.
+     Keng kontent (jadval) o'z ichida suriladi — `.jadval-siljish` ga qarang. */
+  overflow-x: clip;
 }
 
 /* Raqamlar / display — Manrope, tabular. Pul, KPI, sarlavha summasi. */
@@ -142,6 +152,74 @@ input[inputmode="numeric"] {
 }
 .h-safe-bottom {
   height: env(safe-area-inset-bottom);
+}
+/* Pastki bo'shliq + telefon "iyagi" (home indicator). `pb-safe` bilan
+   `pb-4` ni birga yozib bo'lmaydi — biri ikkinchisini bekor qiladi. */
+.pb-safe-4 {
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   MOBIL ERGONOMIKA
+   Telefonda ilova "veb-sahifa" emas, ilova bo'lib his qilinishi uchun
+   kerak bo'lgan eng kam qoidalar. Desktop ko'rinishga tegmaydi.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/* Keng jadval uchun siljish konteyneri. Faqat SHU quti suriladi — sahifa emas.
+   `overscroll-behavior-x: contain` — jadval oxiriga yetganda barmoq harakati
+   brauzerning "orqaga" ishorasiga o'tib ketmaydi. */
+.jadval-siljish {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  /* Kesilgan chekka ko'rinib tursin — davomi borligi bilinadi. */
+  scrollbar-width: thin;
+}
+.jadval-siljish::-webkit-scrollbar {
+  height: 4px;
+}
+.jadval-siljish::-webkit-scrollbar-thumb {
+  background: rgb(var(--border-strong));
+  border-radius: 999px;
+}
+
+@media (max-width: 767px) {
+  /* iOS Safari 16px dan kichik maydonga fokus tushganda sahifani ZUMLAB
+     yuboradi va qaytarmaydi — foydalanuvchi qo'lda kichraytirishga majbur.
+     Barcha maydonlar (inline uslub bilan yozilganlari ham) 16px dan kam
+     bo'lmaydi. */
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  /* Barmoq uchun eng kam bosish zonasi. Jadval/kartochka ichidagi kichik
+     `select` va `input` lar ham shu balandlikka chiqadi — `py-1` bilan
+     yozilgani 26px bo'lib qolardi va barmoq bilan tegib bo'lmasdi. */
+  select,
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) {
+    min-height: 40px;
+  }
+
+  /* Uzun so'z (login, email, mahsulot kodi) qutini kengaytirib sahifani
+     buzmaydi — o'rniga ko'chiriladi. */
+  h1,
+  h2,
+  h3,
+  td,
+  th,
+  p {
+    overflow-wrap: break-word;
+  }
+}
+
+/* Bosilganda kulrang to'rtburchak chiqmasin (Android Chrome) — o'rniga
+   komponentlarning o'z `active:` holati ishlaydi. */
+button,
+a,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Signature: kassa lentasi perforatsiyasi (kun ajratgichi) */

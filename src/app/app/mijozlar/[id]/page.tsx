@@ -27,7 +27,7 @@ export default async function MijozKartochkaPage({ params }: { params: { id: str
           <Link href="/app/mijozlar" className="text-2xs text-brand hover:underline">
             ← Mijozlar
           </Link>
-          <h1 className="text-2xl font-bold text-fg mt-1">{kartochka.mijoz.ism}</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-fg mt-1">{kartochka.mijoz.ism}</h1>
           <p className="text-sm text-muted mt-1">
             {kartochka.mijoz.tel ?? "Telefon kiritilmagan"}
             {kartochka.mijoz.telegram && ` · ${kartochka.mijoz.telegram}`}

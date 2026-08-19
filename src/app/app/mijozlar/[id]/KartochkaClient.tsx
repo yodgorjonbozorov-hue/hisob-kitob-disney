@@ -85,8 +85,8 @@ export function KartochkaClient({
           (sotuvlar.length === 0 ? (
             <EmptyState icon="🧾" title="Sotuv yo'q" description="Bu mijozga hali sotuv yozilmagan." />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            <div className="jadval-siljish">
+              <table className="w-full text-sm min-w-[34rem]">
                 <thead>
                   <tr className="text-left text-faint text-xs uppercase">
                     <th className="pb-2">Sana</th>
@@ -121,8 +121,8 @@ export function KartochkaClient({
           (qarzlar.length === 0 ? (
             <EmptyState icon="🤝" title="Qarz yo'q" description="Bu mijozda qarz yozuvi yo'q." />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            <div className="jadval-siljish">
+              <table className="w-full text-sm min-w-[32rem]">
                 <thead>
                   <tr className="text-left text-faint text-xs uppercase">
                     <th className="pb-2">Sana</th>

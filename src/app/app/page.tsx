@@ -98,7 +98,7 @@ export default async function DashboardPage({
   if (!businessId) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-fg">Boshqaruv paneli</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-fg">Boshqaruv paneli</h1>
         <p className="text-muted">Hali biznes yaratilmagan. Admin panel → Bizneslar bo'limidan qo'shing.</p>
       </div>
     );
@@ -148,7 +148,7 @@ export default async function DashboardPage({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold text-fg">Boshqaruv paneli</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-fg">Boshqaruv paneli</h1>
         <MonthSelector month={month} />
       </div>
 

@@ -66,7 +66,7 @@ export function MahsulotTori({
           placeholder="Skanerlang yoki nomi/kodini yozing"
           aria-label="Mahsulot qidirish yoki kod kiritish"
           autoFocus
-          className="flex-1 rounded-xl border border-line px-4 py-3 text-sm bg-surface"
+          className="flex-1 min-w-0 rounded-xl border border-line px-4 py-3 text-sm bg-surface"
         />
         <Button variant="secondary" onClick={onKamera}>
           Kamera
@@ -74,7 +74,7 @@ export function MahsulotTori({
       </div>
 
       {kategoriyalar.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="flex gap-2 jadval-siljish pb-1">
           <button
             onClick={() => onKategoriya("")}
             className={`shrink-0 rounded-full px-3 py-1.5 text-xs border ${

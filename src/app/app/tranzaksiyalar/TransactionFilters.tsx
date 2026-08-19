@@ -152,18 +152,20 @@ export function TransactionFilters({
       />
 
       {showMore && (
-        <div className="flex flex-wrap gap-3 items-end pt-1">
+        // Telefonda maydonlar 2 ustunga tizilib chiqadi — yon tomonga siljish
+        // ham, yarim kesilgan maydon ham bo'lmaydi.
+        <div className="grid grid-cols-2 gap-3 items-end pt-1 sm:flex sm:flex-wrap">
           <div>
             <label className="block text-xs font-medium text-muted mb-1">Sanadan</label>
-            <input type="date" value={values.from} onChange={(e) => update({ from: e.target.value })} className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm" />
+            <input type="date" value={values.from} onChange={(e) => update({ from: e.target.value })} className="w-full rounded-lg border border-line bg-surface px-3 py-1.5 text-sm" />
           </div>
           <div>
             <label className="block text-xs font-medium text-muted mb-1">Sanagacha</label>
-            <input type="date" value={values.to} onChange={(e) => update({ to: e.target.value })} className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm" />
+            <input type="date" value={values.to} onChange={(e) => update({ to: e.target.value })} className="w-full rounded-lg border border-line bg-surface px-3 py-1.5 text-sm" />
           </div>
           <div>
             <label className="block text-xs font-medium text-muted mb-1">Turi</label>
-            <select value={values.turi} onChange={(e) => update({ turi: e.target.value, categoryId: "" })} className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm">
+            <select value={values.turi} onChange={(e) => update({ turi: e.target.value, categoryId: "" })} className="w-full rounded-lg border border-line bg-surface px-3 py-1.5 text-sm">
               <option value="">Barchasi</option>
               <option value="kirim">Kirim</option>
               <option value="chiqim">Chiqim</option>
@@ -171,7 +173,7 @@ export function TransactionFilters({
           </div>
           <div>
             <label className="block text-xs font-medium text-muted mb-1">Kategoriya</label>
-            <select value={values.categoryId} onChange={(e) => update({ categoryId: e.target.value })} className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm">
+            <select value={values.categoryId} onChange={(e) => update({ categoryId: e.target.value })} className="w-full rounded-lg border border-line bg-surface px-3 py-1.5 text-sm">
               <option value="">Barchasi</option>
               {filteredCategories.map((c) => (
                 <option key={c.id} value={c.id}>{c.nomi}</option>
@@ -180,11 +182,11 @@ export function TransactionFilters({
           </div>
           <div>
             <label className="block text-xs font-medium text-muted mb-1">Summa (dan)</label>
-            <input type="text" inputMode="numeric" value={values.minSumma} onChange={(e) => update({ minSumma: e.target.value ? formatSom(parseSomInput(e.target.value)) : "" }, false)} placeholder="0" className="w-28 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm tnum" />
+            <input type="text" inputMode="numeric" value={values.minSumma} onChange={(e) => update({ minSumma: e.target.value ? formatSom(parseSomInput(e.target.value)) : "" }, false)} placeholder="0" className="w-full sm:w-28 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm tnum" />
           </div>
           <div>
             <label className="block text-xs font-medium text-muted mb-1">Summa (gacha)</label>
-            <input type="text" inputMode="numeric" value={values.maxSumma} onChange={(e) => update({ maxSumma: e.target.value ? formatSom(parseSomInput(e.target.value)) : "" }, false)} placeholder="∞" className="w-28 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm tnum" />
+            <input type="text" inputMode="numeric" value={values.maxSumma} onChange={(e) => update({ maxSumma: e.target.value ? formatSom(parseSomInput(e.target.value)) : "" }, false)} placeholder="∞" className="w-full sm:w-28 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm tnum" />
           </div>
         </div>
       )}

@@ -12,12 +12,17 @@ const toneClass: Record<Tone, string> = {
   neutral: "text-fg",
 };
 
+/**
+ * Katta o'lchamlar telefonda bir pog'ona kichik: summa `whitespace-nowrap`
+ * bo'lgani uchun "1 234 567 soʻm" 34px da tor kartadan chiqib ketardi —
+ * sahifa chetida kesilib, raqamning oxiri KO'RINMAY qolardi.
+ */
 const sizeClass: Record<Size, string> = {
   sm: "text-sm",
   md: "text-base",
-  lg: "text-lg",
-  xl: "text-2xl",
-  display: "text-3xl",
+  lg: "text-base sm:text-lg",
+  xl: "text-lg sm:text-2xl",
+  display: "text-xl sm:text-3xl",
 };
 
 /**
