@@ -182,7 +182,7 @@ bot.command("kod", async (ctx) => {
 bot.command("kirim", tenantHandler((ctx, user) => startTransactionFlow(ctx, user, "kirim"), { yozish: true }));
 bot.command("chiqim", tenantHandler((ctx, user) => startTransactionFlow(ctx, user, "chiqim"), { yozish: true }));
 
-bot.command("hisobot", tenantHandler((ctx) => startMonthlyReport(ctx), { managerOnly: true }));
+bot.command("hisobot", tenantHandler((ctx, user) => startMonthlyReport(ctx, user), { managerOnly: true }));
 
 bot.command(
   "lead",
@@ -246,7 +246,7 @@ bot.command("bekor", async (ctx) => {
   await ctx.reply("Amal bekor qilindi.");
 });
 
-bot.callbackQuery(/^lbiz:/, tenantHandler((ctx) => handleLeadBusinessCallback(ctx)));
+bot.callbackQuery(/^lbiz:/, tenantHandler((ctx, user) => handleLeadBusinessCallback(ctx, user)));
 
 // Avto: mashina qabul qilish va xarajat yozish (faqat direktor/administrator).
 bot.callbackQuery(
@@ -305,14 +305,14 @@ bot.callbackQuery(
   tenantHandler((ctx, user) => handleRadCallback(ctx, user), { managerOnly: true, yozish: true })
 );
 
-bot.callbackQuery(/^biz:/, tenantHandler((ctx) => handleBusinessCallback(ctx), { yozish: true }));
+bot.callbackQuery(/^biz:/, tenantHandler((ctx, user) => handleBusinessCallback(ctx, user), { yozish: true }));
 bot.callbackQuery(/^cat:/, tenantHandler((ctx) => handleCategoryCallback(ctx), { yozish: true }));
 bot.callbackQuery(/^sana:/, tenantHandler((ctx) => handleDateCallback(ctx), { yozish: true }));
 bot.callbackQuery(/^kassa:/, tenantHandler((ctx) => handleAccountCallback(ctx), { yozish: true }));
 
 bot.callbackQuery(
   /^rbiz:/,
-  tenantHandler((ctx) => handleReportBusinessCallback(ctx), { managerOnly: true })
+  tenantHandler((ctx, user) => handleReportBusinessCallback(ctx, user), { managerOnly: true })
 );
 
 bot.callbackQuery(/^izoh:skip$/, tenantHandler((ctx, user) => handleSkipIzohCallback(ctx, user), { yozish: true }));

@@ -28,6 +28,8 @@ export default async function FoydalanuvchilarPage() {
         createdAt: true,
         businessId: true,
         business: { select: { nomi: true } },
+        // Ko'p-bizneslik: xodim biriktirilgan barcha bizneslar.
+        bizneslar: { select: { businessId: true } },
         roleId: true,
         role: { select: { nomi: true } },
       },
@@ -59,6 +61,7 @@ export default async function FoydalanuvchilarPage() {
     createdAt: u.createdAt.toISOString(),
     businessId: u.businessId,
     businessNomi: u.business?.nomi ?? null,
+    businessIds: u.bizneslar.map((b) => b.businessId),
     roleId: u.roleId,
     rolNomi: u.role?.nomi ?? null,
     balans: moliya?.get(u.id)?.balans ?? 0,

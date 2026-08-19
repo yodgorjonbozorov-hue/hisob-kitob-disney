@@ -128,7 +128,7 @@ async function main() {
   });
 
   const kassirHash = await bcrypt.hash(KASSIR_PAROL, 10);
-  await prisma.user.upsert({
+  const kassir = await prisma.user.upsert({
     where: { login: KASSIR_LOGIN },
     update: {},
     // Kassir — bitta biznesga biriktirilgan.
@@ -140,6 +140,14 @@ async function main() {
       businessId: xizmatlar.id,
       tenantId: tenant.id,
     },
+  });
+
+  // Ko'p-bizneslik: ruxsat ro'yxati `UserBusiness` da yuritiladi (bir xodim bir
+  // nechta biznesga biriktirilishi mumkin). Seed kassiri — bitta bizneste.
+  await prisma.userBusiness.upsert({
+    where: { userId_businessId: { userId: kassir.id, businessId: xizmatlar.id } },
+    update: {},
+    create: { userId: kassir.id, businessId: xizmatlar.id },
   });
 
   console.log("\n=== Seed tugadi ===");

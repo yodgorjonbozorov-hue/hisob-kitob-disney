@@ -36,6 +36,9 @@ export const ZAXIRA_JADVALLARI = [
   // murojaat qiladi. Tartib buzilsa zaxira tiklanmaydi.
   "role",
   "user",
+  // Ko'p-bizneslik biriktiruvi — `user` VA `business` dan KEYIN turishi SHART
+  // (ikkalasiga ham FK bilan murojaat qiladi).
+  "userBusiness",
   "tenantModule",
   "subscription",
   "payment",
