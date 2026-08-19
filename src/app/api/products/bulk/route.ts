@@ -4,6 +4,7 @@ import { requireManager } from "@/lib/auth/guard";
 import { withTenant } from "@/lib/auth/tenant";
 import { bulkProductsSchema } from "@/lib/validation/inventory";
 import { resolveActiveBusinessId, requireOmborli } from "@/lib/business";
+import { dashboardYangilandi } from "@/lib/cache";
 
 /** Ko'p mahsulot turini birdan qo'shish (admin). */
 export const POST = withTenant(async (request, _ctx, { session: user }) => {
@@ -32,5 +33,8 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
     )
   );
 
+  // Ombor qoldig'i o'zgardi — bosh sahifadagi "Ombordagi mahsulotlar"
+  // kartasi eskirib qolmasin.
+  dashboardYangilandi(businessId);
   return NextResponse.json({ soni: created.length, mahsulotlar: created }, { status: 201 });
 }, { module: "OMBOR" });
