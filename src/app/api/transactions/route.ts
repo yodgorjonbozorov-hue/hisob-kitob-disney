@@ -2,6 +2,7 @@ import { withTenant } from "@/lib/auth/tenant";
 import { NextResponse } from "next/server";
 import { createTransactionSchema } from "@/lib/validation/transaction";
 import { listTransactions } from "@/lib/queries/transactions";
+import { isTolovBolimi, type TolovBolimi } from "@/lib/tolovBolimi";
 import { chiqimYubor } from "@/lib/services/approval";
 import { getEnabledModules } from "@/lib/modules/guard";
 import { resolveActiveBusinessId } from "@/lib/business";
@@ -28,6 +29,10 @@ export const GET = withTenant(async (request, _ctx, { session: user }) => {
     // yozilgan yozuvlar chiqarib tashlanadi (lib/qarzFiltr.ts).
     realPul: searchParams.get("realPul") === "1",
     kunlikJami: searchParams.get("kunlik") === "1",
+    // "Jami kirim/chiqim" oynasidagi to'lov bo'limi (naqd/click/plastik/bank).
+    tolovBolimi: isTolovBolimi(searchParams.get("tolovBolimi"))
+      ? (searchParams.get("tolovBolimi") as TolovBolimi)
+      : null,
     minSumma: searchParams.get("minSumma") ? parseInt(searchParams.get("minSumma")!, 10) : null,
     maxSumma: searchParams.get("maxSumma") ? parseInt(searchParams.get("maxSumma")!, 10) : null,
     page: parseInt(searchParams.get("page") ?? "1", 10),

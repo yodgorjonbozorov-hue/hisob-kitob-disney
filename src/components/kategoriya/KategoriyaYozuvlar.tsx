@@ -2,12 +2,25 @@
 
 import { Money } from "@/components/ui/Money";
 import { formatSom, formatDate, formatToshkentSoat } from "@/lib/format";
+import { amaldagiBolim, TOLOV_BOLIMI_NOMI, TOLOV_BOLIMI_BELGI } from "@/lib/tolovBolimi";
 import type { TransactionDTO } from "@/lib/queries/transactions";
 
 export interface KunlikJami {
   sana: string;
   summa: number;
   soni: number;
+}
+
+/**
+ * Yozuvning to'lov usuli — `lib/tolovBolimi.ts` dagi AYNI qoida bo'yicha
+ * (aniq `tolovTuri`, bo'lmasa kassa turi). Qarz alohida belgilanadi: u
+ * jamilarga kirmaydi, lekin yozuv sifatida ko'rinishi mumkin.
+ */
+function tolovNomi(t: TransactionDTO): string {
+  if (t.tolovTuri === "qarz") return "\u{1F4CB} Qarz";
+  const bolim = amaldagiBolim(t.tolovTuri, t.account?.turi ?? null);
+  if (!bolim) return "—";
+  return `${TOLOV_BOLIMI_BELGI[bolim]} ${TOLOV_BOLIMI_NOMI[bolim]}`;
 }
 
 /** Sana kaliti — `sana` DateOnly (UTC-yarim tun) bo'lgani uchun ISO ning bosh 10 harfi. */
@@ -68,7 +81,7 @@ export function KategoriyaYozuvlar({
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-2xs text-muted tnum">
-                        {formatToshkentSoat(new Date(t.createdAt))}
+                        {formatToshkentSoat(new Date(t.createdAt))} · {tolovNomi(t)}
                         {t.account?.nomi ? ` · ${t.account.nomi}` : ""}
                       </p>
                       {t.izoh && <p className="text-sm text-fg mt-0.5 break-words">{t.izoh}</p>}
