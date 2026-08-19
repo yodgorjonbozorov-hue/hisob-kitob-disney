@@ -17,6 +17,7 @@ let confirmPayment: any;
 let runWithTenant: any;
 let svc: any;
 let newClient: any;
+let audit: any;
 let bcrypt: any;
 
 const KUN_MS = 24 * 60 * 60 * 1000;
@@ -35,6 +36,7 @@ before(async () => {
   ({ runWithTenant } = await import("@/lib/db/tenantContext"));
   svc = await import("@/lib/superadmin/service");
   newClient = await import("@/lib/superadmin/newClient");
+  audit = await import("@/lib/superadmin/audit");
   bcrypt = await import("bcryptjs");
 
   tA = await createTenantWithOwner({ kompaniyaNomi: "Sinov A", ism: "A", login: "+998911111100", parol: "parol12345" });
@@ -100,23 +102,61 @@ test("findImpersonationTarget: birinchi faol OWNER topiladi", async () => {
   assert.equal(target.rol, "OWNER");
 });
 
-test("logSuperadminAction: audit jurnalga [SUPERADMIN] belgisi bilan yoziladi", async () => {
-  await svc.logSuperadminAction({
-    superadminId: "sa1",
-    superadminIsm: "Egasi",
-    action: "impersonate",
+test("superadminAudit: WHO/WHAT/WHERE/REASON to'liq yoziladi", async () => {
+  // Superadmin 2.0: `logSuperadminAction` o'rniga `superadminAudit` — u
+  // IP, qurilma satri, oldingi/keyingi holat va SABABni ham saqlaydi.
+  await audit.superadminAudit({
+    sa: {
+      session: { userId: "sa1", ism: "Egasi", login: "egasi", rol: "SUPERADMIN" },
+      superRol: "ROOT",
+      ip: "203.0.113.7",
+      userAgent: "SinovBrauzer/1.0",
+    },
+    amal: audit.SA_AMAL.IMPERSONATION_START,
     entity: "tenant",
     entityId: tB.tenant.id,
-    detail: { tenantName: "Faol B" },
+    tenantId: tB.tenant.id,
+    before: { status: "ACTIVE" },
+    after: { tenantName: "Faol B" },
+    sabab: "Mijoz hisobotdagi xatoni ko'rsatishni so'radi",
   });
+
   const log = await rawPrisma.auditLog.findFirst({
-    where: { action: "impersonate", entityId: tB.tenant.id },
+    where: { action: "IMPERSONATION_START", entityId: tB.tenant.id },
     orderBy: { createdAt: "desc" },
   });
   assert.ok(log);
-  assert.equal(log.userIsm, "[SUPERADMIN] Egasi");
+  assert.equal(log.userIsm, "[SUPERADMIN:ROOT] Egasi");
+  assert.equal(log.tenantId, tB.tenant.id);
+  assert.equal(log.ip, "203.0.113.7");
+  assert.equal(log.userAgent, "SinovBrauzer/1.0");
+  assert.ok(log.sabab.includes("hisobotdagi xatoni"));
+  assert.ok(log.before.includes("ACTIVE"));
   assert.ok(log.after.includes("Faol B"));
   assert.equal(log.businessId, null);
+});
+
+test("superadminAudit: parol kabi sirlar jurnalga tushmaydi", async () => {
+  await audit.superadminAudit({
+    sa: {
+      session: { userId: "sa1", ism: "Egasi", login: "egasi", rol: "SUPERADMIN" },
+      superRol: "ROOT",
+      ip: null,
+      userAgent: null,
+    },
+    amal: audit.SA_AMAL.USER_PASSWORD_RESET,
+    entity: "user",
+    entityId: "sinov-user",
+    after: { login: "mijoz", yangiParol: "juda-maxfiy-parol" },
+  });
+
+  const log = await rawPrisma.auditLog.findFirst({
+    where: { entityId: "sinov-user" },
+    orderBy: { createdAt: "desc" },
+  });
+  assert.ok(log);
+  assert.ok(!log.after.includes("juda-maxfiy-parol"), "parol jurnalga tushmasligi kerak");
+  assert.ok(log.after.includes("***"));
 });
 
 // ---------- Yangi mijoz yaratish (panel + skript uchun umumiy servis) ----------

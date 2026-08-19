@@ -3317,3 +3317,174 @@ qo'shilib ketardi.
 yoqish/o'chirish, ma'lumot saqlanishi, tenant/rol izolyatsiyasi, barcode va
 QR, savat birlashishi, atomik chek, orqaga qaytish, qoldiq poygasi,
 qaytarish). Mavjud 53 to'plam ham qayta yurgizildi — hammasi yashil.
+
+## 2026-08-19 — SUPERADMIN 2.0: CONTROL CENTER
+
+**Branch:** `claude/superadmin-2-control-center-ak7714`
+**Hujjat:** `docs/SUPERADMIN-2-AUDIT.md` (audit + bajarilgan ish hisoboti)
+
+### Nima qilindi
+
+Superadmin paneli bitta 527 satrli sahifadan 10 bo'limli Control Center'ga
+qayta qurildi. Bu UI redesign EMAS — asosiy ish backend, xavfsizlik va
+audit qatlamida.
+
+**Baza (bitta additiv migratsiya, `20260819090000_superadmin_2_control_center`):**
+`User.superadminRol`, `User.sessionEpoch`, `AuditLog.userAgent`,
+`AuditLog.sabab`, `FeatureFlag`, `SupportTicket`, `SupportMessage` va
+6 indeks. `DROP` yo'q, ma'lumot qayta yozilmaydi.
+
+**Uchta kritik teshik yopildi:**
+
+1. **Superadmin RBAC binar edi** — panelga kirgan har kim mijozni bloklashi,
+   tarifni o'zgartirishi va bo'sh kompaniyani o'chirishi mumkin edi. Endi
+   6 rol (ROOT/ADMIN/SUPPORT/FINANCE/ANALYST/READ_ONLY) va 13×5 huquq
+   matritsasi (`lib/superadmin/rbac.ts`). Matritsa sidebar, sahifa guard'i
+   va API guard'i uchun YAGONA manba; ROOT matritsada yo'q, shuning uchun
+   yangi resurs qo'shilganda boshqa rollar uni avtomatik olmaydi.
+
+2. **Sessiyani bekor qilib bo'lmasdi.** iron-session stateless — bloklangan
+   xodim yoki o'g'irlangan cookie 7 kun ishlayverardi. `User.sessionEpoch`
+   qo'shildi: login paytida cookie'ga ko'chiriladi, guard har so'rovda
+   bazadagi qiymat bilan solishtiradi. Bir raqamni oshirish = barcha
+   qurilmalardagi barcha sessiyalar kuchsizlanadi. Yo'l-yo'lakay
+   `lib/auth/tenant.ts` endi HAR so'rovda foydalanuvchi holatini o'qiydi
+   (so'rov ichida keshlangan) — o'chirilgan hisob ham darhol yopiladi.
+
+3. **Audit o'chirilardi.** `deleteEmptyTenant` kompaniya bilan birga uning
+   butun jurnalini ham o'chirardi, ya'ni "kim, qachon, nega o'chirdi"
+   savoliga javob qolmasdi. Endi `AuditLog` APPEND-ONLY: `rawPrisma`
+   extension'i `create`dan boshqa yozish amalini rad etadi (tenant clienti
+   ham shu qoida ostida, chunki u rawPrisma'dan quriladi). Kompaniya
+   o'chirilganda jurnal QOLADI — faqat biznesga havolasi uziladi.
+
+**Audit 2.0:** har imtiyozli amal WHO / WHAT / TARGET / WHEN / WHERE (IP +
+qurilma) / BEFORE / AFTER / REASON bilan yoziladi. 12 ta xavfli amalda sabab
+MAJBURIY (server sababsiz so'rovni rad etadi) — bloklash, o'chirish, tarif,
+parol tiklash, sessiya bekor qilish, impersonatsiya, eksport, feature flag.
+Kirish urinishlari (muvaffaqiyatli va muvaffaqiyatsiz) ham jurnalga tushadi —
+Xavfsizlik markazi shulardan hisoblaydi.
+
+**Modul bog'liqligi:** `lib/modules/bogliqlik.ts`. Ro'yxatga faqat KODDA
+haqiqatan mavjud bog'liqlik yozildi — `XARID → OMBOR` (xarid qabul qilinganda
+tovar omborga tushadi). O'ylab topilgan bog'liqlik qo'shilmadi: u mijozning
+modulini sababsiz bloklab qo'yardi. Modul o'chirilganda ma'lumot O'CHMAYDI —
+test buni tekshiradi (mahsulot yaratiladi, modul o'chiriladi, qayta yoqiladi,
+mahsulot joyida).
+
+**Frontend:** yig'iladigan sidebar + topbar + command palette (⌘K),
+10 bo'lim, server tomonda sahifalash/filtr (100 000 kompaniyada ham brauzerga
+25 qator ketadi), jadval <1024px da kartochkaga aylanadi, xavfli amal modali
+"nima bo'ladi + sabab + so'zni yozib tasdiqlash" uch qadamidan iborat.
+
+### Ataylab QILINMAGAN narsalar
+
+- **Soxta monitoring yaratilmadi.** Bu arxitekturada Redis va navbat YO'Q —
+  Tizim sahifasida ular "SOZLANMAGAN" deb, sababi bilan ko'rsatiladi.
+- **UI orqali ixtiyoriy SQL yo'q** — Tizim sahifasida faqat `count()`.
+- **Alohida "Invoice" jadvali yaratilmadi** — bu loyihada hisob-faktura
+  rolini `Payment` bajaradi; bo'sh bo'lim yasashdan ko'ra to'lov kartochkasi
+  to'liq tafsilot beradi.
+
+### Ochiq cheklovlar
+
+- Qurilmalar ro'yxati yo'q (sessiya jadvali kerak) — bekor qilish har doim
+  "hamma qurilmada".
+- Audit immutability ILOVA darajasida: `$queryRaw` extension'ni chetlab
+  o'tadi. To'liq kafolat baza triggeri yoki alohida DB roli bilan.
+- Churn taxminiy: obuna holati tarixi saqlanmaydi.
+
+### Natija
+
+`npm run build` — ✅ o'tdi. 40 ta test to'plami (39 mavjud + yangi
+`test:superadmin2`) — HAMMASI yashil, 0 xato. Yangi test 27 ta holatni
+qamraydi: RBAC matritsasi, audit append-only, modul bog'liqligi va
+ma'lumot saqlanishi, sessiya bekor qilish, tenant o'chirilganda audit
+saqlanishi, qidiruvning rolga mosligi, eksport sirlari, dashboard hisoblari,
+support tiketi izolyatsiyasi, sabab validatsiyasi.
+
+**Migratsiya production'da qo'lda apply qilinadi** (bu muhitda
+`DATABASE_URL` yo'q). Avval zaxira oling — `scripts/deploy-zaxira.mjs`
+buni majburlaydi.
+
+---
+
+## "Jami kirim / Jami chiqim" kartalari bosiladigan bo'ldi (2026-08-17)
+
+Karta bosilganda to'lov turlari bo'yicha taqsimot ochiladi, bo'lim bosilganda
+esa o'sha bo'lim yozuvlari.
+
+### Model haqiqati — "Plastik" to'lov turi EMAS
+
+`TOLOV_TURLARI = ["naqd", "click", "qarz"]` (Transaction.tolovTuri),
+`ACCOUNT_TURLARI = ["naqd", "plastik", "bank"]` (Account.turi). Ya'ni
+"Plastik" — KASSA turi. Eski yozuvlarda `tolovTuri` umuman null.
+
+Shuning uchun bo'lim ro'yxati qotirilmadi, "amaldagi usul" qoidasi
+kiritildi (`src/lib/tolovBolimi.ts`):
+
+    aniq tolovTuri bo'lsa — o'sha;
+    bo'lmasa — kassa turi;
+    kassa ham bo'lmasa — naqd.
+
+Natijada bo'limlar ma'lumotdan chiqadi: Naqd / Click / Plastik / Bank —
+qaysi birida summa bo'lsa, o'sha ko'rinadi. Yangi kassa turi qo'shilsa
+kodni o'zgartirish shart emas.
+
+### Karta === bo'limlar yig'indisi
+
+Jamlash (`getTolovTaqsimoti`) va ro'yxat filtri (`tolovBolimiWhere`) BITTA
+faylda turadi — ajralib ketmasin. Ikkalasi ham `getMonthSummary` bilan ayni
+to'plamdan o'qiydi (shu biznes, o'chirilmagan, tanlangan oy, qarzsiz).
+Qarz bo'limlarga kirmaydi (karta ham uni hisobga olmaydi), lekin alohida
+eslatma qatorida ko'rsatiladi — "pul qayerda?" savoli javobsiz qolmasin.
+
+Test bu invariantni majburlaydi: bo'limlar yig'indisi, har bo'lim ro'yxati
+jami va kartadagi raqam — uchalasi teng bo'lishi shart.
+
+### Eslatma
+
+Repozitoriyada ESLint konfiguratsiyasi yo'q — `npm run lint` interaktiv
+sozlash so'raydi. Lint aslida `next build` ichidagi bosqichda ishlaydi.
+
+---
+
+## Bosh sahifaga "Ombordagi mahsulotlar" kartasi (2026-08-19)
+
+### Qoldiq manbasi — mavjud tizim, parallel hisob YO'Q
+
+Loyihada qoldiqning yagona manbasi `Product.miqdor`. Xizmat qatlami uni har
+harakatda atomik yangilaydi: ombor kirimi va xarid qabuli oshiradi, sotuv
+`miqdor: { gte }` qulfi bilan kamaytiradi, sotuvni bekor qilish qaytaradi,
+inventarizatsiya/hisobdan chiqarish esa `StockAdjustment` yozib yangi
+qiymatni qo'yadi. Karta o'sha ustunni o'qiydi — harakatlarni qayta jamlaydigan
+ikkinchi hisob yaratilmadi.
+
+**Warehouse modeli YO'Q** — biznesda bitta yashirin ombor, ya'ni ombor
+konteksti = `businessId`.
+
+### Birliklar ATAYLAB qo'shilmaydi
+
+`Product.birlik` — dona/kg/litr/metr/quti/paket. Mavjud `getOmborStats`
+hammasini bitta songa qo'shadi (Ombor sahifasidagi "Jami qoldiq (dona)") —
+bu 500 dona + 120 kg = 620 degan ma'nosiz raqam. Yangi
+`getOmborKartasi` birliklar bo'yicha `groupBy` qiladi: kartadagi katta
+raqam eng ko'p TURGA ega birlikdan, qolganlari ostidagi qatorda.
+
+### Turlar soni
+
+Faqat qoldig'i BOR faol mahsulotlar. Bu Ombor sahifasidagi "Mahsulot
+turlari" dan farq qiladi — u barcha faol mahsulotlarni sanaydi.
+
+### Kesh
+
+`products` va `stock` route'lari ilgari `dashboardYangilandi` chaqirmasdi —
+ular dashboardga ta'sir qilmasdi. Endi qoldiq bosh sahifada ko'ringani
+uchun to'rtala mutatsiya route'iga kesh bekor qilish qo'shildi.
+
+### Karta ko'rinish sharti
+
+Faqat `business.omborli` va OMBOR moduli yoqiq bo'lganda. Ombori yo'q
+biznesda karta umuman chiqmaydi — "0 dona" deb turish chalg'itardi. Bu
+qarz kartasidagi holatdan FARQ QILADI: u yerda ma'lumot bor edi, karta esa
+uni yashirardi.

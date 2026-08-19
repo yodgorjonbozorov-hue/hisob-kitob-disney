@@ -6,6 +6,7 @@ import { isManager } from "@/lib/auth/roles";
 import { createProductSchema } from "@/lib/validation/inventory";
 import { resolveActiveBusinessId, requireOmborli } from "@/lib/business";
 import { listProducts } from "@/lib/queries/inventory";
+import { dashboardYangilandi } from "@/lib/cache";
 
 export const GET = withTenant(async (request, _ctx, { session: user }) => {
   forbidSeller(user.rol);
@@ -46,5 +47,8 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
       minQoldiq: parsed.data.minQoldiq ?? undefined,
     },
   });
+  // Ombor qoldig'i o'zgardi — bosh sahifadagi "Ombordagi mahsulotlar"
+  // kartasi eskirib qolmasin.
+  dashboardYangilandi(businessId);
   return NextResponse.json(product, { status: 201 });
 }, { module: "OMBOR" });

@@ -4,6 +4,7 @@ import { requireManager, ForbiddenError } from "@/lib/auth/guard";
 import { withTenant } from "@/lib/auth/tenant";
 import { updateProductSchema } from "@/lib/validation/inventory";
 import { resolveActiveBusinessId } from "@/lib/business";
+import { dashboardYangilandi } from "@/lib/cache";
 
 export const PATCH = withTenant<{ params: { id: string } }>(async (request, { params }, { session: user }) => {
   requireManager(user.rol);
@@ -30,5 +31,7 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
     where: { id: params.id },
     data: parsed.data,
   });
+  // Qoldiq yoki faollik o'zgargan bo'lishi mumkin — kartani yangilaymiz.
+  dashboardYangilandi(businessId);
   return NextResponse.json(product);
 }, { module: "OMBOR" });

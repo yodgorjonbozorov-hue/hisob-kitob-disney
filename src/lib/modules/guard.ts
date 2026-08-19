@@ -5,6 +5,7 @@ import { ForbiddenError } from "@/lib/auth/guard";
 import { planByCode } from "@/lib/billing/plans";
 import type { TenantContext } from "@/lib/auth/tenant";
 import { MODULLAR, modulByCode } from "./registry";
+import { talabQiladi } from "./bogliqlik";
 
 /**
  * Modul guard'lari (server). Yoqilganlik uch shartdan iborat:
@@ -39,11 +40,16 @@ export async function getEnabledModules(ctx: TenantContext): Promise<Set<string>
       yoqilgan.add(r.code);
     }
   }
-  // BOG'LIQLIK: MAGAZIN — OMBOR ustidagi qatlam. OMBOR o'chirilgan bo'lsa
-  // MAGAZIN yozuvi bazada `isActive` bo'lib qolsa ham hisobga OLINMAYDI —
-  // aks holda mahsulotsiz kassa ochilib, sahifa bo'sh chiqardi.
+  // BOG'LIQLIK (yagona manba: `lib/modules/bogliqlik.ts`).
+  //
+  // Superadmin paneli bog'liqlikni YOQISH paytida majburlaydi, bu yerdagi
+  // tekshiruv esa O'QISH paytida ishlaydi: modul yozuvi bazada `isActive`
+  // bo'lib qolsa ham, u talab qiladigan modul yopiq bo'lsa hisobga
+  // OLINMAYDI. Ikkalasi ham kerak — masalan OMBOR keyinroq o'chirilsa,
+  // MAGAZIN yozuvi o'z-o'zidan o'zgarmaydi va mahsulotsiz kassa ochilardi.
   for (const m of MODULLAR) {
-    if (m.talabQiladi && yoqilgan.has(m.code) && !yoqilgan.has(m.talabQiladi)) {
+    if (!yoqilgan.has(m.code)) continue;
+    if (talabQiladi(m.code).some((kerak) => !yoqilgan.has(kerak))) {
       yoqilgan.delete(m.code);
     }
   }
@@ -93,8 +99,10 @@ export async function isModuleOnForTenant(tenantId: string, code: string): Promi
     select: { id: true },
   });
   if (!row) return false;
-  // Bog'liq modul (masalan MAGAZIN -> OMBOR) ham yoqiq bo'lishi shart.
-  if (m.talabQiladi) return isModuleOnForTenant(tenantId, m.talabQiladi);
+  // Bog'liq modullar (masalan MAGAZIN -> OMBOR) ham yoqiq bo'lishi shart.
+  for (const kerak of talabQiladi(m.code)) {
+    if (!(await isModuleOnForTenant(tenantId, kerak))) return false;
+  }
   return true;
 }
 

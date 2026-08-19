@@ -6,6 +6,8 @@ import {
   getDailyDynamics,
 } from "@/lib/queries/dashboard";
 import { getQarzJamlari } from "@/lib/queries/qarz";
+import { getTolovTaqsimoti } from "@/lib/queries/tolovTaqsimoti";
+import { getOmborKartasi } from "@/lib/queries/inventory";
 
 /**
  * Dashboard so'rovlarining KESHLANGAN variantlari (60 s).
@@ -29,3 +31,15 @@ export const getDailyDynamicsKesh = keshlangan("dashboard:kunlik", getDailyDynam
  * yangilanadi, foydalanuvchi 60 soniya kutmaydi.
  */
 export const getQarzJamlariKesh = keshlangan("dashboard:qarz-jamlari", getQarzJamlari);
+/**
+ * "Jami kirim/chiqim" kartasi ichidagi to'lov taqsimoti. Karta summasi bilan
+ * bitta oy va bitta to'plamdan hisoblanadi, shuning uchun kesh ham birga
+ * bekor qilinadi.
+ */
+export const getTolovTaqsimotiKesh = keshlangan("dashboard:tolov-taqsimoti", getTolovTaqsimoti);
+/**
+ * "Ombordagi mahsulotlar" kartasi. Ombor harakatlari (kirim, sotuv,
+ * to'g'rilash) `dashboardYangilandi(businessId)` chaqiradi — qoldiq
+ * o'zgarishi kartada darhol ko'rinadi.
+ */
+export const getOmborKartasiKesh = keshlangan("dashboard:ombor-kartasi", getOmborKartasi);

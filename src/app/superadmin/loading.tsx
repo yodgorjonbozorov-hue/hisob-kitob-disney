@@ -1,13 +1,15 @@
-import { SkeletonHeader, SkeletonStats, SkeletonTable } from "@/components/ui/Skeleton";
+import { Yuklanmoqda } from "@/components/superadmin/Holatlar";
 
-/** Superadmin: tenantlar va to'lovlar jadvallari. */
-export default function Loading() {
+export default function ControlCenterLoading() {
   return (
-    <div className="p-4 space-y-6">
-      <SkeletonHeader amal={false} />
-      <SkeletonStats soni={4} />
-      <SkeletonTable rows={10} />
-      <SkeletonTable rows={6} />
+    <div className="space-y-4">
+      <div className="h-8 w-48 rounded-lg bg-surface-2 animate-pulse" />
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+        {Array.from({ length: 10 }).map((_, i) => (
+          <div key={i} className="h-20 rounded-xl bg-surface-2 animate-pulse" />
+        ))}
+      </div>
+      <Yuklanmoqda />
     </div>
   );
 }

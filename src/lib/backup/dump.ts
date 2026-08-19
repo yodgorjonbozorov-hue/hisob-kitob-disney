@@ -90,6 +90,12 @@ export const ZAXIRA_JADVALLARI = [
   // Kassa topshirig'i — faqat Business'ga FK bilan bog'liq (kassir/qabul
   // qiluvchi ataylab FK'siz: foydalanuvchi o'chirilsa ham tarix qolsin).
   "cashHandover",
+  // Superadmin 2.0 — platforma darajasidagi bayroq, FK'siz (istalgan joyda tursa bo'ladi).
+  "featureFlag",
+  // Support tiketi tenant va user'ga FK bilan bog'liq — ikkalasidan KEYIN turadi.
+  "supportTicket",
+  // Tiket yozishmasi tiketdan KEYIN.
+  "supportMessage",
 ] as const;
 
 export type ZaxiraJadval = (typeof ZAXIRA_JADVALLARI)[number];

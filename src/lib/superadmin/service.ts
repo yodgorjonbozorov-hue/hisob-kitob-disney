@@ -6,7 +6,6 @@ import { hashPassword } from "@/lib/auth/password";
 import { BadRequestError } from "@/lib/auth/guard";
 import { normalizeKompaniyaNomi } from "@/lib/services/signup";
 import { MANAGER_ROLLAR } from "@/lib/auth/roles";
-import { MODULLAR } from "@/lib/modules/registry";
 
 /**
  * SUPERADMIN xizmat qatlami — barcha amallar rawPrisma bilan (tenantlar aro)
@@ -14,27 +13,11 @@ import { MODULLAR } from "@/lib/modules/registry";
  * o'tgan route'lar chaqiradi.
  */
 
-/** Superadmin amalini audit jurnaliga yozadi (kim, qachon, nima). */
-export async function logSuperadminAction(params: {
-  superadminId: string;
-  superadminIsm: string;
-  action: string; // "impersonate" | "extend" | "block" | "unblock" | "payment_confirm" | "payment_reject" | "password_reset"
-  entity: string; // "tenant" | "payment" | "user"
-  entityId: string;
-  detail?: Record<string, unknown>;
-}) {
-  await rawPrisma.auditLog.create({
-    data: {
-      businessId: null,
-      userId: params.superadminId,
-      userIsm: `[SUPERADMIN] ${params.superadminIsm}`,
-      action: params.action,
-      entity: params.entity,
-      entityId: params.entityId,
-      after: params.detail ? JSON.stringify(params.detail) : null,
-    },
-  });
-}
+/**
+ * DIQQAT: audit yozish bu yerdan OLIB TASHLANDI. Superadmin amallari endi
+ * `lib/superadmin/audit.ts` dagi `superadminAudit()` orqali yoziladi — u
+ * IP, qurilma, oldingi/keyingi holat va SABABni ham saqlaydi (talab 22/57).
+ */
 
 export interface TenantOverview {
   id: string;
@@ -176,18 +159,40 @@ export async function deleteEmptyTenant(tenantId: string): Promise<{ name: strin
   const bizneslar = await rawPrisma.business.findMany({ where: { tenantId }, select: { id: true } });
   const businessIds = bizneslar.map((b) => b.id);
 
-  // Bog'liq yozuvlar chetdan markazga: kategoriya/audit -> biznes -> tenant.
+  /**
+   * AUDIT SAQLANADI (talab 23 — append-only).
+   *
+   * Ilgari bu yerda `auditLog.deleteMany` turardi: kompaniya o'chirilganda
+   * uning butun jurnali ham yo'q bo'lardi, ya'ni "kim, qachon, nega o'chirdi"
+   * degan savolga javob qolmasdi. Endi yozuvlar QOLADI, faqat biznesga
+   * havolasi uziladi (`businessId = NULL`) — aks holda FK biznesni o'chirishga
+   * yo'l bermaydi. `tenantId` esa oddiy ustun (FK emas), shuning uchun
+   * kompaniya yozuvi o'chgach ham jurnalda kompaniya izi qoladi.
+   *
+   * `$executeRaw` ATAYLAB: `auditLog.updateMany` client darajasida bloklangan
+   * (append-only qo'riqchisi). Bu yerda yozuv MAZMUNI o'zgarmaydi — faqat
+   * o'chirilayotgan biznesga havola uziladi.
+   */
+  // Bog'liq yozuvlar chetdan markazga: kategoriya -> biznes -> tenant.
   await rawPrisma.$transaction(async (tx) => {
     if (businessIds.length > 0) {
       await tx.category.deleteMany({ where: { businessId: { in: businessIds } } });
-      await tx.auditLog.deleteMany({ where: { businessId: { in: businessIds } } });
+      for (const bId of businessIds) {
+        await tx.$executeRaw`UPDATE "AuditLog" SET "businessId" = NULL WHERE "businessId" = ${bId}`;
+      }
       await tx.stage.deleteMany({ where: { businessId: { in: businessIds } } });
       // Kassalar (Faza 4.1) — har biznesda kamida bittasi bo'ladi, shuning uchun
       // ular ham biznesdan OLDIN o'chirilishi shart (Account.businessId Restrict).
       await tx.accountTransfer.deleteMany({ where: { businessId: { in: businessIds } } });
       await tx.account.deleteMany({ where: { businessId: { in: businessIds } } });
     }
-    await tx.auditLog.deleteMany({ where: { tenantId } });
+    // AuditLog.tenantId ATAYLAB tozalanmaydi — jurnal kompaniya o'chgach ham
+    // qoladi. `userId` esa FK emas, shuning uchun user o'chirilishi jurnalga
+    // ta'sir qilmaydi.
+    await tx.supportMessage.deleteMany({
+      where: { ticket: { tenantId } },
+    });
+    await tx.supportTicket.deleteMany({ where: { tenantId } });
     await tx.user.deleteMany({ where: { tenantId } });
     await tx.business.deleteMany({ where: { tenantId } });
     await tx.tenantModule.deleteMany({ where: { tenantId } });
@@ -206,134 +211,6 @@ export interface Metrics {
   bloklangan: number;
   /** Oylik takrorlanuvchi tushum (so'm) — faol obunadagi tenantlar tarifi yig'indisi. */
   mrr: number;
-}
-
-/**
- * MODUL STATISTIKASI — qaysi modulni nechta kompaniya yoqqan.
- *
- * Nega kerak: "nechta mijozimizda kassa ishlayapti" savoliga javob bo'lmasa,
- * modul rivojiga qancha kuch sarflashni ham, kimga qo'ng'iroq qilishni ham
- * bilib bo'lmaydi.
- *
- * `MAGAZIN` uchun alohida raqam ham chiqadi: modul yoqilgan bo'lsa ham,
- * hech bir bizneste kassa belgilanmagan bo'lsa u AMALDA ishlamayapti —
- * bunday mijozga yordam kerak.
- */
-export interface ModulStat {
-  code: string;
-  nomi: string;
-  /** Modulni yoqqan kompaniyalar soni. */
-  tenantlar: number;
-}
-
-export interface ModulStatistika {
-  modullar: ModulStat[];
-  /** Ombor yuritiladigan bizneslar soni. */
-  omborliBizneslar: number;
-  /** Kassa (POS) yoqilgan bizneslar soni. */
-  magazinBizneslar: number;
-  /** MAGAZIN moduli yoqilgan, lekin bironta biznesda kassa belgilanmagan kompaniyalar. */
-  magazinYarimSozlangan: number;
-}
-
-export async function getModulStatistika(): Promise<ModulStatistika> {
-  const [rows, omborliBizneslar, magazinBizneslar, magazinliTenantIdlar] = await Promise.all([
-    rawPrisma.tenantModule.groupBy({
-      by: ["code"],
-      where: { isActive: true },
-      _count: { _all: true },
-    }),
-    rawPrisma.business.count({ where: { omborli: true } }),
-    rawPrisma.business.count({ where: { magazin: true } }),
-    rawPrisma.business.findMany({ where: { magazin: true }, select: { tenantId: true } }),
-  ]);
-
-  const sonMap = new Map(rows.map((r) => [r.code, r._count._all]));
-  const modullar = MODULLAR.filter((m) => !m.core).map((m) => ({
-    code: m.code,
-    nomi: m.nomi,
-    tenantlar: sonMap.get(m.code) ?? 0,
-  }));
-
-  const magazinliTenantlar = new Set(magazinliTenantIdlar.map((b) => b.tenantId));
-  const magazinModuli = await rawPrisma.tenantModule.findMany({
-    where: { code: "MAGAZIN", isActive: true },
-    select: { tenantId: true },
-  });
-  const magazinYarimSozlangan = magazinModuli.filter(
-    (m) => !magazinliTenantlar.has(m.tenantId)
-  ).length;
-
-  return { modullar, omborliBizneslar, magazinBizneslar, magazinYarimSozlangan };
-}
-
-/**
- * Bitta tenantning modul holati (superadmin paneli uchun).
- * Tarifda yo'q modul ham ko'rsatiladi — superadmin sababni ko'rishi kerak.
- */
-export interface TenantModulHolat {
-  code: string;
-  nomi: string;
-  core: boolean;
-  tarifdaBor: boolean;
-  yoqilgan: boolean;
-}
-
-export async function getTenantModullari(tenantId: string): Promise<TenantModulHolat[]> {
-  const [tenant, rows] = await Promise.all([
-    rawPrisma.tenant.findUnique({ where: { id: tenantId }, select: { plan: true } }),
-    rawPrisma.tenantModule.findMany({ where: { tenantId }, select: { code: true, isActive: true } }),
-  ]);
-  if (!tenant) throw new BadRequestError("Tenant topilmadi");
-  const holat = new Map(rows.map((r) => [r.code, r.isActive]));
-  const plan = planByCode(tenant.plan);
-  return MODULLAR.filter((m) => !m.korinmas).map((m) => ({
-    code: m.code,
-    nomi: m.nomi,
-    core: m.core,
-    tarifdaBor: m.core || (plan?.modullar.includes(m.code) ?? false),
-    yoqilgan: m.core || (holat.get(m.code) ?? false),
-  }));
-}
-
-/**
- * Tenantning modulini superadmin nomidan yoqadi/o'chiradi.
- *
- * O'CHIRISH MA'LUMOTGA TEGMAYDI: faqat `TenantModule.isActive` bayrog'i
- * o'zgaradi. Sotuvlar, cheklar, mahsulotlar, ombor harakati va tarix
- * bazada joyida qoladi — modul qayta yoqilsa hammasi ko'rinadi. Bu ataylab
- * shunday: mijoz modulni vaqtincha o'chirib, keyin qaytarishi odatiy holat.
- */
-export async function setTenantModul(params: {
-  tenantId: string;
-  code: string;
-  isActive: boolean;
-}): Promise<{ code: string; isActive: boolean }> {
-  const modul = MODULLAR.find((m) => m.code === params.code);
-  if (!modul || modul.korinmas) throw new BadRequestError("Noma'lum modul");
-  if (modul.core) throw new BadRequestError("Asosiy modulni o'chirib bo'lmaydi");
-
-  const tenant = await rawPrisma.tenant.findUnique({
-    where: { id: params.tenantId },
-    select: { plan: true },
-  });
-  if (!tenant) throw new BadRequestError("Tenant topilmadi");
-  if (params.isActive && !planByCode(tenant.plan)?.modullar.includes(params.code)) {
-    throw new BadRequestError(`"${modul.nomi}" moduli ${tenant.plan} tarifida mavjud emas`);
-  }
-
-  const bor = await rawPrisma.tenantModule.findFirst({
-    where: { tenantId: params.tenantId, code: params.code },
-    select: { id: true },
-  });
-  if (bor) {
-    await rawPrisma.tenantModule.update({ where: { id: bor.id }, data: { isActive: params.isActive } });
-  } else {
-    await rawPrisma.tenantModule.create({
-      data: { tenantId: params.tenantId, code: params.code, isActive: params.isActive },
-    });
-  }
-  return { code: params.code, isActive: params.isActive };
 }
 
 export async function getMetrics(): Promise<Metrics> {

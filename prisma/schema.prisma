@@ -15,27 +15,30 @@ datasource db {
 /// foydalanuvchilariga ega; tenantlar bir-birining ma'lumotini hech qachon ko'rmaydi.
 /// status: "TRIAL" | "ACTIVE" | "PAST_DUE" | "BLOCKED" (zod bilan cheklanadi).
 model Tenant {
-  id               String         @id @default(cuid())
+  id               String          @id @default(cuid())
   name             String
-  slug             String         @unique
-  status           String         @default("TRIAL")
+  slug             String          @unique
+  status           String          @default("TRIAL")
   trialEndsAt      DateTime?
   currentPeriodEnd DateTime?
-  plan             String         @default("STANDARD")
+  plan             String          @default("STANDARD")
   /// Doimiy bepul foydalanish (hamkor/o'z kompaniyasi). To'lov va muddat
   /// talab qilinmaydi: obuna tugasa ham kirish yopilmaydi, eslatma yuborilmaydi.
   /// Bloklash bundan ustun turadi.
-  bepul            Boolean        @default(false)
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  bepul            Boolean         @default(false)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
   businesses       Business[]
   users            User[]
   subscriptions    Subscription[]
   payments         Payment[]
   modules          TenantModule[]
   roles            Role[]
+  supportTickets   SupportTicket[]
 
   @@index([status])
+  /// Superadmin paneli tenantlarni sana bo'yicha saralaydi va sahifalaydi.
+  @@index([createdAt])
 }
 
 /// MAXSUS ROL — mijoz o'zi yaratadigan rol (PRO tarif).
@@ -98,6 +101,8 @@ model Subscription {
 
   @@index([tenantId])
   @@index([status])
+  /// "Yaqinda tugaydigan obunalar" kesimi.
+  @@index([periodEnd])
 }
 
 /// To'lov yozuvi. provider: "MANUAL" | "PAYME" | "CLICK";
@@ -128,6 +133,8 @@ model Payment {
 
   @@index([tenantId])
   @@index([status])
+  /// Billing sahifasi to'lovlarni sana bo'yicha sahifalaydi.
+  @@index([createdAt])
 }
 
 /// Biznes (kompaniya bo'limi). Har bir biznesning o'z kategoriyalari, tranzaksiyalari va dashboard'i.
@@ -210,6 +217,20 @@ model User {
   lastLoginAt        DateTime?
   // Seed parollarini birinchi kirishda majburiy almashtirish uchun.
   mustChangePassword Boolean           @default(false)
+  /// SUPERADMIN ICHIDAGI ROL (Superadmin 2.0). Faqat `rol = "SUPERADMIN"` bo'lganda
+  /// ma'noga ega: "ROOT" | "ADMIN" | "SUPPORT" | "FINANCE" | "ANALYST" | "READ_ONLY".
+  ///
+  /// DEFAULT ATAYLAB YO'Q. Oddiy (tenant) foydalanuvchida bu ustun NULL bo'lib
+  /// qoladi — u superadmin emas. Superadminda NULL uchrasa `lib/superadmin/rbac.ts`
+  /// uni "ROOT" deb o'qiydi: 2.0 gacha HAR superadmin hamma narsani qila olardi,
+  /// ya'ni NULL — aynan o'sha eski holat. Bu yerda "NULL -> ruxsat yo'q" deyish
+  /// imtiyoz qo'shmaydi, faqat migratsiyadan oldingi hisoblarni tizimdan
+  /// chiqarib yuborardi. Cheklangan rol ochiq tayinlanadi.
+  superadminRol      String?
+  /// SESSIYA AVLODI. Sessiya cookie'sida shu raqam saqlanadi; bazadagi qiymat
+  /// oshirilsa, eski cookie'lar DARHOL kuchini yo'qotadi. Iron-session stateless
+  /// bo'lgani uchun "sessiyani bekor qilish"ning yagona ishonchli yo'li shu.
+  sessionEpoch       Int               @default(0)
   transactions       Transaction[]
   employees          Employee[]
   approvalRequests   ApprovalRequest[] @relation("TasdiqSorovchi")
@@ -239,9 +260,15 @@ model User {
   /// Shaxsiy kassalar (Account.userId) — har user o'z hamyoniga ega bo'la oladi.
   shaxsiyKassalar Account[] @relation("KassaEgasi")
 
+  supportTickets  SupportTicket[]  @relation("TiketMuallifi")
+  supportOwned    SupportTicket[]  @relation("TiketMasuli")
+  supportMessages SupportMessage[]
+
   @@index([businessId])
   @@index([tenantId])
   @@index([roleId])
+  /// Superadmin global foydalanuvchilar ro'yxati rol bo'yicha filtrlanadi.
+  @@index([rol])
 }
 
 /// Kalit-qiymat ko'rinishidagi tizim sozlamalari (masalan, oxirgi yuborilgan oylik hisobot).
@@ -486,12 +513,21 @@ model AuditLog {
   before     String? // JSON
   after      String? // JSON
   ip         String?
+  /// Brauzer/qurilma satri — imtiyozli amal qaysi mashinadan bajarilganini
+  /// ko'rsatadi (Superadmin 2.0 xavfsizlik markazi).
+  userAgent  String?
+  /// Xavfli amal SABABI — superadmin bloklash/tarif/eksport kabi amallarda
+  /// majburiy kiritadi (talab 46/57).
+  sabab      String?
   createdAt  DateTime  @default(now())
 
   @@index([tenantId, createdAt])
   @@index([businessId, createdAt])
   @@index([entity])
   @@index([createdAt])
+  /// Kim nima qilgani bo'yicha kesim — xavfsizlik markazi va "oxirgi faoliyat".
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
 }
 
 /// Kassir kun yakuni — kutilgan naqd (kirim) vs sanalgan naqd, farq.
@@ -1575,4 +1611,71 @@ model PosChek {
   @@index([businessId, deletedAt, sana])
   @@index([businessId, createdAt])
   @@index([contactId])
+}
+
+// ===========================================================================
+// SUPERADMIN 2.0 — CONTROL CENTER MODELLARI
+// ===========================================================================
+
+/// FEATURE FLAG — platforma darajasidagi bayroq ("NEW_POS", "AI_ASSISTANT"...).
+///
+/// ATAYLAB TENANTSIZ: bayroq global tizim sozlamasi. Ayrim tenantlarga ochish
+/// kerak bo'lsa `tenantIdlar` JSON massivi ishlatiladi — alohida jadval emas,
+/// chunki bayroq soni o'nlab bo'ladi va so'rov har doim bitta bayroq bo'yicha.
+/// `doira`: "GLOBAL" (hammaga) | "TENANT" (faqat ro'yxatdagi tenantlarga).
+model FeatureFlag {
+  id          String   @id @default(cuid())
+  kalit       String   @unique
+  nomi        String
+  tavsif      String?
+  doira       String   @default("GLOBAL")
+  yoqilgan    Boolean  @default(false)
+  /// Tenant idlari JSON massivi — faqat `doira = "TENANT"` da ishlatiladi.
+  tenantIdlar String   @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([yoqilgan])
+}
+
+/// SUPPORT TIKETI — mijoz muammosi bo'yicha superadmin yuritadigan yozuv.
+/// holat: "OCHIQ" | "KUTILMOQDA" | "YECHILDI" | "YOPILDI".
+/// muhimlik: "PAST" | "ORTA" | "YUQORI" | "KRITIK".
+model SupportTicket {
+  id         String           @id @default(cuid())
+  tenantId   String
+  tenant     Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  /// Tiketni ochgan mijoz foydalanuvchisi (superadmin ochsa null).
+  userId     String?
+  user       User?            @relation("TiketMuallifi", fields: [userId], references: [id], onDelete: SetNull)
+  /// Mas'ul superadmin.
+  masulId    String?
+  masul      User?            @relation("TiketMasuli", fields: [masulId], references: [id], onDelete: SetNull)
+  mavzu      String
+  tavsif     String
+  holat      String           @default("OCHIQ")
+  muhimlik   String           @default("ORTA")
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  yopilganAt DateTime?
+  xabarlar   SupportMessage[]
+
+  @@index([tenantId])
+  @@index([holat, createdAt])
+  @@index([masulId])
+}
+
+/// Tiket yozishmasi. `ichki = true` — faqat superadminlar ko'radigan qayd.
+model SupportMessage {
+  id         String        @id @default(cuid())
+  ticketId   String
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  muallifId  String?
+  muallif    User?         @relation(fields: [muallifId], references: [id], onDelete: SetNull)
+  muallifIsm String
+  matn       String
+  ichki      Boolean       @default(false)
+  createdAt  DateTime      @default(now())
+
+  @@index([ticketId, createdAt])
 }

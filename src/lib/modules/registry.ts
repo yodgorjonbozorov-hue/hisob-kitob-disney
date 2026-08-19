@@ -43,13 +43,6 @@ export interface ModulTarifi {
   /** Modul rollari: bu modulga umuman kira oladigan rollar (nav'dan tashqari API himoya). */
   rollar: Rol[];
   /**
-   * Ishlashi uchun avval yoqilishi shart bo'lgan modul kodi. MAGAZIN — OMBOR
-   * ustidagi kassa qatlami: mahsulot va qoldiq OMBOR modulida yuritiladi,
-   * shuning uchun OMBORsiz MAGAZIN yoqilmaydi (va yoqilgan bo'lsa ham
-   * `getEnabledModules` uni hisobga olmaydi).
-   */
-  talabQiladi?: string;
-  /**
    * Yoqishdan oldin tasdiq so'raladi va shu ro'yxat ko'rsatiladi ("nima
    * qo'shiladi"). Bo'sh bo'lsa modul bir bosishda yoqiladi (avvalgi
    * xatti-harakat — mavjud modullar uchun hech narsa o'zgarmaydi).
@@ -144,7 +137,7 @@ export const MODULLAR: ModulTarifi[] = [
     // MAGAZIN — OMBOR ustidagi qatlam: mahsulot, qoldiq va sotuv tarixi
     // O'SHA modulda yuritiladi. Shu bois bu yerda "Mahsulotlar"/"Ombor"/
     // "Sotuvlar" havolalari ATAYLAB TAKRORLANMAYDI.
-    talabQiladi: "OMBOR",
+    // Bog'liqlikning O'ZI `lib/modules/bogliqlik.ts` da (yagona manba).
     qoshiladi: [
       "Kassir ekrani (POS) — skaner bilan savat yig'ish",
       "Bitta chekda bir nechta mahsulot sotish",

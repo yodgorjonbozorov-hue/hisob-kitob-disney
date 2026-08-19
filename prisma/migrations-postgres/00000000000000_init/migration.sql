@@ -102,6 +102,8 @@ CREATE TABLE "User" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "lastLoginAt" TIMESTAMP(3),
     "mustChangePassword" BOOLEAN NOT NULL DEFAULT false,
+    "superadminRol" TEXT,
+    "sessionEpoch" INTEGER NOT NULL DEFAULT 0,
     "tenantId" TEXT,
     "businessId" TEXT,
     "telegramChatId" TEXT,
@@ -237,6 +239,8 @@ CREATE TABLE "AuditLog" (
     "before" TEXT,
     "after" TEXT,
     "ip" TEXT,
+    "userAgent" TEXT,
+    "sabab" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "AuditLog_pkey" PRIMARY KEY ("id")
@@ -847,11 +851,59 @@ CREATE TABLE "PosChek" (
     CONSTRAINT "PosChek_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "FeatureFlag" (
+    "id" TEXT NOT NULL,
+    "kalit" TEXT NOT NULL,
+    "nomi" TEXT NOT NULL,
+    "tavsif" TEXT,
+    "doira" TEXT NOT NULL DEFAULT 'GLOBAL',
+    "yoqilgan" BOOLEAN NOT NULL DEFAULT false,
+    "tenantIdlar" TEXT NOT NULL DEFAULT '[]',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "FeatureFlag_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SupportTicket" (
+    "id" TEXT NOT NULL,
+    "tenantId" TEXT NOT NULL,
+    "userId" TEXT,
+    "masulId" TEXT,
+    "mavzu" TEXT NOT NULL,
+    "tavsif" TEXT NOT NULL,
+    "holat" TEXT NOT NULL DEFAULT 'OCHIQ',
+    "muhimlik" TEXT NOT NULL DEFAULT 'ORTA',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "yopilganAt" TIMESTAMP(3),
+
+    CONSTRAINT "SupportTicket_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SupportMessage" (
+    "id" TEXT NOT NULL,
+    "ticketId" TEXT NOT NULL,
+    "muallifId" TEXT,
+    "muallifIsm" TEXT NOT NULL,
+    "matn" TEXT NOT NULL,
+    "ichki" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "SupportMessage_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "Tenant_slug_key" ON "Tenant"("slug");
 
 -- CreateIndex
 CREATE INDEX "Tenant_status_idx" ON "Tenant"("status");
+
+-- CreateIndex
+CREATE INDEX "Tenant_createdAt_idx" ON "Tenant"("createdAt");
 
 -- CreateIndex
 CREATE INDEX "Role_tenantId_isActive_idx" ON "Role"("tenantId", "isActive");
@@ -872,6 +924,9 @@ CREATE INDEX "Subscription_tenantId_idx" ON "Subscription"("tenantId");
 CREATE INDEX "Subscription_status_idx" ON "Subscription"("status");
 
 -- CreateIndex
+CREATE INDEX "Subscription_periodEnd_idx" ON "Subscription"("periodEnd");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Payment_externalId_key" ON "Payment"("externalId");
 
 -- CreateIndex
@@ -879,6 +934,9 @@ CREATE INDEX "Payment_tenantId_idx" ON "Payment"("tenantId");
 
 -- CreateIndex
 CREATE INDEX "Payment_status_idx" ON "Payment"("status");
+
+-- CreateIndex
+CREATE INDEX "Payment_createdAt_idx" ON "Payment"("createdAt");
 
 -- CreateIndex
 CREATE INDEX "Business_tenantId_idx" ON "Business"("tenantId");
@@ -897,6 +955,9 @@ CREATE INDEX "User_tenantId_idx" ON "User"("tenantId");
 
 -- CreateIndex
 CREATE INDEX "User_roleId_idx" ON "User"("roleId");
+
+-- CreateIndex
+CREATE INDEX "User_rol_idx" ON "User"("rol");
 
 -- CreateIndex
 CREATE INDEX "AiConversation_tenantId_updatedAt_idx" ON "AiConversation"("tenantId", "updatedAt");
@@ -969,6 +1030,12 @@ CREATE INDEX "AuditLog_entity_idx" ON "AuditLog"("entity");
 
 -- CreateIndex
 CREATE INDEX "AuditLog_createdAt_idx" ON "AuditLog"("createdAt");
+
+-- CreateIndex
+CREATE INDEX "AuditLog_userId_createdAt_idx" ON "AuditLog"("userId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "AuditLog_action_createdAt_idx" ON "AuditLog"("action", "createdAt");
 
 -- CreateIndex
 CREATE INDEX "ShiftClose_businessId_sana_idx" ON "ShiftClose"("businessId", "sana");
@@ -1261,6 +1328,24 @@ CREATE INDEX "PosChek_contactId_idx" ON "PosChek"("contactId");
 -- CreateIndex
 CREATE UNIQUE INDEX "PosChek_businessId_raqam_key" ON "PosChek"("businessId", "raqam");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "FeatureFlag_kalit_key" ON "FeatureFlag"("kalit");
+
+-- CreateIndex
+CREATE INDEX "FeatureFlag_yoqilgan_idx" ON "FeatureFlag"("yoqilgan");
+
+-- CreateIndex
+CREATE INDEX "SupportTicket_tenantId_idx" ON "SupportTicket"("tenantId");
+
+-- CreateIndex
+CREATE INDEX "SupportTicket_holat_createdAt_idx" ON "SupportTicket"("holat", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "SupportTicket_masulId_idx" ON "SupportTicket"("masulId");
+
+-- CreateIndex
+CREATE INDEX "SupportMessage_ticketId_createdAt_idx" ON "SupportMessage"("ticketId", "createdAt");
+
 -- AddForeignKey
 ALTER TABLE "Role" ADD CONSTRAINT "Role_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
@@ -1533,6 +1618,21 @@ ALTER TABLE "PosChek" ADD CONSTRAINT "PosChek_businessId_fkey" FOREIGN KEY ("bus
 
 -- AddForeignKey
 ALTER TABLE "PosChek" ADD CONSTRAINT "PosChek_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SupportTicket" ADD CONSTRAINT "SupportTicket_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SupportTicket" ADD CONSTRAINT "SupportTicket_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SupportTicket" ADD CONSTRAINT "SupportTicket_masulId_fkey" FOREIGN KEY ("masulId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SupportMessage" ADD CONSTRAINT "SupportMessage_ticketId_fkey" FOREIGN KEY ("ticketId") REFERENCES "SupportTicket"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SupportMessage" ADD CONSTRAINT "SupportMessage_muallifId_fkey" FOREIGN KEY ("muallifId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 
 -- ---------------------------------------------------------------------------

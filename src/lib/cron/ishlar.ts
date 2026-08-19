@@ -46,6 +46,30 @@ export async function tenantlarBoylab(
   return { jami, xato };
 }
 
+/**
+ * CRON IZI (Superadmin 2.0, talab 27/29).
+ *
+ * Ilgari cron ishlagani yoki zaxira olingani HECH QAYERDA qayd etilmasdi:
+ * "oxirgi zaxira qachon olingan?" degan savolga javob yo'q edi. Endi har ish
+ * tugagach `AppSetting` ga vaqt belgisi yoziladi va Control Center → Tizim
+ * sahifasi shu belgilarni ko'rsatadi.
+ *
+ * Yozuv MUVAFFAQIYATLI tugagandagina qo'yiladi — aks holda belgi "hammasi
+ * joyida" deb yolg'on gapirardi.
+ */
+export async function cronBelgisi(nom: string, vaqt: Date = new Date()): Promise<void> {
+  const key = `cron:${nom}`;
+  try {
+    await rawPrisma.appSetting.upsert({
+      where: { key },
+      update: { value: vaqt.toISOString() },
+      create: { key, value: vaqt.toISOString() },
+    });
+  } catch (error) {
+    console.error(`Cron belgisini yozib bo'lmadi (${nom}):`, error);
+  }
+}
+
 /** Xato bo'lsa log'ga yozib, zaxira qiymat qaytaradi — bitta qadam butun ishni yiqitmasin. */
 async function xavfsiz<T>(nom: string, fn: () => Promise<T>, zaxira: T): Promise<T> {
   try {
@@ -68,6 +92,9 @@ export async function zaxiraIshi(opts: { faqatZaxira?: boolean } = {}) {
     () => sendBackupToTelegram(),
     { holat: "xato" }
   );
+
+  // Zaxira MUVAFFAQIYATLI bo'lsagina belgi qo'yiladi.
+  if (zaxira.holat !== "xato") await cronBelgisi("backup");
 
   if (opts.faqatZaxira) return { zaxira: zaxira.holat, suhbat: 0, rateLimit: 0 };
 
@@ -103,6 +130,7 @@ export async function billingIshi() {
     console.warn("Telegram ulanmagan (eslatma yetmadi):", eslatma.telegramsiz.join(", "));
   }
 
+  await cronBelgisi("billing");
   return { expired, eslatma: eslatma.yuborilgan, telegramsiz: eslatma.telegramsiz.length };
 }
 
@@ -122,6 +150,7 @@ export async function hisobotIshi() {
   // Tasdiqlanmagan kunlik yakunlar — direktorga eslatma (tasdiqlash tugmasi bilan).
   const kunlikEslatma = await xavfsiz("Kunlik tasdiqlash eslatmasi", () => sendKunlikEslatma(bot.api), 0);
 
+  await cronBelgisi("hisobot");
   return { digest, kunlikEslatma };
 }
 
@@ -138,5 +167,6 @@ export async function vazifaIshi() {
   const bot = await botniOl();
   const eslatma = await xavfsiz("Vazifa eslatmalari", () => sendTaskReminders(bot.api), 0);
 
+  await cronBelgisi("vazifa");
   return { recurring: recurring.jami, recurringXato: recurring.xato, eslatma };
 }

@@ -5,7 +5,7 @@ import { StatCard } from "@/components/ui/StatCard";
 import { MonthSelector } from "@/components/MonthSelector";
 import { TrendChart } from "@/components/charts/TrendChart";
 import { DailyDynamicsChart } from "@/components/charts/DailyDynamicsChart";
-import { formatMoneyCompact, formatSomLabel, formatMonthLabel } from "@/lib/format";
+import { formatMoneyCompact, formatSomLabel, formatMonthLabel, formatSom } from "@/lib/format";
 import {
   currentMonthString,
   todayDateOnlyString,
@@ -27,14 +27,19 @@ import {
   getTrendKesh,
   getDailyDynamicsKesh,
   getQarzJamlariKesh,
+  getTolovTaqsimotiKesh,
+  getOmborKartasiKesh,
 } from "@/lib/queries/dashboardCached";
 import { getTodayTotals } from "@/lib/queries/shift";
 import { listTransactions } from "@/lib/queries/transactions";
 import { getProBugun } from "@/lib/queries/proDashboard";
 import { getKgSavdo } from "@/lib/queries/selos";
 import { bugunPaneliKorinadi, kgSavdoKorinadi } from "@/lib/mijozXos";
+import { isModuleOnForTenant } from "@/lib/modules/guard";
+import type { OmborKartasiDTO } from "@/lib/queries/inventory";
 import { KassaHome } from "./KassaHome";
 import { KategoriyaBloki } from "./KategoriyaBloki";
+import { PulOqimiKartalari } from "./PulOqimiKartalari";
 import { SelosBugunKartasi } from "./SelosBugunKartasi";
 
 export default async function DashboardPage({
@@ -104,7 +109,14 @@ export default async function DashboardPage({
   const bugunPanel = bugunPaneliKorinadi(tenant);
   // Kg savdosi bloki — mijozga xos (Fortex Selos), tarif imkoniyati EMAS.
   const kgPanel = kgSavdoKorinadi(tenant);
-  const [summary, kirimBreakdown, chiqimBreakdown, trend, daily, qarzTotal, categoryCount, proBugun, kgBugun] = await Promise.all([
+  // OMBOR KARTASI faqat ombor yuritadigan biznesda. Ombori yo'q biznesda
+  // (masalan gul do'koni) karta ATAYLAB umuman ko'rsatilmaydi — "0 dona"
+  // deb turish ekranni chalg'itardi. Bu qarz kartasidagi holatdan farq
+  // qiladi: u yerda ma'lumot BOR edi, karta esa uni yashirardi.
+  const business = await getActiveBusiness(session);
+  const omborKorinadi =
+    (business?.omborli ?? false) && (await isModuleOnForTenant(tenantId, "OMBOR"));
+  const [summary, kirimBreakdown, chiqimBreakdown, trend, daily, qarzTotal, kirimTaqsimot, chiqimTaqsimot, ombor, categoryCount, proBugun, kgBugun] = await Promise.all([
     getMonthSummaryKesh(businessId, month),
     getCategoryBreakdownKesh(businessId, month, "kirim"),
     getCategoryBreakdownKesh(businessId, month, "chiqim"),
@@ -115,6 +127,9 @@ export default async function DashboardPage({
     // qarzlar bazada turgan holda. Qarzlar sahifasidan ombor sharti
     // olib tashlanganda bu joy e'tibordan qolib ketgan.
     getQarzJamlariKesh(businessId),
+    getTolovTaqsimotiKesh(businessId, month, "kirim"),
+    getTolovTaqsimotiKesh(businessId, month, "chiqim"),
+    omborKorinadi ? getOmborKartasiKesh(businessId) : Promise.resolve(null),
     prisma.category.count({ where: { businessId } }),
     // Bugungi kg va kassa/jamoa ko'rsatkichlari (mijozga xos blok).
     bugunPanel ? getProBugun(businessId) : Promise.resolve(null),
@@ -164,20 +179,24 @@ export default async function DashboardPage({
       {/* Barcha kartalar TANLANGAN OY ko'rsatkichlari — umumiy (butun davr)
           kassa qoldig'i ataylab ko'rsatilmaydi: oy raqamlari bilan yonma-yon
           turganda chalg'itardi. Kassalar bo'yicha qoldiq /app/kassa sahifasida. */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard
-          label="Jami kirim"
-          value={formatMoneyCompact(summary.jamiKirim)}
-          changePct={summary.changePct.kirim}
-          goodWhenUp
-          accent="income"
-        />
-        <StatCard
-          label="Jami chiqim"
-          value={formatMoneyCompact(summary.jamiChiqim)}
-          changePct={summary.changePct.chiqim}
-          goodWhenUp={false}
-          accent="expense"
+      <div
+        className={`grid grid-cols-2 gap-3 sm:gap-4 ${
+          ombor ? "lg:grid-cols-5" : "lg:grid-cols-4"
+        }`}
+      >
+        {/* Ikkala karta ham bosiladi — to'lov turlari bo'yicha taqsimot
+            ochiladi. Taqsimot serverda, karta bilan BITTA oy oralig'ida
+            hisoblanadi: yig'indisi kartadagi raqamga teng bo'lishi shart. */}
+        <PulOqimiKartalari
+          kirimSumma={summary.jamiKirim}
+          chiqimSumma={summary.jamiChiqim}
+          kirimChangePct={summary.changePct.kirim}
+          chiqimChangePct={summary.changePct.chiqim}
+          kirimTaqsimot={kirimTaqsimot}
+          chiqimTaqsimot={chiqimTaqsimot}
+          oyFrom={oyFrom}
+          oyTo={oyTo}
+          oyNomi={oyNomi}
         />
         <StatCard
           label="Sof foyda"
@@ -209,6 +228,33 @@ export default async function DashboardPage({
             </p>
           )}
         </StatCard>
+
+        {/* 5-KARTA — faqat ombor yuritadigan biznesda. Mobil ekranda ikkala
+            ustunni egallaydi: 2 ustunli tarmoqda yakka qolgan karta yarim
+            bo'sh qator qoldirardi. */}
+        {ombor && (
+          <StatCard
+            label="Ombordagi mahsulotlar"
+            value={omborQiymat(ombor)}
+            accent="brand"
+            href="/app/ombor"
+            className="col-span-2 lg:col-span-1"
+          >
+            <p className="text-2xs mt-1 tnum text-muted">
+              {ombor.turlarSoni} ta mahsulot turi
+            </p>
+            {/* Boshqa birliklar ALOHIDA qatorda: "500 dona + 120 kg" ni
+                bitta raqamga qo'shish matematik jihatdan noto'g'ri. */}
+            {ombor.birliklar.length > 1 && (
+              <p className="text-2xs mt-0.5 tnum text-faint truncate">
+                {ombor.birliklar
+                  .slice(1)
+                  .map((b) => `${formatSom(b.miqdor)} ${b.birlik}`)
+                  .join(" · ")}
+              </p>
+            )}
+          </StatCard>
+        )}
       </div>
 
       {/* Kg savdosi (mijozga xos — Fortex Selos): bugun necha kg, qancha tushum,
@@ -281,4 +327,13 @@ export default async function DashboardPage({
     </div>
   );
   });
+}
+
+/**
+ * Kartadagi katta raqam — ENG KO'P mahsulot turiga ega birlikdan.
+ * Qolgan birliklar karta ichida alohida qatorda ko'rsatiladi.
+ */
+function omborQiymat(o: OmborKartasiDTO): string {
+  if (!o.asosiy) return "0";
+  return `${formatSom(o.asosiy.miqdor)} ${o.asosiy.birlik}`;
 }

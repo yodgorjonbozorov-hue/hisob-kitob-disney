@@ -156,26 +156,26 @@ test("4. Egasi OMBOR + MAGAZIN'ni yoqsa modul ochiladi", async () => {
 });
 
 test("5. Superadmin modulni yoqa oladi (tenant kontekstisiz)", async () => {
-  const { setTenantModul, getTenantModullari } = await import("@/lib/superadmin/service");
-  await setTenantModul({ tenantId: agency.tenant.id, code: "OMBOR", isActive: true });
-  const holat = await getTenantModullari(agency.tenant.id);
+  const { modulniOzgartir, tenantModulHolati } = await import("@/lib/superadmin/modullar");
+  await modulniOzgartir(agency.tenant.id, "OMBOR", true);
+  const holat = await tenantModulHolati(agency.tenant.id);
   assert.equal(holat.find((m) => m.code === "OMBOR")?.yoqilgan, true);
   assert.equal(holat.find((m) => m.code === "MAGAZIN")?.yoqilgan, false);
 });
 
 test("6. Superadmin modulni o'chira oladi", async () => {
-  const { setTenantModul, getTenantModullari } = await import("@/lib/superadmin/service");
-  await setTenantModul({ tenantId: agency.tenant.id, code: "OMBOR", isActive: false });
-  const holat = await getTenantModullari(agency.tenant.id);
+  const { modulniOzgartir, tenantModulHolati } = await import("@/lib/superadmin/modullar");
+  await modulniOzgartir(agency.tenant.id, "OMBOR", false);
+  const holat = await tenantModulHolati(agency.tenant.id);
   assert.equal(holat.find((m) => m.code === "OMBOR")?.yoqilgan, false);
 });
 
 test("7. Modulni o'chirish MA'LUMOTNI o'chirmaydi", async () => {
-  const { setTenantModul } = await import("@/lib/superadmin/service");
+  const { modulniOzgartir } = await import("@/lib/superadmin/modullar");
   const p = await mahsulot("Coca-Cola 1.5L", 12_000, 20, "4601234567890");
   const chek = await sot({ satrlar: [{ productId: p.id, miqdor: 2 }], tolovTuri: "naqd" });
 
-  await setTenantModul({ tenantId: dokon.tenant.id, code: "MAGAZIN", isActive: false });
+  await modulniOzgartir(dokon.tenant.id, "MAGAZIN", false);
 
   // Modul o'chgan — lekin chek, sotuv satrlari va qoldiq joyida.
   const saqlangan = await rawPrisma.posChek.findUnique({ where: { id: chek.id } });
@@ -185,7 +185,7 @@ test("7. Modulni o'chirish MA'LUMOTNI o'chirmaydi", async () => {
   assert.equal(mahs.miqdor, 18);
 
   // Qayta yoqilganda hammasi ko'rinadi.
-  await setTenantModul({ tenantId: dokon.tenant.id, code: "MAGAZIN", isActive: true });
+  await modulniOzgartir(dokon.tenant.id, "MAGAZIN", true);
   const yoqilgan = await D(() => guard.getEnabledModules(fakeCtx(dokon.tenant, "OWNER")));
   assert.ok(yoqilgan.has("MAGAZIN"));
 });
@@ -744,10 +744,10 @@ test("31. ProductCategory biznes/tenant doirasida qamalgan", async () => {
 });
 
 test("32. Superadmin: tarifda yo'q modulni yoqa OLMAYDI", async () => {
-  const { setTenantModul } = await import("@/lib/superadmin/service");
+  const { modulniOzgartir } = await import("@/lib/superadmin/modullar");
   // STANDARD tarifida CRM yo'q (lib/billing/plans.ts).
   await assert.rejects(
-    async () => setTenantModul({ tenantId: agency.tenant.id, code: "CRM", isActive: true }),
+    async () => modulniOzgartir(agency.tenant.id, "CRM", true),
     (e: Error) => /tarifida mavjud emas/.test(e.message)
   );
   // Bazaga ham yozilmagan.
@@ -758,14 +758,14 @@ test("32. Superadmin: tarifda yo'q modulni yoqa OLMAYDI", async () => {
 });
 
 test("33. Superadmin: asosiy (core) modulni o'chira OLMAYDI", async () => {
-  const { setTenantModul } = await import("@/lib/superadmin/service");
+  const { modulniOzgartir } = await import("@/lib/superadmin/modullar");
   await assert.rejects(
-    async () => setTenantModul({ tenantId: dokon.tenant.id, code: "MOLIYA", isActive: false }),
+    async () => modulniOzgartir(dokon.tenant.id, "MOLIYA", false),
     (e: Error) => /Asosiy modulni/.test(e.message)
   );
   // Noma'lum modul ham rad etiladi (kod injection'ga qarshi).
   await assert.rejects(
-    async () => setTenantModul({ tenantId: dokon.tenant.id, code: "YOQ_MODUL", isActive: true }),
+    async () => modulniOzgartir(dokon.tenant.id, "YOQ_MODUL", true),
     (e: Error) => /Noma'lum modul/.test(e.message)
   );
 });
@@ -851,4 +851,48 @@ test("36. Arxitektura qisman qaytarishga TAYYOR (hozir yoqilmagan)", async () =>
     satrlar.reduce((x: number, s: { jamiSumma: number }) => x + s.jamiSumma, 0),
     chek.jamiSumma
   );
+});
+
+// =========================================================================
+// MODUL BOG'LIQLIGI (Superadmin 2.0 bilan birlashtirilgandan keyin)
+// =========================================================================
+
+test("37. Bog'liqlik YAGONA manbada: MAGAZIN -> OMBOR", async () => {
+  const { talabQiladi, tayanadiganlar } = await import("@/lib/modules/bogliqlik");
+  // Ilgari bu bilim ikki joyda edi: registry'dagi `talabQiladi` maydoni va
+  // Superadmin 2.0 dagi `MODUL_BOGLIQLIGI`. Ikki manba vaqt o'tib bir-biriga
+  // mos kelmay qolardi — endi bitta manba.
+  assert.deepEqual(talabQiladi("MAGAZIN"), ["OMBOR"]);
+  assert.ok(tayanadiganlar("OMBOR").includes("MAGAZIN"));
+
+  const registry = await import("@/lib/modules/registry");
+  const magazin = registry.modulByCode("MAGAZIN");
+  assert.ok(magazin && !("talabQiladi" in magazin), "registry'da takroriy maydon qolmasligi kerak");
+});
+
+test("38. Superadmin OMBORsiz MAGAZIN'ni yoqa OLMAYDI", async () => {
+  const { modulniOzgartir } = await import("@/lib/superadmin/modullar");
+  // `agency` da OMBOR o'chirilgan (6-test) — MAGAZIN yoqilmasligi kerak.
+  await assert.rejects(
+    async () => modulniOzgartir(agency.tenant.id, "MAGAZIN", true),
+    (e: Error) => /Ombor|OMBOR|ombor/.test(e.message)
+  );
+  const row = await rawPrisma.tenantModule.findFirst({
+    where: { tenantId: agency.tenant.id, code: "MAGAZIN", isActive: true },
+  });
+  assert.equal(row, null, "rad etilgan yoqish bazaga yozilmasligi kerak");
+});
+
+test("39. MAGAZIN yoqiq bo'lsa OMBOR o'chirilmaydi (jimgina sinmasin)", async () => {
+  const { modulniOzgartir } = await import("@/lib/superadmin/modullar");
+  // `dokon` da ikkalasi ham yoqiq (4-test). OMBOR o'chirilsa kassa
+  // mahsulotsiz qolardi — shuning uchun sabab bilan rad etiladi.
+  await assert.rejects(
+    async () => modulniOzgartir(dokon.tenant.id, "OMBOR", false),
+    (e: Error) => /Magazin|MAGAZIN|magazin/.test(e.message)
+  );
+  // OMBOR hali ham yoqiq.
+  const yoqilgan = await D(() => guard.getEnabledModules(fakeCtx(dokon.tenant, "OWNER")));
+  assert.ok(yoqilgan.has("OMBOR"));
+  assert.ok(yoqilgan.has("MAGAZIN"));
 });

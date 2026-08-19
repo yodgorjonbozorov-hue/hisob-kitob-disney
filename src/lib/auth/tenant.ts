@@ -56,10 +56,19 @@ const tenantByIdCached = requestCache(async (tenantId: string): Promise<TenantIn
   })
 );
 
+/**
+ * Foydalanuvchining XAVFSIZLIK holati: faolmi, qaysi tenantda, sessiya avlodi.
+ *
+ * HAR so'rovda o'qiladi (so'rov ichida keshlanadi). Ilgari bu yozuv faqat
+ * sessiyada `tenantId` bo'lmaganda o'qilardi, ya'ni:
+ *   · bloklangan foydalanuvchi cookie tugagunicha (7 kun) ishlayverardi;
+ *   · "sessiyani bekor qilish" umuman imkonsiz edi.
+ * Bitta keshlangan so'rov evaziga ikkala teshik ham yopiladi.
+ */
 const userTenantIdCached = requestCache(async (userId: string) =>
   rawPrisma.user.findUnique({
     where: { id: userId },
-    select: { tenantId: true, isActive: true },
+    select: { tenantId: true, isActive: true, sessionEpoch: true },
   })
 );
 
@@ -68,12 +77,17 @@ const userTenantIdCached = requestCache(async (userId: string) =>
  * tenantId bo'lmaydi — bazadan o'qiladi (fail-closed: topilmasa null).
  */
 async function loadTenant(session: Required<SessionData>): Promise<TenantInfo | null> {
-  let tenantId = session.tenantId ?? null;
-  if (!tenantId) {
-    const user = await userTenantIdCached(session.userId);
-    if (!user || !user.isActive) return null;
-    tenantId = user.tenantId;
-  }
+  // Fail-closed: yozuv yo'q, hisob o'chirilgan yoki sessiya avlodi eskirgan
+  // bo'lsa kontekst QURILMAYDI — chaqiruvchi 401/403 beradi yoki /login ga
+  // yo'naltiradi.
+  const user = await userTenantIdCached(session.userId);
+  if (!user || !user.isActive) return null;
+  if ((session.sessionEpoch ?? 0) !== user.sessionEpoch) return null;
+
+  // Sessiyadagi tenant bazadagisi bilan ziddiyatda bo'lsa — fail-closed.
+  // (Foydalanuvchi boshqa kompaniyaga ko'chirilgan, cookie esa eski.)
+  if (session.tenantId && user.tenantId && session.tenantId !== user.tenantId) return null;
+  const tenantId = session.tenantId ?? user.tenantId;
   if (!tenantId) return null;
   return tenantByIdCached(tenantId);
 }
