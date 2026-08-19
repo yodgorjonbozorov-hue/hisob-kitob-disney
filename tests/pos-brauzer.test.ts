@@ -584,6 +584,61 @@ test("TO'LIQ QAYTARISH: qoldiq qaytadi, pul chiqadi, chek tarixda qoladi", { ski
 // ROL (RBAC) TEKSHIRUVLARI
 // =========================================================================
 
+test("YORLIQ CHOP ETISH sahifasi ochiladi va QR chizadi", { skip: sabab }, async () => {
+  // 100+ kodsiz tovarli do'kon uchun asosiy oqim: ommaviy QR yaratish ->
+  // yorliqlarni stiker printerida chop etish.
+  const page = await sahifa(ctxAdmin);
+  await page.goto(`${ASOS}/app/pos/qr`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("h1", { timeout: 30_000 });
+
+  // Kodsiz tovarlarga bir yo'la QR yaratish.
+  const [javob] = await Promise.all([
+    page.waitForResponse(
+      (r) => r.url().endsWith("/api/pos/mahsulot/qr-hammasi") && r.request().method() === "POST",
+      { timeout: 30_000 }
+    ),
+    page.getByRole("button", { name: "Kodsiz tovarlarga QR yaratish" }).click(),
+  ]);
+  assert.ok(javob.ok(), `ommaviy QR yiqildi: HTTP ${javob.status()}`);
+
+  // Chop etish sahifasi.
+  await page.goto(`${ASOS}/app/pos/qr/chop`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("h1", { timeout: 30_000 });
+  assert.equal(await page.locator("h1").first().innerText(), "Yorliqlarni chop etish");
+
+  // Yorliqlar chizilgan va ichida haqiqiy QR (SVG) bor.
+  await page.waitForSelector(".yorliq", { timeout: 15_000 });
+  assert.ok((await page.locator(".yorliq").count()) > 0, "kamida bitta yorliq bo'lishi kerak");
+  assert.ok((await page.locator(".yorliq-qr svg").count()) > 0, "yorliqda QR rasmi bo'lishi kerak");
+
+  // O'lcham almashtirilsa yorliq o'lchami ham o'zgaradi (CSS qayta yoziladi).
+  const oldin = await page.locator(".yorliq").first().boundingBox();
+  await page.getByRole("button", { name: "58 × 40 mm" }).click();
+  await page.waitForTimeout(300);
+  const keyin = await page.locator(".yorliq").first().boundingBox();
+  assert.ok(
+    keyin && oldin && keyin.width > oldin.width,
+    "58 mm yorliq 40 mm dan keng bo'lishi kerak"
+  );
+
+  await page.close();
+});
+
+test("KASSIRGA yorliq chop etish sahifasi YOPIQ", { skip: sabab }, async () => {
+  const page = await sahifa(ctxKassir);
+  await page.goto(`${ASOS}/app/pos/qr/chop`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("h1", { timeout: 30_000 });
+  assert.doesNotMatch(page.url(), /\/app\/pos\/qr/, "kassirga katalog sahifalari yopiq");
+
+  // Backend ham rad etishi kerak — frontend'da yashirish xavfsizlik emas.
+  const javob = await page.evaluate(async () => {
+    const r = await fetch("/api/pos/mahsulot/qr-hammasi", { method: "POST" });
+    return r.status;
+  });
+  assert.equal(javob, 403, `kassirning ommaviy QR so'rovi 403 bo'lishi kerak, keldi: ${javob}`);
+  await page.close();
+});
+
 test("KASSIR kassaga kiradi, lekin QR sahifasi unga yopiq", { skip: sabab }, async () => {
   const page = await sahifa(ctxKassir);
   await page.goto(`${ASOS}/app/pos`, { waitUntil: "domcontentloaded" });
