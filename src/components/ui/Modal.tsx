@@ -109,15 +109,21 @@ export function Modal({
         onClick={(e) => e.stopPropagation()}
         className={`bg-surface text-fg w-full ${
           size === "lg" ? "sm:max-w-2xl" : "sm:max-w-md"
-        } sm:rounded-2xl rounded-t-2xl shadow-xl p-6 pb-safe max-h-[92vh] overflow-y-auto animate-slide-up sm:animate-fade-in`}
+        } sm:rounded-2xl rounded-t-2xl shadow-xl px-4 sm:px-6 sm:pt-6 pb-safe-4 sm:pb-6 max-h-[92vh] overflow-y-auto overscroll-contain animate-slide-up sm:animate-fade-in`}
       >
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-fg">{title}</h3>
+        {/* Pastdan chiqadigan varaqning tortish belgisi — mobil'da bu shakl
+            "yopish uchun pastga suring" degan ishorani beradi. */}
+        <div className="sm:hidden w-10 h-1 rounded-full bg-line mx-auto mt-3 mb-1" aria-hidden="true" />
+
+        {/* Sarlavha yopishqoq: uzun formada pastga tushganda ham "Yopish"
+            tugmasi barmoq ostida qoladi. */}
+        <div className="sticky sm:static top-0 z-10 -mx-4 px-4 sm:mx-0 sm:px-0 bg-surface flex items-center justify-between gap-2 py-3 sm:py-0 sm:mb-4">
+          <h3 className="text-lg font-semibold text-fg min-w-0 break-words">{title}</h3>
           <button
             type="button"
             onClick={onClose}
             aria-label="Yopish"
-            className="text-faint hover:text-fg text-2xl leading-none w-9 h-9 flex items-center justify-center -mr-2 rounded-lg hover:bg-surface-2"
+            className="shrink-0 text-faint hover:text-fg text-2xl leading-none w-11 h-11 sm:w-9 sm:h-9 flex items-center justify-center -mr-2 rounded-lg hover:bg-surface-2"
           >
             &times;
           </button>

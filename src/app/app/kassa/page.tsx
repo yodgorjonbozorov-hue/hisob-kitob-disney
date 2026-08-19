@@ -36,7 +36,7 @@ export default async function KassaPage() {
     if (!businessId) {
       return (
         <div className="space-y-6">
-          <h1 className="text-2xl font-bold text-fg">Kassalar</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-fg">Kassalar</h1>
           <p className="text-muted">Hali biznes yaratilmagan.</p>
         </div>
       );
@@ -64,7 +64,7 @@ export default async function KassaPage() {
       <div className="space-y-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-fg">Kassalar</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-fg">Kassalar</h1>
             <p className="text-sm text-muted mt-1">
               Biznes: <span className="font-medium text-fg">{business?.nomi ?? "—"}</span> · Har
               kassaning joriy qoldig&apos;i va bugungi harakati

@@ -34,7 +34,7 @@ export default async function QrPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-fg">QR / Shtrix-kod</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-fg">QR / Shtrix-kod</h1>
           <p className="text-sm text-muted mt-1">
             Quti ustidagi zavod kodini saqlang; kodi yo&apos;q tovarga Balansa QR yarating.
             Narx QR ichiga yozilmaydi — narx o&apos;zgarsa stikerni qayta bosish shart emas.

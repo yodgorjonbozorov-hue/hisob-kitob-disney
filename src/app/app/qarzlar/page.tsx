@@ -66,7 +66,7 @@ export default async function QarzlarPage({
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-fg">{sarlavha}</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-fg">{sarlavha}</h1>
           <p className="text-sm text-muted mt-1">
             Biznes: <span className="font-medium text-fg">{business.nomi}</span> · qarz kirim
             emas, pul faqat to&apos;langanda balansga tushadi

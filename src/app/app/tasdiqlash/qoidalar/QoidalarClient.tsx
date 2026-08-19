@@ -41,8 +41,8 @@ export function QoidalarClient({
             action={<Button onClick={() => setModal("yangi")}>Birinchi qoida</Button>}
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="jadval-siljish">
+            <table className="w-full text-sm min-w-[32rem]">
               <thead>
                 <tr className="text-left text-faint text-xs uppercase">
                   <th className="pb-2">Qamrov</th>

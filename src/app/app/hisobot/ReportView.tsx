@@ -17,7 +17,8 @@ function CategoryTable({ title, data, tone }: { title: string; data: { nomi: str
       {data.length === 0 ? (
         <p className="text-faint text-sm py-6 text-center">Ma'lumot yo'q</p>
       ) : (
-        <table className="w-full text-sm">
+        <div className="jadval-siljish">
+        <table className="w-full text-sm min-w-[20rem]">
           <thead>
             <tr className="text-left text-faint text-xs uppercase">
               <th className="pb-2">Kategoriya</th>
@@ -37,6 +38,7 @@ function CategoryTable({ title, data, tone }: { title: string; data: { nomi: str
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </Card>
   );
@@ -141,8 +143,8 @@ function AvtoJadval({ yakun }: { yakun: NonNullable<MonthlyReport["avto"]> }) {
           </span>
         </p>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+      <div className="jadval-siljish">
+        <table className="w-full text-sm min-w-[36rem]">
           <thead className="bg-surface-2 text-muted text-xs uppercase">
             <tr>
               <th className="text-left px-5 py-2">Mashina</th>

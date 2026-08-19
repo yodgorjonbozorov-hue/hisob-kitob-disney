@@ -39,7 +39,7 @@ export default async function BizneslarPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-fg">Bizneslar</h1>
+      <h1 className="text-xl sm:text-2xl font-bold text-fg">Bizneslar</h1>
       <BusinessesClient initialBusinesses={dto} />
     </div>
   );

@@ -30,7 +30,7 @@ export default async function OchirilganlarPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-fg">O'chirilganlar</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-fg">O'chirilganlar</h1>
         <p className="text-sm text-muted mt-1">
           Biznes: <span className="font-medium text-fg">{business?.nomi ?? "—"}</span> · O'chirilgan yozuvlarni
           tiklash yoki butunlay o'chirish

@@ -24,7 +24,7 @@ export default async function KunlikTarixPage() {
     if (!businessId) {
       return (
         <div className="space-y-6">
-          <h1 className="text-2xl font-bold text-fg">Kunlik hisobotlar</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-fg">Kunlik hisobotlar</h1>
           <p className="text-muted">Hali biznes yaratilmagan.</p>
         </div>
       );
@@ -42,7 +42,7 @@ export default async function KunlikTarixPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-fg">Kunlik hisobotlar</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-fg">Kunlik hisobotlar</h1>
           <p className="text-sm text-muted mt-1">
             Biznes: <span className="font-medium text-fg">{business?.nomi ?? "—"}</span> · Har
             kunni bosib batafsil hisobotni oching

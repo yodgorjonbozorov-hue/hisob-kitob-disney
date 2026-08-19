@@ -66,7 +66,7 @@ export default async function KassaHisobotPage({
           <Link href="/app/kassa" className="text-2xs text-muted hover:text-brand">
             ← Kassalar
           </Link>
-          <h1 className="text-2xl font-bold text-fg mt-1">Kassalar hisoboti</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-fg mt-1">Kassalar hisoboti</h1>
           <p className="text-sm text-muted mt-1">{nomi}</p>
         </div>
 
@@ -103,7 +103,7 @@ export default async function KassaHisobotPage({
 
         <Card>
           <h2 className="font-semibold text-fg mb-3">Kassalar bo&apos;yicha</h2>
-          <div className="overflow-x-auto">
+          <div className="jadval-siljish">
             <table className="w-full text-sm min-w-[28rem]">
               <thead>
                 <tr className="text-left text-faint text-xs uppercase">

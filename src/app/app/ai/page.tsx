@@ -15,7 +15,7 @@ export default async function AiPage() {
     return (
       <div className="space-y-4 max-w-2xl">
         <div>
-          <h1 className="text-2xl font-bold text-fg">AI yordamchi</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-fg">AI yordamchi</h1>
           <p className="text-sm text-muted mt-1">
             Biznes: <span className="font-medium text-fg">{business?.nomi ?? "—"}</span> · Raqamlaringiz
             bo'yicha savol bering

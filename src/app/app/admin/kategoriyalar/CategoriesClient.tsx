@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
+import { Jadval, type Ustun } from "@/components/ui/Jadval";
 
 interface CategoryDTO {
   id: string;
@@ -64,19 +65,42 @@ export function CategoriesClient({
     setModalOpen(false);
   }
 
+  // Ustun ta'rifi BITTA — desktop jadval ham, mobil kartochka ham shundan.
+  const ustunlar: Ustun<CategoryDTO>[] = [
+    { kalit: "nomi", sarlavha: "Nomi", katak: (c) => c.nomi },
+    {
+      kalit: "holati",
+      sarlavha: "Holati",
+      katak: (c) => <Badge tone={c.isActive ? "kirim" : "neutral"}>{c.isActive ? "Faol" : "Nofaol"}</Badge>,
+    },
+    ...(kgSavdo && tab === "kirim"
+      ? [
+          {
+            kalit: "kg",
+            sarlavha: "Kg savdosi",
+            katak: (c: CategoryDTO) => (
+              <Badge tone={c.kgAsosli ? "kirim" : "neutral"}>
+                {c.kgAsosli ? "Kg bo'yicha" : "Summa bo'yicha"}
+              </Badge>
+            ),
+          },
+        ]
+      : []),
+  ];
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-2">
           <button
             onClick={() => setTab("kirim")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === "kirim" ? "bg-income text-white" : "bg-income-soft text-income-fg"}`}
+            className={`px-4 min-h-[44px] rounded-lg text-sm font-medium ${tab === "kirim" ? "bg-income text-white" : "bg-income-soft text-income-fg"}`}
           >
             Kirim
           </button>
           <button
             onClick={() => setTab("chiqim")}
-            className={`px-4 py-2 rounded-lg text-sm font-medium ${tab === "chiqim" ? "bg-expense text-white" : "bg-expense-soft text-expense-fg"}`}
+            className={`px-4 min-h-[44px] rounded-lg text-sm font-medium ${tab === "chiqim" ? "bg-expense text-white" : "bg-expense-soft text-expense-fg"}`}
           >
             Chiqim
           </button>
@@ -85,47 +109,28 @@ export function CategoriesClient({
       </div>
 
       <Card>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-faint text-xs uppercase">
-              <th className="pb-2">Nomi</th>
-              <th className="pb-2">Holati</th>
-              {kgSavdo && tab === "kirim" && <th className="pb-2">Kg savdosi</th>}
-              <th className="pb-2 text-right">Amal</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line">
-            {visible.map((cat) => (
-              <tr key={cat.id}>
-                <td className="py-2.5">{cat.nomi}</td>
-                <td className="py-2.5">
-                  <Badge tone={cat.isActive ? "kirim" : "neutral"}>{cat.isActive ? "Faol" : "Nofaol"}</Badge>
-                </td>
-                {kgSavdo && tab === "kirim" && (
-                  <td className="py-2.5">
-                    <button
-                      onClick={() => toggleKg(cat)}
-                      className="text-xs font-medium text-muted hover:text-brand"
-                      title="Yoqilsa: summa emas, miqdor (kg) va 1 kg narxi so'raladi"
-                    >
-                      <Badge tone={cat.kgAsosli ? "kirim" : "neutral"}>
-                        {cat.kgAsosli ? "Kg bo'yicha" : "Summa bo'yicha"}
-                      </Badge>
-                    </button>
-                  </td>
-                )}
-                <td className="py-2.5 text-right">
-                  <button
-                    onClick={() => toggleActive(cat)}
-                    className="text-xs font-medium text-muted hover:text-income"
-                  >
-                    {cat.isActive ? "Nofaollashtirish" : "Faollashtirish"}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Jadval
+          ustunlar={ustunlar}
+          qatorlar={visible}
+          kalit={(c) => c.id}
+          amallar={(cat) => [
+            {
+              label: cat.isActive ? "Nofaollashtirish" : "Faollashtirish",
+              onClick: () => void toggleActive(cat),
+              tur: "ijobiy",
+            },
+            ...(kgSavdo && tab === "kirim"
+              ? [
+                  {
+                    label: cat.kgAsosli ? "Summa bo'yicha qilish" : "Kg bo'yicha qilish",
+                    onClick: () => void toggleKg(cat),
+                    tur: "asosiy" as const,
+                  },
+                ]
+              : []),
+          ]}
+          bosh={<p className="text-sm text-faint py-6 text-center">Bu turda kategoriya yo&apos;q</p>}
+        />
       </Card>
 
       {modalOpen && (

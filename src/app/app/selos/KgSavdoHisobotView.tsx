@@ -87,8 +87,8 @@ export function KgSavdoHisobotView({
             <div className="px-5 py-3 border-b border-line">
               <h2 className="font-semibold text-fg">Savdolar ({hisobot.savdoSoni})</h2>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            <div className="jadval-siljish">
+              <table className="w-full text-sm min-w-[40rem]">
                 <thead className="bg-surface-2 text-muted text-xs uppercase">
                   <tr>
                     <th className="text-left px-4 py-2">Mahsulot</th>

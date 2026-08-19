@@ -31,7 +31,7 @@ export default async function KunlikPage({
     if (!businessId) {
       return (
         <div className="space-y-6">
-          <h1 className="text-2xl font-bold text-fg">Kunlik hisobot</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-fg">Kunlik hisobot</h1>
           <p className="text-muted">Hali biznes yaratilmagan.</p>
         </div>
       );
@@ -60,7 +60,7 @@ export default async function KunlikPage({
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-fg">Kunlik hisobot</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-fg">Kunlik hisobot</h1>
           <p className="text-sm text-muted mt-1">
             Biznes: <span className="font-medium text-fg">{business?.nomi ?? "—"}</span> · Kun
             yakunini {direktor.direktorIsm ? `direktor ${direktor.direktorIsm}` : "direktor"}{" "}

@@ -115,11 +115,11 @@ export function DavomatClient({ davomat, oy }: { davomat: DavomatDTO; oy: string
       {xato && <p className="text-sm text-expense">{xato}</p>}
 
       <Card>
-        <div className="overflow-x-auto">
+        <div className="jadval-siljish">
           <table className="text-2xs">
             <thead>
               <tr className="text-faint uppercase">
-                <th className="sticky left-0 bg-surface px-2 py-1 text-left">Xodim</th>
+                <th className="sticky left-0 z-10 bg-surface border-r border-line px-2 py-1 text-left">Xodim</th>
                 {kunlar.map((k) => (
                   <th key={k} className="px-1 py-1 tnum w-7">
                     {k}
@@ -130,7 +130,7 @@ export function DavomatClient({ davomat, oy }: { davomat: DavomatDTO; oy: string
             <tbody>
               {davomat.xodimlar.map((x) => (
                 <tr key={x.id}>
-                  <td className="sticky left-0 bg-surface px-2 py-1 whitespace-nowrap font-medium text-fg">
+                  <td className="sticky left-0 z-10 bg-surface border-r border-line px-2 py-1 whitespace-nowrap font-medium text-fg">
                     {x.ism}
                   </td>
                   {kunlar.map((k) => {
@@ -144,7 +144,7 @@ export function DavomatClient({ davomat, oy }: { davomat: DavomatDTO; oy: string
                           onClick={() => bosildi(x.id, k)}
                           disabled={amal === kalit}
                           aria-label={`${x.ism} ${oy}-${String(k).padStart(2, "0")}`}
-                          className={`w-6 h-6 rounded ${b ? b.klass : "bg-surface-2 text-faint"} hover:ring-1 hover:ring-brand`}
+                          className={`w-7 h-7 rounded ${b ? b.klass : "bg-surface-2 text-faint"} hover:ring-1 hover:ring-brand`}
                         >
                           {b ? b.harf : ""}
                         </button>

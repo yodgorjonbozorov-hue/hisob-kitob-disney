@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
+import { Jadval, type Ustun } from "@/components/ui/Jadval";
 import { formatDateUZ } from "@/lib/format";
 import { ParolTiklashModal, LoginTiklashModal } from "./TiklashModal";
 
@@ -146,6 +147,121 @@ export function UsersClient({
     setModalOpen(false);
   }
 
+  /** Rol tanlagich — jadvalda ham, mobil kartochkada ham bir xil. */
+  function rolKatak(u: UserDTO) {
+    if (u.id === currentUserId) return u.rolNomi ?? ROL_LABEL[u.rol] ?? u.rol;
+    return (
+      <select
+        value={u.roleId ? `custom:${u.roleId}` : u.rol}
+        onChange={(e) => changeRol(u, e.target.value)}
+        aria-label={`${u.ism} — rol`}
+        className="w-full max-w-[190px] rounded-lg border border-line bg-surface px-2 py-1 text-sm"
+      >
+        <option value="CASHIER">Kassir</option>
+        <option value="SELLER">Sotuvchi</option>
+        <option value="OWNER">Direktor</option>
+        {pro && customRoles.length > 0 && (
+          <optgroup label="Maxsus rollar">
+            {customRoles.map((r) => (
+              <option key={r.id} value={`custom:${r.id}`}>
+                {r.nomi}
+              </option>
+            ))}
+            {u.roleId && !customRoles.some((r) => r.id === u.roleId) && (
+              <option value={`custom:${u.roleId}`}>{u.rolNomi ?? "Maxsus rol"}</option>
+            )}
+          </optgroup>
+        )}
+      </select>
+    );
+  }
+
+  /** Biznes tanlagich — faqat kassir/sotuvchida ma'noga ega. */
+  function biznesKatak(u: UserDTO) {
+    if (u.rol !== "CASHIER" && u.rol !== "SELLER") return "Barcha";
+    return (
+      <select
+        value={u.businessId ?? ""}
+        onChange={(e) => changeBusiness(u, e.target.value)}
+        aria-label={`${u.ism} — biznes`}
+        className="w-full max-w-[190px] rounded-lg border border-line bg-surface px-2 py-1 text-sm"
+      >
+        {u.rol === "SELLER" && <option value="">Barcha bizneslar</option>}
+        {u.rol === "CASHIER" && u.businessId === null && <option value="">— (biriktirilmagan)</option>}
+        {businesses.map((b) => (
+          <option key={b.id} value={b.id}>
+            {b.nomi}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  // Ustun ta'rifi BITTA — desktop jadval ham, mobil kartochka ham shundan.
+  const ustunlar: Ustun<UserDTO>[] = [
+    {
+      kalit: "ism",
+      sarlavha: "Ism",
+      katak: (u) => (
+        <>
+          {u.ism}
+          {/* Login mobil kartochkada sarlavha ostiga tushadi — alohida ustun shart emas. */}
+          <span className="block text-2xs text-faint font-normal lg:hidden">{u.login}</span>
+        </>
+      ),
+    },
+    { kalit: "login", sarlavha: "Login", mobilYashir: true, katak: (u) => u.login, className: "text-muted" },
+    { kalit: "rol", sarlavha: "Rol", katak: rolKatak },
+    { kalit: "biznes", sarlavha: "Biznes", katak: biznesKatak, className: "text-muted" },
+    // Balans manfiy bo'lishi normal: xodim biznes nomidan pul sarflagan bo'lsa
+    // (masalan xarid to'lovi) qarzdorlik emas, uning kassasidan chiqqan pul.
+    ...(moliyaBiznes
+      ? [
+          {
+            kalit: "balans",
+            sarlavha: "Balans",
+            raqam: true,
+            className: "whitespace-nowrap",
+            katak: (u: UserDTO) => (
+              <span className={u.balans > 0 ? "text-income" : u.balans < 0 ? "text-expense" : "text-muted"}>
+                {u.balans > 0 ? "+" : ""}
+                {u.balans.toLocaleString("uz-UZ")}
+              </span>
+            ),
+          },
+          {
+            kalit: "qarz",
+            sarlavha: "Qarz",
+            raqam: true,
+            className: "whitespace-nowrap",
+            katak: (u: UserDTO) => (
+              <span className={u.qarz > 0 ? "text-expense" : "text-muted"}>
+                {u.qarz.toLocaleString("uz-UZ")}
+              </span>
+            ),
+          },
+          {
+            kalit: "amallar",
+            sarlavha: "Yozuvlar",
+            raqam: true,
+            className: "text-muted",
+            katak: (u: UserDTO) => u.amallar,
+          },
+        ]
+      : []),
+    {
+      kalit: "holati",
+      sarlavha: "Holati",
+      katak: (u) => <Badge tone={u.isActive ? "kirim" : "neutral"}>{u.isActive ? "Faol" : "Nofaol"}</Badge>,
+    },
+    {
+      kalit: "qoshilgan",
+      sarlavha: "Qo'shilgan",
+      className: "text-muted",
+      katak: (u) => formatDateUZ(new Date(u.createdAt)),
+    },
+  ];
+
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
@@ -158,136 +274,26 @@ export function UsersClient({
             Balans, qarz va yozuvlar — <span className="font-medium">{moliyaBiznes}</span> kesimida.
           </p>
         )}
-        {/* Ustunlar ko'p — tor ekranda jadval o'zi suriladi, sahifa emas. */}
-        <div className="overflow-x-auto">
-        <table className="w-full text-sm min-w-[900px]">
-          <thead>
-            <tr className="text-left text-faint text-xs uppercase">
-              <th className="pb-2">Ism</th>
-              <th className="pb-2">Login</th>
-              <th className="pb-2">Rol</th>
-              <th className="pb-2">Biznes</th>
-              {moliyaBiznes && <th className="pb-2 text-right">Balans</th>}
-              {moliyaBiznes && <th className="pb-2 text-right">Qarz</th>}
-              {moliyaBiznes && <th className="pb-2 text-right">Yozuvlar</th>}
-              <th className="pb-2">Holati</th>
-              <th className="pb-2">Qo'shilgan</th>
-              <th className="pb-2 text-right">Amal</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line">
-            {users.map((u) => (
-              <tr key={u.id}>
-                <td className="py-2.5">{u.ism}</td>
-                <td className="py-2.5 text-muted">{u.login}</td>
-                <td className="py-2.5">
-                  {u.id === currentUserId ? (
-                    u.rolNomi ?? ROL_LABEL[u.rol] ?? u.rol
-                  ) : (
-                    <select
-                      value={u.roleId ? `custom:${u.roleId}` : u.rol}
-                      onChange={(e) => changeRol(u, e.target.value)}
-                      className="rounded-lg border border-line bg-surface px-2 py-1 text-sm"
-                    >
-                      <option value="CASHIER">Kassir</option>
-                      <option value="SELLER">Sotuvchi</option>
-                      <option value="OWNER">Direktor</option>
-                      {pro && customRoles.length > 0 && (
-                        <optgroup label="Maxsus rollar">
-                          {customRoles.map((r) => (
-                            <option key={r.id} value={`custom:${r.id}`}>
-                              {r.nomi}
-                            </option>
-                          ))}
-                          {u.roleId && !customRoles.some((r) => r.id === u.roleId) && (
-                            <option value={`custom:${u.roleId}`}>{u.rolNomi ?? "Maxsus rol"}</option>
-                          )}
-                        </optgroup>
-                      )}
-                    </select>
-                  )}
-                </td>
-                <td className="py-2.5 text-muted">
-                  {u.rol === "CASHIER" || u.rol === "SELLER" ? (
-                    <select
-                      value={u.businessId ?? ""}
-                      onChange={(e) => changeBusiness(u, e.target.value)}
-                      className="rounded-lg border border-line px-2 py-1 text-sm"
-                    >
-                      {u.rol === "SELLER" && <option value="">Barcha bizneslar</option>}
-                      {u.rol === "CASHIER" && u.businessId === null && <option value="">— (biriktirilmagan)</option>}
-                      {businesses.map((b) => (
-                        <option key={b.id} value={b.id}>
-                          {b.nomi}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    "Barcha"
-                  )}
-                </td>
-                {moliyaBiznes && (
-                  <>
-                    {/* Balans manfiy bo'lishi normal: xodim biznes nomidan pul
-                        sarflagan bo'lsa (masalan xarid to'lovi) qarzdorlik emas,
-                        shunchaki uning kassasidan chiqqan pul. */}
-                    <td className="py-2.5 text-right tnum whitespace-nowrap">
-                      <span
-                        className={
-                          u.balans > 0 ? "text-income" : u.balans < 0 ? "text-expense" : "text-muted"
-                        }
-                      >
-                        {u.balans > 0 ? "+" : ""}
-                        {u.balans.toLocaleString("uz-UZ")}
-                      </span>
-                    </td>
-                    <td className="py-2.5 text-right tnum whitespace-nowrap">
-                      <span className={u.qarz > 0 ? "text-expense" : "text-muted"}>
-                        {u.qarz.toLocaleString("uz-UZ")}
-                      </span>
-                    </td>
-                    <td className="py-2.5 text-right tnum text-muted">{u.amallar}</td>
-                  </>
-                )}
-                <td className="py-2.5">
-                  <Badge tone={u.isActive ? "kirim" : "neutral"}>{u.isActive ? "Faol" : "Nofaol"}</Badge>
-                </td>
-                <td className="py-2.5 text-muted">{formatDateUZ(new Date(u.createdAt))}</td>
-                <td className="py-2.5 text-right whitespace-nowrap">
-                  <button
-                    onClick={() => setParolUser(u)}
-                    className="text-xs font-medium text-muted hover:text-brand mr-3"
-                  >
-                    Parol tiklash
-                  </button>
-                  <button
-                    onClick={() => setLoginUser(u)}
-                    className="text-xs font-medium text-muted hover:text-brand mr-3"
-                  >
-                    Login tiklash
-                  </button>
-                  {u.id !== currentUserId && (
-                    <>
-                      <button
-                        onClick={() => toggleActive(u)}
-                        className="text-xs font-medium text-muted hover:text-income mr-3"
-                      >
-                        {u.isActive ? "Nofaollashtirish" : "Faollashtirish"}
-                      </button>
-                      <button
-                        onClick={() => deleteUser(u)}
-                        className="text-xs font-medium text-muted hover:text-expense"
-                      >
-                        O'chirish
-                      </button>
-                    </>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        </div>
+        <Jadval
+          ustunlar={ustunlar}
+          qatorlar={users}
+          kalit={(u) => u.id}
+          minKenglik="min-w-[60rem]"
+          amallar={(u) => [
+            { label: "Parol tiklash", onClick: () => setParolUser(u), tur: "asosiy" as const },
+            { label: "Login tiklash", onClick: () => setLoginUser(u), tur: "asosiy" as const },
+            ...(u.id !== currentUserId
+              ? [
+                  {
+                    label: u.isActive ? "Nofaollashtirish" : "Faollashtirish",
+                    onClick: () => void toggleActive(u),
+                    tur: "ijobiy" as const,
+                  },
+                  { label: "O'chirish", onClick: () => void deleteUser(u), tur: "xavf" as const },
+                ]
+              : []),
+          ]}
+        />
       </Card>
 
       {pro && (

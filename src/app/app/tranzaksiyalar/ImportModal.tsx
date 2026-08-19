@@ -145,7 +145,7 @@ export function ImportModal({ onClose }: { onClose: () => void }) {
                 </p>
 
                 {tekshiruv.namuna.length > 0 && (
-                  <div className="overflow-x-auto max-h-48 overflow-y-auto">
+                  <div className="jadval-siljish max-h-48 overflow-y-auto">
                     <table className="w-full text-2xs">
                       <thead className="text-faint uppercase text-left">
                         <tr>

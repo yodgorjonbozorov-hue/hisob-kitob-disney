@@ -19,7 +19,7 @@ export default async function TasdiqlashPage() {
     if (!businessId) {
       return (
         <div className="space-y-6">
-          <h1 className="text-2xl font-bold text-fg">Tasdiqlash</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-fg">Tasdiqlash</h1>
           <p className="text-muted">Hali biznes yaratilmagan.</p>
         </div>
       );
@@ -35,7 +35,7 @@ export default async function TasdiqlashPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-fg">Tasdiqlash</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-fg">Tasdiqlash</h1>
           <p className="text-sm text-muted mt-1">
             Biznes: <span className="font-medium text-fg">{business?.nomi ?? "—"}</span> ·
             Chegaradan oshgan chiqim tasdiqlanmaguncha hisobotlarga tushmaydi

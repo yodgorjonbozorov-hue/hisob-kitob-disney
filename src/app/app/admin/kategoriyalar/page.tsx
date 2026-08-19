@@ -19,7 +19,7 @@ export default async function KategoriyalarPage() {
   if (!activeBusiness) {
     return (
       <div className="space-y-6">
-        <h1 className="text-2xl font-bold text-fg">Kategoriyalar</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-fg">Kategoriyalar</h1>
         <p className="text-muted">Hali biznes yaratilmagan. Bizneslar bo'limidan qo'shing.</p>
       </div>
     );
@@ -33,7 +33,7 @@ export default async function KategoriyalarPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-fg">Kategoriyalar</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-fg">Kategoriyalar</h1>
         <p className="text-sm text-muted mt-1">
           Biznes: <span className="font-medium text-fg">{activeBusiness.nomi}</span>
         </p>

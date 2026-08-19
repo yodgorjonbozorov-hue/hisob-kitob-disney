@@ -77,7 +77,7 @@ export default async function SozlamalarSahifasi() {
         sarlavha="Rollar va huquqlar matritsasi"
         izoh="Yagona manba: lib/superadmin/rbac.ts — API ham, panel ham shu jadvalga tayanadi"
       >
-        <div className="overflow-x-auto">
+        <div className="jadval-siljish">
           <table className="w-full text-sm min-w-[720px]">
             <thead>
               <tr className="border-b border-line">

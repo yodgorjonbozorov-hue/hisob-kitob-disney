@@ -38,7 +38,7 @@ export default async function BillingPage() {
           <div className="flex items-center gap-3">
             <Logo variant="icon" height={36} />
             <div>
-              <h1 className="font-heading text-2xl font-bold text-fg">Obuna va to'lov</h1>
+              <h1 className="font-heading text-xl sm:text-2xl font-bold text-fg">Obuna va to'lov</h1>
               <p className="text-sm text-muted">{tenant.name}</p>
             </div>
           </div>
