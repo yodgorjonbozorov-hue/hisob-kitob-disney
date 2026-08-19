@@ -1,4 +1,5 @@
 import { runBusinessTx } from "@/lib/db/businessTx";
+import { csvQatorniBol, csvSatrlar } from "@/lib/csv";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { logAudit } from "@/lib/services/audit";
 import { z } from "zod";
@@ -51,34 +52,6 @@ export interface ParsedQator {
   izoh: string | null;
 }
 
-/**
- * CSV qatorini bo'laklarga ajratadi — qo'shtirnoq ichidagi vergulni hurmat qiladi
- * ("Ijara, iyul" kabi izohlar buzilmasin).
- */
-function csvQatorniBol(qator: string): string[] {
-  const natija: string[] = [];
-  let joriy = "";
-  let qoshtirnoqda = false;
-  for (let i = 0; i < qator.length; i++) {
-    const ch = qator[i];
-    if (ch === '"') {
-      if (qoshtirnoqda && qator[i + 1] === '"') {
-        joriy += '"';
-        i++;
-      } else {
-        qoshtirnoqda = !qoshtirnoqda;
-      }
-    } else if ((ch === "," || ch === ";") && !qoshtirnoqda) {
-      natija.push(joriy);
-      joriy = "";
-    } else {
-      joriy += ch;
-    }
-  }
-  natija.push(joriy);
-  return natija.map((x) => x.trim());
-}
-
 /** "1 250 000", "1250000.00", "1,250,000" — hammasi 1250000 ga aylanadi. */
 function summaniOqi(raw: string): number {
   const tozalangan = raw.replace(/[^\d.-]/g, "");
@@ -92,10 +65,7 @@ export function csvniOqi(matn: string): { qatorlar: ParsedQator[]; xatolar: Xato
   const qatorlar: ParsedQator[] = [];
   const xatolar: XatoQator[] = [];
 
-  const satrlar = matn
-    .replace(/\r\n/g, "\n")
-    .split("\n")
-    .map((s) => s.trimEnd());
+  const satrlar = csvSatrlar(matn);
 
   let boshlanish = 0;
   // Birinchi qator sarlavha bo'lsa o'tkazib yuboriladi.

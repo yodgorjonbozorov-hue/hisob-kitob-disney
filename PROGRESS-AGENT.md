@@ -3502,3 +3502,82 @@ ko'rsatmaydi. Test buni majburlaydi.
 
 Miqdor birliklar bo'ylab qo'shilmaydi, QIYMAT esa qo'shilaveradi — pul
 hamma birlik uchun bir xil so'm.
+
+## Katalog import / eksport — CSV va Excel (2026-08-19)
+
+Mijoz (disney giftbox) Bito ilovasidan Balansa'ga ko'chmoqda: 221 ta tovar.
+Qo'lda kiritish real to'siq, shuning uchun bir martalik skript emas, doimiy
+IMKONIYAT qo'shildi — har mijoz o'z katalogini o'zi ko'chira oladi.
+
+Fayllar:
+
+- `src/lib/csv.ts` — CSV o'qish/yozish umumiy joyi (`csvQatorniBol`,
+  `csvSatrlar`, `ajratgichniTop`, `ustunKaliti`, `csvYasa`). Tranzaksiya
+  importi ham shu yerga o'tkazildi: ikki tahlilchi vaqt o'tib bir-biridan
+  farq qila boshlaydi.
+- `src/lib/services/mahsulotImport.ts` — sarlavha moslashuvi, qator
+  tekshiruvi, bazaga yozish.
+- `src/lib/queries/mahsulotEksport.ts`, `src/lib/excel/mahsulotlarWorkbook.ts`,
+  `src/lib/excel/xlsxOqi.ts`.
+- `src/app/api/products/import/route.ts`, `.../export/route.ts`.
+- `src/app/app/ombor/ImportModal.tsx` + `ImportNatija.tsx`; Ombor sahifasida
+  "Fayldan yuklash" va "Excel eksport" tugmalari.
+- `tests/mahsulot-import.test.ts` (20 test), `npm run test:mahsulot-import`.
+
+### Ustun nomlari moslashtiriladi
+
+Har dastur ustunni o'zicha ataydi ("Mahsulot", "Tovar nomi", "Name"). Bito
+eksporti Balansa sarlavhalariga umuman tushmaydi. Foydalanuvchini faylni
+qayta yozishga majburlash importning ma'nosini yo'qotardi, shuning uchun
+`USTUN_MUQOBILLARI` jadvali bor va solishtirish `ustunKaliti()` orqali
+(kichik harf, apostrof va bo'shliqsiz) ketadi.
+
+Sarlavha esa MAJBURIY: ustunlarni tartib bo'yicha taxmin qilish xavfli —
+narx bilan qoldiq joyi almashsa mijoz buni faqat kassada sezadi.
+
+### Faylda YO'Q ustunga tegilmaydi
+
+Eng katta xavf shu edi: Bito faylida narx ustuni umuman yo'q. Agar
+"yangilash" rejimi bo'sh qiymatni 0 deb yozsa, bitta import butun katalog
+narxini nolga tushirib yuborardi.
+
+Shuning uchun ikki holat farqlanadi: ustun bor-u katak bo'sh (`null`) va
+ustunning o'zi yo'q (`undefined`). Yangilashda faqat FAYLDA BOR ustunlar
+tegadi. Test buni majburlaydi.
+
+### Boshlang'ich qoldiq PUL YOZMAYDI
+
+Ko'chirilayotgan tovar allaqachon sotib olingan va eski dasturda
+hisoblangan. Unga `StockEntry` + chiqim tranzaksiya yozish mijozning
+hisobotini buzardi — bir kunda 200 mln so'mlik "xarid" paydo bo'lardi.
+
+Qoldiq `StockAdjustment` (turi `inventarizatsiya`, sabab "Import:
+boshlang'ich qoldiq") sifatida yoziladi: bu tovar hodisasi, pul harakati
+emas — mavjud "Inventarizatsiya" yo'li bilan aynan bir xil. Test tranzaksiya
+va `StockEntry` soni NOL qolishini tekshiradi.
+
+### Moslashtirish va ziddiyat
+
+Ustuvorlik: shtrix-kod → SKU → nom. Shtrix-kod tovarning eng ishonchli
+kimligi, shuning uchun nomi o'zgargan tovar dublikat bo'lib qo'shilmaydi.
+
+Ziddiyat holati alohida: shtrix-kod bitta tovarni, SKU/nom esa BOSHQASINI
+ko'rsatsa, qaysi biri to'g'ri ekanini dastur bila olmaydi. Bunda taxmin
+qilinmaydi — qator xato sifatida chetga chiqariladi va qolgan qatorlar
+yoziladi. Aks holda import jimgina mavjud tovarning nomini almashtirib
+qo'yardi.
+
+### Eksport = import formati
+
+Eksport ustunlari import kutadigan ustunlarga AYNAN teng (test buni
+majburlaydi). Shu bilan Bito muammosining yechimi ochiladi: fayl narx
+bermaydi → import qilinadi → Excel eksport → narx/qoldiq to'ldiriladi →
+"yangilash" rejimida qayta yuklanadi. Excel fayl serverda o'qiladi
+(`xlsxdanCsv`), ya'ni mijozni "CSV qilib saqlang" deyishga majburlamaydi.
+
+### Chegara
+
+Bir yurishda 500 qator. Sababi texnik: import bitta tranzaksiyada ishlaydi
+va `runBusinessTx` 15 soniya beradi. Chegara jimgina kesib tashlanmaydi —
+ochiq xato bo'lib ko'rinadi. Katalog bir marta o'qiladi va xotirada
+xaritaga solinadi, aks holda 500 qator 1500 so'rov bo'lardi.
