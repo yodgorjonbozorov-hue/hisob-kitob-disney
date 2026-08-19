@@ -3118,3 +3118,43 @@ sahifa chegarasiga tushsa brauzerda jamlash yolg'on raqam berardi.
 `npm run test:kategoriya` — 11 ta test: topshiriqdagi 1–5 stsenariylari,
 karta === tafsilot invarianti (qarz bo'lganda ham), Yozuvlar sahifasi
 regressiyasi, kunlik jamlar, qidiruv, sahifalash, bo'sh davr.
+
+---
+
+## "Jami kirim / Jami chiqim" kartalari bosiladigan bo'ldi (2026-08-17)
+
+Karta bosilganda to'lov turlari bo'yicha taqsimot ochiladi, bo'lim bosilganda
+esa o'sha bo'lim yozuvlari.
+
+### Model haqiqati — "Plastik" to'lov turi EMAS
+
+`TOLOV_TURLARI = ["naqd", "click", "qarz"]` (Transaction.tolovTuri),
+`ACCOUNT_TURLARI = ["naqd", "plastik", "bank"]` (Account.turi). Ya'ni
+"Plastik" — KASSA turi. Eski yozuvlarda `tolovTuri` umuman null.
+
+Shuning uchun bo'lim ro'yxati qotirilmadi, "amaldagi usul" qoidasi
+kiritildi (`src/lib/tolovBolimi.ts`):
+
+    aniq tolovTuri bo'lsa — o'sha;
+    bo'lmasa — kassa turi;
+    kassa ham bo'lmasa — naqd.
+
+Natijada bo'limlar ma'lumotdan chiqadi: Naqd / Click / Plastik / Bank —
+qaysi birida summa bo'lsa, o'sha ko'rinadi. Yangi kassa turi qo'shilsa
+kodni o'zgartirish shart emas.
+
+### Karta === bo'limlar yig'indisi
+
+Jamlash (`getTolovTaqsimoti`) va ro'yxat filtri (`tolovBolimiWhere`) BITTA
+faylda turadi — ajralib ketmasin. Ikkalasi ham `getMonthSummary` bilan ayni
+to'plamdan o'qiydi (shu biznes, o'chirilmagan, tanlangan oy, qarzsiz).
+Qarz bo'limlarga kirmaydi (karta ham uni hisobga olmaydi), lekin alohida
+eslatma qatorida ko'rsatiladi — "pul qayerda?" savoli javobsiz qolmasin.
+
+Test bu invariantni majburlaydi: bo'limlar yig'indisi, har bo'lim ro'yxati
+jami va kartadagi raqam — uchalasi teng bo'lishi shart.
+
+### Eslatma
+
+Repozitoriyada ESLint konfiguratsiyasi yo'q — `npm run lint` interaktiv
+sozlash so'raydi. Lint aslida `next build` ichidagi bosqichda ishlaydi.

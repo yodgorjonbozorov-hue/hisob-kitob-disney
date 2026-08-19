@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { qidiruvRejimi } from "@/lib/db/dialect";
 import { dateOnlyStringToUTCDate, utcDateToDateOnlyString } from "@/lib/date";
 import { qarzsiz } from "@/lib/qarzFiltr";
+import { tolovBolimiWhere, type TolovBolimi } from "@/lib/tolovBolimi";
 import type { Prisma } from "@prisma/client";
 
 export interface TransactionListParams {
@@ -34,6 +35,12 @@ export interface TransactionListParams {
   realPul?: boolean;
   /** Kunlik jamlar ham qaytarilsinmi (sana bo'yicha guruhlangan ro'yxat uchun). */
   kunlikJami?: boolean;
+  /**
+   * TO'LOV BO'LIMI — "naqd" | "click" | "plastik" | "bank".
+   * Shart `lib/queries/tolovTaqsimoti.ts` dan olinadi: taqsimotni jamlagan
+   * qoida bilan ro'yxat filtri AYNI joydan chiqsin.
+   */
+  tolovBolimi?: TolovBolimi | null;
   page?: number;
   pageSize?: number;
 }
@@ -50,6 +57,12 @@ function buildTransactionWhere(params: TransactionListParams): Prisma.Transactio
   if (params.turi === "kirim" || params.turi === "chiqim") where.turi = params.turi;
   if (params.categoryId) where.categoryId = params.categoryId;
   if (params.q) where.izoh = { contains: params.q, ...qidiruvRejimi() };
+  if (params.tolovBolimi) {
+    // `AND` bilan: bo'lim sharti o'zining `OR` iga ega (naqd) va yuqoridagi
+    // shartlarni ustidan yozib yubormasligi kerak.
+    where.AND = [...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+      tolovBolimiWhere(params.tolovBolimi)];
+  }
   if (params.minSumma != null || params.maxSumma != null) {
     where.summa = {};
     if (params.minSumma != null) where.summa.gte = params.minSumma;

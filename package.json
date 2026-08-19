@@ -41,6 +41,7 @@
     "test:qarz": "node -r ts-node/register tests/qarz.test.ts",
     "test:qarzdorlik": "node -r ts-node/register tests/qarzdorlik.test.ts",
     "test:kategoriya": "node -r ts-node/register tests/kategoriya-tafsilot.test.ts",
+    "test:tolov-taqsimoti": "node -r ts-node/register tests/tolov-taqsimoti.test.ts",
     "test:kunlik": "node -r ts-node/register tests/kunlik.test.ts",
     "test:smena": "node -r ts-node/register tests/smena.test.ts",
     "test:sotuv-bekor": "node -r ts-node/register tests/sotuv-bekor.test.ts",

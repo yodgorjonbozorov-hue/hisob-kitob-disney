@@ -27,6 +27,7 @@ import {
   getTrendKesh,
   getDailyDynamicsKesh,
   getQarzJamlariKesh,
+  getTolovTaqsimotiKesh,
 } from "@/lib/queries/dashboardCached";
 import { getTodayTotals } from "@/lib/queries/shift";
 import { listTransactions } from "@/lib/queries/transactions";
@@ -35,6 +36,7 @@ import { getKgSavdo } from "@/lib/queries/selos";
 import { bugunPaneliKorinadi, kgSavdoKorinadi } from "@/lib/mijozXos";
 import { KassaHome } from "./KassaHome";
 import { KategoriyaBloki } from "./KategoriyaBloki";
+import { PulOqimiKartalari } from "./PulOqimiKartalari";
 import { SelosBugunKartasi } from "./SelosBugunKartasi";
 
 export default async function DashboardPage({
@@ -104,7 +106,7 @@ export default async function DashboardPage({
   const bugunPanel = bugunPaneliKorinadi(tenant);
   // Kg savdosi bloki — mijozga xos (Fortex Selos), tarif imkoniyati EMAS.
   const kgPanel = kgSavdoKorinadi(tenant);
-  const [summary, kirimBreakdown, chiqimBreakdown, trend, daily, qarzTotal, categoryCount, proBugun, kgBugun] = await Promise.all([
+  const [summary, kirimBreakdown, chiqimBreakdown, trend, daily, qarzTotal, kirimTaqsimot, chiqimTaqsimot, categoryCount, proBugun, kgBugun] = await Promise.all([
     getMonthSummaryKesh(businessId, month),
     getCategoryBreakdownKesh(businessId, month, "kirim"),
     getCategoryBreakdownKesh(businessId, month, "chiqim"),
@@ -115,6 +117,8 @@ export default async function DashboardPage({
     // qarzlar bazada turgan holda. Qarzlar sahifasidan ombor sharti
     // olib tashlanganda bu joy e'tibordan qolib ketgan.
     getQarzJamlariKesh(businessId),
+    getTolovTaqsimotiKesh(businessId, month, "kirim"),
+    getTolovTaqsimotiKesh(businessId, month, "chiqim"),
     prisma.category.count({ where: { businessId } }),
     // Bugungi kg va kassa/jamoa ko'rsatkichlari (mijozga xos blok).
     bugunPanel ? getProBugun(businessId) : Promise.resolve(null),
@@ -165,19 +169,19 @@ export default async function DashboardPage({
           kassa qoldig'i ataylab ko'rsatilmaydi: oy raqamlari bilan yonma-yon
           turganda chalg'itardi. Kassalar bo'yicha qoldiq /app/kassa sahifasida. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <StatCard
-          label="Jami kirim"
-          value={formatMoneyCompact(summary.jamiKirim)}
-          changePct={summary.changePct.kirim}
-          goodWhenUp
-          accent="income"
-        />
-        <StatCard
-          label="Jami chiqim"
-          value={formatMoneyCompact(summary.jamiChiqim)}
-          changePct={summary.changePct.chiqim}
-          goodWhenUp={false}
-          accent="expense"
+        {/* Ikkala karta ham bosiladi — to'lov turlari bo'yicha taqsimot
+            ochiladi. Taqsimot serverda, karta bilan BITTA oy oralig'ida
+            hisoblanadi: yig'indisi kartadagi raqamga teng bo'lishi shart. */}
+        <PulOqimiKartalari
+          kirimSumma={summary.jamiKirim}
+          chiqimSumma={summary.jamiChiqim}
+          kirimChangePct={summary.changePct.kirim}
+          chiqimChangePct={summary.changePct.chiqim}
+          kirimTaqsimot={kirimTaqsimot}
+          chiqimTaqsimot={chiqimTaqsimot}
+          oyFrom={oyFrom}
+          oyTo={oyTo}
+          oyNomi={oyNomi}
         />
         <StatCard
           label="Sof foyda"

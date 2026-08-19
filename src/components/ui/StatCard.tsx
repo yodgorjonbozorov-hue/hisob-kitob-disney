@@ -17,6 +17,7 @@ export function StatCard({
   goodWhenUp = true,
   accent = "neutral",
   href,
+  onClick,
   title,
   children,
 }: {
@@ -26,6 +27,8 @@ export function StatCard({
   goodWhenUp?: boolean;
   accent?: "income" | "expense" | "neutral" | "brand" | "debt";
   href?: string;
+  /** `href` o'rniga — kartani bosganda oyna ochish uchun (klient komponentda). */
+  onClick?: () => void;
   title?: string;
   children?: React.ReactNode;
 }) {
@@ -46,7 +49,11 @@ export function StatCard({
     <>
       <p className="text-muted text-sm mb-1 flex items-center gap-1">
         {label}
-        {href && <span aria-hidden className="text-faint">›</span>}
+        {(href || onClick) && (
+          <span aria-hidden className="text-faint">
+            ›
+          </span>
+        )}
       </p>
       <p className={`text-xl sm:text-2xl font-semibold tnum ${accentClass}`} title={title}>
         {value}
@@ -62,14 +69,21 @@ export function StatCard({
   );
 
   const asos = "bg-surface rounded-2xl shadow-card border border-line p-4 sm:p-5";
+  const bosiladi =
+    "transition hover:border-brand hover:shadow-md active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand";
+
   if (href) {
     return (
-      <Link
-        href={href}
-        className={`${asos} block transition hover:border-brand hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-brand`}
-      >
+      <Link href={href} className={`${asos} block ${bosiladi}`}>
         {ichi}
       </Link>
+    );
+  }
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={`${asos} block w-full text-left ${bosiladi}`}>
+        {ichi}
+      </button>
     );
   }
   return <div className={asos}>{ichi}</div>;
