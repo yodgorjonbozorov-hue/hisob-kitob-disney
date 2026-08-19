@@ -201,6 +201,9 @@ model Business {
   kassaTopshiriqlar  CashHandover[]
   productCategories  ProductCategory[]
   posCheklar         PosChek[]
+  /// Ko'p-bizneslik biriktiruvlari (UserBusiness) — bir xodim bir nechta
+  /// bizneste ishlashi mumkin.
+  userBiriktiruvlar  UserBusiness[]
 
   @@index([tenantId])
 }
@@ -240,9 +243,23 @@ model User {
   tenantId String?
   tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
-  // Kassir bitta biznesga biriktiriladi; owner/admin/seller uchun null (tenant ichidagi barcha bizneslar).
+  /// BIRLAMCHI BIZNES (ko'p-bizneslikdan keyingi ma'nosi).
+  ///
+  /// Biriktiruvlar endi `UserBusiness` jadvalida — bir xodim 1, 2 yoki undan
+  /// ortiq biznesga biriktirilishi mumkin. Bu ustun esa QULAYLIK nusxasi:
+  ///   · aynan BITTA biznesga biriktirilgan bo'lsa — o'sha biznes id'si
+  ///     (kassir/sotuvchi yozuvlari doim shu biznesga tushadi, adashmaydi);
+  ///   · biriktirilmagan YOKI 2+ biznesga biriktirilgan bo'lsa — NULL.
+  /// Ya'ni "NULL" endi "biriktirilmagan" degani EMAS: haqiqiy ruxsat ro'yxati
+  /// `UserBusiness` da (lib/business.ts). Bu ustunga tayanadigan eski kod
+  /// (bot, sessiya) shu bois xato ruxsat bermaydi — u faqat "bitta biznesga
+  /// qotirilganmi" savoliga javob beradi.
   businessId String?
   business   Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+
+  /// Xodim kira oladigan bizneslar (ko'p-bizneslik). Bo'sh bo'lsa — cheklov
+  /// yo'q (tenant ichidagi barcha bizneslar), direktor/administratordagi kabi.
+  bizneslar UserBusiness[]
 
   telegramChatId    String?   @unique
   linkCode          String?
@@ -269,6 +286,32 @@ model User {
   @@index([roleId])
   /// Superadmin global foydalanuvchilar ro'yxati rol bo'yicha filtrlanadi.
   @@index([rol])
+}
+
+/// FOYDALANUVCHI ↔ BIZNES BIRIKTIRUVI (ko'p-bizneslik).
+///
+/// Nega kerak: bitta jamoa bir nechta biznesni yuritadi (masalan "Disney
+/// Flowers" va "Disney Giftbox" — sotuvchilar bir xil, bizneslar esa hisob-kitob
+/// chalkashmasligi uchun alohida). Ilgari xodim FAQAT bitta biznesga
+/// biriktirilardi: ikkinchi bizneste ishlash uchun ikkinchi login kerak edi.
+///
+/// Qoida: qatorlari bor xodim FAQAT shu bizneslarga kiradi; qatori yo'q xodim
+/// — cheklovsiz (tenant ichidagi barcha bizneslar). Ruxsatning YAGONA manbai
+/// shu jadval (`lib/business.ts`).
+model UserBusiness {
+  id         String   @id @default(cuid())
+  userId     String
+  businessId String
+  createdAt  DateTime @default(now())
+  /// Biriktiruv — foydalanuvchining o'zi bilan yashaydi: hisob o'chirilsa
+  /// qator ham ketadi (tarixiy qiymati yo'q).
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  /// Bir xodim bir biznesga ikki marta biriktirilmaydi.
+  @@unique([userId, businessId])
+  @@index([userId])
+  @@index([businessId])
 }
 
 /// Kalit-qiymat ko'rinishidagi tizim sozlamalari (masalan, oxirgi yuborilgan oylik hisobot).

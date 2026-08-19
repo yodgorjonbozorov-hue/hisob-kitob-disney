@@ -118,6 +118,9 @@ const BUSINESS_SCOPED = new Set([
   // MAGAZIN (POS / QR / Barcode)
   "ProductCategory",
   "PosChek",
+  // Ko'p-bizneslik: xodim ↔ biznes biriktiruvi. `businessId` orqali tenantga
+  // bog'lanadi — begona tenant biznesiga biriktirish shu filtrda to'xtaydi.
+  "UserBusiness",
 ]);
 // AuditLog: businessId nullable — biznesga bog'langan yozuvlar tenant bo'yicha filtrlanadi.
 export const AUDIT_MODEL = "AuditLog";

@@ -11,8 +11,13 @@ export const createUserSchema = z.object({
   parol: z.string().min(8, "Parol kamida 8 belgi bo'lishi kerak").max(100),
   // SUPERADMIN bu yerda yo'q — panel orqali yaratilmaydi. ADMIN roli FAZA 2+ da ochiladi.
   rol: z.enum(["OWNER", "CASHIER", "SELLER"]).default("CASHIER"),
-  // Kassir uchun biznes id majburiy (server tekshiradi); owner/seller uchun bo'sh/null (tenant ichidagi barcha bizneslar).
+  // ESKI MAYDON — bitta biznes. Saqlanadi (mavjud chaqiruvlar buzilmasin):
+  // berilsa `businessIds: [businessId]` bilan bir xil ma'noga ega.
   businessId: z.string().optional().nullable(),
+  // KO'P-BIZNESLIK: xodim bir nechta biznesga biriktiriladi. Kassir uchun
+  // kamida bitta majburiy (server tekshiradi), sotuvchi uchun ixtiyoriy
+  // (bo'sh — barcha bizneslar), direktor uchun e'tiborsiz.
+  businessIds: z.array(z.string()).max(50).optional().nullable(),
   // MAXSUS ROL (PRO): berilsa `rol` e'tiborsiz — rol.bazaRol ishlatiladi.
   roleId: z.string().optional().nullable(),
   // Alohida huquq override'lari (PRO).
@@ -27,6 +32,8 @@ export const updateUserSchema = z.object({
   ism: z.string().min(1).max(100).optional(),
   rol: z.enum(["OWNER", "CASHIER", "SELLER"]).optional(),
   businessId: z.string().optional().nullable(),
+  /** Ko'p-bizneslik: to'liq ro'yxat (berilgan bo'lsa eskisi shu bilan ALMASHADI). */
+  businessIds: z.array(z.string()).max(50).optional().nullable(),
   // MAXSUS ROL (PRO): null — maxsus roldan chiqarish (tizim roliga qaytadi).
   roleId: z.string().optional().nullable(),
   huquqPlus: z.array(huquqKodi).max(50).optional().nullable(),

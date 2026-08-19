@@ -6,6 +6,7 @@ import { withTenant } from "@/lib/auth/tenant";
 import { updateUserSchema } from "@/lib/validation/user";
 import { hashPassword } from "@/lib/auth/password";
 import { requirePro } from "@/lib/billing/pro";
+import { biznesIdlariniHalQil, biriktiruvlarniYangila, birlamchiBiznes } from "@/lib/services/userBiznes";
 
 const USER_SELECT = {
   id: true,
@@ -16,6 +17,8 @@ const USER_SELECT = {
   createdAt: true,
   businessId: true,
   business: { select: { nomi: true } },
+  // Ko'p-bizneslik: xodim biriktirilgan barcha bizneslar.
+  bizneslar: { select: { businessId: true, business: { select: { nomi: true } } } },
   roleId: true,
   role: { select: { nomi: true, bazaRol: true } },
   huquqPlus: true,
@@ -34,13 +37,13 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
 
   const existing = await prisma.user.findUnique({
     where: { id: params.id },
-    select: { rol: true, businessId: true, login: true },
+    select: { rol: true, businessId: true, login: true, bizneslar: { select: { businessId: true } } },
   });
   if (!existing) {
     return NextResponse.json({ error: "Foydalanuvchi topilmadi" }, { status: 404 });
   }
 
-  const { parol, businessId, login, roleId, huquqPlus, huquqMinus, ...rest } = parsed.data;
+  const { parol, businessId, businessIds, login, roleId, huquqPlus, huquqMinus, ...rest } = parsed.data;
   let { rol } = parsed.data;
 
   // MAXSUS ROL (PRO): roleId berilsa tizim roli rol.bazaRol'dan sinxronlanadi;
@@ -80,28 +83,22 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
   }
   const effectiveRol = rol ?? existing.rol;
 
-  // Biznesni rol asosida hal qilamiz:
-  //  - CASHIER → majburiy biznes.
-  //  - SELLER → ixtiyoriy biznes (biriktirilsa yozuvlari doim shu biznesga tushadi).
+  // Bizneslarni rol asosida hal qilamiz (ko'p-bizneslik — lib/services/userBiznes.ts):
+  //  - CASHIER → kamida bitta biznes majburiy.
+  //  - SELLER → ixtiyoriy (biriktirilsa yozuvlari faqat o'sha bizneslarga tushadi).
   //  - OWNER/ADMIN → biznessiz (barcha bizneslar).
-  let businessIdData: { businessId?: string | null } = {};
-  if (effectiveRol === "CASHIER" || effectiveRol === "SELLER") {
-    const targetBiz = businessId !== undefined ? businessId : existing.businessId;
-    if (effectiveRol === "CASHIER" && !targetBiz) {
-      return NextResponse.json({ error: "Kassir uchun biznes tanlanishi shart" }, { status: 400 });
-    }
-    if (targetBiz) {
-      const biz = await prisma.business.findUnique({ where: { id: targetBiz }, select: { id: true } });
-      if (!biz) {
-        return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });
-      }
-      businessIdData = { businessId: targetBiz };
-    } else {
-      businessIdData = { businessId: null };
-    }
-  } else {
-    businessIdData = { businessId: null };
-  }
+  const biznesIdlar = await biznesIdlariniHalQil({
+    rol: effectiveRol,
+    businessIds,
+    businessId,
+    // Biriktiruv jadvali bo'sh, lekin eski `businessId` ustuni to'lgan bo'lsa
+    // (migratsiyadan tashqari yo'l bilan yaratilgan hisob) — u yo'qolmasin.
+    mavjud: existing.bizneslar.length
+      ? existing.bizneslar.map((b) => b.businessId)
+      : existing.businessId
+        ? [existing.businessId]
+        : [],
+  });
 
   const updated = await prisma.user.update({
     where: { id: params.id },
@@ -109,7 +106,7 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
       ...rest,
       ...(rol !== undefined ? { rol } : {}),
       ...(login !== undefined && login !== existing.login ? { login } : {}),
-      ...businessIdData,
+      businessId: birlamchiBiznes(biznesIdlar),
       ...roleData,
       ...overrideData,
       ...(parol ? { parolHash: await hashPassword(parol) } : {}),
@@ -117,7 +114,9 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
     select: USER_SELECT,
   });
 
-  return NextResponse.json(updated);
+  await biriktiruvlarniYangila(params.id, biznesIdlar);
+
+  return NextResponse.json({ ...updated, bizneslar: biznesIdlar.map((b) => ({ businessId: b })) });
 });
 
 /**

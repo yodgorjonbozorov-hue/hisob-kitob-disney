@@ -6,6 +6,7 @@ import { todayDateOnlyString } from "@/lib/date";
 import { chiqimYubor } from "@/lib/services/approval";
 import { isModuleOnForTenant } from "@/lib/modules/guard";
 import { getFlow, setFlow, clearFlow, type TransactionFlowState } from "./state";
+import { botBizneslar, botBiznesRuxsati } from "./bizneslar";
 
 function chatIdOf(ctx: Context): string {
   return String(ctx.chat!.id);
@@ -13,25 +14,24 @@ function chatIdOf(ctx: Context): string {
 
 /**
  * Tranzaksiya kiritishni boshlaydi.
- * - Kassir (biznesga biriktirilgan): to'g'ridan-to'g'ri kategoriya tanlash.
- * - Admin (biznes null): avval biznes tanlash bosqichi.
+ * - Bitta biznes ochiq bo'lsa (biriktirilgan kassir/sotuvchi): to'g'ridan-to'g'ri
+ *   kategoriya tanlash.
+ * - Bir nechta bo'lsa (direktor yoki ko'p biznesga biriktirilgan xodim): avval
+ *   biznes tanlash bosqichi.
  */
 export async function startTransactionFlow(ctx: Context, user: User, turi: "kirim" | "chiqim") {
   const chatId = chatIdOf(ctx);
 
-  if (user.businessId) {
-    await setFlow(chatId, { step: "category", turi, businessId: user.businessId });
-    await showCategories(ctx, chatId, turi, user.businessId, false);
-    return;
-  }
-
-  // Admin — biznes tanlaydi.
-  const businesses = await prisma.business.findMany({
-    where: { isActive: true },
-    orderBy: { nomi: "asc" },
-  });
+  // Ko'p-bizneslik: xodimga OCHIQ bizneslar (bot/bizneslar.ts).
+  const businesses = await botBizneslar(user);
   if (businesses.length === 0) {
     await ctx.reply("Hali biznes yaratilmagan. Veb-saytda biznes qo'shing.");
+    return;
+  }
+  if (businesses.length === 1) {
+    const businessId = businesses[0].id;
+    await setFlow(chatId, { step: "category", turi, businessId });
+    await showCategories(ctx, chatId, turi, businessId, false);
     return;
   }
 
@@ -81,7 +81,7 @@ async function showCategories(
   else await ctx.reply(text, { reply_markup: keyboard });
 }
 
-export async function handleBusinessCallback(ctx: Context) {
+export async function handleBusinessCallback(ctx: Context, user: User) {
   const chatId = chatIdOf(ctx);
   const flow = await getFlow(chatId);
   const data = ctx.callbackQuery?.data ?? "";
@@ -92,18 +92,15 @@ export async function handleBusinessCallback(ctx: Context) {
     return;
   }
 
-  const business = await prisma.business.findFirst({
-    where: { id: businessId, isActive: true },
-    select: { id: true },
-  });
-  if (!business) {
-    await ctx.answerCallbackQuery({ text: "Biznes topilmadi" });
+  // Ko'p-bizneslik: tugma xodimga OCHIQ biznesniki bo'lishi shart.
+  if (!(await botBiznesRuxsati(user, businessId))) {
+    await ctx.answerCallbackQuery({ text: "Bu biznesga ruxsatingiz yo'q" });
     return;
   }
 
-  await setFlow(chatId, { ...flow, step: "category", businessId: business.id });
+  await setFlow(chatId, { ...flow, step: "category", businessId });
   await ctx.answerCallbackQuery();
-  await showCategories(ctx, chatId, flow.turi, business.id, true);
+  await showCategories(ctx, chatId, flow.turi, businessId, true);
 }
 
 export async function handleCategoryCallback(ctx: Context) {

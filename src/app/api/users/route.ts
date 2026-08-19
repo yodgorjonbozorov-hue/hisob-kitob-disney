@@ -6,6 +6,7 @@ import { withTenant } from "@/lib/auth/tenant";
 import { createUserSchema } from "@/lib/validation/user";
 import { hashPassword } from "@/lib/auth/password";
 import { requirePro } from "@/lib/billing/pro";
+import { biznesIdlariniHalQil, biriktiruvlarniYangila, birlamchiBiznes } from "@/lib/services/userBiznes";
 
 const USER_SELECT = {
   id: true,
@@ -16,6 +17,8 @@ const USER_SELECT = {
   createdAt: true,
   businessId: true,
   business: { select: { nomi: true } },
+  // Ko'p-bizneslik: xodim biriktirilgan barcha bizneslar.
+  bizneslar: { select: { businessId: true, business: { select: { nomi: true } } } },
   roleId: true,
   role: { select: { nomi: true, bazaRol: true } },
   huquqPlus: true,
@@ -61,22 +64,15 @@ export const POST = withTenant(async (request, _ctx, tenant) => {
     requirePro(tenant);
   }
 
-  // Kassir uchun biznes MAJBURIY; sotuvchi uchun IXTIYORIY (biriktirilsa — yozuvlari
-  // doim shu biznesga tushadi; biriktirilmasa — ko'p-biznesli). Owner/admin — biznessiz.
-  let businessId: string | null = null;
-  if (effectiveRol === "CASHIER" || effectiveRol === "SELLER") {
-    if (effectiveRol === "CASHIER" && !parsed.data.businessId) {
-      return NextResponse.json({ error: "Kassir uchun biznes tanlanishi shart" }, { status: 400 });
-    }
-    if (parsed.data.businessId) {
-      // Tenant-scoped client: boshqa tenant biznesi bu yerda ko'rinmaydi (null qaytadi).
-      const biz = await prisma.business.findUnique({ where: { id: parsed.data.businessId }, select: { id: true } });
-      if (!biz) {
-        return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });
-      }
-      businessId = biz.id;
-    }
-  }
+  // Kassir uchun kamida bitta biznes MAJBURIY; sotuvchi uchun IXTIYORIY
+  // (biriktirilsa — yozuvlari faqat o'sha bizneslarga tushadi; biriktirilmasa
+  // — barcha bizneslar). Owner/admin — biznessiz (lib/services/userBiznes.ts).
+  const biznesIdlar = await biznesIdlariniHalQil({
+    rol: effectiveRol,
+    businessIds: parsed.data.businessIds,
+    businessId: parsed.data.businessId,
+    mavjud: [],
+  });
 
   // Login BUTUN tizim bo'ylab unique — shuning uchun rawPrisma (tenantlar aro tekshiruv).
   const existing = await rawPrisma.user.findUnique({ where: { login: parsed.data.login } });
@@ -91,7 +87,7 @@ export const POST = withTenant(async (request, _ctx, tenant) => {
       login: parsed.data.login,
       parolHash,
       rol: effectiveRol,
-      businessId,
+      businessId: birlamchiBiznes(biznesIdlar),
       roleId,
       huquqPlus: parsed.data.huquqPlus?.length ? JSON.stringify(parsed.data.huquqPlus) : undefined,
       huquqMinus: parsed.data.huquqMinus?.length ? JSON.stringify(parsed.data.huquqMinus) : undefined,
@@ -99,5 +95,10 @@ export const POST = withTenant(async (request, _ctx, tenant) => {
     select: USER_SELECT,
   });
 
-  return NextResponse.json(created, { status: 201 });
+  await biriktiruvlarniYangila(created.id, biznesIdlar);
+
+  return NextResponse.json(
+    { ...created, bizneslar: biznesIdlar.map((businessId) => ({ businessId })) },
+    { status: 201 }
+  );
 });

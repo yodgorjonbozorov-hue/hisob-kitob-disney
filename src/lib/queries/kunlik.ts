@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { dateOnlyStringToUTCDate, utcDateToDateOnlyString } from "@/lib/date";
+import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
 
 /**
  * KUNLIK HISOBOT o'qish so'rovlari. Faqat o'qish — yozish lib/services/kunlik.ts da.
@@ -219,7 +220,8 @@ export async function listKunlikNomzodlar(businessId: string): Promise<KunlikNom
     where: {
       isActive: true,
       rol: { in: ["OWNER", "ADMIN", "CASHIER", "SELLER"] },
-      OR: [{ businessId: null }, { businessId }],
+      // Ko'p-bizneslik: biriktirilganlar + umuman biriktirilmaganlar.
+      ...biznesXodimlariWhere(businessId),
     },
     select: { id: true, ism: true, rol: true },
     orderBy: { ism: "asc" },

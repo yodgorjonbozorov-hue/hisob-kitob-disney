@@ -11,6 +11,7 @@ import {
 import { formatMoney, parseSummaText } from "@/lib/format";
 import { getFlow } from "./state";
 import { flowStore } from "./conversationStore";
+import { botBizneslar } from "./bizneslar";
 
 /**
  * TELEGRAM AVTO KANALI: olib-sotar ko'p vaqt bozorda/yo'lda bo'ladi — mashina
@@ -94,16 +95,9 @@ function summaniTop(matn: string): number {
   return parseSummaText(`${m[1].trim()} ${m[2] ?? ""}`.trim());
 }
 
-/** Foydalanuvchiga ochiq avto bizneslar (kassir — faqat biriktirilgani). */
+/** Foydalanuvchiga ochiq avto bizneslar (biriktirilgan bo'lsa — faqat o'shalar). */
 async function avtoBizneslar(user: User) {
-  return prisma.business.findMany({
-    where: {
-      isActive: true,
-      turi: "avto",
-      ...(user.businessId ? { id: user.businessId } : {}),
-    },
-    orderBy: { nomi: "asc" },
-  });
+  return botBizneslar(user, { turi: "avto" });
 }
 
 /** Avtoparkdagi (sotilmagan) mashinalar. */

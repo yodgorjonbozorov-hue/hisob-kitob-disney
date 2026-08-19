@@ -439,7 +439,13 @@ export async function setKunlikDirektor(businessId: string, direktorId: string |
     });
     if (!user) throw new BadRequestError("Foydalanuvchi topilmadi yoki nofaol");
     if (user.rol === "SUPERADMIN") throw new BadRequestError("Bu foydalanuvchini direktor qilib bo'lmaydi");
-    if (user.businessId && user.businessId !== businessId) {
+    // Ko'p-bizneslik: ruxsat ro'yxati `UserBusiness` da. Qator bo'lmasa eski
+    // `businessId` ustuniga qaraladi (biriktirilmagan xodim — cheklovsiz).
+    const biriktirilgan = (
+      await prisma.userBusiness.findMany({ where: { userId: user.id }, select: { businessId: true } })
+    ).map((b) => b.businessId);
+    const cheklov = biriktirilgan.length > 0 ? biriktirilgan : user.businessId ? [user.businessId] : [];
+    if (cheklov.length > 0 && !cheklov.includes(businessId)) {
       throw new BadRequestError("Bu foydalanuvchi boshqa biznesga biriktirilgan");
     }
     direktorIsm = user.ism;
