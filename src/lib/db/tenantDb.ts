@@ -29,7 +29,18 @@ import { auditYoz, entityNomi, type AuditAmal } from "./auditWriter";
  * `tenantId` yoki `businessId` maydoni bor model albatta ro'yxatda bo'lishi,
  * yoki `TIZIM_MODELLAR` da SABABI bilan yozilishi kerak.
  */
-export const TENANT_DIRECT = new Set(["Business", "User", "Subscription", "Payment", "TenantModule", "Role"]);
+export const TENANT_DIRECT = new Set([
+  "Business",
+  "User",
+  "Subscription",
+  "Payment",
+  "TenantModule",
+  "Role",
+  // Superadmin 2.0 — support tiketi. Hozircha faqat superadmin paneli o'qiydi
+  // (rawPrisma), lekin ustunda `tenantId` bor: mijozga ochilganda filtr
+  // AVTOMATIK ishlashi uchun ro'yxatga shu yerda kiritildi.
+  "SupportTicket",
+]);
 
 /**
  * ATAYLAB tenantga bog'lanmagan tizim jadvallari — sababi bilan.
@@ -48,6 +59,14 @@ export const TIZIM_MODELLAR: Record<string, string> = {
   // (businessId + userId) bilan o'qiladi; businessId egaligi withTenant'da
   // yuqorida tekshiriladi. Scoped client orqali umuman ishlatilmaydi.
   AiConversation: "faqat rawPrisma va (businessId, userId) kompozit kaliti bilan o'qiladi",
+  // Superadmin 2.0: platforma bayroqlari — tenantga tegishli emas. Ayrim
+  // tenantlarga ochish `tenantIdlar` JSON massivi orqali, so'rov esa har doim
+  // bitta bayroq kaliti bo'yicha (lib/superadmin/bayroqlar.ts).
+  FeatureFlag: "platforma darajasidagi feature flag, tenantga tegishli emas",
+  // Tiket yozishmasida tenantId/businessId ustuni ATAYLAB yo'q — u ota
+  // tiketga (SupportTicket) FK bilan bog'langan va tenant filtri o'sha
+  // darajada qo'llanadi. Yozishma faqat superadmin paneli orqali o'qiladi.
+  SupportMessage: "ota tiket (SupportTicket) orqali filtrlanadi, o'z tenantId ustuni yo'q",
 };
 
 const BUSINESS_SCOPED = new Set([

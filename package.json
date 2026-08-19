@@ -51,6 +51,7 @@
     "test:signup": "node -r ts-node/register tests/signup.test.ts",
     "test:billing": "node -r ts-node/register tests/billing.test.ts",
     "test:superadmin": "node -r ts-node/register tests/superadmin.test.ts",
+    "test:superadmin2": "node -r ts-node/register tests/superadmin2.test.ts",
     "test:modules": "node -r ts-node/register tests/modules.test.ts",
     "test:crm": "node -r ts-node/register tests/crm.test.ts",
     "test:tasks": "node -r ts-node/register tests/tasks.test.ts",

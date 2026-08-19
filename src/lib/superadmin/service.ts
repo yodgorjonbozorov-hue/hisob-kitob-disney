@@ -13,27 +13,11 @@ import { MANAGER_ROLLAR } from "@/lib/auth/roles";
  * o'tgan route'lar chaqiradi.
  */
 
-/** Superadmin amalini audit jurnaliga yozadi (kim, qachon, nima). */
-export async function logSuperadminAction(params: {
-  superadminId: string;
-  superadminIsm: string;
-  action: string; // "impersonate" | "extend" | "block" | "unblock" | "payment_confirm" | "payment_reject" | "password_reset"
-  entity: string; // "tenant" | "payment" | "user"
-  entityId: string;
-  detail?: Record<string, unknown>;
-}) {
-  await rawPrisma.auditLog.create({
-    data: {
-      businessId: null,
-      userId: params.superadminId,
-      userIsm: `[SUPERADMIN] ${params.superadminIsm}`,
-      action: params.action,
-      entity: params.entity,
-      entityId: params.entityId,
-      after: params.detail ? JSON.stringify(params.detail) : null,
-    },
-  });
-}
+/**
+ * DIQQAT: audit yozish bu yerdan OLIB TASHLANDI. Superadmin amallari endi
+ * `lib/superadmin/audit.ts` dagi `superadminAudit()` orqali yoziladi — u
+ * IP, qurilma, oldingi/keyingi holat va SABABni ham saqlaydi (talab 22/57).
+ */
 
 export interface TenantOverview {
   id: string;
@@ -175,18 +159,40 @@ export async function deleteEmptyTenant(tenantId: string): Promise<{ name: strin
   const bizneslar = await rawPrisma.business.findMany({ where: { tenantId }, select: { id: true } });
   const businessIds = bizneslar.map((b) => b.id);
 
-  // Bog'liq yozuvlar chetdan markazga: kategoriya/audit -> biznes -> tenant.
+  /**
+   * AUDIT SAQLANADI (talab 23 — append-only).
+   *
+   * Ilgari bu yerda `auditLog.deleteMany` turardi: kompaniya o'chirilganda
+   * uning butun jurnali ham yo'q bo'lardi, ya'ni "kim, qachon, nega o'chirdi"
+   * degan savolga javob qolmasdi. Endi yozuvlar QOLADI, faqat biznesga
+   * havolasi uziladi (`businessId = NULL`) — aks holda FK biznesni o'chirishga
+   * yo'l bermaydi. `tenantId` esa oddiy ustun (FK emas), shuning uchun
+   * kompaniya yozuvi o'chgach ham jurnalda kompaniya izi qoladi.
+   *
+   * `$executeRaw` ATAYLAB: `auditLog.updateMany` client darajasida bloklangan
+   * (append-only qo'riqchisi). Bu yerda yozuv MAZMUNI o'zgarmaydi — faqat
+   * o'chirilayotgan biznesga havola uziladi.
+   */
+  // Bog'liq yozuvlar chetdan markazga: kategoriya -> biznes -> tenant.
   await rawPrisma.$transaction(async (tx) => {
     if (businessIds.length > 0) {
       await tx.category.deleteMany({ where: { businessId: { in: businessIds } } });
-      await tx.auditLog.deleteMany({ where: { businessId: { in: businessIds } } });
+      for (const bId of businessIds) {
+        await tx.$executeRaw`UPDATE "AuditLog" SET "businessId" = NULL WHERE "businessId" = ${bId}`;
+      }
       await tx.stage.deleteMany({ where: { businessId: { in: businessIds } } });
       // Kassalar (Faza 4.1) — har biznesda kamida bittasi bo'ladi, shuning uchun
       // ular ham biznesdan OLDIN o'chirilishi shart (Account.businessId Restrict).
       await tx.accountTransfer.deleteMany({ where: { businessId: { in: businessIds } } });
       await tx.account.deleteMany({ where: { businessId: { in: businessIds } } });
     }
-    await tx.auditLog.deleteMany({ where: { tenantId } });
+    // AuditLog.tenantId ATAYLAB tozalanmaydi — jurnal kompaniya o'chgach ham
+    // qoladi. `userId` esa FK emas, shuning uchun user o'chirilishi jurnalga
+    // ta'sir qilmaydi.
+    await tx.supportMessage.deleteMany({
+      where: { ticket: { tenantId } },
+    });
+    await tx.supportTicket.deleteMany({ where: { tenantId } });
     await tx.user.deleteMany({ where: { tenantId } });
     await tx.business.deleteMany({ where: { tenantId } });
     await tx.tenantModule.deleteMany({ where: { tenantId } });

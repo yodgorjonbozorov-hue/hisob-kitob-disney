@@ -18,6 +18,16 @@ export interface SessionData {
   mustChangePassword?: boolean;
   // Impersonatsiya: SUPERADMIN tenant nomidan kirganda uning userId'si shu yerda saqlanadi.
   impersonatedBy?: string | null;
+  /**
+   * SESSIYA AVLODI (Superadmin 2.0). Login paytida `User.sessionEpoch` shu
+   * yerga ko'chiriladi; guard har so'rovda bazadagi qiymat bilan solishtiradi.
+   * Bazadagi raqam oshirilsa — shu foydalanuvchining BARCHA cookie'lari
+   * bir zumda kuchsizlanadi ("sessiyani bekor qilish").
+   *
+   * Eski (migratsiyagacha ochilgan) sessiyalarda maydon yo'q — `0` deb
+   * o'qiladi, ya'ni hech kim tizimdan chiqarilmaydi.
+   */
+  sessionEpoch?: number;
 }
 
 /**

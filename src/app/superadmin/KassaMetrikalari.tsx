@@ -21,20 +21,18 @@ export function KassaMetrikalari({ m }: { m: Metrikalar }) {
     { label: "Ortiqcha", value: formatSom(m.ortiqcha), tone: m.ortiqcha > 0 ? "text-debt" : undefined },
   ];
 
+  // Tashqi kartochka ATAYLAB yo'q: komponent Control Center'da `Bolim`
+  // ichiga joylashadi, o'z ramkasi bo'lsa ikki qavat karta hosil bo'lardi.
   return (
-    <div className="bg-surface rounded-2xl border border-line shadow-card p-5">
-      <h2 className="font-semibold text-fg mb-1">Kassir kassalari</h2>
-      <p className="text-xs text-faint mb-3">
-        Kassirlarning qo&apos;lidagi naqd. Kirim/chiqim hisobotlaridan alohida yuritiladi.
-      </p>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {qatorlar.map((q) => (
-          <div key={q.label} className="bg-surface-2 rounded-xl p-3">
-            <p className="text-xs text-muted">{q.label}</p>
-            <p className={`text-base font-bold tnum mt-1 ${q.tone ?? "text-fg"}`}>{q.value}</p>
-          </div>
-        ))}
-      </div>
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {qatorlar.map((q) => (
+        <div key={q.label} className="bg-surface-2 rounded-xl p-3">
+          <p className="text-2xs text-muted">{q.label}</p>
+          <p className={`text-base font-display tabular-nums mt-1 ${q.tone ?? "text-fg"}`}>
+            {q.value}
+          </p>
+        </div>
+      ))}
     </div>
   );
 }

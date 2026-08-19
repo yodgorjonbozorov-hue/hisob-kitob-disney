@@ -53,6 +53,9 @@ async function main() {
         ism,
         parolHash: await bcrypt.hash(parol, 10),
         rol: "SUPERADMIN",
+        // Superadmin 2.0: platforma egasi ROOT — cheklovsiz. Cheklangan
+        // rollar (SUPPORT/FINANCE/...) panel orqali ochiq tayinlanadi.
+        superadminRol: "ROOT",
         tenantId: null,
         businessId: null,
         // Parolni egasining o'zi tanlagan — majburiy almashtirish so'ralmaydi.

@@ -36,6 +36,35 @@ async function findUserByLogin(login: string) {
 const IP_OYNA = 5 * 60 * 1000;
 const LOGIN_OYNA = 15 * 60 * 1000;
 
+/**
+ * Kirish urinishini audit jurnaliga yozadi. HECH QACHON xato tashlamaydi —
+ * jurnal yozib bo'lmagani login oqimini buzmasligi kerak.
+ */
+async function loginUrinishiYoz(p: {
+  login: string;
+  ip: string;
+  ok: boolean;
+  userId: string | null;
+  tenantId: string | null;
+}): Promise<void> {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        tenantId: p.tenantId,
+        businessId: null,
+        userId: p.userId,
+        userIsm: p.login,
+        action: p.ok ? "login" : "login_failed",
+        entity: "auth",
+        entityId: p.userId ?? p.login,
+        ip: p.ip === "unknown" ? null : p.ip,
+      },
+    });
+  } catch (error) {
+    console.error("Kirish urinishini yozib bo'lmadi:", error);
+  }
+}
+
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request) ?? "unknown";
   const rlKey = `login:${ip}`;
@@ -72,11 +101,16 @@ export async function POST(request: NextRequest) {
 
   const user = await findUserByLogin(login);
   if (!user || !user.isActive) {
+    // Muvaffaqiyatsiz urinish jurnalga tushadi — Xavfsizlik markazi shu
+    // yozuvlardan hujum belgisini ko'radi (Superadmin 2.0, talab 24).
+    // Yozuvlar soni rate limit bilan cheklangan (IP 8/5daq, login 5/15daq).
+    await loginUrinishiYoz({ login, ip, ok: false, userId: user?.id ?? null, tenantId: user?.tenantId ?? null });
     return genericError;
   }
 
   const valid = await verifyPassword(parol, user.parolHash);
   if (!valid) {
+    await loginUrinishiYoz({ login, ip, ok: false, userId: user.id, tenantId: user.tenantId });
     return genericError;
   }
 
@@ -93,7 +127,10 @@ export async function POST(request: NextRequest) {
   session.tenantId = user.tenantId ?? null;
   session.businessId = user.businessId ?? null;
   session.mustChangePassword = user.mustChangePassword ?? false;
+  session.sessionEpoch = user.sessionEpoch ?? 0;
   await session.save();
+
+  await loginUrinishiYoz({ login, ip, ok: true, userId: user.id, tenantId: user.tenantId });
 
   return NextResponse.json({ ok: true, rol: user.rol, mustChangePassword: user.mustChangePassword ?? false });
 }

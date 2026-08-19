@@ -1,27 +1,35 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { withSuperadmin } from "@/lib/auth/superadmin";
+import { r } from "@/lib/superadmin/rbac";
 import { setTenantBepul } from "@/lib/billing/subscribe";
-import { logSuperadminAction } from "@/lib/superadmin/service";
+import { superadminAudit, SA_AMAL } from "@/lib/superadmin/audit";
+import { bepulSchema } from "@/lib/validation/superadmin";
 
-const schema = z.object({ bepul: z.boolean() });
+/** Mijozni doimiy bepulga o'tkazish / bekor qilish. Sabab MAJBURIY (pul qarori). */
+export const POST = withSuperadmin<{ params: { id: string } }>(
+  r("bizneslar", "UPDATE"),
+  async (request, { params }, sa) => {
+    const parsed = bepulSchema.safeParse(await request.json().catch(() => ({})));
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" },
+        { status: 400 }
+      );
+    }
 
-/** Mijozni doimiy bepulga o'tkazish / bekor qilish. */
-export const POST = withSuperadmin<{ params: { id: string } }>(async (request, { params }, session) => {
-  const parsed = schema.safeParse(await request.json());
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Xato ma'lumot" }, { status: 400 });
+    const tenant = await setTenantBepul(params.id, parsed.data.bepul);
+
+    await superadminAudit({
+      sa,
+      amal: SA_AMAL.BUSINESS_FREE_CHANGED,
+      entity: "tenant",
+      entityId: params.id,
+      tenantId: params.id,
+      before: { bepul: !parsed.data.bepul },
+      after: { bepul: tenant.bepul, name: tenant.name },
+      sabab: parsed.data.sabab,
+    });
+
+    return NextResponse.json({ ok: true, bepul: tenant.bepul });
   }
-
-  const tenant = await setTenantBepul(params.id, parsed.data.bepul);
-  await logSuperadminAction({
-    superadminId: session.userId,
-    superadminIsm: session.ism,
-    action: parsed.data.bepul ? "bepul_yoqildi" : "bepul_bekor",
-    entity: "tenant",
-    entityId: params.id,
-    detail: { name: tenant.name, bepul: tenant.bepul },
-  });
-
-  return NextResponse.json({ ok: true, bepul: tenant.bepul });
-});
+);

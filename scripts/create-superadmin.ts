@@ -34,6 +34,9 @@ async function main() {
       ism: ism ?? "Platforma egasi",
       parolHash: await hashPassword(parol),
       rol: "SUPERADMIN",
+      // Superadmin 2.0: skript orqali ochilgan hisob ROOT bo'ladi.
+      // Cheklangan rol Control Center → Sozlamalar bo'limidan beriladi.
+      superadminRol: "ROOT",
       tenantId: null,
       businessId: null,
     },
