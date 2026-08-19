@@ -3,56 +3,60 @@
 import { useEffect, useRef, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import {
+  kameraHolati,
+  KAMERASIZ_YORIQNOMA,
+  type BarcodeDetectorCtor,
+} from "@/lib/magazin/kameraQollab";
 
 /**
  * KAMERA SKANERI — telefon/noutbuk kamerasi orqali QR va shtrix-kod o'qish.
  *
- * Brauzerning o'z `BarcodeDetector` API'si ishlatiladi (Android Chrome va
- * ish stolidagi Chrome/Edge'da bor). Tashqi dekoder kutubxonasi ATAYLAB
- * qo'shilmadi: u ~200 KB JS bo'lib, kassa ekranining ochilish tezligiga
- * urardi — apparat skaner esa bundan mustaqil ishlaydi.
+ * Brauzerning o'z `BarcodeDetector` API'si ishlatiladi. U iPhone Safari'da
+ * (va iOS'dagi barcha brauzerlarda, chunki hammasi WebKit) YO'Q — sabablari
+ * va dekoder kutubxonasi qo'shilmagani `lib/magazin/kameraQollab.ts` da.
  *
- * API yo'q yoki kameraga ruxsat berilmagan bo'lsa — bu oyna sababni aytadi
- * va foydalanuvchi QIDIRUV maydoniga qaytadi (fallback POS ekranida
- * doim ochiq turadi).
+ * Qo'llab-quvvatlanmaganda bu oyna BOSH KETMAYDI: nima qilish kerakligini
+ * aytadi va foydalanuvchini qidiruvga qaytaradi (`onFallback`) — o'sha yo'l
+ * har doim ishlaydi.
  */
-
-/** Brauzerdagi `BarcodeDetector` — TypeScript tiplarida hali yo'q. */
-interface BarcodeDetectorLike {
-  detect(source: CanvasImageSource): Promise<Array<{ rawValue: string }>>;
-}
-type BarcodeDetectorCtor = new (opts?: { formats?: string[] }) => BarcodeDetectorLike;
-
-export function KameraSkaner({ onKod, onClose }: { onKod: (kod: string) => void; onClose: () => void }) {
+export function KameraSkaner({
+  onKod,
+  onClose,
+  onFallback,
+}: {
+  onKod: (kod: string) => void;
+  onClose: () => void;
+  /** Kamera ishlamasa — qidiruv maydoniga qaytarish. */
+  onFallback: () => void;
+}) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [xato, setXato] = useState<string | null>(null);
+  // Boshlang'ich holat SINXRON aniqlanadi: qo'llab-quvvatlanmaydigan
+  // brauzerda kamera oynasi bir lahza ham "yuklanmoqda" ko'rinishida
+  // turmasin — foydalanuvchi darhol nima qilishni bilsin.
+  const [qollab] = useState(() => kameraHolati().qollab);
 
   useEffect(() => {
+    const holat = kameraHolati();
+    if (!holat.qollab) {
+      setXato(holat.sabab);
+      return;
+    }
+
     let stream: MediaStream | null = null;
     let timer: ReturnType<typeof setInterval> | null = null;
     let toxtadi = false;
 
     async function boshla() {
-      const Ctor = (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector;
-      if (!Ctor) {
-        setXato(
-          "Bu brauzer kamera orqali kod o'qishni qo'llab-quvvatlamaydi. " +
-            "Skanerdan foydalaning yoki mahsulotni qidiruvdan toping."
-        );
-        return;
-      }
-      if (!navigator.mediaDevices?.getUserMedia) {
-        setXato("Kameraga kirish mumkin emas. Qidiruvdan foydalaning.");
-        return;
-      }
-
+      const Ctor = (window as unknown as { BarcodeDetector: BarcodeDetectorCtor }).BarcodeDetector;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           // Telefonda orqa kamera — kod o'qish uchun aynan u kerak.
           video: { facingMode: "environment" },
         });
       } catch {
-        setXato("Kameraga ruxsat berilmadi. Qidiruvdan foydalaning.");
+        setXato("Kameraga ruxsat berilmadi.");
         return;
       }
       if (toxtadi) {
@@ -93,12 +97,25 @@ export function KameraSkaner({ onKod, onClose }: { onKod: (kod: string) => void;
   }, [onKod]);
 
   return (
-    <Modal open onClose={onClose} title="Kamera bilan skanerlash">
+    <Modal open onClose={onClose} title={xato ? "Kamera ishlamaydi" : "Kamera bilan skanerlash"}>
       <div className="space-y-3">
         {xato ? (
-          <p className="text-sm text-expense-fg bg-expense-soft border border-expense/40 rounded-lg px-3 py-2">
-            {xato}
-          </p>
+          <div data-test="kamera-fallback" className="space-y-3">
+            <p className="text-sm text-expense-fg bg-expense-soft border border-expense/40 rounded-lg px-3 py-2">
+              {xato}
+            </p>
+            <div>
+              <p className="text-sm font-medium text-fg mb-2">Nima qilish mumkin:</p>
+              <ul className="space-y-1.5">
+                {KAMERASIZ_YORIQNOMA.map((q) => (
+                  <li key={q} className="text-sm text-muted flex gap-2">
+                    <span className="text-brand shrink-0">→</span>
+                    <span>{q}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
         ) : (
           <>
             <div className="relative rounded-xl overflow-hidden bg-black aspect-video">
@@ -112,10 +129,13 @@ export function KameraSkaner({ onKod, onClose }: { onKod: (kod: string) => void;
             </p>
           </>
         )}
-        <div className="flex justify-end">
+
+        <div className="flex gap-2 justify-end">
           <Button variant="secondary" onClick={onClose}>
             Yopish
           </Button>
+          {/* Kamera ishlamaganda ASOSIY harakat — qidiruvga qaytish. */}
+          {(xato || !qollab) && <Button onClick={onFallback}>Qidiruvga o&apos;tish</Button>}
         </div>
       </div>
     </Modal>

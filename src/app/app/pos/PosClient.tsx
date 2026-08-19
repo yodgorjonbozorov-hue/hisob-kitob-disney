@@ -159,6 +159,13 @@ export function PosClient({
             void kodKirdi(kod);
           }}
           onClose={() => setKamera(false)}
+          // Kamera ishlamaydigan brauzerda (masalan iPhone Safari) kassir
+          // boshi berk ko'chada qolmasin: oyna yopiladi va fokus qidiruv
+          // maydoniga qaytadi — u yerdan nom yoki kod bilan davom etadi.
+          onFallback={() => {
+            setKamera(false);
+            qidiruvRef.current?.focus();
+          }}
         />
       )}
 

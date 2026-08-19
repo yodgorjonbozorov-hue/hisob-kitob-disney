@@ -295,3 +295,52 @@ test("kassa migratsiyasi ikkinchi marta ishga tushirilsa hech narsa buzmaydi", a
   assert.equal(await son(`SELECT COUNT(*) n FROM "Transaction" WHERE "accountId" IS NULL`), 0);
   assert.equal(await son(`SELECT SUM("summa") n FROM "Transaction"`), 33_000_000, "summalar o'zgarmasligi kerak");
 });
+
+// ---------- MAGAZIN moduli: mavjud bizneslar TEGILMAGANI ----------
+
+test("MAGAZIN migratsiyasi mavjud bizneslarni do'konga AYLANTIRMAYDI", async () => {
+  // Eng muhim production kafolati: modul mavjud mijozlarga majburan
+  // qo'shilmasligi kerak. Migratsiya ustunlar qo'shadi, LEKIN hech bir
+  // mavjud biznesni kassaga ulamaydi va hech bir tenantda modulni yoqmaydi.
+  const bizneslar: any[] = (
+    await client.execute(`SELECT "id","magazin","omborli" FROM "Business" ORDER BY "id"`)
+  ).rows;
+  assert.equal(bizneslar.length, 2);
+  for (const b of bizneslar) {
+    assert.equal(Number(b.magazin), 0, `${b.id}: magazin bayrog'i o'z-o'zidan yoqilmasligi kerak`);
+  }
+  // `omborli` eski qiymatida qolgan (migratsiya unga tegmaydi).
+  assert.ok(bizneslar.every((b) => Number(b.omborli) === 1));
+
+  // Bironta tenantda MAGAZIN moduli yoqilmagan.
+  const modul = await son(`SELECT COUNT(*) n FROM "TenantModule" WHERE "code" = 'MAGAZIN'`);
+  assert.equal(modul, 0, "migratsiya TenantModule ga yozuv qo'shmasligi kerak");
+
+  // Eski sotuvlar chekka bog'lanmagan — ular avvalgidek mustaqil sotuv.
+  const chekli = await son(`SELECT COUNT(*) n FROM "Sale" WHERE "chekId" IS NOT NULL`);
+  assert.equal(chekli, 0, "eski sotuvlarda chekId NULL bo'lib qolishi kerak");
+
+  // Yangi jadvallar bo'sh.
+  assert.equal(await son(`SELECT COUNT(*) n FROM "PosChek"`), 0);
+  assert.equal(await son(`SELECT COUNT(*) n FROM "ProductCategory"`), 0);
+});
+
+test("MAGAZIN ustunlari va indekslari qo'shildi", async () => {
+  const product = await ustunlar("Product");
+  for (const u of ["barcode", "qrKod", "rasmUrl", "categoryId"]) {
+    assert.ok(product.includes(u), `Product.${u} yo'q`);
+  }
+  assert.ok((await ustunlar("Business")).includes("magazin"), "Business.magazin yo'q");
+  assert.ok((await ustunlar("Sale")).includes("chekId"), "Sale.chekId yo'q");
+
+  // Chek raqami unique cheklovi — dublikatga qarshi ASOSIY himoya.
+  // U bo'lmasa parallel sotuvda ikki chek bir xil raqam olishi mumkin edi.
+  const indekslar: string[] = (
+    await client.execute("SELECT name FROM sqlite_master WHERE type='index'")
+  ).rows.map((r: any) => String(r.name));
+  assert.ok(
+    indekslar.includes("PosChek_businessId_raqam_key"),
+    "chek raqami uchun unique indeks bo'lishi SHART"
+  );
+  assert.ok(indekslar.includes("Product_businessId_barcode_key"), "barcode unique indeksi yo'q");
+});

@@ -35,10 +35,18 @@ let BadRequestError: any;
 let dokon: any;
 let agency: any;
 
-function D<T>(fn: () => Promise<T>): Promise<T> {
+/**
+ * Tenant kontekstida bajarish. Qaytish turi ATAYLAB `any`: bu fayldagi
+ * modullar dinamik `import()` bilan olinadi va `any` turida, shu bois
+ * generik `<T>` `unknown` ga tushib qolardi va har chaqiruvda qo'lda
+ * annotatsiya talab qilardi (boshqa test fayllaridagi uslub bilan bir xil).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function D(fn: () => unknown): Promise<any> {
   return runWithTenant(dokon.tenant.id, fn, { userId: dokon.user.id, ism: "Kassir" });
 }
-function A<T>(fn: () => Promise<T>): Promise<T> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function A(fn: () => unknown): Promise<any> {
   return runWithTenant(agency.tenant.id, fn, { userId: agency.user.id, ism: "Direktor" });
 }
 
@@ -151,15 +159,15 @@ test("5. Superadmin modulni yoqa oladi (tenant kontekstisiz)", async () => {
   const { setTenantModul, getTenantModullari } = await import("@/lib/superadmin/service");
   await setTenantModul({ tenantId: agency.tenant.id, code: "OMBOR", isActive: true });
   const holat = await getTenantModullari(agency.tenant.id);
-  assert.equal(holat.find((m: any) => m.code === "OMBOR").yoqilgan, true);
-  assert.equal(holat.find((m: any) => m.code === "MAGAZIN").yoqilgan, false);
+  assert.equal(holat.find((m) => m.code === "OMBOR")?.yoqilgan, true);
+  assert.equal(holat.find((m) => m.code === "MAGAZIN")?.yoqilgan, false);
 });
 
 test("6. Superadmin modulni o'chira oladi", async () => {
   const { setTenantModul, getTenantModullari } = await import("@/lib/superadmin/service");
   await setTenantModul({ tenantId: agency.tenant.id, code: "OMBOR", isActive: false });
   const holat = await getTenantModullari(agency.tenant.id);
-  assert.equal(holat.find((m: any) => m.code === "OMBOR").yoqilgan, false);
+  assert.equal(holat.find((m) => m.code === "OMBOR")?.yoqilgan, false);
 });
 
 test("7. Modulni o'chirish MA'LUMOTNI o'chirmaydi", async () => {
@@ -609,4 +617,238 @@ test("28. PosChek boshqa tenantga ko'rinmaydi", async () => {
   assert.ok(dokonCheklar > 0);
   const agencyCheklar = await A(() => prisma.posChek.count());
   assert.equal(agencyCheklar, 0);
+});
+
+// =========================================================================
+// MA'LUMOT YAXLITLIGI (invariant zanjiri)
+// =========================================================================
+
+test("29. INVARIANT ZANJIRI: chek -> satr -> to'lov -> qoldiq -> moliya", async () => {
+  // Bitta sotuvda TO'LIQ zanjir tekshiriladi. Har bo'g'in alohida testlarda
+  // ham bor, lekin ular alohida — zanjirning O'RTASIDA uzilib qolishi
+  // (masalan chek bor, satr yo'q) faqat shu yerda ushlanadi.
+  const a = await mahsulot("Zanjir A", 20_000, 30);
+  const b = await mahsulot("Zanjir B", 7_000, 30);
+
+  const oldingiKirim = await rawPrisma.transaction.count({
+    where: { businessId: dokon.business.id, turi: "kirim", deletedAt: null },
+  });
+
+  const chek = await sot({
+    satrlar: [
+      { productId: a.id, miqdor: 2 },
+      { productId: b.id, miqdor: 5 },
+    ],
+    tolovTuri: "naqd",
+  });
+
+  // 1. Chek yaratildi.
+  const saqlangan = await rawPrisma.posChek.findUnique({ where: { id: chek.id } });
+  assert.ok(saqlangan, "chek yaratilishi kerak");
+  assert.equal(saqlangan.jamiSumma, 2 * 20_000 + 5 * 7_000);
+
+  // 2. Har satr Sale yozuvi va chekka BOG'LANGAN.
+  const satrlar = await rawPrisma.sale.findMany({ where: { chekId: chek.id } });
+  assert.equal(satrlar.length, 2);
+  assert.ok(satrlar.every((s: { chekId: string | null }) => s.chekId === chek.id));
+  // Satrlar jami chek summasiga TENG — pul va tovar mos.
+  assert.equal(
+    satrlar.reduce((x: number, s: { jamiSumma: number }) => x + s.jamiSumma, 0),
+    saqlangan.jamiSumma
+  );
+
+  // 3. To'lov to'g'ri qayd etildi (naqd -> BITTA kirim tranzaksiya).
+  assert.ok(saqlangan.transactionId);
+  const txn = await rawPrisma.transaction.findUnique({ where: { id: saqlangan.transactionId } });
+  assert.equal(txn.turi, "kirim");
+  assert.equal(txn.summa, saqlangan.jamiSumma);
+  assert.equal(txn.deletedAt, null);
+
+  // 4. Qoldiq kamaydi (har satr bo'yicha aniq).
+  assert.equal((await rawPrisma.product.findUnique({ where: { id: a.id } })).miqdor, 28);
+  assert.equal((await rawPrisma.product.findUnique({ where: { id: b.id } })).miqdor, 25);
+
+  // 5. Moliyada ANIQ BITTA yangi kirim (satr soniga qarab ko'paymagan).
+  const keyingiKirim = await rawPrisma.transaction.count({
+    where: { businessId: dokon.business.id, turi: "kirim", deletedAt: null },
+  });
+  assert.equal(keyingiKirim, oldingiKirim + 1, "ikki satrli chek bitta kirim yozishi kerak");
+
+  // 6. Qarz emas — qarzdorlik YARATILMAGAN.
+  assert.equal(saqlangan.debtId, null);
+});
+
+test("30. YARIM YOZUV QOLMAYDI: xato bo'lsa zanjirning HAR bo'g'ini orqaga qaytadi", async () => {
+  const yaxshi = await mahsulot("Rollback A", 10_000, 20);
+  const kam = await mahsulot("Rollback B", 10_000, 1);
+
+  const oldin = {
+    chek: await rawPrisma.posChek.count({ where: { businessId: dokon.business.id } }),
+    sale: await rawPrisma.sale.count({ where: { businessId: dokon.business.id } }),
+    txn: await rawPrisma.transaction.count({ where: { businessId: dokon.business.id } }),
+    debt: await rawPrisma.debt.count({ where: { businessId: dokon.business.id } }),
+  };
+
+  await assert.rejects(
+    async () =>
+      sot({
+        satrlar: [
+          { productId: yaxshi.id, miqdor: 5 },
+          { productId: kam.id, miqdor: 10 }, // omborda 1 ta
+        ],
+        tolovTuri: "qarz",
+        mijozNomi: "Rollback mijoz",
+      }),
+    BadRequestError
+  );
+
+  assert.equal(
+    await rawPrisma.posChek.count({ where: { businessId: dokon.business.id } }),
+    oldin.chek
+  );
+  assert.equal(await rawPrisma.sale.count({ where: { businessId: dokon.business.id } }), oldin.sale);
+  assert.equal(
+    await rawPrisma.transaction.count({ where: { businessId: dokon.business.id } }),
+    oldin.txn
+  );
+  assert.equal(await rawPrisma.debt.count({ where: { businessId: dokon.business.id } }), oldin.debt);
+  // Birinchi satr qoldig'i ham tegilmagan.
+  assert.equal((await rawPrisma.product.findUnique({ where: { id: yaxshi.id } })).miqdor, 20);
+});
+
+// =========================================================================
+// XAVFSIZLIK REGRESSIYASI (qolgan nuqtalar)
+// =========================================================================
+
+test("31. ProductCategory biznes/tenant doirasida qamalgan", async () => {
+  await D(() =>
+    prisma.productCategory.create({
+      data: { businessId: dokon.business.id, nomi: "Ichimliklar" },
+    })
+  );
+  const dokonda = await D(() => prisma.productCategory.count());
+  assert.ok(dokonda > 0);
+
+  // Boshqa tenant uni KO'RMAYDI.
+  const agentlikda = await A(() => prisma.productCategory.count());
+  assert.equal(agentlikda, 0, "mahsulot kategoriyasi boshqa tenantga ko'rinmasligi kerak");
+
+  // Nom biznes ichida takrorlanmaydi (kategoriya ikkilanib ketmasin).
+  await assert.rejects(async () =>
+    D(() =>
+      prisma.productCategory.create({
+        data: { businessId: dokon.business.id, nomi: "Ichimliklar" },
+      })
+    )
+  );
+});
+
+test("32. Superadmin: tarifda yo'q modulni yoqa OLMAYDI", async () => {
+  const { setTenantModul } = await import("@/lib/superadmin/service");
+  // STANDARD tarifida CRM yo'q (lib/billing/plans.ts).
+  await assert.rejects(
+    async () => setTenantModul({ tenantId: agency.tenant.id, code: "CRM", isActive: true }),
+    (e: Error) => /tarifida mavjud emas/.test(e.message)
+  );
+  // Bazaga ham yozilmagan.
+  const row = await rawPrisma.tenantModule.findFirst({
+    where: { tenantId: agency.tenant.id, code: "CRM" },
+  });
+  assert.equal(row, null);
+});
+
+test("33. Superadmin: asosiy (core) modulni o'chira OLMAYDI", async () => {
+  const { setTenantModul } = await import("@/lib/superadmin/service");
+  await assert.rejects(
+    async () => setTenantModul({ tenantId: dokon.tenant.id, code: "MOLIYA", isActive: false }),
+    (e: Error) => /Asosiy modulni/.test(e.message)
+  );
+  // Noma'lum modul ham rad etiladi (kod injection'ga qarshi).
+  await assert.rejects(
+    async () => setTenantModul({ tenantId: dokon.tenant.id, code: "YOQ_MODUL", isActive: true }),
+    (e: Error) => /Noma'lum modul/.test(e.message)
+  );
+});
+
+test("34. Boshqa tenantning chekini qaytarib bo'lmaydi (IDOR)", async () => {
+  // Do'kon chekini agentlik biznesi nomidan bekor qilishga urinish.
+  const p = await mahsulot("IDOR tovari", 15_000, 10);
+  const chek = await sot({ satrlar: [{ productId: p.id, miqdor: 1 }], tolovTuri: "naqd" });
+
+  await assert.rejects(
+    async () =>
+      A(() =>
+        pos.posChekBekor({
+          businessId: agency.business.id,
+          chekId: chek.id,
+          sabab: "ruxsatsiz urinish",
+          userId: agency.user.id,
+        })
+      ),
+    ForbiddenError
+  );
+  // Chek tegilmagan.
+  const keyin = await rawPrisma.posChek.findUnique({ where: { id: chek.id } });
+  assert.equal(keyin.deletedAt, null);
+});
+
+test("35. Kamera qo'llab-quvvatlanmasa aniq sabab qaytadi (iPhone Safari yo'li)", async () => {
+  const { kameraHolati, KAMERASIZ_YORIQNOMA } = await import("@/lib/magazin/kameraQollab");
+
+  // BarcodeDetector yo'q (iOS Safari, Firefox).
+  const yoq = kameraHolati({ navigator: { mediaDevices: { getUserMedia: () => {} } } });
+  assert.equal(yoq.qollab, false);
+  assert.match((yoq as { sabab: string }).sabab, /Safari/);
+
+  // API bor, lekin kameraga kirish yo'q (masalan HTTPS emas).
+  const kamerasiz = kameraHolati({ BarcodeDetector: function () {}, navigator: {} });
+  assert.equal(kamerasiz.qollab, false);
+
+  // Hammasi joyida.
+  const bor = kameraHolati({
+    BarcodeDetector: function () {},
+    navigator: { mediaDevices: { getUserMedia: () => {} } },
+  });
+  assert.equal(bor.qollab, true);
+
+  // Yo'riqnoma bo'sh bo'lmasligi kerak — foydalanuvchi nima qilishini bilsin.
+  assert.ok(KAMERASIZ_YORIQNOMA.length >= 2);
+});
+
+// =========================================================================
+// QISMAN QAYTARISH — ARXITEKTURA TAYYORLIGI (hozir IMPLEMENT QILINMAGAN)
+// =========================================================================
+
+test("36. Arxitektura qisman qaytarishga TAYYOR (hozir yoqilmagan)", async () => {
+  // Qisman qaytarish HOZIR yo'q va bu ataylab. Lekin keyinchalik qo'shish
+  // uchun ma'lumot modeli yetarli bo'lishi kerak: har chek satri ALOHIDA
+  // yozuv bo'lib, o'z miqdori, narxi, tannarxi va yumshoq o'chirish
+  // maydonlari bilan kelishi shart. Agar satrlar chek ichida JSON sifatida
+  // saqlanganda, qisman qaytarish uchun butun modelni qayta qurish kerak
+  // bo'lardi. Bu test shu xususiyatni QO'RIQLAYDI.
+  const a = await mahsulot("Qisman A", 9_000, 10);
+  const b = await mahsulot("Qisman B", 4_000, 10);
+  const chek = await sot({
+    satrlar: [
+      { productId: a.id, miqdor: 2 },
+      { productId: b.id, miqdor: 3 },
+    ],
+    tolovTuri: "naqd",
+  });
+
+  const satrlar = await rawPrisma.sale.findMany({ where: { chekId: chek.id } });
+  assert.equal(satrlar.length, 2, "har satr ALOHIDA yozuv bo'lishi kerak");
+  for (const s of satrlar) {
+    assert.ok(s.id, "satrning o'z identifikatori bo'lishi kerak");
+    assert.ok(s.miqdor > 0, "satrda o'z miqdori bo'lishi kerak");
+    assert.ok(s.birlikNarx > 0, "satrda o'z narxi bo'lishi kerak");
+    assert.ok("tannarx" in s, "marja hisobi uchun tannarx snapshot bo'lishi kerak");
+    assert.ok("deletedAt" in s, "satr alohida yumshoq o'chirilishi mumkin bo'lishi kerak");
+  }
+  // Chek summasi satrlardan HISOBLANADI — qisman qaytarishda uni qayta
+  // hisoblash mumkin (qotirilgan qiymatga tayanmaydi).
+  assert.equal(
+    satrlar.reduce((x: number, s: { jamiSumma: number }) => x + s.jamiSumma, 0),
+    chek.jamiSumma
+  );
 });

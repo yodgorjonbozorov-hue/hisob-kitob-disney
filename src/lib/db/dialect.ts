@@ -71,3 +71,31 @@ export function registrsizTeng(column: string, qiymat: string): Prisma.Sql {
     ? Prisma.sql`LOWER(${col}) = LOWER(${qiymat})`
     : Prisma.sql`${col} = ${qiymat} COLLATE NOCASE`;
 }
+
+/**
+ * BIZNES QATORINI QULFLASH — ketma-ket raqam ajratish uchun.
+ *
+ * Muammo: POS cheki raqami `max(raqam) + 1` bilan olinadi. PostgreSQL
+ * READ COMMITTED bilan ishlagani uchun bir vaqtda kelgan N ta sotuv
+ * BIR XIL `max` ni o'qiydi va faqat bittasi yoziladi; qolgani unique
+ * cheklovga urilib qayta urinishga tushadi. 20 kassirda bu "podaning
+ * bir joyga yugurishi" ga aylanadi: har qayta urinishda yana bittasi
+ * o'tadi, qolgani yana yiqiladi (haqiqiy o'lchov: 20 tadan 10 tasi
+ * 5 urinishdan keyin ham yiqilgan).
+ *
+ * Yechim: raqam olishdan OLDIN biznes qatoriga qulf qo'yiladi. Shunda
+ * tranzaksiyalar TO'QNASHMAYDI, NAVBATGA turadi — har biri o'z raqamini
+ * oladi va qayta urinish umuman kerak bo'lmaydi.
+ *
+ * SQLite/Turso'da `FOR UPDATE` yo'q va KERAK EMAS: u yozuv tranzaksiyalarini
+ * baribir ketma-ketlashtiradi. Shu bois `null` qaytadi va chaqiruvchi
+ * qulfsiz davom etadi (mavjud xatti-harakat o'zgarmaydi).
+ *
+ * Qulf tranzaksiya oxirigacha ushlanadi — chaqiruvchi uni tranzaksiyaning
+ * BOSHIDA olishi kerak, aks holda qulflar tartibi buzilib deadlock xavfi
+ * paydo bo'ladi.
+ */
+export function biznesQatorQulfiSql(businessId: string): Prisma.Sql | null {
+  if (!isPostgres()) return null;
+  return Prisma.sql`SELECT "id" FROM "Business" WHERE "id" = ${businessId} FOR UPDATE`;
+}

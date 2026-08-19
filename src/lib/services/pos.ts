@@ -5,6 +5,7 @@ import { ensureCategoryTx } from "@/lib/services/inventory";
 import { qarzLimitTekshirTx } from "@/lib/services/mijoz";
 import { logAudit } from "@/lib/services/audit";
 import { todayDateOnlyString, dateOnlyStringToUTCDate } from "@/lib/date";
+import { biznesQatorQulfiSql } from "@/lib/db/dialect";
 
 /**
  * MAGAZIN (POS) XIZMAT QATLAMI — kassadagi savat sotuvi.
@@ -98,13 +99,91 @@ function satrlarniBirlashtir(satrlar: PosSavatSatri[]): PosSavatSatri[] {
   return [...map.values()];
 }
 
-/** Biznes ichidagi keyingi chek raqami (tranzaksiya ichida chaqiriladi). */
+/**
+ * Biznes ichidagi keyingi chek raqami (tranzaksiya ichida chaqiriladi).
+ *
+ * TO'QNASHUV NIMA UCHUN MUMKIN: SQLite/Turso yozuv tranzaksiyalarini
+ * ketma-ketlashtiradi, ya'ni u yerda bu o'qish xavfsiz. PostgreSQL esa
+ * READ COMMITTED bilan ishlaydi — ikki kassir bir vaqtda sotsa IKKALASI
+ * ham `max = 5` ni o'qib, ikkalasi ham 6-raqamni yozmoqchi bo'ladi.
+ *
+ * Bu yerda RAQAMNI TO'G'RILASHGA urinilmaydi. Haqiqat manbai — bazadagi
+ * `@@unique([businessId, raqam])` cheklovi: ikkinchi yozuv MAJBURAN
+ * yiqiladi (P2002) va butun tranzaksiya orqaga qaytadi. Yiqilgan urinish
+ * esa `posSotuv` da qaytadan boshlanadi (`chekRaqamiBilanQaytaUrin`).
+ *
+ * Ya'ni dublikat chek raqami bazaga JISMONAN sig'maydi — bu ilova
+ * mantig'iga emas, cheklovga tayanadi.
+ */
 async function keyingiChekRaqami(tx: BusinessTx, businessId: string): Promise<number> {
   const oxirgi = await tx.posChek.aggregate({
     where: { businessId },
     _max: { raqam: true },
   });
   return (oxirgi._max.raqam ?? 0) + 1;
+}
+
+/** Chek raqami poygasida qancha marta qayta urinamiz. */
+const QAYTA_URINISH = 5;
+
+/**
+ * Xato QAYTA URINISHGA arziydimi.
+ *
+ * Uch holat qamrab olinadi va ularning HAMMASIDA tranzaksiya to'liq orqaga
+ * qaytgan bo'ladi (ya'ni qoldiq kamaymagan, chek yozilmagan) — shu bois
+ * qaytadan urinish xavfsiz, ikki marta sotib yuborish mumkin emas:
+ *
+ *   P2002  — chek raqami band bo'lib qoldi (yuqoridagi poyga);
+ *   P2034  — Prisma'ning o'z kodi: "write conflict yoki deadlock, qayta
+ *            urinib ko'ring" (Postgres xatolarini Prisma shunga o'raydi);
+ *   40001  — serialization_failure (xom Postgres kodi, o'ralmagan holat);
+ *   40P01  — deadlock_detected (ikki tranzaksiya bir-birining qatorini kutdi).
+ *
+ * P2002 ATAYLAB tor: faqat `raqam` ustuni bo'yicha. Masalan shtrix-kod
+ * to'qnashuvi ham P2002 beradi, lekin u FOYDALANUVCHI XATOSI — uni qayta
+ * urinib "tuzatib" bo'lmaydi va xabar kassirga yetib borishi kerak.
+ */
+function qaytaUrinsaBoladimi(e: unknown): boolean {
+  if (!e || typeof e !== "object") return false;
+  const xato = e as { code?: unknown; meta?: { target?: unknown } };
+
+  if (xato.code === "P2002") {
+    const nishon = xato.meta?.target;
+    const matn = Array.isArray(nishon) ? nishon.join(",") : String(nishon ?? "");
+    return matn.toLowerCase().includes("raqam");
+  }
+  return xato.code === "P2034" || xato.code === "40001" || xato.code === "40P01";
+}
+
+/**
+ * Chek raqami poygasi (yoki deadlock) bo'lsa butun tranzaksiyani qaytadan
+ * boshlaydi.
+ *
+ * Qayta urinish TRANZAKSIYA ICHIDA emas, TASHQARISIDA bo'lishi shart:
+ * PostgreSQL'da tranzaksiya ichidagi xatodan keyin seans "aborted" holatga
+ * o'tadi va undan keyingi har qanday so'rov 25P02 bilan yiqiladi. Ya'ni
+ * ichkarida tutib qolib davom etish mumkin emas.
+ */
+async function chekRaqamiBilanQaytaUrin<T>(fn: () => Promise<T>): Promise<T> {
+  let oxirgi: unknown;
+  for (let urinish = 0; urinish < QAYTA_URINISH; urinish++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (!qaytaUrinsaBoladimi(e)) throw e;
+      oxirgi = e;
+      // Qisqa, o'sib boruvchi kutish: ikki kassir bir vaqtda "yana" bosganda
+      // ular darhol yana to'qnashmasin.
+      await new Promise((r) => setTimeout(r, 10 * (urinish + 1)));
+    }
+  }
+  // Bu yerga yetish — kutilmagan darajadagi bosim. Kassirga tushunarli
+  // xabar beramiz, texnik P2002 ni emas.
+  throw new BadRequestError(
+    `Kassada bir vaqtda juda ko'p sotuv bo'lyapti — qaytadan urinib ko'ring (${String(
+      (oxirgi as { code?: string })?.code ?? "?"
+    )})`
+  );
 }
 
 export interface PosChekNatija {
@@ -142,147 +221,173 @@ export async function posSotuv(params: PosSotuvParams): Promise<PosChekNatija> {
   const sana = params.sana ?? todayDateOnlyString();
   const sanaDate = dateOnlyStringToUTCDate(sana);
 
-  const natija = await runBusinessTx(params.businessId, async (tx) => {
-    // Tranzaksiya ichida xom `tx` ishlatiladi — HAR so'rovda `businessId`
-    // sharti QO'LDA yoziladi (CLAUDE.md dagi kelishuv).
-    const products = await tx.product.findMany({
-      where: {
-        id: { in: satrlar.map((s) => s.productId) },
-        businessId: params.businessId,
-        isActive: true,
-      },
-      select: { id: true, nomi: true, sotuvNarx: true, kelganNarx: true },
-    });
-    const pMap = new Map(products.map((p) => [p.id, p]));
+  // BUTUN TRANZAKSIYA qayta urinish ostida: chek raqami poygasi yoki
+  // deadlock bo'lsa hammasi orqaga qaytadi va noldan boshlanadi.
+  const natija = await chekRaqamiBilanQaytaUrin(() =>
+    runBusinessTx(params.businessId, async (tx) => {
+      // ---- 0. RAQAM NAVBATI ----
+      // Biznes qatoriga qulf: shu biznesdagi POS sotuvlari to'qnashmaydi,
+      // NAVBATGA turadi va har biri o'z chek raqamini oladi. Qulf eng boshda
+      // olinadi — qulflar tartibi barcha POS tranzaksiyalarida bir xil bo'lsin
+      // (deadlock xavfi tug'ilmasin). PostgreSQL'da ishlaydi; SQLite'da
+      // `null` qaytadi va hech narsa o'zgarmaydi (u yozuvlarni baribir
+      // ketma-ketlashtiradi).
+      const qulf = biznesQatorQulfiSql(params.businessId);
+      if (qulf) await tx.$queryRaw(qulf);
 
-    // Narxlar avval hisoblanadi: qarz limiti omborga TEGMASDAN oldin
-    // tekshirilishi kerak.
-    const hisob = satrlar.map((s) => {
-      const p = pMap.get(s.productId);
-      if (!p) throw new ForbiddenError("Mahsulot topilmadi");
-      const kelishilgan = s.narx != null && s.narx > 0 ? Math.round(s.narx) : null;
-      const birlikNarx = kelishilgan ?? p.sotuvNarx;
-      if (birlikNarx <= 0) {
-        throw new BadRequestError(`"${p.nomi}" uchun sotuv narxi kiritilmagan`);
-      }
-      return {
-        product: p,
-        miqdor: s.miqdor,
-        birlikNarx,
-        tannarx: p.kelganNarx,
-        jamiSumma: birlikNarx * s.miqdor,
-      };
-    });
-
-    const jamiSumma = hisob.reduce((a, h) => a + h.jamiSumma, 0);
-
-    if (params.tolovTuri === "qarz" && params.contactId) {
-      await qarzLimitTekshirTx(tx, params.businessId, params.contactId, jamiSumma);
-    }
-
-    // ---- Ombor: shartli atomik kamaytirish (parallel kassalar himoyasi) ----
-    // `updateMany` filtriga `miqdor >= n` sharti kiradi, ya'ni yetarli qoldiq
-    // bo'lmasa `count = 0` qaytadi va bironta qator o'zgarmaydi. Ikki kassir
-    // bir vaqtda oxirgi donani sotsa faqat bittasi o'tadi.
-    for (const h of hisob) {
-      const upd = await tx.product.updateMany({
-        where: { id: h.product.id, businessId: params.businessId, miqdor: { gte: h.miqdor } },
-        data: { miqdor: { decrement: h.miqdor } },
+      // Tranzaksiya ichida xom `tx` ishlatiladi — HAR so'rovda `businessId`
+      // sharti QO'LDA yoziladi (CLAUDE.md dagi kelishuv).
+      const products = await tx.product.findMany({
+        where: {
+          id: { in: satrlar.map((s) => s.productId) },
+          businessId: params.businessId,
+          isActive: true,
+        },
+        select: { id: true, nomi: true, sotuvNarx: true, kelganNarx: true },
       });
-      if (upd.count === 0) {
-        throw new BadRequestError(`"${h.product.nomi}" omborda yetarli emas`);
+      const pMap = new Map(products.map((p) => [p.id, p]));
+
+      // Narxlar avval hisoblanadi: qarz limiti omborga TEGMASDAN oldin
+      // tekshirilishi kerak.
+      const hisob = satrlar.map((s) => {
+        const p = pMap.get(s.productId);
+        if (!p) throw new ForbiddenError("Mahsulot topilmadi");
+        const kelishilgan = s.narx != null && s.narx > 0 ? Math.round(s.narx) : null;
+        const birlikNarx = kelishilgan ?? p.sotuvNarx;
+        if (birlikNarx <= 0) {
+          throw new BadRequestError(`"${p.nomi}" uchun sotuv narxi kiritilmagan`);
+        }
+        return {
+          product: p,
+          miqdor: s.miqdor,
+          birlikNarx,
+          tannarx: p.kelganNarx,
+          jamiSumma: birlikNarx * s.miqdor,
+        };
+      });
+
+      const jamiSumma = hisob.reduce((a, h) => a + h.jamiSumma, 0);
+
+      // QATOR QULFLARI BIR XIL TARTIBDA OLINADI — deadlock'ning oldini oladi.
+      //
+      // Ikki kassir bir vaqtda sotayotgan bo'lsin: A savati [non, sut], B
+      // savati [sut, non]. Har `updateMany` o'sha qatorga qulf qo'yadi. Tartib
+      // har xil bo'lsa A "sut"ni, B "non"ni kutib qoladi — PostgreSQL kutish
+      // halqasini sezib ulardan birini 40P01 (deadlock) bilan uzadi.
+      //
+      // productId bo'yicha saralash bilan HAR tranzaksiya qulflarni bir xil
+      // ketma-ketlikda oladi, ya'ni halqa umuman tuzilmaydi. SQLite'da bu
+      // zararsiz: u yozuvlarni baribir ketma-ketlashtiradi.
+      hisob.sort((a, b) => (a.product.id < b.product.id ? -1 : a.product.id > b.product.id ? 1 : 0));
+
+      if (params.tolovTuri === "qarz" && params.contactId) {
+        await qarzLimitTekshirTx(tx, params.businessId, params.contactId, jamiSumma);
       }
-    }
 
-    const raqam = await keyingiChekRaqami(tx, params.businessId);
-    const chek = await tx.posChek.create({
-      data: {
-        businessId: params.businessId,
-        raqam,
-        jamiSumma,
-        tolovTuri: params.tolovTuri,
-        contactId: params.contactId ?? undefined,
-        mijozNomi: params.mijozNomi?.trim() || undefined,
-        mijozTel: params.mijozTel?.trim() || undefined,
-        userId: params.userId,
-        sana: sanaDate,
-      },
-      select: { id: true, raqam: true },
-    });
+      // ---- Ombor: shartli atomik kamaytirish (parallel kassalar himoyasi) ----
+      // `updateMany` filtriga `miqdor >= n` sharti kiradi, ya'ni yetarli qoldiq
+      // bo'lmasa `count = 0` qaytadi va bironta qator o'zgarmaydi. Ikki kassir
+      // bir vaqtda oxirgi donani sotsa faqat bittasi o'tadi.
+      for (const h of hisob) {
+        const upd = await tx.product.updateMany({
+          where: { id: h.product.id, businessId: params.businessId, miqdor: { gte: h.miqdor } },
+          data: { miqdor: { decrement: h.miqdor } },
+        });
+        if (upd.count === 0) {
+          throw new BadRequestError(`"${h.product.nomi}" omborda yetarli emas`);
+        }
+      }
 
-    for (const h of hisob) {
-      await tx.sale.create({
+      const raqam = await keyingiChekRaqami(tx, params.businessId);
+      const chek = await tx.posChek.create({
         data: {
           businessId: params.businessId,
-          productId: h.product.id,
-          miqdor: h.miqdor,
-          birlikNarx: h.birlikNarx,
-          tannarx: h.tannarx,
-          jamiSumma: h.jamiSumma,
-          // Satr darajasidagi to'lov turi chek bilan bir xil bo'lishi uchun
-          // "qarz" dan boshqasi "naqd" deb yoziladi: `Sale.tolovTuri`
-          // tarixan ikki qiymatli ("naqd" | "qarz") va uni kengaytirish
-          // eski sotuv hisobotlarini o'zgartirib yuborardi.
-          tolovTuri: params.tolovTuri === "qarz" ? "qarz" : "naqd",
+          raqam,
+          jamiSumma,
+          tolovTuri: params.tolovTuri,
           contactId: params.contactId ?? undefined,
           mijozNomi: params.mijozNomi?.trim() || undefined,
           mijozTel: params.mijozTel?.trim() || undefined,
-          sana: sanaDate,
           userId: params.userId,
-          chekId: chek.id,
-          // `transactionId` ATAYLAB bo'sh — pul yozuvi chekda (yuqoridagi izoh).
-        },
-      });
-    }
-
-    // ---- To'lov ----
-    if (params.tolovTuri === "qarz") {
-      const debt = await tx.debt.create({
-        data: {
-          businessId: params.businessId,
-          turi: "olinadigan",
-          contactId: params.contactId ?? undefined,
-          mijozNomi: params.mijozNomi!.trim(),
-          mijozTel: params.mijozTel?.trim() || undefined,
-          jamiSumma,
-          status: "OPEN",
           sana: sanaDate,
-          izoh: `${chek.raqam}-chek`,
-          userId: params.userId,
         },
-        select: { id: true },
+        select: { id: true, raqam: true },
       });
-      await tx.posChek.update({ where: { id: chek.id }, data: { debtId: debt.id } });
-    } else {
-      const categoryId = await ensureCategoryTx(tx, params.businessId, SOTUV_KATEGORIYA);
-      const txn = await createTransactionTx(tx, params.userId, params.businessId, {
-        turi: "kirim",
-        categoryId,
-        accountId: params.accountId ?? undefined,
-        tolovTuri: tranzaksiyaTolovTuri(params.tolovTuri),
-        summa: jamiSumma,
-        sana,
-        izoh: `${chek.raqam}-chek · ${hisob.length} ta tovar`,
-      });
-      await tx.posChek.update({
-        where: { id: chek.id },
-        data: { transactionId: txn.id, accountId: txn.accountId ?? undefined },
-      });
-    }
 
-    return {
-      id: chek.id,
-      raqam: chek.raqam,
-      jamiSumma,
-      tolovTuri: params.tolovTuri,
-      satrlar: hisob.map((h) => ({
-        nomi: h.product.nomi,
-        miqdor: h.miqdor,
-        birlikNarx: h.birlikNarx,
-        jamiSumma: h.jamiSumma,
-      })),
-    };
-  });
+      for (const h of hisob) {
+        await tx.sale.create({
+          data: {
+            businessId: params.businessId,
+            productId: h.product.id,
+            miqdor: h.miqdor,
+            birlikNarx: h.birlikNarx,
+            tannarx: h.tannarx,
+            jamiSumma: h.jamiSumma,
+            // Satr darajasidagi to'lov turi chek bilan bir xil bo'lishi uchun
+            // "qarz" dan boshqasi "naqd" deb yoziladi: `Sale.tolovTuri`
+            // tarixan ikki qiymatli ("naqd" | "qarz") va uni kengaytirish
+            // eski sotuv hisobotlarini o'zgartirib yuborardi.
+            tolovTuri: params.tolovTuri === "qarz" ? "qarz" : "naqd",
+            contactId: params.contactId ?? undefined,
+            mijozNomi: params.mijozNomi?.trim() || undefined,
+            mijozTel: params.mijozTel?.trim() || undefined,
+            sana: sanaDate,
+            userId: params.userId,
+            chekId: chek.id,
+            // `transactionId` ATAYLAB bo'sh — pul yozuvi chekda (yuqoridagi izoh).
+          },
+        });
+      }
+
+      // ---- To'lov ----
+      if (params.tolovTuri === "qarz") {
+        const debt = await tx.debt.create({
+          data: {
+            businessId: params.businessId,
+            turi: "olinadigan",
+            contactId: params.contactId ?? undefined,
+            mijozNomi: params.mijozNomi!.trim(),
+            mijozTel: params.mijozTel?.trim() || undefined,
+            jamiSumma,
+            status: "OPEN",
+            sana: sanaDate,
+            izoh: `${chek.raqam}-chek`,
+            userId: params.userId,
+          },
+          select: { id: true },
+        });
+        await tx.posChek.update({ where: { id: chek.id }, data: { debtId: debt.id } });
+      } else {
+        const categoryId = await ensureCategoryTx(tx, params.businessId, SOTUV_KATEGORIYA);
+        const txn = await createTransactionTx(tx, params.userId, params.businessId, {
+          turi: "kirim",
+          categoryId,
+          accountId: params.accountId ?? undefined,
+          tolovTuri: tranzaksiyaTolovTuri(params.tolovTuri),
+          summa: jamiSumma,
+          sana,
+          izoh: `${chek.raqam}-chek · ${hisob.length} ta tovar`,
+        });
+        await tx.posChek.update({
+          where: { id: chek.id },
+          data: { transactionId: txn.id, accountId: txn.accountId ?? undefined },
+        });
+      }
+
+      return {
+        id: chek.id,
+        raqam: chek.raqam,
+        jamiSumma,
+        tolovTuri: params.tolovTuri,
+        satrlar: hisob.map((h) => ({
+          nomi: h.product.nomi,
+          miqdor: h.miqdor,
+          birlikNarx: h.birlikNarx,
+          jamiSumma: h.jamiSumma,
+        })),
+      };
+    })
+  );
 
   // `runBusinessTx` xom `tx` bilan ishlaydi — extension'dagi avtomatik audit
   // u yerda ishlamaydi, shuning uchun biznes hodisasi qo'lda yoziladi.
