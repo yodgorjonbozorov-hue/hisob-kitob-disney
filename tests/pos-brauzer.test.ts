@@ -732,3 +732,60 @@ test("SOTUVCHI (SELLER) kassaga umuman kira olmaydi", { skip: sabab }, async () 
   assert.equal(javob.malumot.topildi, true);
   await page.close();
 });
+
+// =========================================================================
+// MAKET: SAVAT HAR DOIM EKRANDA
+// =========================================================================
+
+test("KATEGORIYA TASMASI uzun bo'lsa ham SAVAT ekrandan chiqib ketmaydi", { skip: sabab }, async () => {
+  /*
+   * HAQIQIY NUQSON (2026-08-19).
+   *
+   * Kassa maketi ikki ustunli: `grid-cols-[1fr_380px]`. Grid bolasining
+   * sukutdagi `min-width: auto` qiymati uni kontentining eng kichik
+   * kengligidan pastga tushirmaydi. Do'konda 11 ta kategoriya bo'lganda
+   * chap ustun kengayib ketdi va savat ekranning O'NG TOMONIDAN tashqariga
+   * chiqdi. `body { overflow-x: clip }` (mobil qulaylashtirishda qo'shilgan)
+   * uni siljitib topishga ham yo'l qo'ymadi — kassir savatni umuman
+   * ko'rmadi va hech narsa sota olmadi.
+   *
+   * Shuning uchun bu yerda "savat bormi" emas, "savat EKRAN ICHIDAMI"
+   * tekshiriladi: DOM'da bo'lgani bilan ko'rinmaydigan savat ishlamaydi.
+   */
+  const page = await sahifa(ctxKassir);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`${ASOS}/app/pos`, { waitUntil: "domcontentloaded" });
+  await page.waitForSelector("h1", { timeout: 30_000 });
+
+  // Kategoriya tasmasi haqiqatan uzun bo'lishi kerak — aks holda test
+  // nuqsonni umuman qo'zg'atmaydi va bekorga yashil bo'lib turadi.
+  const kategoriyaSoni = await page.locator("button", { hasText: /^Gullar$|^teddi$|^shar$/ }).count();
+  assert.ok(kategoriyaSoni >= 3, `e2e bazasida kategoriyalar yetarli emas: ${kategoriyaSoni}`);
+
+  const olcham = await page.evaluate(() => {
+    const sarlavha = [...document.querySelectorAll("h2")].find((h) => h.textContent === "Savat");
+    const karta = sarlavha?.closest("div.bg-surface");
+    const r = karta?.getBoundingClientRect();
+    return {
+      oyna: window.innerWidth,
+      bodyScroll: document.body.scrollWidth,
+      savat: r ? { chap: Math.round(r.left), ong: Math.round(r.right) } : null,
+    };
+  });
+
+  assert.ok(olcham.savat, "savat kartasi topilmadi");
+  assert.ok(
+    olcham.savat.ong <= olcham.oyna,
+    `savat ekrandan chiqib ketgan: o'ng cheti ${olcham.savat.ong}px, ekran ${olcham.oyna}px`
+  );
+  assert.ok(olcham.savat.chap >= 0, "savat chap tomondan chiqib ketgan");
+  assert.equal(
+    olcham.bodyScroll,
+    olcham.oyna,
+    "sahifa gorizontal siljimasligi kerak — keng kontent o'z ichida suriladi"
+  );
+
+  // To'lov tugmasi ham bosiladigan joyda turibdi.
+  assert.ok(await page.getByRole("button", { name: "To'lovga o'tish" }).isVisible());
+  await page.close();
+});

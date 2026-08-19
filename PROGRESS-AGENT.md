@@ -3626,3 +3626,52 @@ Qator `productId` bilan keladi, ya'ni foydalanuvchi boshqa biznesning
 mahsulot idsini yuborishi mumkin. Servis idlarni `businessId` sharti bilan
 bir marta o'qiydi va topilmaganlarini `topilmadi` deb SANAYDI — jimgina
 o'tkazib yuborilmaydi.
+
+## Kassa (POS): savat ekrandan chiqib ketgan edi (2026-08-19)
+
+Mijoz "kassa buzilib ketdi" dedi: Disney Giftbox kassasida SAVAT umuman
+ko'rinmasdi — mahsulot to'ri butun ekranni egallab turgan, savat ham,
+"To'lovga o'tish" tugmasi ham yo'q. Kassir hech narsa sota olmaydi.
+
+### Sabab
+
+Kassa maketi ikki ustunli: `grid grid-cols-1 lg:grid-cols-[1fr_380px]`.
+Grid bolasining sukutdagi `min-width: auto` qiymati uni KONTENTINING eng
+kichik kengligidan pastga tushirmaydi. Chap ustundagi kategoriya tasmasi
+(Disney Giftbox'da 11 ta kategoriya, ichki kengligi 1109px) shu tufayli
+ustunni 976px ga cho'zdi va 380px lik savat ekranning o'ng chetidan
+TASHQARIGA chiqdi.
+
+Ilgari bunday holatda sahifa gorizontal siljirdi — xunuk, lekin savat
+topilardi. Mobil qulaylashtirish `body { overflow-x: clip }` qo'shgach esa
+u KESILDI: siljitib ham yetib bo'lmaydigan, mavjud-u ko'rinmaydigan
+element bo'lib qoldi.
+
+Ikkita sharoit birga kelganda paydo bo'lgani uchun nuqson e'tibordan
+chetda qoldi: mobil ish `overflow-x: clip` ni kiritdi, import esa katalogga
+o'nlab kategoriya olib keldi. Ikkalasidan biri bo'lmasa kassa "ishlab"
+turaverardi.
+
+### Tuzatish
+
+`MahsulotTori` ildiziga `min-w-0` — grid bolasi endi o'z kontentidan
+kichrayishi mumkin, kategoriya tasmasi esa `.jadval-siljish` ichida
+suriladi (u shu maqsadda qo'yilgan edi). Bir sinf, maketning boshqa
+joyiga tegilmadi.
+
+### Nega testlar ushlamagan
+
+`tests/pos-brauzer.test.ts` "savat DOM'da bormi" deb tekshirardi — savat
+ekrandan chiqib ketganda ham DOM'da bor edi, ya'ni test yashil turaverardi.
+Ikkinchidan, e2e bazasida kategoriya UMUMAN yo'q edi, shuning uchun tasma
+hech qachon uzun bo'lmasdi.
+
+Ikkalasi ham tuzatildi:
+ - `scripts/e2e-tayyorla.mjs` — Salyut do'koniga 11 ta kategoriya qo'shildi
+   (haqiqiy do'kondagidek);
+ - yangi test savatning `getBoundingClientRect()` ini o'lchaydi va uning
+   o'ng cheti ekran ichida qolishini talab qiladi.
+
+Sabab-oqibat isbotlandi: `min-w-0` olib tashlanganda test yiqiladi
+(u bilan birga savatga tegadigan yana 7 ta test ham), qaytarilganda
+19 tasi ham o'tadi.

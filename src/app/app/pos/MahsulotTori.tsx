@@ -51,7 +51,17 @@ export function MahsulotTori({
   });
 
   return (
-    <div className="space-y-3">
+    /*
+     * `min-w-0` — SAVAT YO'QOLIB QOLMASLIGI UCHUN.
+     *
+     * Bu blok kassa maketining `1fr` ustuni. Grid bolasining sukutdagi
+     * `min-width: auto` qiymati uni kontentining eng kichik kengligidan
+     * pastga tushirmaydi: kategoriya tasmasi uzun bo'lsa (do'konda 10-15
+     * kategoriya odatiy hol) ustun kengayib, 380px lik savat ekrandan
+     * TASHQARIGA chiqib ketardi. Sahifa `overflow-x: clip` bo'lgani uchun
+     * u siljitib ham topilmasdi — kassir savatni umuman ko'rmasdi.
+     */
+    <div className="min-w-0 space-y-3">
       <div className="flex gap-2">
         <input
           ref={qidiruvRef}

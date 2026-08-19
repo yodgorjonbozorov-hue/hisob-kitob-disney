@@ -140,6 +140,27 @@ async function magazinniTayyorla(c, tenantId) {
     });
   }
 
+  /*
+   * KATEGORIYALAR — maket sinovining shartI.
+   *
+   * Haqiqiy do'konda 10-15 kategoriya odatiy hol va kassa ekranida ular
+   * bitta gorizontal tasmaga tushadi. Ilgari e2e bazasida kategoriya
+   * umuman yo'q edi, shuning uchun tasma hech qachon uzun bo'lmasdi va
+   * "savat ekrandan chiqib ketdi" nuqsoni testlardan o'tib ketgan edi.
+   */
+  const KATEGORIYALAR = [
+    "Gullar", "Igrushkalar", "STICH KAROBKA", "geley", "kafshonka ayiq",
+    "qogoz", "seflar", "shar", "suvener", "teddi", "yumshoq o'yinchoqlar",
+  ];
+  for (let i = 0; i < KATEGORIYALAR.length; i++) {
+    await c.execute({
+      sql: `INSERT OR IGNORE INTO "ProductCategory"
+              ("id","businessId","nomi","tartib","isActive","createdAt")
+            VALUES (?, 'biz_salyut', ?, ?, 1, ?)`,
+      args: [`pc_salyut_${i}`, KATEGORIYALAR[i], i, new Date().toISOString()],
+    });
+  }
+
   // Do'konga BIRIKTIRILGAN kassir — rol tekshiruvlari uchun.
   // Parol seed'dagi kassir bilan bir xil hash (kassir123).
   const kassirHash = (
