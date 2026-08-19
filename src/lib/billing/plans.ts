@@ -15,7 +15,11 @@ export const PLANLAR: Plan[] = [
     nomi: "Standart",
     oylikNarx: 199_000,
     tavsif: "Cheksiz biznes, foydalanuvchi va tranzaksiya · Hisobotlar (PDF/Excel) · Telegram bot",
-    modullar: ["MOLIYA", "OMBOR", "KUNLIK"],
+    // MAGAZIN — Standartga kiritilgan: bu tarif allaqachon OMBOR (savdo)
+    // bilan keladi va do'kon uchun kassa uning tabiiy davomi. Tarifda
+    // borligi modulni YOQMAYDI: tenant uni Sozlamalar → Modullar'dan
+    // o'zi yoqadi, ya'ni mavjud mijozlarda hech narsa o'zgarmaydi.
+    modullar: ["MOLIYA", "OMBOR", "KUNLIK", "MAGAZIN"],
   },
   {
     code: "AVTO",
@@ -31,7 +35,22 @@ export const PLANLAR: Plan[] = [
     oylikNarx: 399_000,
     tavsif:
       "Standart'dagi hammasi + Xarid (ta'minotchi, buyurtma, qabul qilish) + CRM (bitimlar kanbani, kontaktlar) + Vazifalar + AI yordamchi",
-    modullar: ["MOLIYA", "OMBOR", "KUNLIK", "XARID", "TASDIQLASH", "MIJOZLAR", "HR", "HUJJATLAR", "CRM", "VAZIFALAR", "AI"],
+    modullar: [
+      "MOLIYA", "OMBOR", "KUNLIK", "MAGAZIN", "XARID", "TASDIQLASH",
+      "MIJOZLAR", "HR", "HUJJATLAR", "CRM", "VAZIFALAR", "AI",
+    ],
+  },
+  {
+    // DO'KON tarifi — chakana savdo uchun to'plam. Kelajakda modul-tarif
+    // bog'lanishi shu yerdan kengaytiriladi: to'lov/obuna tizimiga
+    // TEGILMAGAN, tarif faqat "qaysi modul ochiq" ro'yxatidan iborat.
+    code: "SHOP",
+    nomi: "Do'kon",
+    oylikNarx: 299_000,
+    tavsif:
+      "Do'kon va chakana savdo uchun: kassa (POS), shtrix-kod va QR, ombor qoldig'i, " +
+      "xarid va ta'minotchilar, mijozlar kartochkasi · Hisobotlar · Telegram bot",
+    modullar: ["MOLIYA", "OMBOR", "KUNLIK", "MAGAZIN", "XARID", "MIJOZLAR"],
   },
 ];
 

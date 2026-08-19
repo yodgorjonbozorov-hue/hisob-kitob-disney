@@ -38,6 +38,9 @@ export default async function ProtectedLayout({
   const activeBusiness = businesses.find((b) => b.id === activeBusinessId);
   const activeOmborli = activeBusiness?.omborli ?? false;
   const activeAvto = isAvto(activeBusiness?.turi);
+  // Kassa (POS) menyusi faqat magazin belgilangan bizneste. Bayroq
+  // qo'yilmagan (ya'ni barcha mavjud) bizneslarda menyu O'ZGARMAYDI.
+  const activeMagazin = activeBusiness?.magazin ?? false;
   // Bildirishnoma soni endi clientda (/api/me/notif-count) yuklanadi —
   // ilgari bu hisob HAR sahifa renderini ~6 ketma-ket DB so'roviga bloklab turardi.
 
@@ -46,6 +49,7 @@ export default async function ProtectedLayout({
     rol: session.rol,
     yoqilgan: yoqilganModullar,
     omborli: activeOmborli,
+    magazin: activeMagazin,
     avto: activeAvto,
     // PRO havolalar (Rollar va huquqlar) faqat PRO mijozda — boshqalar menyusi o'zgarmaydi.
     pro: isPro(ctx.tenant.plan),

@@ -5,6 +5,7 @@ import { ForbiddenError } from "@/lib/auth/guard";
 import { planByCode } from "@/lib/billing/plans";
 import type { TenantContext } from "@/lib/auth/tenant";
 import { MODULLAR, modulByCode } from "./registry";
+import { talabQiladi } from "./bogliqlik";
 
 /**
  * Modul guard'lari (server). Yoqilganlik uch shartdan iborat:
@@ -39,8 +40,30 @@ export async function getEnabledModules(ctx: TenantContext): Promise<Set<string>
       yoqilgan.add(r.code);
     }
   }
+  // BOG'LIQLIK (yagona manba: `lib/modules/bogliqlik.ts`).
+  //
+  // Superadmin paneli bog'liqlikni YOQISH paytida majburlaydi, bu yerdagi
+  // tekshiruv esa O'QISH paytida ishlaydi: modul yozuvi bazada `isActive`
+  // bo'lib qolsa ham, u talab qiladigan modul yopiq bo'lsa hisobga
+  // OLINMAYDI. Ikkalasi ham kerak — masalan OMBOR keyinroq o'chirilsa,
+  // MAGAZIN yozuvi o'z-o'zidan o'zgarmaydi va mahsulotsiz kassa ochilardi.
+  for (const m of MODULLAR) {
+    if (!yoqilgan.has(m.code)) continue;
+    if (talabQiladi(m.code).some((kerak) => !yoqilgan.has(kerak))) {
+      yoqilgan.delete(m.code);
+    }
+  }
   return yoqilgan;
 }
+
+/**
+ * MODUL YOQILMAGANLIGI — standart xato kodi.
+ *
+ * Frontend "modul yopiq" holatini boshqa 403'lardan (rol yetmadi, boshqa
+ * tenant yozuvi) ajrata olishi kerak: birinchisida foydalanuvchini
+ * Sozlamalar → Modullar sahifasiga yuborish mantiqiy, qolganlarida yo'q.
+ */
+export const MODULE_NOT_ENABLED = "MODULE_NOT_ENABLED";
 
 /** API uchun: modul yoqilmagan yoki rol ruxsatsiz bo'lsa ForbiddenError. */
 export async function requireModule(ctx: TenantContext, code: string): Promise<void> {
@@ -51,7 +74,10 @@ export async function requireModule(ctx: TenantContext, code: string): Promise<v
   }
   const yoqilgan = await getEnabledModules(ctx);
   if (!yoqilgan.has(code)) {
-    throw new ForbiddenError(`"${m.nomi}" moduli yoqilmagan — Sozlamalar → Modullar bo'limidan yoqing`);
+    throw new ForbiddenError(
+      `"${m.nomi}" moduli yoqilmagan — Sozlamalar → Modullar bo'limidan yoqing`,
+      MODULE_NOT_ENABLED
+    );
   }
 }
 
@@ -72,7 +98,12 @@ export async function isModuleOnForTenant(tenantId: string, code: string): Promi
     where: { tenantId, code, isActive: true },
     select: { id: true },
   });
-  return !!row;
+  if (!row) return false;
+  // Bog'liq modullar (masalan MAGAZIN -> OMBOR) ham yoqiq bo'lishi shart.
+  for (const kerak of talabQiladi(m.code)) {
+    if (!(await isModuleOnForTenant(tenantId, kerak))) return false;
+  }
+  return true;
 }
 
 /** Sahifalar uchun: modul yopiq bo'lsa asosiy sahifaga redirect. */

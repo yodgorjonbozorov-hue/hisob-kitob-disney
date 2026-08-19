@@ -3,7 +3,7 @@ import {
   Package, ShoppingCart, HandCoins, Truck, Factory, Building2, Tags, Users, Trash2, ScrollText,
   BadgeCheck, Gavel, Contact2, IdCard, CalendarDays, FileSignature, ClipboardList,
   CreditCard, Blocks, Handshake, BookUser, ListChecks, Sparkles, ShieldCheck, Menu, BarChart3,
-  Home, Send, Scale, type LucideIcon,
+  Home, Send, Scale, ScanBarcode, QrCode, ReceiptText, type LucideIcon,
 } from "lucide-react";
 
 /**
@@ -52,6 +52,10 @@ export const IKONLAR: Record<string, LucideIcon> = {
   telegram: Send,
   // Kg savdosi (mijozga xos) — tarozi.
   weight: Scale,
+  // MAGAZIN moduli.
+  pos: ScanBarcode,
+  qr: QrCode,
+  chek: ReceiptText,
 };
 
 /** Noma'lum kalit kelsa ham ikonkasiz bo'sh joy qolmasin. */

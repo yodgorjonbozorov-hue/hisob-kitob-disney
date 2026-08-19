@@ -42,6 +42,12 @@ export interface ModulTarifi {
   korinmas?: boolean;
   /** Modul rollari: bu modulga umuman kira oladigan rollar (nav'dan tashqari API himoya). */
   rollar: Rol[];
+  /**
+   * Yoqishdan oldin tasdiq so'raladi va shu ro'yxat ko'rsatiladi ("nima
+   * qo'shiladi"). Bo'sh bo'lsa modul bir bosishda yoqiladi (avvalgi
+   * xatti-harakat — mavjud modullar uchun hech narsa o'zgarmaydi).
+   */
+  qoshiladi?: string[];
   nav: NavItem[];
 }
 
@@ -119,6 +125,33 @@ export const MODULLAR: ModulTarifi[] = [
       { href: "/app/sotuv", label: "Sotuv", icon: "cart", tartib: 21, rollar: ["OWNER", "ADMIN", "CASHIER"] },
       // "Qarzlar" ataylab bu yerda EMAS — u MOLIYA (core) modulida, chunki
       // qarz ombori yo'q bizneslarda ham yuritiladi.
+    ],
+  },
+  {
+    code: "MAGAZIN",
+    nomi: "Magazin (kassa / POS)",
+    tavsif:
+      "Do'kon kassasi: shtrix-kod skaneri bilan savat yig'ish, bitta chekda ko'p mahsulot sotish, " +
+      "QR/barcode chop etish va chekni qaytarish. Chakana savdo qiladigan bizneslar uchun.",
+    core: false,
+    // MAGAZIN — OMBOR ustidagi qatlam: mahsulot, qoldiq va sotuv tarixi
+    // O'SHA modulda yuritiladi. Shu bois bu yerda "Mahsulotlar"/"Ombor"/
+    // "Sotuvlar" havolalari ATAYLAB TAKRORLANMAYDI.
+    // Bog'liqlikning O'ZI `lib/modules/bogliqlik.ts` da (yagona manba).
+    qoshiladi: [
+      "Kassir ekrani (POS) — skaner bilan savat yig'ish",
+      "Bitta chekda bir nechta mahsulot sotish",
+      "To'lov: naqd, karta, Click yoki qarz",
+      "QR va shtrix-kod: biriktirish, chop etish, skanerlash",
+      "Cheklar tarixi va chekni to'liq qaytarish",
+    ],
+    // Kassir — bu modulning ASOSIY foydalanuvchisi. Sotuvchi (SELLER) kassaga
+    // kirmaydi: u faqat kirim/chiqim kiritadi (OMBOR bilan bir xil qoida).
+    rollar: ["OWNER", "ADMIN", "CASHIER"],
+    nav: [
+      { href: "/app/pos", label: "Kassa (POS)", icon: "pos", tartib: 19, rollar: ["OWNER", "ADMIN", "CASHIER"] },
+      { href: "/app/pos/cheklar", label: "Cheklar", icon: "chek", tartib: 22, rollar: ["OWNER", "ADMIN", "CASHIER"] },
+      { href: "/app/pos/qr", label: "QR / Shtrix-kod", icon: "qr", tartib: 22, rollar: BOSHQARUVCHILAR },
     ],
   },
   {
@@ -253,6 +286,12 @@ export interface NavHolati {
   yoqilgan: Set<string>;
   /** Aktiv biznes omborli'mi — OMBOR nav'i faqat shunda ko'rinadi. */
   omborli: boolean;
+  /**
+   * Aktiv bizneste magazin (kassa) yuritiladimi — MAGAZIN nav'i faqat shunda
+   * ko'rinadi. `omborli` bilan bir xil qoida: modul TENANT darajasida, bayroq
+   * BIZNES darajasida. Berilmasa false — mavjud bizneslarda menyu O'ZGARMAYDI.
+   */
+  magazin?: boolean;
   /** Aktiv biznes avto rejimidami — OMBOR yorliqlari "Avtopark/Mashina sotish" bo'ladi. */
   avto?: boolean;
   /** Tenant PRO tarifdami — `faqatPro` havolalar faqat shunda ko'rinadi. */
@@ -275,6 +314,7 @@ export function computeNav({
   rol,
   yoqilgan,
   omborli,
+  magazin = false,
   avto = false,
   pro = false,
   kgSavdo = false,
@@ -283,6 +323,10 @@ export function computeNav({
   for (const m of MODULLAR) {
     if (!m.core && !yoqilgan.has(m.code)) continue;
     if (m.code === "OMBOR" && !omborli) continue;
+    // MAGAZIN — do'kon kassasi. Ikki shart ham kerak: tenant modulni yoqqan
+    // BO'LSA HAM, mahsulot va qoldiq yuritilmaydigan bizneste kassaning
+    // ma'nosi yo'q.
+    if (m.code === "MAGAZIN" && (!magazin || !omborli)) continue;
     if (!m.rollar.includes(rol)) continue;
     for (const item of m.nav) {
       if (!item.rollar.includes(rol)) continue;
@@ -319,8 +363,15 @@ export function computeMobileTabs(holat: NavHolati): MobileTab[] {
   }
   if (!manager && kunlikBor) tabs.push({ href: "/app/kunlik", label: "Kunlik", icon: "daily" });
   const omborBor = holat.yoqilgan.has("OMBOR") && holat.omborli;
+  // Do'konda kassirning yagona ekrani — POS. Sotuv formasidan ustun turadi.
+  const posBor =
+    omborBor &&
+    holat.yoqilgan.has("MAGAZIN") &&
+    !!holat.magazin &&
+    modulByCode("MAGAZIN")!.rollar.includes(holat.rol);
   if (tabs.length < 3) {
-    if (omborBor) tabs.push({ href: "/app/sotuv", label: holat.avto ? "Sotish" : "Sotuv", icon: "cart" });
+    if (posBor) tabs.push({ href: "/app/pos", label: "Kassa", icon: "pos" });
+    else if (omborBor) tabs.push({ href: "/app/sotuv", label: holat.avto ? "Sotish" : "Sotuv", icon: "cart" });
     else if (crmBor) tabs.push({ href: "/app/crm", label: "CRM", icon: "crm" });
     else if (manager) tabs.push({ href: "/app/hisobot", label: "Hisobot", icon: "chart" });
   }

@@ -21,6 +21,7 @@ export const E2E_URL = `file:./${BAZA}`;
 /** Registry'dagi core BO'LMAGAN modullar — yoqilishi kerak bo'lganlari. */
 const MODULLAR = [
   "OMBOR",
+  "MAGAZIN",
   "XARID",
   "TASDIQLASH",
   "MIJOZLAR",
@@ -80,6 +81,8 @@ async function main() {
     });
   }
 
+  await magazinniTayyorla(c, tenantId);
+
   const soni = await c.execute(
     `SELECT COUNT(*) n FROM "TenantModule" WHERE "isActive" = 1`
   );
@@ -90,3 +93,64 @@ main().catch((e) => {
   console.error("XATO:", e.message);
   process.exit(1);
 });
+
+/**
+ * MAGAZIN (POS) uchun E2E holati.
+ *
+ * Ikki biznes ATAYLAB har xil sozlanadi — brauzer testi ikkala tomonni ham
+ * tekshirishi kerak:
+ *
+ *   "Salyut"         — omborli + magazin YOQIQ  → kassa ochiladi;
+ *   "Demo Xizmatlar" — ikkalasi ham O'CHIQ      → kassa umuman ko'rinmaydi
+ *                                                 va route ham ochilmaydi.
+ *
+ * Shtrix-kodlar haqiqiy EAN-13 ko'rinishida: skaner testi aynan shunday
+ * raqamlar bilan ishlaydi.
+ */
+async function magazinniTayyorla(c, tenantId) {
+  // Kassa yuritiladigan do'kon.
+  await c.execute(`UPDATE "Business" SET "omborli" = 1, "magazin" = 1 WHERE "id" = 'biz_salyut'`);
+  // Kassasiz biznes — "modul yopiq" holatini tekshirish uchun.
+  await c.execute(
+    `UPDATE "Business" SET "omborli" = 0, "magazin" = 0 WHERE "id" = 'biz_disney_navoiy'`
+  );
+
+  // Naqd kassa: pul qayerga tushishini ko'rsatish uchun har biznesda kamida
+  // bitta bo'lishi kerak (yangi biznes yaratish oqimidagi bilan bir xil qoida).
+  for (const [id, biz] of [["acc_salyut", "biz_salyut"], ["acc_xizmat", "biz_disney_navoiy"]]) {
+    await c.execute({
+      sql: `INSERT OR IGNORE INTO "Account" ("id","businessId","nomi","turi","isActive","tartib","createdAt")
+            VALUES (?, ?, 'Naqd kassa', 'naqd', 1, 0, ?)`,
+      args: [id, biz, new Date().toISOString()],
+    });
+  }
+
+  // Kassa uchun narxi va qoldig'i bor, shtrix-kodli mahsulotlar.
+  const TOVARLAR = [
+    ["p_kola", "Coca-Cola 1.5L", 12000, 8400, 100, "4601234567890"],
+    ["p_fanta", "Fanta 1L", 10000, 7000, 50, "4600000000017"],
+    ["p_non", "Uyda pishirilgan non", 5000, 3000, 40, null],
+  ];
+  for (const [id, nomi, sotuv, kelgan, miqdor, barcode] of TOVARLAR) {
+    await c.execute({
+      sql: `INSERT OR IGNORE INTO "Product"
+              ("id","businessId","nomi","kelganNarx","sotuvNarx","miqdor","isActive","birlik","minQoldiq","createdAt","barcode")
+            VALUES (?, 'biz_salyut', ?, ?, ?, ?, 1, 'dona', 0, ?, ?)`,
+      args: [id, nomi, kelgan, sotuv, miqdor, new Date().toISOString(), barcode],
+    });
+  }
+
+  // Do'konga BIRIKTIRILGAN kassir — rol tekshiruvlari uchun.
+  // Parol seed'dagi kassir bilan bir xil hash (kassir123).
+  const kassirHash = (
+    await c.execute(`SELECT "parolHash" h FROM "User" WHERE "rol" = 'CASHIER' LIMIT 1`)
+  ).rows[0]?.h;
+  if (kassirHash) {
+    await c.execute({
+      sql: `INSERT OR IGNORE INTO "User"
+              ("id","ism","login","parolHash","rol","isActive","createdAt","mustChangePassword","tenantId","businessId")
+            VALUES ('u_kassir_salyut','Salyut kassiri','kassir-salyut',?,'CASHIER',1,?,0,?, 'biz_salyut')`,
+      args: [String(kassirHash), new Date().toISOString(), tenantId],
+    });
+  }
+}

@@ -145,8 +145,33 @@ test("migratsiya toza Postgres bazasiga qo'llanadi", { skip: sabab }, async () =
      WHERE constraint_schema='public' AND constraint_type='FOREIGN KEY'`
   );
 
-  assert.equal(Number(jadval.rows[0].n), 40);
-  assert.equal(Number(fk.rows[0].n), 76);
+  // KUTILGAN SONLAR QO'LDA YOZILMAYDI — sxemadan va migratsiya faylining
+  // O'ZIDAN hisoblanadi.
+  //
+  // Nega: ilgari bu yerda `40` va `76` qotirilgan edi. Sxemaga yangi model
+  // qo'shilganda ular yangilanmadi va son 46 ga chiqib ketdi — test esa
+  // JIMGINA qizil bo'lib turavergan edi, chunki `PG_TEST_URL` sozlanmagan
+  // mashinada u umuman ishga tushmaydi. Ya'ni qo'lda yozilgan son bu yerda
+  // hech narsani qo'riqlamaydi, faqat eskiradi.
+  //
+  // Endi tekshirilayotgan narsa aniq: "migratsiya fayli o'zi e'lon qilgan
+  // hamma narsani haqiqatan yaratdimi va sxemadagi har model uchun jadval
+  // bormi".
+  const migratsiyaMatni = readFileSync(MIGRATSIYA, "utf8");
+  const kutilganJadval = (readFileSync("prisma/schema.prisma", "utf8").match(/^model\s+\w+/gm) ?? [])
+    .length;
+  const kutilganFk = (migratsiyaMatni.match(/FOREIGN KEY/g) ?? []).length;
+
+  assert.equal(
+    Number(jadval.rows[0].n),
+    kutilganJadval,
+    "sxemadagi har model uchun Postgres'da jadval bo'lishi kerak"
+  );
+  assert.equal(
+    Number(fk.rows[0].n),
+    kutilganFk,
+    "migratsiyada e'lon qilingan har FK bazada yaratilgan bo'lishi kerak"
+  );
 });
 
 test("login uchun funksional indeks o'z joyida", { skip: sabab }, async () => {

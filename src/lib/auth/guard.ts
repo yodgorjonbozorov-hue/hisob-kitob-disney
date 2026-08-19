@@ -3,9 +3,17 @@ import type { Rol } from "./session";
 import { isManager } from "./roles";
 
 export class ForbiddenError extends Error {
-  constructor(message = "Ruxsat yo'q") {
+  /**
+   * Mashina o'qiydigan sabab kodi (masalan "MODULE_NOT_ENABLED"). Javobda
+   * `code` maydoni bo'lib chiqadi. Berilmasa javob AVVALGIDEK faqat `error`
+   * matnidan iborat — mavjud route'lar va ularni o'qiydigan UI o'zgarmaydi.
+   */
+  readonly code?: string;
+
+  constructor(message = "Ruxsat yo'q", code?: string) {
     super(message);
     this.name = "ForbiddenError";
+    this.code = code;
   }
 }
 
@@ -54,7 +62,10 @@ export function requireOwnerOrAdmin(rol: Rol, userId: string, ownerId: string): 
 /** Route handlerlarda try/catch orqali xatolarni HTTP javobga aylantiradi. */
 export function handleApiError(error: unknown): NextResponse {
   if (error instanceof ForbiddenError) {
-    return NextResponse.json({ error: error.message }, { status: 403 });
+    return NextResponse.json(
+      error.code ? { error: error.message, code: error.code } : { error: error.message },
+      { status: 403 }
+    );
   }
   if (error instanceof UnauthorizedError) {
     return NextResponse.json({ error: error.message }, { status: 401 });

@@ -24,6 +24,9 @@ prisma/backups/
 pnpm-lock.yaml
 pnpm-workspace.yaml
 
+# Postgres sinovi/generatsiyasi uchun vaqtinchalik sxema nusxalari
+prisma/.pg-*.tmp.prisma
+
 # Playwright (brauzer testlari)
 /test-results/
 /playwright-report/

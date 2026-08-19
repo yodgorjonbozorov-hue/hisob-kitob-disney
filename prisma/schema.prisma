@@ -154,6 +154,11 @@ model Business {
   /// Bayroq ATAYLAB opt-in: yoqilmagan bizneslarda kassa tanlash mantig'i
   /// avvalgidek qoladi (lib/services/accounts.ts → resolveAccountId).
   shaxsiyKassa       Boolean                @default(false)
+  /// MAGAZIN (POS) shu bizneste yuritiladimi. MAGAZIN moduli TENANT darajasida
+  /// yoqiladi, bu bayroq esa BIZNES darajasida — bir tenantda do'kon ham,
+  /// do'kon bo'lmagan biznes ham yonma-yon tura oladi (`omborli` bilan bir xil
+  /// qoida). Mavjud bizneslarda `false` — ular uchun hech narsa o'zgarmaydi.
+  magazin            Boolean                @default(false)
   createdAt          DateTime               @default(now())
   tenantId           String
   tenant             Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
@@ -194,6 +199,8 @@ model Business {
   dailyReportSetting DailyReportSetting?
   smenalar           Smena[]
   kassaTopshiriqlar  CashHandover[]
+  productCategories  ProductCategory[]
+  posCheklar         PosChek[]
 
   @@index([tenantId])
 }
@@ -595,6 +602,22 @@ model Product {
   /// Ilgari butun tizim uchun bitta sobit chegara (5 dona) ishlatilardi —
   /// tuxum sotuvchiga ham, avtomobil sotuvchiga ham bir xil edi.
   minQoldiq     Int                 @default(0)
+  /// ZAVOD SHTRIX-KODI (EAN-13/UPC va h.k.) — quti ustidagi kod.
+  /// Biznes ichida takrorlanmaydi (@@unique([businessId, barcode])); GLOBAL
+  /// unique ATAYLAB emas: bir xil Coca-Cola'ni yuzlab do'kon sotadi va
+  /// global cheklov ikkinchi mijozga mahsulot qo'shishga yo'l bermasdi.
+  barcode       String?
+  /// BALANSA QR — zavod kodi yo'q mahsulot uchun tizim yaratadigan barqaror
+  /// identifikator ("BALANSA-PRODUCT-XXXXXXXX"). QR ichida FAQAT shu kalit
+  /// bo'ladi: narx yoki qoldiq QR ichiga yozilmaydi, shuning uchun narx
+  /// o'zgarganda chop etilgan stikerlarni qayta bosish shart emas.
+  qrKod         String?
+  /// Mahsulot rasmi (tashqi havola yoki saqlagich URL'i).
+  rasmUrl       String?
+  /// MAHSULOT KATEGORIYASI (POS'da guruhlab ko'rsatish uchun). `Category`
+  /// modelidan ATAYLAB alohida: u kirim/chiqim moliyaviy kategoriyasi.
+  categoryId    String?
+  category      ProductCategory?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   // Avto rejimi maydonlari — umumiy bizneslarda null.
   avtoYil       Int?
   avtoRaqam     String?
@@ -607,8 +630,11 @@ model Product {
   adjustments   StockAdjustment[]
   xaridSatrlari PurchaseOrderItem[]
 
+  @@unique([businessId, barcode])
+  @@unique([businessId, qrKod])
   @@index([businessId])
   @@index([businessId, sku])
+  @@index([businessId, categoryId])
 }
 
 /// OMBOR TO'G'RILASH — inventarizatsiya yoki hisobdan chiqarish.
@@ -709,8 +735,14 @@ model Sale {
   cancelledBy   String?
   cancelReason  String?
   debt          Debt?
+  /// POS CHEKI (MAGAZIN moduli). To'ldirilgan bo'lsa — bu sotuv savatdagi
+  /// bitta satr; pul harakati va bekor qilish CHEK darajasida yuritiladi.
+  /// null — oddiy bir mahsulotli sotuv (OMBOR moduli, avvalgi xatti-harakat).
+  chekId        String?
+  chek          PosChek?  @relation(fields: [chekId], references: [id], onDelete: Restrict)
 
   @@index([businessId, sana])
+  @@index([chekId])
   @@index([businessId, deletedAt, sana])
   @@index([productId])
   @@index([contactId])
@@ -898,6 +930,7 @@ model Contact {
   sales      Sale[]
   debts      Debt[]
   contracts  Contract[]
+  posCheklar PosChek[]
 
   @@index([businessId])
   @@index([businessId, tel])
@@ -1506,6 +1539,78 @@ model CashHandover {
 
   @@index([businessId, holat, topshirilganAt])
   @@index([businessId, kassirId, topshirilganAt])
+}
+
+// ==== MAGAZIN moduli (POS / QR / Barcode) ====
+
+/// MAHSULOT KATEGORIYASI — POS'da tovarni guruhlab ko'rsatish uchun.
+///
+/// `Category` (kirim/chiqim) modelidan ATAYLAB alohida: u moliyaviy kategoriya
+/// bo'lib, hisobot va budjet unga tayanadi. "Ichimliklar", "Non mahsulotlari"
+/// kabi tovar guruhlarini o'sha jadvalga aralashtirib yuborish hisobotni
+/// buzardi.
+model ProductCategory {
+  id         String    @id @default(cuid())
+  businessId String
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  nomi       String
+  tartib     Int       @default(0)
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
+  products   Product[]
+
+  @@unique([businessId, nomi])
+  @@index([businessId, isActive, tartib])
+}
+
+/// POS CHEKI — kassada bitta to'lovda sotilgan savat.
+///
+/// Nega alohida jadval kerak: `Sale` bitta mahsulotni tasvirlaydi. Kassada
+/// esa bitta xaridor 10 xil tovar oladi va BITTA to'lov qiladi. Agar har
+/// satr uchun alohida kirim tranzaksiya yozilsa, kassa tarixida bitta
+/// xariddan 10 ta yozuv paydo bo'lardi.
+///
+/// Shuning uchun: har satr avvalgidek `Sale` yozuvi bo'lib qoladi (barcha
+/// mavjud hisobot, marja va ombor mantig'i O'ZGARISHSIZ ishlaydi), pul
+/// harakati esa — bitta tranzaksiya yoki bitta qarz — CHEKDA yuritiladi.
+///
+/// Bekor qilish ham chek darajasida: kassada yarim chekni qaytarish emas,
+/// butun chekni qaytarish qoidasi ishlaydi.
+model PosChek {
+  id            String    @id @default(cuid())
+  businessId    String
+  business      Business  @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  /// Biznes ichidagi ketma-ket chek raqami (kassir "125-chek" deb ataydi).
+  raqam         Int
+  jamiSumma     Int
+  /// "naqd" | "karta" | "click" | "qarz". Naqd/karta/click — pul darhol
+  /// kassaga tushadi (qaysi kassa — `accountId`), qarz — Debt yaratiladi.
+  tolovTuri     String
+  /// Pul tushgan kassa (Account) — naqd/karta/click uchun.
+  accountId     String?
+  /// Chekning yagona kirim tranzaksiyasi (naqd/karta/click).
+  transactionId String?
+  /// Qarzga sotilganda — yaratilgan qarzdorlik.
+  debtId        String?   @unique
+  contactId     String?
+  contact       Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  mijozNomi     String?
+  mijozTel      String?
+  userId        String
+  /// Chek sanasi (UTC yarim tuni) — `Sale.sana` bilan bir xil qoida.
+  sana          DateTime
+  createdAt     DateTime  @default(now())
+  /// Qaytarilgan/bekor qilingan chek — yumshoq o'chirish (tarix saqlanadi).
+  deletedAt     DateTime?
+  cancelledBy   String?
+  cancelReason  String?
+  satrlar       Sale[]
+
+  @@unique([businessId, raqam])
+  @@index([businessId, deletedAt, sana])
+  @@index([businessId, createdAt])
+  @@index([contactId])
 }
 
 // ===========================================================================

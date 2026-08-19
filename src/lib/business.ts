@@ -15,6 +15,8 @@ export interface BusinessDTO {
   turi: string;
   /** Naqd yozuv xodimning shaxsiy kassasiga tushadimi (lib/services/kassaTanlash.ts). */
   shaxsiyKassa: boolean;
+  /** Do'kon kassasi (POS) shu bizneste yuritiladimi — MAGAZIN moduli bayrog'i. */
+  magazin: boolean;
 }
 
 /**
@@ -39,14 +41,14 @@ export async function getAccessibleBusinesses(session: SessionData): Promise<Bus
 const businessByIdCached = requestCache(async (id: string) =>
   prisma.business.findUnique({
     where: { id },
-    select: { id: true, nomi: true, isActive: true, omborli: true, turi: true, shaxsiyKassa: true },
+    select: { id: true, nomi: true, isActive: true, omborli: true, turi: true, shaxsiyKassa: true, magazin: true },
   })
 );
 
 const activeBusinessesCached = requestCache(async (_tenantId: string) =>
   prisma.business.findMany({
     where: { isActive: true },
-    select: { id: true, nomi: true, isActive: true, omborli: true, turi: true, shaxsiyKassa: true },
+    select: { id: true, nomi: true, isActive: true, omborli: true, turi: true, shaxsiyKassa: true, magazin: true },
     orderBy: { nomi: "asc" },
   })
 );
@@ -97,6 +99,30 @@ export async function requireOmborli(businessId: string): Promise<void> {
   const b = await prisma.business.findUnique({ where: { id: businessId }, select: { omborli: true } });
   if (!b?.omborli) {
     throw new BadRequestError("Bu biznesda ombor tizimi yoqilmagan");
+  }
+}
+
+/**
+ * Bizneste do'kon kassasi (POS) yuritilishini tekshiradi; bo'lmasa
+ * BadRequestError. MAGAZIN route'lari boshida ishlatiladi.
+ *
+ * DIQQAT: bu MODUL guard'ining o'rnini BOSMAYDI. Modul tenant darajasida
+ * (`withTenant(..., { module: "MAGAZIN" })`), bu bayroq esa biznes
+ * darajasida — ikkalasi ham majburiy, chunki bir tenantda do'kon ham,
+ * do'kon bo'lmagan biznes ham bo'lishi mumkin.
+ *
+ * Ombor ham talab qilinadi: mahsulot va qoldiq OMBOR modulida yuritiladi.
+ */
+export async function requireMagazin(businessId: string): Promise<void> {
+  const b = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { omborli: true, magazin: true },
+  });
+  if (!b?.magazin) {
+    throw new BadRequestError("Bu bizneste magazin (kassa) yoqilmagan");
+  }
+  if (!b.omborli) {
+    throw new BadRequestError("Magazin ishlashi uchun avval ombor tizimi yoqilishi kerak");
   }
 }
 

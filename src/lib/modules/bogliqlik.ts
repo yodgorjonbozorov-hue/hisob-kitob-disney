@@ -23,6 +23,11 @@ import { MODULLAR, modulByCode, type ModulTarifi } from "./registry";
  */
 export const MODUL_BOGLIQLIGI: Record<string, string[]> = {
   XARID: ["OMBOR"],
+  // MAGAZIN → OMBOR: kassa OMBOR ustidagi qatlam. Mahsulot, narx va qoldiq
+  // o'sha modulda yuritiladi (`lib/queries/pos.ts` → `product` jadvali),
+  // sotuv esa qoldiqni kamaytiradi. Ombor yopiq bo'lsa kassada sotadigan
+  // tovar ham, kamaytiradigan qoldiq ham qolmaydi.
+  MAGAZIN: ["OMBOR"],
 };
 
 /** Shu modul ishlashi uchun kerak bo'lgan modullar (to'g'ridan-to'g'ri). */

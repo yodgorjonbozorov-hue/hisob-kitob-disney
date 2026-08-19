@@ -115,6 +115,9 @@ const BUSINESS_SCOPED = new Set([
   "Smena",
   // Kassir kassasi — kassa topshirig'i va kassirga pul berish
   "CashHandover",
+  // MAGAZIN (POS / QR / Barcode)
+  "ProductCategory",
+  "PosChek",
 ]);
 // AuditLog: businessId nullable — biznesga bog'langan yozuvlar tenant bo'yicha filtrlanadi.
 export const AUDIT_MODEL = "AuditLog";
