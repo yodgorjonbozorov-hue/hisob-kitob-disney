@@ -47,6 +47,9 @@ export const ZAXIRA_JADVALLARI = [
   "shiftClose",
   "recurringTransaction",
   "budget",
+  // MAGAZIN: DIQQAT: `productCategory` `product`dan OLDIN turishi SHART —
+  // `Product.categoryId` unga FK bilan murojaat qiladi.
+  "productCategory",
   "product",
   "productExpense",
   "stockEntry",
@@ -54,6 +57,10 @@ export const ZAXIRA_JADVALLARI = [
   // ham `contactId` FK bor (MIJOZLAR moduli). Tartib buzilsa zaxira tiklanmaydi:
   // "Foreign key constraint violated". `tests/backup.test.ts` buni qo'riqlaydi.
   "contact",
+  // MAGAZIN: DIQQAT: `posChek` `sale`dan OLDIN turishi SHART — `Sale.chekId`
+  // unga FK bilan murojaat qiladi. O'zi esa `contact`dan KEYIN turadi
+  // (`PosChek.contactId`).
+  "posChek",
   "sale",
   "debt",
   "debtPayment",

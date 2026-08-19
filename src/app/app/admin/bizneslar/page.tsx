@@ -21,6 +21,7 @@ export default async function BizneslarPage() {
       isActive: true,
       turi: true,
       omborli: true,
+      magazin: true,
       _count: { select: { categories: true, transactions: true } },
     },
   });
@@ -31,6 +32,7 @@ export default async function BizneslarPage() {
     isActive: b.isActive,
     turi: b.turi,
     omborli: b.omborli,
+    magazin: b.magazin,
     kategoriyalar: b._count.categories,
     tranzaksiyalar: b._count.transactions,
   }));

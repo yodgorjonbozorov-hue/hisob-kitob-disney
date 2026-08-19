@@ -51,7 +51,10 @@ export type AuditEntity =
   | "dailyTransaction"
   | "dailyReportSetting"
   | "smena"
-  | "cashHandover";
+  | "cashHandover"
+  // MAGAZIN moduli
+  | "posChek"
+  | "productCategory";
 
 interface AuditInput {
   businessId?: string | null;

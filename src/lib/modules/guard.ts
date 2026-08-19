@@ -39,8 +39,25 @@ export async function getEnabledModules(ctx: TenantContext): Promise<Set<string>
       yoqilgan.add(r.code);
     }
   }
+  // BOG'LIQLIK: MAGAZIN — OMBOR ustidagi qatlam. OMBOR o'chirilgan bo'lsa
+  // MAGAZIN yozuvi bazada `isActive` bo'lib qolsa ham hisobga OLINMAYDI —
+  // aks holda mahsulotsiz kassa ochilib, sahifa bo'sh chiqardi.
+  for (const m of MODULLAR) {
+    if (m.talabQiladi && yoqilgan.has(m.code) && !yoqilgan.has(m.talabQiladi)) {
+      yoqilgan.delete(m.code);
+    }
+  }
   return yoqilgan;
 }
+
+/**
+ * MODUL YOQILMAGANLIGI — standart xato kodi.
+ *
+ * Frontend "modul yopiq" holatini boshqa 403'lardan (rol yetmadi, boshqa
+ * tenant yozuvi) ajrata olishi kerak: birinchisida foydalanuvchini
+ * Sozlamalar → Modullar sahifasiga yuborish mantiqiy, qolganlarida yo'q.
+ */
+export const MODULE_NOT_ENABLED = "MODULE_NOT_ENABLED";
 
 /** API uchun: modul yoqilmagan yoki rol ruxsatsiz bo'lsa ForbiddenError. */
 export async function requireModule(ctx: TenantContext, code: string): Promise<void> {
@@ -51,7 +68,10 @@ export async function requireModule(ctx: TenantContext, code: string): Promise<v
   }
   const yoqilgan = await getEnabledModules(ctx);
   if (!yoqilgan.has(code)) {
-    throw new ForbiddenError(`"${m.nomi}" moduli yoqilmagan — Sozlamalar → Modullar bo'limidan yoqing`);
+    throw new ForbiddenError(
+      `"${m.nomi}" moduli yoqilmagan — Sozlamalar → Modullar bo'limidan yoqing`,
+      MODULE_NOT_ENABLED
+    );
   }
 }
 
@@ -72,7 +92,10 @@ export async function isModuleOnForTenant(tenantId: string, code: string): Promi
     where: { tenantId, code, isActive: true },
     select: { id: true },
   });
-  return !!row;
+  if (!row) return false;
+  // Bog'liq modul (masalan MAGAZIN -> OMBOR) ham yoqiq bo'lishi shart.
+  if (m.talabQiladi) return isModuleOnForTenant(tenantId, m.talabQiladi);
+  return true;
 }
 
 /** Sahifalar uchun: modul yopiq bo'lsa asosiy sahifaga redirect. */

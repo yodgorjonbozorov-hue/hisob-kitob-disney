@@ -21,6 +21,8 @@ const ENTITY_LABEL: Record<string, string> = {
   user: "Foydalanuvchi",
   category: "Kategoriya",
   sale: "Sotuv",
+  posChek: "Kassa cheki",
+  productCategory: "Mahsulot kategoriyasi",
   debt: "Qarz",
   business: "Biznes",
   budget: "Budjet",

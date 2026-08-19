@@ -1,8 +1,9 @@
 import { requireSuperadminPage } from "@/lib/auth/superadmin";
-import { listTenantsOverview, getMetrics } from "@/lib/superadmin/service";
+import { listTenantsOverview, getMetrics, getModulStatistika } from "@/lib/superadmin/service";
 import { getKassaMetrikalari } from "@/lib/superadmin/kassa";
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { SuperadminClient } from "./SuperadminClient";
+import { ModulStatistikasi } from "./ModulStatistikasi";
 
 export const metadata = { title: "SUPERADMIN — Balansa platforma boshqaruvi" };
 
@@ -10,9 +11,10 @@ export const metadata = { title: "SUPERADMIN — Balansa platforma boshqaruvi" }
 export default async function SuperadminPage() {
   const session = await requireSuperadminPage();
 
-  const [metrics, kassaMetrics, tenants, pendingPayments, users] = await Promise.all([
+  const [metrics, kassaMetrics, modulStat, tenants, pendingPayments, users] = await Promise.all([
     getMetrics(),
     getKassaMetrikalari(),
+    getModulStatistika(),
     listTenantsOverview(),
     rawPrisma.payment.findMany({
       where: { status: "PENDING" },
@@ -52,6 +54,9 @@ export default async function SuperadminPage() {
         isActive: u.isActive,
         tenantId: u.tenantId!,
       }))}
+      // Statistika server komponentida tayyorlanadi va client panelga
+      // tayyor JSX sifatida beriladi — client'ga ortiqcha ma'lumot ketmaydi.
+      modulPaneli={<ModulStatistikasi stat={modulStat} />}
     />
   );
 }

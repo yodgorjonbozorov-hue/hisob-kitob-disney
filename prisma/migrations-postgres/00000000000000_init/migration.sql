@@ -84,6 +84,7 @@ CREATE TABLE "Business" (
     "omborli" BOOLEAN NOT NULL DEFAULT false,
     "turi" TEXT NOT NULL DEFAULT 'umumiy',
     "shaxsiyKassa" BOOLEAN NOT NULL DEFAULT false,
+    "magazin" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "tenantId" TEXT NOT NULL,
 
@@ -298,6 +299,10 @@ CREATE TABLE "Product" (
     "sku" TEXT,
     "birlik" TEXT NOT NULL DEFAULT 'dona',
     "minQoldiq" INTEGER NOT NULL DEFAULT 0,
+    "barcode" TEXT,
+    "qrKod" TEXT,
+    "rasmUrl" TEXT,
+    "categoryId" TEXT,
     "avtoYil" INTEGER,
     "avtoRaqam" TEXT,
     "avtoRang" TEXT,
@@ -372,6 +377,7 @@ CREATE TABLE "Sale" (
     "deletedAt" TIMESTAMP(3),
     "cancelledBy" TEXT,
     "cancelReason" TEXT,
+    "chekId" TEXT,
 
     CONSTRAINT "Sale_pkey" PRIMARY KEY ("id")
 );
@@ -805,6 +811,42 @@ CREATE TABLE "CashHandover" (
     CONSTRAINT "CashHandover_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "ProductCategory" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "nomi" TEXT NOT NULL,
+    "tartib" INTEGER NOT NULL DEFAULT 0,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "ProductCategory_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PosChek" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "raqam" INTEGER NOT NULL,
+    "jamiSumma" INTEGER NOT NULL,
+    "tolovTuri" TEXT NOT NULL,
+    "accountId" TEXT,
+    "transactionId" TEXT,
+    "debtId" TEXT,
+    "contactId" TEXT,
+    "mijozNomi" TEXT,
+    "mijozTel" TEXT,
+    "userId" TEXT NOT NULL,
+    "sana" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "deletedAt" TIMESTAMP(3),
+    "cancelledBy" TEXT,
+    "cancelReason" TEXT,
+
+    CONSTRAINT "PosChek_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "Tenant_slug_key" ON "Tenant"("slug");
 
@@ -947,6 +989,15 @@ CREATE INDEX "Product_businessId_idx" ON "Product"("businessId");
 CREATE INDEX "Product_businessId_sku_idx" ON "Product"("businessId", "sku");
 
 -- CreateIndex
+CREATE INDEX "Product_businessId_categoryId_idx" ON "Product"("businessId", "categoryId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Product_businessId_barcode_key" ON "Product"("businessId", "barcode");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Product_businessId_qrKod_key" ON "Product"("businessId", "qrKod");
+
+-- CreateIndex
 CREATE INDEX "StockAdjustment_businessId_createdAt_idx" ON "StockAdjustment"("businessId", "createdAt");
 
 -- CreateIndex
@@ -966,6 +1017,9 @@ CREATE INDEX "StockEntry_productId_idx" ON "StockEntry"("productId");
 
 -- CreateIndex
 CREATE INDEX "Sale_businessId_sana_idx" ON "Sale"("businessId", "sana");
+
+-- CreateIndex
+CREATE INDEX "Sale_chekId_idx" ON "Sale"("chekId");
 
 -- CreateIndex
 CREATE INDEX "Sale_businessId_deletedAt_sana_idx" ON "Sale"("businessId", "deletedAt", "sana");
@@ -1186,6 +1240,27 @@ CREATE INDEX "CashHandover_businessId_holat_topshirilganAt_idx" ON "CashHandover
 -- CreateIndex
 CREATE INDEX "CashHandover_businessId_kassirId_topshirilganAt_idx" ON "CashHandover"("businessId", "kassirId", "topshirilganAt");
 
+-- CreateIndex
+CREATE INDEX "ProductCategory_businessId_isActive_tartib_idx" ON "ProductCategory"("businessId", "isActive", "tartib");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ProductCategory_businessId_nomi_key" ON "ProductCategory"("businessId", "nomi");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PosChek_debtId_key" ON "PosChek"("debtId");
+
+-- CreateIndex
+CREATE INDEX "PosChek_businessId_deletedAt_sana_idx" ON "PosChek"("businessId", "deletedAt", "sana");
+
+-- CreateIndex
+CREATE INDEX "PosChek_businessId_createdAt_idx" ON "PosChek"("businessId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "PosChek_contactId_idx" ON "PosChek"("contactId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PosChek_businessId_raqam_key" ON "PosChek"("businessId", "raqam");
+
 -- AddForeignKey
 ALTER TABLE "Role" ADD CONSTRAINT "Role_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
@@ -1262,6 +1337,9 @@ ALTER TABLE "Budget" ADD CONSTRAINT "Budget_categoryId_fkey" FOREIGN KEY ("categ
 ALTER TABLE "Product" ADD CONSTRAINT "Product_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Product" ADD CONSTRAINT "Product_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "ProductCategory"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "StockAdjustment" ADD CONSTRAINT "StockAdjustment_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1287,6 +1365,9 @@ ALTER TABLE "Sale" ADD CONSTRAINT "Sale_productId_fkey" FOREIGN KEY ("productId"
 
 -- AddForeignKey
 ALTER TABLE "Sale" ADD CONSTRAINT "Sale_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Sale" ADD CONSTRAINT "Sale_chekId_fkey" FOREIGN KEY ("chekId") REFERENCES "PosChek"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Debt" ADD CONSTRAINT "Debt_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -1443,6 +1524,15 @@ ALTER TABLE "Attachment" ADD CONSTRAINT "Attachment_businessId_fkey" FOREIGN KEY
 
 -- AddForeignKey
 ALTER TABLE "CashHandover" ADD CONSTRAINT "CashHandover_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "ProductCategory" ADD CONSTRAINT "ProductCategory_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PosChek" ADD CONSTRAINT "PosChek_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PosChek" ADD CONSTRAINT "PosChek_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 
 -- ---------------------------------------------------------------------------

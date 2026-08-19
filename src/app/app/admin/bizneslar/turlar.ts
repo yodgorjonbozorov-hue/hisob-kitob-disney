@@ -6,6 +6,8 @@ export interface BusinessDTO {
   turi: string;
   /** Ombor va sotuv shu bizneste yuritiladimi (nav'da Ombor/Sotuv shunga bog'liq). */
   omborli: boolean;
+  /** Do'kon kassasi (POS) shu bizneste yuritiladimi (nav'da Kassa shunga bog'liq). */
+  magazin: boolean;
   kategoriyalar: number;
   tranzaksiyalar: number;
 }
@@ -17,4 +19,5 @@ export interface YangiBiznes {
   isActive: boolean;
   turi: string;
   omborli: boolean;
+  magazin: boolean;
 }

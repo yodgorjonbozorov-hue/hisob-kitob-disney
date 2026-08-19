@@ -6,6 +6,7 @@ import { hashPassword } from "@/lib/auth/password";
 import { BadRequestError } from "@/lib/auth/guard";
 import { normalizeKompaniyaNomi } from "@/lib/services/signup";
 import { MANAGER_ROLLAR } from "@/lib/auth/roles";
+import { MODULLAR } from "@/lib/modules/registry";
 
 /**
  * SUPERADMIN xizmat qatlami — barcha amallar rawPrisma bilan (tenantlar aro)
@@ -205,6 +206,134 @@ export interface Metrics {
   bloklangan: number;
   /** Oylik takrorlanuvchi tushum (so'm) — faol obunadagi tenantlar tarifi yig'indisi. */
   mrr: number;
+}
+
+/**
+ * MODUL STATISTIKASI — qaysi modulni nechta kompaniya yoqqan.
+ *
+ * Nega kerak: "nechta mijozimizda kassa ishlayapti" savoliga javob bo'lmasa,
+ * modul rivojiga qancha kuch sarflashni ham, kimga qo'ng'iroq qilishni ham
+ * bilib bo'lmaydi.
+ *
+ * `MAGAZIN` uchun alohida raqam ham chiqadi: modul yoqilgan bo'lsa ham,
+ * hech bir bizneste kassa belgilanmagan bo'lsa u AMALDA ishlamayapti —
+ * bunday mijozga yordam kerak.
+ */
+export interface ModulStat {
+  code: string;
+  nomi: string;
+  /** Modulni yoqqan kompaniyalar soni. */
+  tenantlar: number;
+}
+
+export interface ModulStatistika {
+  modullar: ModulStat[];
+  /** Ombor yuritiladigan bizneslar soni. */
+  omborliBizneslar: number;
+  /** Kassa (POS) yoqilgan bizneslar soni. */
+  magazinBizneslar: number;
+  /** MAGAZIN moduli yoqilgan, lekin bironta biznesda kassa belgilanmagan kompaniyalar. */
+  magazinYarimSozlangan: number;
+}
+
+export async function getModulStatistika(): Promise<ModulStatistika> {
+  const [rows, omborliBizneslar, magazinBizneslar, magazinliTenantIdlar] = await Promise.all([
+    rawPrisma.tenantModule.groupBy({
+      by: ["code"],
+      where: { isActive: true },
+      _count: { _all: true },
+    }),
+    rawPrisma.business.count({ where: { omborli: true } }),
+    rawPrisma.business.count({ where: { magazin: true } }),
+    rawPrisma.business.findMany({ where: { magazin: true }, select: { tenantId: true } }),
+  ]);
+
+  const sonMap = new Map(rows.map((r) => [r.code, r._count._all]));
+  const modullar = MODULLAR.filter((m) => !m.core).map((m) => ({
+    code: m.code,
+    nomi: m.nomi,
+    tenantlar: sonMap.get(m.code) ?? 0,
+  }));
+
+  const magazinliTenantlar = new Set(magazinliTenantIdlar.map((b) => b.tenantId));
+  const magazinModuli = await rawPrisma.tenantModule.findMany({
+    where: { code: "MAGAZIN", isActive: true },
+    select: { tenantId: true },
+  });
+  const magazinYarimSozlangan = magazinModuli.filter(
+    (m) => !magazinliTenantlar.has(m.tenantId)
+  ).length;
+
+  return { modullar, omborliBizneslar, magazinBizneslar, magazinYarimSozlangan };
+}
+
+/**
+ * Bitta tenantning modul holati (superadmin paneli uchun).
+ * Tarifda yo'q modul ham ko'rsatiladi — superadmin sababni ko'rishi kerak.
+ */
+export interface TenantModulHolat {
+  code: string;
+  nomi: string;
+  core: boolean;
+  tarifdaBor: boolean;
+  yoqilgan: boolean;
+}
+
+export async function getTenantModullari(tenantId: string): Promise<TenantModulHolat[]> {
+  const [tenant, rows] = await Promise.all([
+    rawPrisma.tenant.findUnique({ where: { id: tenantId }, select: { plan: true } }),
+    rawPrisma.tenantModule.findMany({ where: { tenantId }, select: { code: true, isActive: true } }),
+  ]);
+  if (!tenant) throw new BadRequestError("Tenant topilmadi");
+  const holat = new Map(rows.map((r) => [r.code, r.isActive]));
+  const plan = planByCode(tenant.plan);
+  return MODULLAR.filter((m) => !m.korinmas).map((m) => ({
+    code: m.code,
+    nomi: m.nomi,
+    core: m.core,
+    tarifdaBor: m.core || (plan?.modullar.includes(m.code) ?? false),
+    yoqilgan: m.core || (holat.get(m.code) ?? false),
+  }));
+}
+
+/**
+ * Tenantning modulini superadmin nomidan yoqadi/o'chiradi.
+ *
+ * O'CHIRISH MA'LUMOTGA TEGMAYDI: faqat `TenantModule.isActive` bayrog'i
+ * o'zgaradi. Sotuvlar, cheklar, mahsulotlar, ombor harakati va tarix
+ * bazada joyida qoladi — modul qayta yoqilsa hammasi ko'rinadi. Bu ataylab
+ * shunday: mijoz modulni vaqtincha o'chirib, keyin qaytarishi odatiy holat.
+ */
+export async function setTenantModul(params: {
+  tenantId: string;
+  code: string;
+  isActive: boolean;
+}): Promise<{ code: string; isActive: boolean }> {
+  const modul = MODULLAR.find((m) => m.code === params.code);
+  if (!modul || modul.korinmas) throw new BadRequestError("Noma'lum modul");
+  if (modul.core) throw new BadRequestError("Asosiy modulni o'chirib bo'lmaydi");
+
+  const tenant = await rawPrisma.tenant.findUnique({
+    where: { id: params.tenantId },
+    select: { plan: true },
+  });
+  if (!tenant) throw new BadRequestError("Tenant topilmadi");
+  if (params.isActive && !planByCode(tenant.plan)?.modullar.includes(params.code)) {
+    throw new BadRequestError(`"${modul.nomi}" moduli ${tenant.plan} tarifida mavjud emas`);
+  }
+
+  const bor = await rawPrisma.tenantModule.findFirst({
+    where: { tenantId: params.tenantId, code: params.code },
+    select: { id: true },
+  });
+  if (bor) {
+    await rawPrisma.tenantModule.update({ where: { id: bor.id }, data: { isActive: params.isActive } });
+  } else {
+    await rawPrisma.tenantModule.create({
+      data: { tenantId: params.tenantId, code: params.code, isActive: params.isActive },
+    });
+  }
+  return { code: params.code, isActive: params.isActive };
 }
 
 export async function getMetrics(): Promise<Metrics> {

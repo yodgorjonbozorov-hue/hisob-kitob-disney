@@ -11,6 +11,17 @@ export const createBusinessSchema = z.object({
    */
   omborli: z.boolean().optional(),
   /**
+   * Do'kon kassasi (POS) shu bizneste yuritiladimi. `omborli` bilan bir xil
+   * qoida: MAGAZIN moduli tenant darajasida, bu bayroq biznes darajasida.
+   */
+  magazin: z.boolean().optional(),
+  /**
+   * Biznes faoliyati (lib/biznesFaoliyati.ts kodi). Berilsa `turi`,
+   * `omborli` va `magazin` shundan kelib chiqadi va tegishli modullar
+   * yoqiladi — foydalanuvchi texnik bayroqlarni bilishi shart emas.
+   */
+  faoliyat: z.string().max(20).optional().nullable(),
+  /**
    * Shaxsiy kassa rejimi: naqd yozuv uni KIRITGAN xodimning kassasiga tushadi.
    * Yoqilganda biznesning har faol xodimiga kassa ochiladi (route'da).
    */
@@ -22,6 +33,8 @@ export const updateBusinessSchema = z.object({
   isActive: z.boolean().optional(),
   turi: z.enum(["umumiy", "avto"]).optional(),
   omborli: z.boolean().optional(),
+  /** Do'kon kassasi (POS) shu bizneste yuritiladimi. */
+  magazin: z.boolean().optional(),
   /**
    * Shaxsiy kassa rejimi: naqd yozuv uni KIRITGAN xodimning kassasiga tushadi.
    * Yoqilganda biznesning har faol xodimiga kassa ochiladi (route'da).

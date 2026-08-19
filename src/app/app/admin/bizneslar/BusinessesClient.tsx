@@ -31,7 +31,13 @@ export function BusinessesClient({ initialBusinesses }: { initialBusinesses: Bus
     setBusinesses((prev) =>
       prev.map((x) =>
         x.id === updated.id
-          ? { ...x, isActive: updated.isActive, turi: updated.turi, omborli: updated.omborli }
+          ? {
+              ...x,
+              isActive: updated.isActive,
+              turi: updated.turi,
+              omborli: updated.omborli,
+              magazin: updated.magazin,
+            }
           : x
       )
     );
@@ -55,7 +61,32 @@ export function BusinessesClient({ initialBusinesses }: { initialBusinesses: Bus
     if (b.omborli && !confirm(`"${b.nomi}" da ombor va sotuv bo'limlari yopilsinmi?\n\nMahsulot va sotuv ma'lumotlari o'chmaydi — qayta yoqsangiz joyida bo'ladi.`)) {
       return;
     }
-    return patch(b, { omborli: !b.omborli });
+    // Ombor o'chirilsa kassa ham ma'nosini yo'qotadi (mahsulot va qoldiq
+    // ombordan keladi) — shu bois birga o'chiriladi.
+    return patch(b, { omborli: !b.omborli, ...(b.omborli ? { magazin: false } : {}) });
+  }
+
+  /**
+   * Do'kon kassasini (POS) shu bizneste yoqish/o'chirish.
+   *
+   * O'chirilganda MA'LUMOT O'CHMAYDI: cheklar, sotuvlar, mahsulot kodlari va
+   * qoldiqlar joyida qoladi — faqat kassa bo'limi ko'rinmay qoladi.
+   */
+  function toggleMagazin(b: BusinessDTO) {
+    if (!b.omborli && !b.magazin) {
+      alert("Kassa ombor ustida ishlaydi. Avval shu bizneste omborni yoqing.");
+      return;
+    }
+    if (
+      b.magazin &&
+      !confirm(
+        `"${b.nomi}" da kassa (POS) bo'limi yopilsinmi?\n\n` +
+          "Cheklar, sotuvlar va mahsulot kodlari o'chmaydi — qayta yoqsangiz joyida bo'ladi."
+      )
+    ) {
+      return;
+    }
+    return patch(b, { magazin: !b.magazin });
   }
 
   async function deleteBusiness(b: BusinessDTO) {
@@ -88,6 +119,7 @@ export function BusinessesClient({ initialBusinesses }: { initialBusinesses: Bus
               <th className="pb-2">Nomi</th>
               <th className="pb-2">Rejim</th>
               <th className="pb-2">Ombor</th>
+              <th className="pb-2">Kassa</th>
               <th className="pb-2 text-right">Kategoriyalar</th>
               <th className="pb-2 text-right">Tranzaksiyalar</th>
               <th className="pb-2">Holati</th>
@@ -106,6 +138,9 @@ export function BusinessesClient({ initialBusinesses }: { initialBusinesses: Bus
                 <td className="py-2.5">
                   <Badge tone={b.omborli ? "kirim" : "neutral"}>{b.omborli ? "Yoqiq" : "O'chiq"}</Badge>
                 </td>
+                <td className="py-2.5">
+                  <Badge tone={b.magazin ? "kirim" : "neutral"}>{b.magazin ? "Yoqiq" : "O'chiq"}</Badge>
+                </td>
                 <td className="py-2.5 text-right text-muted">{b.kategoriyalar}</td>
                 <td className="py-2.5 text-right text-muted">{b.tranzaksiyalar}</td>
                 <td className="py-2.5">
@@ -117,6 +152,12 @@ export function BusinessesClient({ initialBusinesses }: { initialBusinesses: Bus
                     className="text-xs font-medium text-muted hover:text-brand mr-3"
                   >
                     {b.omborli ? "Omborni o'chirish" : "Omborni yoqish"}
+                  </button>
+                  <button
+                    onClick={() => toggleMagazin(b)}
+                    className="text-xs font-medium text-muted hover:text-brand mr-3"
+                  >
+                    {b.magazin ? "Kassani o'chirish" : "Kassani yoqish"}
                   </button>
                   <button
                     onClick={() => toggleTuri(b)}

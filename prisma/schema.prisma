@@ -147,6 +147,11 @@ model Business {
   /// Bayroq ATAYLAB opt-in: yoqilmagan bizneslarda kassa tanlash mantig'i
   /// avvalgidek qoladi (lib/services/accounts.ts → resolveAccountId).
   shaxsiyKassa       Boolean                @default(false)
+  /// MAGAZIN (POS) shu bizneste yuritiladimi. MAGAZIN moduli TENANT darajasida
+  /// yoqiladi, bu bayroq esa BIZNES darajasida — bir tenantda do'kon ham,
+  /// do'kon bo'lmagan biznes ham yonma-yon tura oladi (`omborli` bilan bir xil
+  /// qoida). Mavjud bizneslarda `false` — ular uchun hech narsa o'zgarmaydi.
+  magazin            Boolean                @default(false)
   createdAt          DateTime               @default(now())
   tenantId           String
   tenant             Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
@@ -187,6 +192,8 @@ model Business {
   dailyReportSetting DailyReportSetting?
   smenalar           Smena[]
   kassaTopshiriqlar  CashHandover[]
+  productCategories  ProductCategory[]
+  posCheklar         PosChek[]
 
   @@index([tenantId])
 }
@@ -319,30 +326,30 @@ model Account {
 /// ichida joyini o'zgartirdi. Aks holda kunlik kirim/chiqim sun'iy oshib
 /// ketardi. Kassa qoldig'i hisobida esa alohida hisobga olinadi.
 model AccountTransfer {
-  id            String   @id @default(cuid())
-  businessId    String
-  business      Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
-  fromAccountId String
-  fromAccount   Account  @relation("transferFrom", fields: [fromAccountId], references: [id], onDelete: Restrict)
-  toAccountId   String
-  toAccount     Account  @relation("transferTo", fields: [toAccountId], references: [id], onDelete: Restrict)
-  summa         Int
+  id                   String    @id @default(cuid())
+  businessId           String
+  business             Business  @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  fromAccountId        String
+  fromAccount          Account   @relation("transferFrom", fields: [fromAccountId], references: [id], onDelete: Restrict)
+  toAccountId          String
+  toAccount            Account   @relation("transferTo", fields: [toAccountId], references: [id], onDelete: Restrict)
+  summa                Int
   /// Valyuta — hozircha faqat "UZS" (butun tizim so'mda, Int).
-  valyuta       String   @default("UZS")
-  sana          DateTime
-  izoh          String?
-  userId        String
+  valyuta              String    @default("UZS")
+  sana                 DateTime
+  izoh                 String?
+  userId               String
   // FOYDALANUVCHIDAN FOYDALANUVCHIGA O'TKAZMA (PRO): shaxsiy kassalar orasidagi
   // transfer kim kimga pul berganini ham yozadi. Ism — snapshot (ShiftClose
   // uslubi): foydalanuvchi o'chirilsa ham tarix o'qiladigan bo'lib qoladi.
-  fromUserId    String?
-  fromUserIsm   String?
-  toUserId      String?
-  toUserIsm     String?
+  fromUserId           String?
+  fromUserIsm          String?
+  toUserId             String?
+  toUserIsm            String?
   /// "transfer" — oddiy pul ko'chirish; "smena" — smena topshirish
   /// (kassir kassasini keyingi kassirga/direktorga topshiradi).
   /// Faqat KO'RSATISH va hisobot uchun — pul harakati ikkalasida bir xil.
-  turi          String   @default("transfer")
+  turi                 String    @default("transfer")
   /// "bajarildi" | "kutilmoqda" | "rad" | "bekor" | "arxiv".
   ///
   /// QOLDIQQA KIRADIGANLAR: "bajarildi" va "bekor".
@@ -358,21 +365,21 @@ model AccountTransfer {
   ///     Legacy tizim ATAYLAB ledgerga tegmasdi, shuning uchun bu qatorlar
   ///     ham pul ko'chirmaydi: ular faqat "kim kimga qachon topshirdi"
   ///     tarixini bitta joyda ko'rsatish uchun (scripts/kassa-handover-migratsiya.ts).
-  holat         String   @default("bajarildi")
+  holat                String    @default("bajarildi")
   /// Ko'chirilgan `CashHandover` yozuvining IDsi. UNIQUE — migratsiya
   /// idempotent: qayta ishga tushirilsa dublikat yaratilmaydi.
-  legacyCashHandoverId String? @unique
+  legacyCashHandoverId String?   @unique
   /// Qabul qilgan/rad etgan foydalanuvchi. Ism — snapshot (tarix o'qiladigan qolsin).
-  tasdiqlaganId String?
-  tasdiqlaganIsm String?
-  tasdiqlanganAt DateTime?
-  radAt         DateTime?
+  tasdiqlaganId        String?
+  tasdiqlaganIsm       String?
+  tasdiqlanganAt       DateTime?
+  radAt                DateTime?
   /// Rad etish yoki bekor qilish sababi (qabul qiluvchi yozadi).
-  qarorIzoh     String?
+  qarorIzoh            String?
   /// Bog'liq hujjat: "purchaseOrder" | "debt" | "storno" (+ relatedId).
-  relatedType   String?
-  relatedId     String?
-  createdAt     DateTime @default(now())
+  relatedType          String?
+  relatedId            String?
+  createdAt            DateTime  @default(now())
 
   @@index([businessId, sana])
   @@index([businessId, fromUserId])
@@ -559,6 +566,22 @@ model Product {
   /// Ilgari butun tizim uchun bitta sobit chegara (5 dona) ishlatilardi —
   /// tuxum sotuvchiga ham, avtomobil sotuvchiga ham bir xil edi.
   minQoldiq     Int                 @default(0)
+  /// ZAVOD SHTRIX-KODI (EAN-13/UPC va h.k.) — quti ustidagi kod.
+  /// Biznes ichida takrorlanmaydi (@@unique([businessId, barcode])); GLOBAL
+  /// unique ATAYLAB emas: bir xil Coca-Cola'ni yuzlab do'kon sotadi va
+  /// global cheklov ikkinchi mijozga mahsulot qo'shishga yo'l bermasdi.
+  barcode       String?
+  /// BALANSA QR — zavod kodi yo'q mahsulot uchun tizim yaratadigan barqaror
+  /// identifikator ("BALANSA-PRODUCT-XXXXXXXX"). QR ichida FAQAT shu kalit
+  /// bo'ladi: narx yoki qoldiq QR ichiga yozilmaydi, shuning uchun narx
+  /// o'zgarganda chop etilgan stikerlarni qayta bosish shart emas.
+  qrKod         String?
+  /// Mahsulot rasmi (tashqi havola yoki saqlagich URL'i).
+  rasmUrl       String?
+  /// MAHSULOT KATEGORIYASI (POS'da guruhlab ko'rsatish uchun). `Category`
+  /// modelidan ATAYLAB alohida: u kirim/chiqim moliyaviy kategoriyasi.
+  categoryId    String?
+  category      ProductCategory?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   // Avto rejimi maydonlari — umumiy bizneslarda null.
   avtoYil       Int?
   avtoRaqam     String?
@@ -571,8 +594,11 @@ model Product {
   adjustments   StockAdjustment[]
   xaridSatrlari PurchaseOrderItem[]
 
+  @@unique([businessId, barcode])
+  @@unique([businessId, qrKod])
   @@index([businessId])
   @@index([businessId, sku])
+  @@index([businessId, categoryId])
 }
 
 /// OMBOR TO'G'RILASH — inventarizatsiya yoki hisobdan chiqarish.
@@ -673,8 +699,14 @@ model Sale {
   cancelledBy   String?
   cancelReason  String?
   debt          Debt?
+  /// POS CHEKI (MAGAZIN moduli). To'ldirilgan bo'lsa — bu sotuv savatdagi
+  /// bitta satr; pul harakati va bekor qilish CHEK darajasida yuritiladi.
+  /// null — oddiy bir mahsulotli sotuv (OMBOR moduli, avvalgi xatti-harakat).
+  chekId        String?
+  chek          PosChek?  @relation(fields: [chekId], references: [id], onDelete: Restrict)
 
   @@index([businessId, sana])
+  @@index([chekId])
   @@index([businessId, deletedAt, sana])
   @@index([productId])
   @@index([contactId])
@@ -685,59 +717,59 @@ model Sale {
 ///  - turi = "beriladigan" — biz qarzdormiz (masalan mashina olindi, egasiga to'lanmadi).
 /// To'lovlar bilan kamayadi: olinadigan → kirim tranzaksiya, beriladigan → chiqim.
 model Debt {
-  id         String        @id @default(cuid())
-  businessId String
-  business   Business      @relation(fields: [businessId], references: [id], onDelete: Restrict)
-  turi       String        @default("olinadigan")
-  saleId     String?       @unique
-  sale       Sale?         @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  id                 String        @id @default(cuid())
+  businessId         String
+  business           Business      @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  turi               String        @default("olinadigan")
+  saleId             String?       @unique
+  sale               Sale?         @relation(fields: [saleId], references: [id], onDelete: Restrict)
   /// Qarz qaysi mahsulot/mashinaga tegishli (ixtiyoriy).
-  productId  String?
-  product    Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productId          String?
+  product            Product?      @relation(fields: [productId], references: [id], onDelete: SetNull)
   /// Mijoz kartochkasiga bog'lanish (ixtiyoriy — eski yozuvlarda null).
-  contactId  String?
-  contact    Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  mijozNomi  String
-  mijozTel   String?
-  jamiSumma  Int
-  tolangan   Int           @default(0)
+  contactId          String?
+  contact            Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  mijozNomi          String
+  mijozTel           String?
+  jamiSumma          Int
+  tolangan           Int           @default(0)
   /// TARIXIY BAYROQ. `status` bilan har doim sinxron yuritiladi
   /// (PAID va CANCELLED — ikkalasi ham `true`), chunki ochiq qarz jamlari
   /// va mijoz limiti shu ustun bo'yicha hisoblanadi.
-  isYopilgan Boolean       @default(false)
+  isYopilgan         Boolean       @default(false)
   /// HOLAT: "OPEN" | "PARTIALLY_PAID" | "PAID" | "CANCELLED".
   /// `isYopilgan` faqat "yopiqmi" degan savolga javob berardi — qisman
   /// to'langan qarzni ochiqdan ajratib bo'lmasdi va bekor qilish yo'q edi.
-  status     String        @default("OPEN")
+  status             String        @default("OPEN")
   /// QARZ BERILGAN SANA (kun aniqligida, UTC-yarim tun). Eski yozuvlarda
   /// migratsiya uni `createdAt` dan to'ldiradi. Kirim sanasi bu EMAS —
   /// kirim faqat to'lov sanasi bilan yoziladi (lib/services/qarz.ts).
-  sana       DateTime?
+  sana               DateTime?
   /// Qaysi kategoriya hisobiga qarzga savdo yozildi (hisobot uchun, ixtiyoriy).
-  categoryId String?
-  category   Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  categoryId         String?
+  category           Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   /// MAS'UL SOTUVCHI/OPERATOR. FK ataylab yo'q (DailyReportSetting.direktorId
   /// uslubi) — xodim o'chirilsa qarz tarixi buzilmasin; ism snapshot sifatida
   /// saqlanadi. Tenant tekshiruvi xizmat qatlamida.
-  masulId    String?
-  masulIsm   String?
+  masulId            String?
+  masulIsm           String?
   /// ESKI YOZUVLAR KO'PRIGI: `tolovTuri = "qarz"` bilan yozilgan kirim
   /// tranzaksiyasidan ko'chirilgan qarz (scripts/qarz-migratsiya.ts).
   /// @unique — bitta tranzaksiya ikki marta ko'chirilmaydi (idempotentlik).
   /// FK yo'q: tranzaksiya yumshoq o'chirilsa ham bog'lanish o'qiladigan qoladi.
-  manbaTransactionId String? @unique
+  manbaTransactionId String?       @unique
   /// Kelishilgan to'lov muddati (ixtiyoriy).
-  muddat     DateTime?
-  izoh       String?
-  userId     String
-  createdAt  DateTime      @default(now())
+  muddat             DateTime?
+  izoh               String?
+  userId             String
+  createdAt          DateTime      @default(now())
   /// AUDIT: oxirgi o'zgarish. Eski yozuvlarda null.
-  updatedAt  DateTime?     @updatedAt
-  updatedBy  String?
-  cancelledAt   DateTime?
-  cancelledBy   String?
-  cancelReason  String?
-  payments   DebtPayment[]
+  updatedAt          DateTime?     @updatedAt
+  updatedBy          String?
+  cancelledAt        DateTime?
+  cancelledBy        String?
+  cancelReason       String?
+  payments           DebtPayment[]
 
   @@index([businessId, isYopilgan, turi])
   @@index([businessId, turi])
@@ -862,6 +894,7 @@ model Contact {
   sales      Sale[]
   debts      Debt[]
   contracts  Contract[]
+  posCheklar PosChek[]
 
   @@index([businessId])
   @@index([businessId, tel])
@@ -951,28 +984,28 @@ model Activity {
 
 /// Qarz to'lovi — kirim tranzaksiya yaratadi va qarzni kamaytiradi.
 model DebtPayment {
-  id            String   @id @default(cuid())
-  debtId        String
-  debt          Debt     @relation(fields: [debtId], references: [id], onDelete: Restrict)
-  businessId    String
-  business      Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
-  summa         Int
+  id             String    @id @default(cuid())
+  debtId         String
+  debt           Debt      @relation(fields: [debtId], references: [id], onDelete: Restrict)
+  businessId     String
+  business       Business  @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  summa          Int
   /// TO'LOV SANASI — pul HAQIQATDA kelgan kun. Kirim tranzaksiyasi aynan shu
   /// sana bilan yoziladi, qarz berilgan sana bilan EMAS. Eski yozuvlarda
   /// migratsiya uni `createdAt` dan to'ldiradi.
-  sana          DateTime?
+  sana           DateTime?
   /// Qaysi usulda to'landi: "naqd" | "click" | "bank". Eski yozuvlarda null.
-  tolovTuri     String?
+  tolovTuri      String?
   /// Qaysi kassaga tushdi. Kirim tranzaksiyasi ham shu kassaga bog'lanadi.
-  accountId     String?
-  izoh          String?
-  userId        String
-  transactionId String?
+  accountId      String?
+  izoh           String?
+  userId         String
+  transactionId  String?
   /// TAKROR TO'LOVDAN HIMOYA: klient har to'lov uchun bir martalik kalit
   /// yuboradi. Tugma ikki marta bosilsa ikkinchi so'rov shu unique cheklovga
   /// uriladi va mavjud to'lov qaytariladi — balans ikki marta oshmaydi.
   idempotencyKey String?
-  createdAt     DateTime @default(now())
+  createdAt      DateTime  @default(now())
 
   @@unique([debtId, idempotencyKey])
   @@index([debtId])
@@ -1470,4 +1503,76 @@ model CashHandover {
 
   @@index([businessId, holat, topshirilganAt])
   @@index([businessId, kassirId, topshirilganAt])
+}
+
+// ==== MAGAZIN moduli (POS / QR / Barcode) ====
+
+/// MAHSULOT KATEGORIYASI — POS'da tovarni guruhlab ko'rsatish uchun.
+///
+/// `Category` (kirim/chiqim) modelidan ATAYLAB alohida: u moliyaviy kategoriya
+/// bo'lib, hisobot va budjet unga tayanadi. "Ichimliklar", "Non mahsulotlari"
+/// kabi tovar guruhlarini o'sha jadvalga aralashtirib yuborish hisobotni
+/// buzardi.
+model ProductCategory {
+  id         String    @id @default(cuid())
+  businessId String
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  nomi       String
+  tartib     Int       @default(0)
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
+  products   Product[]
+
+  @@unique([businessId, nomi])
+  @@index([businessId, isActive, tartib])
+}
+
+/// POS CHEKI — kassada bitta to'lovda sotilgan savat.
+///
+/// Nega alohida jadval kerak: `Sale` bitta mahsulotni tasvirlaydi. Kassada
+/// esa bitta xaridor 10 xil tovar oladi va BITTA to'lov qiladi. Agar har
+/// satr uchun alohida kirim tranzaksiya yozilsa, kassa tarixida bitta
+/// xariddan 10 ta yozuv paydo bo'lardi.
+///
+/// Shuning uchun: har satr avvalgidek `Sale` yozuvi bo'lib qoladi (barcha
+/// mavjud hisobot, marja va ombor mantig'i O'ZGARISHSIZ ishlaydi), pul
+/// harakati esa — bitta tranzaksiya yoki bitta qarz — CHEKDA yuritiladi.
+///
+/// Bekor qilish ham chek darajasida: kassada yarim chekni qaytarish emas,
+/// butun chekni qaytarish qoidasi ishlaydi.
+model PosChek {
+  id            String    @id @default(cuid())
+  businessId    String
+  business      Business  @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  /// Biznes ichidagi ketma-ket chek raqami (kassir "125-chek" deb ataydi).
+  raqam         Int
+  jamiSumma     Int
+  /// "naqd" | "karta" | "click" | "qarz". Naqd/karta/click — pul darhol
+  /// kassaga tushadi (qaysi kassa — `accountId`), qarz — Debt yaratiladi.
+  tolovTuri     String
+  /// Pul tushgan kassa (Account) — naqd/karta/click uchun.
+  accountId     String?
+  /// Chekning yagona kirim tranzaksiyasi (naqd/karta/click).
+  transactionId String?
+  /// Qarzga sotilganda — yaratilgan qarzdorlik.
+  debtId        String?   @unique
+  contactId     String?
+  contact       Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  mijozNomi     String?
+  mijozTel      String?
+  userId        String
+  /// Chek sanasi (UTC yarim tuni) — `Sale.sana` bilan bir xil qoida.
+  sana          DateTime
+  createdAt     DateTime  @default(now())
+  /// Qaytarilgan/bekor qilingan chek — yumshoq o'chirish (tarix saqlanadi).
+  deletedAt     DateTime?
+  cancelledBy   String?
+  cancelReason  String?
+  satrlar       Sale[]
+
+  @@unique([businessId, raqam])
+  @@index([businessId, deletedAt, sana])
+  @@index([businessId, createdAt])
+  @@index([contactId])
 }

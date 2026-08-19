@@ -3254,3 +3254,66 @@ Yo'l-yo'lakay yana ikki nuqta:
 
 53 ta test to'plamining HAMMASI yashil. `test:smoke` ketma-ket 7 marta
 yurgizildi — har safar 7/7, ortidan osilgan jarayon qolmadi.
+
+---
+
+## MAGAZIN moduli — POS / Inventory / QR / Barcode (2026-08-19)
+
+### Nima uchun bu shakl
+
+Talab "Magazin/POS modulini qo'sh, LEKIN u mavjud bizneslarga majburan
+qo'shilmasin" edi. Auditda ma'lum bo'ldiki, buning uchun kerak bo'lgan
+skeletning deyarli hammasi ALLAQACHON bor:
+
+- modul katalogi (`lib/modules/registry.ts`) va yoqilganlik jadvali (`TenantModule`);
+- API guard (`withTenant(h, { module })`) va sahifa guard'i (`requireModulePage`);
+- **biznes darajasidagi bayroq** namunasi — `Business.omborli` + `requireOmborli()`;
+- tarif ↔ modul bog'lanishi (`lib/billing/plans.ts`).
+
+Shuning uchun parallel arxitektura qurilmadi. `MAGAZIN` — o'sha katalogdagi
+yangi modul, `Business.magazin` esa `omborli` bilan bir xil qoidada ishlaydigan
+biznes bayrog'i.
+
+### Eng muhim ikki qaror
+
+**1. MAGAZIN — OMBOR ustidagi qatlam, uning nusxasi emas.**
+Mahsulot, qoldiq, sotuv tarixi va xarid allaqachon OMBOR/XARID modullarida.
+MAGAZIN faqat YANGI narsani qo'shadi: kassir ekrani (POS), cheklar/qaytarish
+va QR/shtrix-kod. "Mahsulotlar", "Ombor", "Sotuvlar" sahifalari
+TAKRORLANMADI. Registry'ga `talabQiladi` maydoni qo'shildi: OMBOR yopiq
+bo'lsa MAGAZIN yozuvi `isActive` bo'lsa ham hisobga olinmaydi.
+
+**2. Chek satrlari — o'sha `Sale` yozuvlari.**
+`PosChek` faqat SAVAT BOSHI. Har satr avvalgidek `Sale` bo'lib qoladi, ya'ni
+marja, ombor kamayishi, mijoz kartochkasi va barcha mavjud hisobotlar
+o'zgarishsiz ishlaydi. Agar parallel "PosSale" jadvali qilinganda, o'sha
+hisobotlarning har biri "ikki manbadan o'qish" ga aylanardi va POS savdosi
+hisobotlarda ko'rinmay qolish xavfi tug'ilardi.
+
+PUL esa chek darajasida: xaridor 10 ta tovarni bitta to'lovda oladi, demak
+kassaga BITTA kirim tranzaksiya tushadi (10 ta emas). Shu bois POS
+satrlarida `Sale.transactionId` ataylab bo'sh — pul yozuvi
+`PosChek.transactionId` da.
+
+### Mavjud mijozlarga nima bo'ldi
+
+Hech narsa. Migratsiya faqat ustun qo'shadi va jadval yaratadi:
+`Business.magazin` = false, `Sale.chekId` = NULL, `TenantModule` ga bironta
+qator YOZILMAYDI. Ya'ni menyu, route, huquq va workflow o'zgarmaydi —
+Retail OFF bo'lgan biznes modulni umuman mavjud emasdek ko'radi.
+
+### Skaner va qo'lda yozish ziddiyati
+
+Do'kon skanerlarining aksariyati HID klaviatura: kodni juda tez "yozadi" va
+Enter bosadi. Global tinglovchi ikki shart bilan himoyalangan
+(`app/pos/useSkaner.ts`): fokus biror kiritish maydonida bo'lsa umuman
+ishlamaydi, ishlaganda ham belgilar orasidagi oraliq 60 ms dan katta bo'lsa
+bufer tozalanadi. Aks holda kassir "coca" deb yozganda har harf kod buferiga
+qo'shilib ketardi.
+
+### Natija
+
+`npm run build` o'tdi. `tests/magazin.test.ts` — 28/28 yashil (modul
+yoqish/o'chirish, ma'lumot saqlanishi, tenant/rol izolyatsiyasi, barcode va
+QR, savat birlashishi, atomik chek, orqaga qaytish, qoldiq poygasi,
+qaytarish). Mavjud 53 to'plam ham qayta yurgizildi — hammasi yashil.

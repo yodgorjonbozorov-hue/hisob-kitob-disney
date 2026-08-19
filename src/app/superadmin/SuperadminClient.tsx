@@ -3,6 +3,7 @@
 import { Fragment, useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { PLANLAR } from "@/lib/billing/plans";
+import { TenantModullar } from "./TenantModullar";
 import { BIZNES_TURLARI } from "@/lib/biznesTuri";
 import { KassaMetrikalari } from "./KassaMetrikalari";
 import type { KassaMetrikalari as KassaMetrikaTuri } from "@/lib/superadmin/kassa";
@@ -67,6 +68,7 @@ export function SuperadminClient({
   tenants,
   pendingPayments,
   users,
+  modulPaneli,
 }: {
   superadminIsm: string;
   metrics: Metrics;
@@ -75,10 +77,14 @@ export function SuperadminClient({
   tenants: TenantRow[];
   pendingPayments: PaymentRow[];
   users: UserRow[];
+  /** Modul statistikasi paneli (server komponentida tayyorlanadi). */
+  modulPaneli?: React.ReactNode;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [openUsers, setOpenUsers] = useState<string | null>(null);
+  // Qaysi kompaniyaning modul paneli ochiq (foydalanuvchilar paneli bilan bir xil uslub).
+  const [openModullar, setOpenModullar] = useState<string | null>(null);
   const [xabar, setXabar] = useState<string | null>(null);
 
   async function call(
@@ -229,6 +235,8 @@ export function SuperadminClient({
           ))}
         </div>
 
+        {modulPaneli}
+
         {/* Kassir kassalari — barcha tenantlar bo'ylab */}
         <KassaMetrikalari m={kassaMetrics} />
 
@@ -354,6 +362,13 @@ export function SuperadminClient({
                         >
                           {t.bepul ? "Bepulni bekor qilish" : "Bepul qilish"}
                         </button>
+                        <button
+                          className={btn}
+                          disabled={!!busy}
+                          onClick={() => setOpenModullar(openModullar === t.id ? null : t.id)}
+                        >
+                          Modullar {openModullar === t.id ? "▴" : "▾"}
+                        </button>
                         <button className={btn} disabled={!!busy} onClick={() => kirish(t)}>
                           Kirish →
                         </button>
@@ -370,6 +385,18 @@ export function SuperadminClient({
                       </div>
                     </td>
                   </tr>
+                  {openModullar === t.id && (
+                    <tr>
+                      <td colSpan={7} className="py-2 pl-4 bg-surface-2/50">
+                        <TenantModullar
+                          tenantId={t.id}
+                          tenantNomi={t.name}
+                          btn={btn}
+                          onXabar={setXabar}
+                        />
+                      </td>
+                    </tr>
+                  )}
                   {openUsers === t.id && (
                     <tr>
                       <td colSpan={7} className="py-2 pl-4 bg-surface-2/50">

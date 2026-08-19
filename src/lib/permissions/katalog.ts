@@ -30,6 +30,10 @@ export const HUQUQLAR: Huquq[] = [
   { code: "kassa.korish", label: "Kassalarni ko'rish", guruh: "Moliya" },
   { code: "pul.berish", label: "Pul berish (o'tkazma yaratish)", guruh: "Moliya" },
   { code: "pul.qabul", label: "Pul qabul qilish", guruh: "Moliya" },
+  // Magazin (POS / QR / Barcode)
+  { code: "pos.sotish", label: "Kassada (POS) sotish", guruh: "Magazin" },
+  { code: "pos.qaytarish", label: "Chekni qaytarish/bekor qilish", guruh: "Magazin" },
+  { code: "barcode.boshqarish", label: "Shtrix-kod va QR biriktirish", guruh: "Magazin" },
   // Sotuv va qarz
   { code: "sotuv.yaratish", label: "Sotuv yaratish", guruh: "Sotuv va qarz" },
   { code: "qarz.korish", label: "Qarzlarni ko'rish", guruh: "Sotuv va qarz" },
@@ -69,6 +73,10 @@ export const ROL_DEFAULT_HUQUQLAR: Record<Rol, string[]> = {
     "sotuv.yaratish",
     "qarz.korish",
     "qarz.tolash",
+    // Kassada sotish — kassirning asosiy amali. Chekni QAYTARISH esa
+    // ataylab yo'q: qaytarish pulni kassadan chiqaradi, bu boshqaruvchi
+    // qarori (mavjud "sotuvni bekor qilish" qoidasi bilan bir xil).
+    "pos.sotish",
   ],
   SELLER: ["tranzaksiya.korish", "tranzaksiya.yaratish", "pul.qabul"],
 };
