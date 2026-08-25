@@ -33,3 +33,6 @@ prisma/.pg-*.tmp.prisma
 /blob-report/
 .vercel
 .env*
+
+# Responsive verifikatsiya suratlari — repoga qo'shilmaydi.
+tests/suratlar/

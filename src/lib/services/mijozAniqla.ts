@@ -184,7 +184,21 @@ export async function qarzMijozYarat(params: {
   ism: string;
   tel: string | null;
   izoh?: string | null;
-}): Promise<{ contactId: string; ism: string; tel: string | null; ochiqQarz: number }> {
+}): Promise<{
+  contactId: string;
+  ism: string;
+  tel: string | null;
+  ochiqQarz: number;
+  /**
+   * MAVJUD kartochka qaytarildimi (yangisi yaratilmadi).
+   *
+   * Dublikat oldini olish JIM bo'lmasligi kerak (18-talab): operator
+   * "yangi mijoz" tugmasini bosgan bo'lsa, uning o'rniga eski kartochka
+   * ishlatilganini BILISHI shart — aks holda u yozgan telefon boshqa
+   * odamning kartochkasiga tushib ketganini sezmaydi.
+   */
+  mavjud: boolean;
+}> {
   return runBusinessTx(params.businessId, async (tx) => {
     const mijoz = await mijozniAniqlaTx(tx, {
       businessId: params.businessId,
@@ -195,6 +209,7 @@ export async function qarzMijozYarat(params: {
     });
 
     let contactId = mijoz.contactId;
+    const mavjud = contactId !== null;
     if (!contactId) {
       const yangi = await tx.contact.create({
         data: {
@@ -234,6 +249,7 @@ export async function qarzMijozYarat(params: {
       ism: mijoz.ism,
       tel: mijoz.tel,
       ochiqQarz: ochiqQarz > 0 ? ochiqQarz : 0,
+      mavjud,
     };
   });
 }
