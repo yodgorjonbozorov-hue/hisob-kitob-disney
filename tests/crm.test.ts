@@ -32,6 +32,8 @@ let tB: any;
 /** "Onajon" — Disney Navoiy kirim kategoriyasi (A tenant). */
 let katOnajon: any;
 let katOtajon: any;
+/** "Bantik" — to'liq oqim testining kategoriyasi (topshiriqdagi misol). */
+let katBantik: any;
 
 /** Qisqartma: A tenant kontekstida bajarish. */
 const A = <T>(fn: () => Promise<T>): Promise<T> => runWithTenant(tA.tenant.id, fn);
@@ -66,6 +68,9 @@ before(async () => {
   });
   katOtajon = await rawPrisma.category.create({
     data: { businessId: tA.business.id, nomi: "Otajon", turi: "kirim" },
+  });
+  katBantik = await rawPrisma.category.create({
+    data: { businessId: tA.business.id, nomi: "Bantik", turi: "kirim" },
   });
 });
 
@@ -351,15 +356,220 @@ test("IZOLYATSIYA: A buyurtmasini B kirimga o'tkaza olmaydi", async () => {
   );
 });
 
-test("modul-rol: SELLER CRM'ga kiradi, CASHIER kirmaydi", async () => {
+test("modul-rol: CRM biznesdagi BARCHA rollarga ochiq (sotuvchi ham, kassir ham)", async () => {
   const ctx = (rol: string) => ({
     session: { rol },
     tenantId: tA.tenant.id,
     tenant: { ...tA.tenant, plan: "PRO" },
     access: { mode: "FULL" },
   });
-  await A(() => guard.requireModule(ctx("SELLER"), "CRM"));
-  await assert.rejects(async () => A(() => guard.requireModule(ctx("CASHIER"), "CRM")), ForbiddenError);
+  // "Sotuvchi" deb ishlaydigan xodim hisobi SELLER'da ham, CASHIER'da ham
+  // ochilgan bo'lishi mumkin — CRM ikkalasiga ham ko'rinishi shart.
+  for (const rol of ["OWNER", "ADMIN", "CASHIER", "SELLER"]) {
+    await A(() => guard.requireModule(ctx(rol), "CRM"));
+  }
+});
+
+test("modul-rol: CRM ochilgani BOSHQARUV bo'limlarini ochib yubormaydi", async () => {
+  const ctx = (rol: string) => ({
+    session: { rol },
+    tenantId: tA.tenant.id,
+    tenant: { ...tA.tenant, plan: "PRO" },
+    access: { mode: "FULL" },
+  });
+  // Maxfiy bo'limlar (foydalanuvchilar, audit, obuna) — BOSHQARUV modulida.
+  for (const rol of ["CASHIER", "SELLER"]) {
+    await assert.rejects(
+      async () => A(() => guard.requireModule(ctx(rol), "BOSHQARUV")),
+      ForbiddenError,
+      `${rol} BOSHQARUV moduliga kira olmasligi kerak`
+    );
+    await assert.rejects(
+      async () => A(() => guard.requireModule(ctx(rol), "HR")),
+      ForbiddenError,
+      `${rol} HR moduliga kira olmasligi kerak`
+    );
+    await assert.rejects(
+      async () => A(() => guard.requireModule(ctx(rol), "XARID")),
+      ForbiddenError,
+      `${rol} XARID moduliga kira olmasligi kerak`
+    );
+  }
+});
+
+test("NAVIGATSIYA: CRM havolasi sotuvchi va kassir menyusida bor, admin havolalari yo'q", async () => {
+  const registry = await import("@/lib/modules/registry");
+  const yoqilgan = new Set(["MOLIYA", "BOSHQARUV", "CRM"]);
+  for (const rol of ["CASHIER", "SELLER"] as const) {
+    const nav = registry.computeNav({ rol, yoqilgan, omborli: false, pro: true });
+    const hrefs = nav.map((n: any) => n.href);
+    assert.ok(hrefs.includes("/app/crm"), `${rol} menyusida CRM bo'lishi shart`);
+    assert.ok(hrefs.includes("/app/crm/kontaktlar"), `${rol} menyusida Kontaktlar bo'lishi shart`);
+    // Maxfiy bo'limlar ochilib ketmadi.
+    for (const yopiq of [
+      "/app/admin/foydalanuvchilar",
+      "/app/admin/audit",
+      "/app/admin/rollar",
+      "/app/admin/bizneslar",
+      "/app/hisobot",
+      "/billing",
+    ]) {
+      assert.ok(!hrefs.includes(yopiq), `${rol} menyusida ${yopiq} bo'lmasligi kerak`);
+    }
+  }
+  // Direktor menyusi o'zgarmagan.
+  const owner = registry.computeNav({ rol: "OWNER", yoqilgan, omborli: false, pro: true });
+  assert.ok(owner.map((n: any) => n.href).includes("/app/admin/audit"));
+});
+
+test("MAS'UL XODIM: boshqa biznesning xodimi buyurtmaga yozilmaydi", async () => {
+  // A tenantida ikkinchi biznes va faqat unga biriktirilgan sotuvchi.
+  const ikkinchi = await rawPrisma.business.create({
+    data: { nomi: "A ikkinchi biznes", tenantId: tA.tenant.id },
+  });
+  const begona = await rawPrisma.user.create({
+    data: {
+      ism: "Ikkinchi biznes sotuvchisi",
+      login: "+998944444403",
+      parolHash: "x",
+      rol: "SELLER",
+      tenantId: tA.tenant.id,
+      businessId: ikkinchi.id,
+      bizneslar: { create: { businessId: ikkinchi.id } },
+    },
+  });
+
+  await assert.rejects(
+    A(() =>
+      crm.createDeal({
+        businessId: tA.business.id,
+        nomi: "Begona mas'ul",
+        categoryId: katOnajon.id,
+        masulId: begona.id,
+        userId: tA.user.id,
+      })
+    ),
+    ForbiddenError,
+    "boshqa biznesning xodimi mas'ul bo'la olmaydi"
+  );
+
+  // O'z biznesining xodimi esa o'tadi.
+  const oz = await rawPrisma.user.create({
+    data: {
+      ism: "Birinchi biznes sotuvchisi",
+      login: "+998944444404",
+      parolHash: "x",
+      rol: "CASHIER",
+      tenantId: tA.tenant.id,
+      businessId: tA.business.id,
+      bizneslar: { create: { businessId: tA.business.id } },
+    },
+  });
+  const deal = await A(() =>
+    crm.createDeal({
+      businessId: tA.business.id,
+      nomi: "O'z mas'uli",
+      categoryId: katOnajon.id,
+      masulId: oz.id,
+      userId: tA.user.id,
+    })
+  );
+  assert.equal(deal.masulId, oz.id);
+});
+
+test("TO'LIQ OQIM: yangi buyurtma -> Yutildi -> Kirim -> Dashboard kategoriya kesimi", async () => {
+  const { getCategoryBreakdown } = await import("@/lib/queries/dashboard");
+  const sana = "2026-08-20";
+  const oy = "2026-08";
+
+  const oldin = await A(() => getCategoryBreakdown(tA.business.id, oy, "kirim"));
+  const oldingi = oldin.find((k: any) => k.categoryId === katBantik.id)?.summa ?? 0;
+
+  // 1. Sotuvchi mavjud KIRIM kategoriyasini tanlab buyurtma kiritadi.
+  const kirimKategoriyalari = await A(() =>
+    prisma.category.findMany({ where: { businessId: tA.business.id, turi: "kirim", isActive: true } })
+  );
+  assert.ok(
+    kirimKategoriyalari.some((k: any) => k.id === katBantik.id),
+    "CRM ro'yxati Kirim kategoriyalaridan olinadi"
+  );
+
+  const deal = await A(() =>
+    crm.createDeal({
+      businessId: tA.business.id,
+      nomi: "Bantik buyurtmasi",
+      categoryId: katBantik.id,
+      summa: 500_000,
+      kontaktIsm: "Zilola",
+      kontaktTel: "+998907778899",
+      sana,
+      userId: tA.user.id,
+    })
+  );
+
+  // 2. "Yutildi" holatiga o'tkazish + kirim yozish.
+  const won = await A(() =>
+    prisma.stage.findFirst({ where: { businessId: tA.business.id, turi: "WON" } })
+  );
+  await A(() =>
+    crm.moveDeal({
+      businessId: tA.business.id,
+      dealId: deal.id,
+      stageId: won.id,
+      kirimYoz: true,
+      userId: tA.user.id,
+    })
+  );
+
+  // 3. Kirim AYNAN tanlangan kategoriya bilan yozilgan.
+  const yangilangan = await A(() =>
+    prisma.deal.findFirst({ where: { id: deal.id }, include: { transaction: true } })
+  );
+  assert.ok(yangilangan.transactionId, "buyurtma kirimga bog'landi");
+  assert.equal(yangilangan.transaction.categoryId, katBantik.id, "kategoriya ko'chdi");
+  assert.equal(yangilangan.transaction.turi, "kirim");
+  assert.equal(yangilangan.transaction.summa, 500_000);
+
+  // 4. IDEMPOTENTLIK: ikkinchi urinish yangi kirim YARATMAYDI.
+  await assert.rejects(
+    A(() => crmKirim.kirimgaKochirish({ businessId: tA.business.id, dealId: deal.id, userId: tA.user.id })),
+    BadRequestError
+  );
+  const kirimSoni = await A(() =>
+    prisma.transaction.count({ where: { businessId: tA.business.id, categoryId: katBantik.id, deletedAt: null } })
+  );
+  assert.equal(kirimSoni, 1, "bitta buyurtmadan bitta kirim");
+
+  // 5. Dashboard -> "Kirim — kategoriya bo'yicha" da summa AYNAN shu
+  //    kategoriya ichida ko'rinadi ("Kategoriyasiz" emas).
+  const keyin = await A(() => getCategoryBreakdown(tA.business.id, oy, "kirim"));
+  const qator = keyin.find((k: any) => k.categoryId === katBantik.id);
+  assert.ok(qator, "Bantik qatori kategoriya kesimida bo'lishi shart");
+  assert.equal(qator.nomi, "Bantik");
+  assert.equal(qator.summa, oldingi + 500_000);
+});
+
+test("ESKI BUYURTMA: kategoriyasi keyin tanlansa kirim SHU kategoriyaga tushadi", async () => {
+  // Kategoriya maydoni qo'shilgunga qadar yaratilgan buyurtma (categoryId NULL).
+  const eski = await A(() =>
+    crm.createDeal({
+      businessId: tA.business.id,
+      nomi: "Eski kategoriyasiz buyurtma",
+      summa: 200_000,
+      sana: "2026-08-21",
+      userId: tA.user.id,
+    })
+  );
+  assert.equal(eski.categoryId, null, "eski buyurtma kategoriyasiz qoladi — buzilmaydi");
+
+  // Sotuvchi kirimga o'tkazishdan OLDIN kategoriyani tanlaydi.
+  await A(() =>
+    prisma.deal.update({ where: { id: eski.id }, data: { category: { connect: { id: katBantik.id } } } })
+  );
+  const txn = await A(() =>
+    crmKirim.kirimgaKochirish({ businessId: tA.business.id, dealId: eski.id, userId: tA.user.id })
+  );
+  assert.equal(txn.categoryId, katBantik.id, "zaxira 'Sotuv' emas, tanlangan kategoriya");
 });
 
 test("STANDARD tarifda CRM yoqilgan bo'lsa ham ochilmaydi", async () => {

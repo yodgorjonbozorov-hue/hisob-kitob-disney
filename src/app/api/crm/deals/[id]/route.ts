@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { withTenant } from "@/lib/auth/tenant";
 import { ForbiddenError, BadRequestError } from "@/lib/auth/guard";
 import { resolveActiveBusinessId } from "@/lib/business";
-import { moveDeal } from "@/lib/crm/service";
+import { moveDeal, biznesXodimi } from "@/lib/crm/service";
 import { buyurtmaPatchSchema } from "@/lib/validation/crm";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import type { Prisma } from "@prisma/client";
@@ -75,10 +75,9 @@ export const PATCH = withTenant<{ params: { id: string } }>(
         if (!cat) throw new ForbiddenError("Kategoriya bu biznesga tegishli emas");
         if (cat.turi !== "kirim") throw new BadRequestError("Kategoriya kirim turida bo'lishi kerak");
       }
-      if (data.masulId) {
-        const masul = await prisma.user.findFirst({ where: { id: data.masulId }, select: { id: true } });
-        if (!masul) throw new ForbiddenError("Mas'ul xodim topilmadi");
-      }
+      // Mas'ul xodim — shu BIZNESning xodimi (tenant filtri o'zi yetarli emas:
+      // bir kompaniyaning ikkinchi biznesidagi xodim ham o'tib ketardi).
+      if (data.masulId) await biznesXodimi(businessId, data.masulId);
 
       const patch: Prisma.DealUpdateInput = {};
       if (data.nomi !== undefined) patch.nomi = data.nomi;

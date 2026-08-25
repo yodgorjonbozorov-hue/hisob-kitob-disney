@@ -4,6 +4,7 @@ import { requireModulePage } from "@/lib/modules/guard";
 import { prisma } from "@/lib/prisma";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import { getBoard } from "@/lib/crm/service";
+import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
 import { kunlikBuyurtmalar, kategoriyaStatistikasi } from "@/lib/crm/statistika";
 import { todayTashkentDateOnlyString, utcDateToDateOnlyString } from "@/lib/date";
 import { CrmClient } from "./CrmClient";
@@ -36,7 +37,14 @@ export default async function CrmPage() {
         select: { id: true, nomi: true },
         orderBy: [{ tartib: "asc" }, { nomi: "asc" }],
       }),
-      prisma.user.findMany({ where: { isActive: true }, select: { id: true, ism: true }, orderBy: { ism: "asc" } }),
+      // MAS'UL XODIM ro'yxati — faqat SHU biznesda ishlaydiganlar. Tenant
+      // filtri o'zi yetarli emas: bir kompaniyada bir necha biznes bo'lsa,
+      // A biznesining sotuvchisi B biznesining xodimlarini ko'rardi.
+      prisma.user.findMany({
+        where: { isActive: true, ...biznesXodimlariWhere(businessId) },
+        select: { id: true, ism: true },
+        orderBy: { ism: "asc" },
+      }),
       kunlikBuyurtmalar(businessId, bugun),
       kategoriyaStatistikasi(businessId),
     ]);

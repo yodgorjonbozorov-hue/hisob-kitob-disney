@@ -220,11 +220,22 @@ export const MODULLAR: ModulTarifi[] = [
     nomi: "CRM — mijozlar va bitimlar",
     tavsif: "Lead va bitimlar kanbani, kontaktlar, faoliyat tarixi. Yutilgan bitim 1 klikda kirimga aylanadi.",
     core: false,
-    // Sotuvchining asosiy ish quroli — SELLER'ga to'liq ochiq (foydalanuvchi qarori).
-    rollar: ["OWNER", "ADMIN", "SELLER"],
+    // KUNLIK BUYURTMA — savdo maydonidagi HAR bir xodimning ish quroli.
+    //
+    // Ilgari bu yerda faqat SELLER turardi va "sotuvchi" deb ishlaydigan,
+    // lekin hisobi CASHIER rolida ochilgan xodimlarga CRM umuman
+    // KO'RINMASDI (nav ham, sahifa ham, API ham shu ro'yxatdan o'qiladi).
+    // Buyurtma qabul qilish va to'lov olingach uni kirimga o'tkazish —
+    // ikkala rol uchun ham bir xil kundalik amal, shuning uchun modul
+    // biznesdagi barcha rollarga ochiq.
+    //
+    // DIQQAT: bu faqat CRM. Boshqaruv bo'limlari (Bizneslar,
+    // Foydalanuvchilar, Audit, Hisobot, Modullar) o'z ro'yxatlari bilan
+    // BOSHQARUVCHILAR'da qolgan — bu o'zgarish ularga tegmaydi.
+    rollar: HAMMA,
     nav: [
-      { href: "/app/crm", label: "CRM", icon: "crm", tartib: 30, rollar: ["OWNER", "ADMIN", "SELLER"] },
-      { href: "/app/crm/kontaktlar", label: "Kontaktlar", icon: "contacts", tartib: 31, rollar: ["OWNER", "ADMIN", "SELLER"] },
+      { href: "/app/crm", label: "CRM", icon: "crm", tartib: 30, rollar: HAMMA },
+      { href: "/app/crm/kontaktlar", label: "Kontaktlar", icon: "contacts", tartib: 31, rollar: HAMMA },
     ],
   },
   {
