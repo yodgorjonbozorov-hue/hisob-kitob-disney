@@ -8,7 +8,7 @@ import { listTransactions } from "@/lib/queries/transactions";
 import { getTezKategoriyalar } from "@/lib/queries/tezKategoriyalar";
 import { isTolovGuruhi, type TolovGuruhi } from "@/lib/tolovBolimi";
 import { formatSom } from "@/lib/format";
-import { dateOnlyStringToUTCDate, todayTashkentDateOnlyString } from "@/lib/date";
+import { todayTashkentDateOnlyString } from "@/lib/date";
 import { isModuleOnForTenant } from "@/lib/modules/guard";
 import { TransactionsClient } from "./TransactionsClient";
 import { listAccounts, getMeningKassam } from "@/lib/queries/accounts";
@@ -16,7 +16,6 @@ import { toshkentBugunBoshi } from "@/lib/services/kassirKassa";
 import { KassamKartasi } from "@/components/kassa/KassamKartasi";
 import { SotilganMahsulotlar } from "./SotilganMahsulotlar";
 import { getSotuvStatistika, type SotuvStatistikaDTO } from "@/lib/queries/sotuvStatistika";
-import type { Prisma } from "@prisma/client";
 
 interface SearchParams {
   from?: string;
@@ -50,9 +49,6 @@ export default async function TranzaksiyalarPage({
   // Tenant konteksti: quyidagi barcha prisma so'rovlari shu tenantga avtomatik cheklanadi.
   return runWithTenant(tenantId, async () => {
   const businessId = await resolveActiveBusinessId(session);
-  // Sotuvchi kirim ham, chiqim ham qo'shadi/ko'radi — faqat "Sof foyda" ko'rsatkichi yashirin.
-  const hideProfit = session.rol === "SELLER";
-
   if (!businessId) {
     return (
       <div className="space-y-6">
@@ -99,55 +95,6 @@ export default async function TranzaksiyalarPage({
     // Ko'p ishlatiladigan kategoriyalar — FAQAT formadagi tartib uchun.
     getTezKategoriyalar(businessId, scopeUserId),
   ]);
-
-  // QARZ bo'limi jami — uchta manba qo'shiladi:
-  //  1) `Debt` yozuvlari — yangi qarzlar shu yerga tushadi (asosiy manba);
-  //  2) `totals.qarzKirim` — ESKI `tolovTuri="qarz"` tranzaksiyalari
-  //     (scripts/qarz-migratsiya.ts ko'chirmaguncha);
-  //  3) kunlik hisobotdagi qo'lda kiritilgan qarz tushumlari.
-  // MUHIM: bu ko'rsatkich `totals.sof` ga KIRMAYDI — qarz real pul emas.
-  const qarzWhereDebt: Prisma.DebtWhereInput = {
-    businessId,
-    turi: "olinadigan",
-    status: { not: "CANCELLED" },
-    // Eski tranzaksiyadan ko'chirilgan qarz ikki marta sanalmasin: uning
-    // summasi `totals.qarzKirim` da allaqachon bor.
-    manbaTransactionId: null,
-  };
-  {
-    if (scopeUserId) qarzWhereDebt.userId = scopeUserId;
-    if (searchParams.from || searchParams.to) {
-      const sana: Prisma.DateTimeFilter = {};
-      if (searchParams.from) sana.gte = dateOnlyStringToUTCDate(searchParams.from);
-      if (searchParams.to) {
-        sana.lt = new Date(dateOnlyStringToUTCDate(searchParams.to).getTime() + 24 * 60 * 60 * 1000);
-      }
-      qarzWhereDebt.sana = sana;
-    }
-  }
-  const qarzYozuvlari =
-    (await prisma.debt.aggregate({ _sum: { jamiSumma: true }, where: qarzWhereDebt }))._sum.jamiSumma ?? 0;
-
-  let qarzSumma: number | null = null;
-  if (await isModuleOnForTenant(tenantId, "KUNLIK")) {
-    const qarzWhere: Prisma.DailyTransactionWhereInput = {
-      businessId,
-      tolovTuri: "DEBT",
-      transactionId: null,
-      deletedAt: null,
-    };
-    if (scopeUserId) qarzWhere.userId = scopeUserId;
-    if (searchParams.from || searchParams.to) {
-      const sana: Prisma.DateTimeFilter = {};
-      if (searchParams.from) sana.gte = dateOnlyStringToUTCDate(searchParams.from);
-      if (searchParams.to) {
-        sana.lt = new Date(dateOnlyStringToUTCDate(searchParams.to).getTime() + 24 * 60 * 60 * 1000);
-      }
-      qarzWhere.report = { sana };
-    }
-    const agg = await prisma.dailyTransaction.aggregate({ _sum: { summa: true }, where: qarzWhere });
-    qarzSumma = agg._sum.summa ?? 0;
-  }
 
   // SOTILGAN MAHSULOTLAR (Kirim bo'limi) — ombor yuritadigan biznesda.
   //
@@ -196,14 +143,8 @@ export default async function TranzaksiyalarPage({
         tezKategoriyalar={tezKategoriyalar}
         currentUserId={session.userId}
         currentUserRol={session.rol}
-        hideProfit={hideProfit}
         moveTargets={moveTargets}
         totals={result.totals}
-        qarzSumma={
-          qarzSumma === null && result.totals.qarzKirim === 0 && qarzYozuvlari === 0
-            ? null
-            : (qarzSumma ?? 0) + result.totals.qarzKirim + qarzYozuvlari
-        }
         filters={{
           from: searchParams.from ?? "",
           to: searchParams.to ?? "",
