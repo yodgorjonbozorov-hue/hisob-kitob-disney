@@ -4072,3 +4072,29 @@ Test: `npm run test:crm` (24 ta) — rol matritsasi (4 rol kiradi, maxfiy
 modullar yopiq), sidebar havolalari, to'liq oqim (buyurtma → Yutildi →
 Kirim → bosh sahifadagi kategoriya kesimi), idempotentlik, eski
 kategoriyasiz buyurtma va ko'p-bizneslik izolyatsiyasi.
+
+## Boshqaruv paneli (/app) — Business Control Center
+
+Bosh sahifa oddiy statistika ro'yxatidan biznes holatini 10 soniyada
+ko'rsatadigan panelga aylantirildi. Faqat `/app` — boshqa sahifalarning
+UI va biznes mantig'iga tegilmadi.
+
+- 5 KPI: Jami kirim, Jami chiqim, Sof foyda, **Kassada** (yangi — faol
+  kassalar joriy qoldig'i, tur bo'yicha kesim bilan), Menga qarzdor.
+  Beshalasida ko'z tugmasi (`lib/pulYashirish.ts` ga `kassa` va `qarz`
+  kartalari qo'shildi).
+- **Pul oqimi** grafigi (7 kun / 30 kun / 3 oy / 1 yil) — ikki so'rov,
+  to'rtta filtr klientda kesiladi. Eski "6 oy dinamikasi" va "Kunlik
+  dinamika" grafiklari shu blok bilan almashtirildi.
+- **Balansa Insight** — deterministik xulosa dvigateli
+  (`lib/services/dashboardInsight.ts`), AI chaqiruvisiz.
+- **Bugungi holat** va **Diqqat talab qiladi** bloklari.
+- Kategoriya taqsimoti default TOP 5 + "Barchasini ko'rish".
+- "+ Yangi" tez amal menyusi — mavjud formalarni qayta ishlatadi.
+- Adaptivlik: har blok modul + rol + granular huquq bilan yopiladi;
+  biznes nomiga qarab shart YO'Q.
+- Yangi so'rovlar: `lib/queries/dashboardPanel.ts`; testlar:
+  `tests/panel.test.ts` (`npm run test:panel`).
+- OMBOR kartasi KPI qatoridan olib tashlandi (5 KPI talabi) — ombor
+  holati endi "Diqqat talab qiladi" blokida (tugagan / minimal qoldiqdan
+  kam) va `/app/ombor` sahifasida.

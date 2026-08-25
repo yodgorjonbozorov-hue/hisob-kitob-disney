@@ -15,13 +15,24 @@
 
 export const YASHIRIN_COOKIE = "pul_yashirin";
 
-export type PulKarta = "kirim" | "chiqim" | "foyda";
+/**
+ * Ko'z tugmasi bor kartalar. "kassa" va "qarz" keyin qo'shildi — eski
+ * cookie'da ular yo'q va `yashirinniOqi` ularni ochiq (false) deb o'qiydi,
+ * ya'ni mavjud foydalanuvchilar uchun hech narsa o'zgarmaydi.
+ */
+export type PulKarta = "kirim" | "chiqim" | "foyda" | "kassa" | "qarz";
 
-export const PUL_KARTALARI: PulKarta[] = ["kirim", "chiqim", "foyda"];
+export const PUL_KARTALARI: PulKarta[] = ["kirim", "chiqim", "foyda", "kassa", "qarz"];
 
 export type YashirinHolat = Record<PulKarta, boolean>;
 
-export const HAMMASI_OCHIQ: YashirinHolat = { kirim: false, chiqim: false, foyda: false };
+export const HAMMASI_OCHIQ: YashirinHolat = {
+  kirim: false,
+  chiqim: false,
+  foyda: false,
+  kassa: false,
+  qarz: false,
+};
 
 /** Cookie qiymatini holatga aylantiradi. Noma'lum kalitlar e'tiborsiz qoladi. */
 export function yashirinniOqi(xom: string | null | undefined): YashirinHolat {

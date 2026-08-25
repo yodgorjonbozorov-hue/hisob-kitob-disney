@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { formatMoney } from "@/lib/format";
 import { BuyurtmaKarta } from "./BuyurtmaKarta";
 import { BuyurtmaModal } from "./BuyurtmaModal";
@@ -35,7 +35,10 @@ export function CrmClient({
   bugun: string;
 }) {
   const router = useRouter();
-  const [yangiOchiq, setYangiOchiq] = useState(false);
+  // Bosh sahifadagi "+ Yangi → Buyurtma" shu havola bilan keladi: forma
+  // shu yerda qoladi, dashboard uni QAYTA yozmaydi.
+  const yangiSoralgan = useSearchParams().get("yangi") === "1";
+  const [yangiOchiq, setYangiOchiq] = useState(yangiSoralgan);
   const [tanlangan, setTanlangan] = useState<BuyurtmaDTO | null>(null);
   const [kirimTasdiq, setKirimTasdiq] = useState<BuyurtmaDTO | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
