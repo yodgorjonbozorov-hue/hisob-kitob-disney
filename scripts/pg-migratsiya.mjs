@@ -47,6 +47,16 @@ const QOLDA = `
 -- (scripts/pg-migratsiya.mjs har generatsiyada qo'shib qo'yadi.)
 -- ---------------------------------------------------------------------------
 CREATE INDEX "User_login_lower_idx" ON "User" (LOWER("login"));
+
+-- ---------------------------------------------------------------------------
+-- QO'LDA QO'SHILGAN: kategoriya nomining registrga BEFARQ yagonaligi.
+-- Sxemadagi @@unique([nomi, turi, businessId]) registrga sezgir, ya'ni
+-- "Bantik" va "bantik" ikki alohida kategoriya bo'lib qolardi. Ifodali
+-- indeksni Prisma sxemasi ifodalay olmaydi — SQLite yo'li migratsiya
+-- 20260825120000_kategoriya_registrsiz_unique da, Postgres yo'li shu yerda.
+-- ---------------------------------------------------------------------------
+CREATE UNIQUE INDEX "Category_businessId_turi_nomi_registrsiz_key"
+  ON "Category" ("businessId", "turi", LOWER(TRIM("nomi")));
 `;
 
 function main() {
@@ -90,7 +100,8 @@ function main() {
     writeFileSync(MAQSAD, res.stdout + QOLDA);
 
     const jadval = (res.stdout.match(/CREATE TABLE/g) ?? []).length;
-    const indeks = (res.stdout.match(/CREATE (UNIQUE )?INDEX/g) ?? []).length + 1;
+    const indeks = (res.stdout.match(/CREATE (UNIQUE )?INDEX/g) ?? []).length +
+      (QOLDA.match(/CREATE (UNIQUE )?INDEX/g) ?? []).length;
     const fk = (res.stdout.match(/FOREIGN KEY/g) ?? []).length;
     console.log(`✅ ${MAQSAD}`);
     console.log(`   ${jadval} jadval, ${indeks} indeks, ${fk} tashqi kalit`);
