@@ -194,6 +194,8 @@ CREATE TABLE "AccountTransfer" (
     "tasdiqlanganAt" TIMESTAMP(3),
     "radAt" TIMESTAMP(3),
     "qarorIzoh" TEXT,
+    "hisoblangan" INTEGER,
+    "farq" INTEGER,
     "relatedType" TEXT,
     "relatedId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

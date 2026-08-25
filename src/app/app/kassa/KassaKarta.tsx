@@ -2,80 +2,127 @@
 
 import Link from "next/link";
 import { Money } from "@/components/ui/Money";
+import { formatSom, formatRelative } from "@/lib/format";
 import { ACCOUNT_TURI_NOMI, type AccountTuri } from "@/lib/validation/account";
-import type { AccountQoldiq, KassaKunlik } from "@/lib/queries/accounts";
+import type { KassaNazoratKarta } from "@/lib/queries/kassaNazorat";
+import { KartaMenyu, type KartaAmal } from "./KartaMenyu";
 
 /** Kassa turi belgisi — ro'yxatda darrov ajralib tursin. */
 const TURI_BELGI: Record<string, string> = { naqd: "💵", plastik: "💳", bank: "🏦" };
 
 /**
- * BITTA KASSA KARTASI — dashboard ko'rinishi.
+ * BITTA KASSA KARTASI — pul nazorati birligi.
  *
- * Kassir bir qarashda uchta savolga javob olishi kerak: qancha pul bor,
- * bugun qancha tushdi, kimniki. Batafsili — kartani bosganda ochiladigan
- * detal sahifasida (harakatlar tarixi bilan).
+ * Ierarxiya ataylab qat'iy: eng katta element — JORIY QOLDIQ, chunki sahifani
+ * ochgan odamning birinchi savoli "bu kassada hozir qancha pul bor". Bugungi
+ * kirim/chiqim undan kichik, o'tkazma qatori esa eng past darajada — u
+ * kamdan-kam bo'ladi va faqat bo'lganda ko'rinadi.
+ *
+ * O'tkazma AYRIM qatorda: u kirim ham, chiqim ham emas (biznes hisobotiga
+ * qo'shilmaydi), lekin kassaning qoldig'ini o'zgartiradi. Bir qatorga
+ * qo'shib yuborilsa "bugun 5 mln kirdi, qoldiq nega 2 mln" degan savol
+ * javobsiz qolardi.
  */
 export function KassaKarta({
   kassa,
-  kunlik,
   meniki,
-  onTahrir,
+  amallar,
 }: {
-  kassa: AccountQoldiq;
-  kunlik: KassaKunlik | undefined;
+  kassa: KassaNazoratKarta;
   /** Shu kassa joriy foydalanuvchiniki — ajratib ko'rsatiladi. */
   meniki: boolean;
-  /** Boshqaruvchi bo'lsa — kassani tahrirlash tugmasi. */
-  onTahrir?: () => void;
+  /** "⋯" menyusidagi amallar (huquqqa qarab sahifa tayyorlaydi). */
+  amallar: KartaAmal[];
 }) {
+  const transferBor = kassa.bugungiKirgan > 0 || kassa.bugungiChiqqan > 0;
+
   return (
-    <div
-      className={`relative bg-surface border rounded-2xl p-5 transition ${
+    <article
+      className={`relative flex flex-col bg-surface border rounded-2xl p-4 sm:p-5 shadow-card transition ${
         meniki ? "border-brand" : "border-line"
-      } ${kassa.isActive ? "" : "opacity-60"}`}
+      } ${kassa.isActive ? "" : "opacity-70"}`}
     >
+      <div className="flex items-start justify-between gap-2">
+        <Link
+          href={`/app/kassa/${kassa.id}`}
+          className="min-w-0 flex-1 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+        >
+          <p className="text-sm font-semibold text-fg truncate">
+            {kassa.userId ? "👤" : (TURI_BELGI[kassa.turi] ?? "💰")} {kassa.nomi}
+          </p>
+          <p className="text-2xs text-faint mt-0.5 truncate">
+            {kassa.userId
+              ? `Shaxsiy · ${kassa.egaIsm ?? "egasi o'chirilgan"}`
+              : (ACCOUNT_TURI_NOMI[kassa.turi as AccountTuri] ?? kassa.turi)}
+          </p>
+        </Link>
+        <KartaMenyu amallar={amallar} yorliq={kassa.nomi} />
+      </div>
+
       <Link
         href={`/app/kassa/${kassa.id}`}
-        className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand rounded-lg"
+        className="block mt-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
       >
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-medium text-fg truncate">
-            {kassa.userId ? "👤" : TURI_BELGI[kassa.turi] ?? "💰"} {kassa.nomi}
-          </p>
-          {meniki && <span className="text-2xs text-brand shrink-0">sizniki</span>}
-          {!kassa.isActive && <span className="text-2xs text-faint shrink-0">nofaol</span>}
-        </div>
-        <p className="text-2xs text-faint mt-0.5 truncate">
-          {kassa.userId
-            ? (kassa.egaIsm ?? "egasi o'chirilgan")
-            : (ACCOUNT_TURI_NOMI[kassa.turi as AccountTuri] ?? kassa.turi)}
-        </p>
-
-        <div className="mt-3">
-          <Money value={kassa.qoldiq} size="xl" tone={kassa.qoldiq >= 0 ? "neutral" : "expense"} />
-        </div>
-
-        <div className="mt-3 pt-3 border-t border-line space-y-1">
-          <div className="flex items-center justify-between">
-            <span className="text-2xs text-muted">Bugungi kirim</span>
-            <Money value={kunlik?.kirim ?? 0} size="sm" tone="income" />
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-2xs text-muted">Bugungi chiqim</span>
-            <Money value={kunlik?.chiqim ?? 0} size="sm" tone="expense" />
-          </div>
-        </div>
+        <Money value={kassa.qoldiq} size="xl" tone={kassa.qoldiq >= 0 ? "neutral" : "expense"} />
       </Link>
 
-      {onTahrir && (
-        <button
-          type="button"
-          onClick={onTahrir}
-          className="absolute top-4 right-4 text-2xs text-faint hover:text-brand"
-        >
-          Tahrirlash
-        </button>
+      <div className="flex flex-wrap items-center gap-1.5 mt-2">
+        {meniki && (
+          <span className="rounded-full bg-brand-wash text-brand px-2 py-0.5 text-2xs font-medium">
+            Sizniki
+          </span>
+        )}
+        {kassa.topshirishKutmoqda && (
+          <span className="rounded-full bg-debt-soft text-debt-fg px-2 py-0.5 text-2xs font-medium">
+            Topshirish kutilmoqda
+          </span>
+        )}
+        {!kassa.isActive && (
+          <span className="rounded-full bg-surface-2 text-muted px-2 py-0.5 text-2xs font-medium">
+            Nofaol
+          </span>
+        )}
+      </div>
+
+      <dl className="mt-3 pt-3 border-t border-line space-y-1.5 text-2xs">
+        <div className="flex items-center justify-between gap-2">
+          <dt className="text-muted">Bugun kirim</dt>
+          <dd className="tnum font-medium text-income">+ {formatSom(kassa.bugungiKirim)}</dd>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <dt className="text-muted">Bugun chiqim</dt>
+          <dd className="tnum font-medium text-expense">− {formatSom(kassa.bugungiChiqim)}</dd>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <dt className="text-muted">Sof</dt>
+          <dd
+            className={`tnum font-semibold ${
+              kassa.bugungiSof > 0 ? "text-income" : kassa.bugungiSof < 0 ? "text-expense" : "text-fg"
+            }`}
+          >
+            {kassa.bugungiSof > 0 ? "+ " : kassa.bugungiSof < 0 ? "− " : ""}
+            {formatSom(Math.abs(kassa.bugungiSof))}
+          </dd>
+        </div>
+        {transferBor && (
+          <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-line">
+            <dt className="text-faint">Bugungi o&apos;tkazma</dt>
+            <dd className="tnum text-muted">
+              {kassa.bugungiKirgan > 0 && `+${formatSom(kassa.bugungiKirgan)}`}
+              {kassa.bugungiKirgan > 0 && kassa.bugungiChiqqan > 0 && " · "}
+              {kassa.bugungiChiqqan > 0 && `−${formatSom(kassa.bugungiChiqqan)}`}
+            </dd>
+          </div>
+        )}
+      </dl>
+
+      {(kassa.kutilayotganChiqim > 0 || kassa.oxirgiTopshirish) && (
+        <p className="mt-2 text-2xs text-faint">
+          {kassa.kutilayotganChiqim > 0
+            ? `${formatSom(kassa.kutilayotganChiqim)} soʻm tasdiq kutmoqda`
+            : `Oxirgi topshirish: ${formatRelative(new Date(kassa.oxirgiTopshirish!))}`}
+        </p>
       )}
-    </div>
+    </article>
   );
 }

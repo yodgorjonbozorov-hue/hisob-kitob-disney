@@ -4,6 +4,7 @@ import { requireManager, BadRequestError } from "@/lib/auth/guard";
 import { withTenant } from "@/lib/auth/tenant";
 import { updateBusinessSchema } from "@/lib/validation/business";
 import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
+import { logAudit } from "@/lib/services/audit";
 import { biznesOchir } from "@/lib/services/biznesOchirish";
 
 export const PATCH = withTenant<{ params: { id: string } }>(async (request, { params }, { session: user }) => {
@@ -19,9 +20,11 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
   // tekshiriladi. Ilgari bu qoida faqat UI'da edi: qo'lda yuborilgan
   // `{ magazin: true }` omborsiz bizneste kassani yoqib qo'yardi va menyu
   // jimgina bo'sh chiqardi.
+  // `shaxsiyKassa` ham shu yerdan olinadi — auditdagi "oldin" qiymati uchun
+  // alohida so'rov kerak emas.
   const joriy = await prisma.business.findUnique({
     where: { id: params.id },
-    select: { omborli: true, magazin: true },
+    select: { omborli: true, magazin: true, shaxsiyKassa: true },
   });
   if (!joriy) return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });
 
@@ -41,6 +44,21 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
   }
 
   const business = await prisma.business.update({ where: { id: params.id }, data });
+
+  // KASSA SOZLAMASI auditga tushadi: shaxsiy kassa rejimi naqd pul QAYSI
+  // kassaga tushishini o'zgartiradi, ya'ni bu moliyaviy oqim sozlamasi.
+  // Boshqa biznes maydonlari bu yerda ataylab yozilmaydi — ular kassa
+  // nazoratiga daxlsiz.
+  if (parsed.data.shaxsiyKassa !== undefined) {
+    await logAudit({
+      businessId: business.id,
+      action: "update",
+      entity: "business",
+      entityId: business.id,
+      before: { shaxsiyKassa: joriy.shaxsiyKassa },
+      after: { shaxsiyKassa: business.shaxsiyKassa },
+    });
+  }
 
   // Shaxsiy kassa rejimi YOQILGANDA har faol xodimga kassa ochiladi. Aks holda
   // rejim yoqilgan bo'lsa-yu kassalar yo'q bo'lsa, naqd pul avvalgidek umumiy
