@@ -31,3 +31,5 @@ prisma/.pg-*.tmp.prisma
 /test-results/
 /playwright-report/
 /blob-report/
+.vercel
+.env*
