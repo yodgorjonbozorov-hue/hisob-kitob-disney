@@ -2,164 +2,222 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
-import { Money } from "@/components/ui/Money";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { formatToshkentVaqt } from "@/lib/format";
-import type { AccountQoldiq, KassaKunlik, TransferDTO } from "@/lib/queries/accounts";
+import type { KassaDavr } from "@/lib/kassaDavr";
+import type { TransferDTO } from "@/lib/queries/accounts";
+import type { KassaNazorat, KassaNazoratKarta } from "@/lib/queries/kassaNazorat";
+import { QoldiqHero } from "./QoldiqHero";
+import { KutilayotganPanel } from "./KutilayotganPanel";
 import { KassaKarta } from "./KassaKarta";
-import { KassaModal } from "./KassaModal";
+import { HarakatlarPaneli } from "./HarakatlarPaneli";
+import { SozlamalarPanel } from "./SozlamalarPanel";
+import { AmalTugma } from "./AmalTugma";
 import { TransferModal } from "./TransferModal";
+import { TopshirishModal } from "./TopshirishModal";
+import { KassaModal } from "./KassaModal";
+import type { KartaAmal } from "./KartaMenyu";
+
+type Oyna =
+  | { tur: "transfer"; fromId: string | null }
+  | { tur: "topshirish"; fromId: string | null }
+  | { tur: "kassa"; kassa: KassaNazoratKarta | null }
+  | null;
 
 /**
- * O'tkazma holatining yorlig'i. "bajarildi" ataylab yorliqsiz — u odatiy
- * holat va har qatorga rangli belgi qo'yish ro'yxatni o'qib bo'lmas qiladi.
- */
-const HOLAT_YORLIQ: Record<string, { matn: string; tone: "warning" | "neutral" | "chiqim" }> = {
-  kutilmoqda: { matn: "Kutilmoqda", tone: "warning" },
-  rad: { matn: "Rad etilgan", tone: "chiqim" },
-  bekor: { matn: "Bekor qilingan", tone: "neutral" },
-  arxiv: { matn: "Arxiv", tone: "neutral" },
-};
-
-/**
- * KASSALAR PANELI.
+ * KASSALAR — PUL NAZORATI MARKAZI.
  *
- * Barcha xodimlar barcha kassalarni KO'RADI (pul qayerda ekani sir emas),
- * lekin BOSHQARUV amallari (kassa ochish/tahrirlash) faqat boshqaruvchida.
- * Ruxsatlar serverda ham mustaqil tekshiriladi — bu yerdagi bayroqlar
- * shunchaki keraksiz tugmani ko'rsatmaydi.
+ * Bloklar tartibi savollarning DOLZARBLIGI bo'yicha: avval jami qoldiq va
+ * bugungi harakat (har kuni kerak), keyin harakat talab qiladigan
+ * topshirishlar, so'ng kassalar, tarix va oxirida sozlamalar.
+ *
+ * ═══ HUQUQ ═══
+ * Barcha xodimlar barcha kassalarni KO'RADI — pul qayerda ekani sir emas.
+ * Amallar esa huquq bilan qulflanadi: o'tkazma va topshirish "pul.berish",
+ * qaror "pul.qabul", kassa ochish/tahrirlash faqat boshqaruvchida. Bu
+ * yerdagi bayroqlar shunchaki ishlamaydigan tugmani ko'rsatmaydi — HAR
+ * amalni server mustaqil tekshiradi (frontendda tugmani yashirish
+ * xavfsizlik emas).
  */
 export function KassaClient({
-  qoldiqlar,
-  kunlik,
-  transferlar,
+  nazorat,
+  harakatlar,
+  davr,
   meniUserId,
-  meniKassam,
   boshqaruvchi,
   transferQila,
+  qabulQila,
+  businessId,
+  shaxsiyKassa,
 }: {
-  qoldiqlar: AccountQoldiq[];
-  /** accountId → bugungi kirim/chiqim. */
-  kunlik: Record<string, KassaKunlik>;
-  /** So'nggi YAKUNLANGAN o'tkazmalar. */
-  transferlar: TransferDTO[];
+  nazorat: KassaNazorat;
+  harakatlar: TransferDTO[];
+  davr: KassaDavr;
   meniUserId: string;
-  meniKassam: string | null;
   boshqaruvchi: boolean;
-  /** "pul.berish" huquqi bormi. */
+  /** "pul.berish" — o'tkazma va topshirish yaratish. */
   transferQila: boolean;
+  /** "pul.qabul" — kutilayotgan topshiriq bo'yicha qaror. */
+  qabulQila: boolean;
+  businessId: string;
+  shaxsiyKassa: boolean;
 }) {
   const router = useRouter();
-  const [kassaModal, setKassaModal] = useState<AccountQoldiq | "yangi" | null>(null);
-  const [transferModal, setTransferModal] = useState(false);
+  const [oyna, setOyna] = useState<Oyna>(null);
 
-  const jami = qoldiqlar.reduce((a, q) => a + q.qoldiq, 0);
-  const faollar = qoldiqlar.filter((q) => q.isActive);
+  const faollar = nazorat.kartalar.filter((k) => k.isActive);
+  const meniKassam = nazorat.kartalar.find((k) => k.userId === meniUserId && k.isActive) ?? null;
+  const otkazaOladi = transferQila && faollar.length >= 2;
 
-  function yangilash() {
-    setKassaModal(null);
-    setTransferModal(false);
+  /** Shu kassadan pul chiqarishga haqqi bormi (server qoidasining nusxasi). */
+  function manbaBolaOladi(k: KassaNazoratKarta): boolean {
+    return k.isActive && (!k.userId || k.userId === meniUserId || boshqaruvchi);
+  }
+  const manbalar = faollar.filter(manbaBolaOladi);
+  const topshiraOladi = transferQila && faollar.length >= 2 && manbalar.some((k) => k.mavjud > 0);
+
+  function yopVaYangila() {
+    setOyna(null);
     router.refresh();
   }
 
+  function kartaAmallari(k: KassaNazoratKarta): KartaAmal[] {
+    const amallar: KartaAmal[] = [
+      { label: "Batafsil", onClick: () => router.push(`/app/kassa/${k.id}`) },
+    ];
+    if (otkazaOladi && manbaBolaOladi(k)) {
+      amallar.push({
+        label: "Pul o'tkazish",
+        onClick: () => setOyna({ tur: "transfer", fromId: k.id }),
+      });
+    }
+    if (topshiraOladi && manbaBolaOladi(k) && k.mavjud > 0) {
+      amallar.push({
+        label: "Kassani topshirish",
+        onClick: () => setOyna({ tur: "topshirish", fromId: k.id }),
+      });
+    }
+    if (boshqaruvchi) {
+      amallar.push({ label: "Tahrirlash", onClick: () => setOyna({ tur: "kassa", kassa: k }) });
+    }
+    return amallar;
+  }
+
   return (
-    <div className="space-y-6">
-      <Card>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm text-muted">Jami kassalar</p>
-            <Money value={jami} size="display" tone={jami >= 0 ? "brand" : "expense"} />
-          </div>
-          <div className="flex gap-2">
+    <div className="space-y-4 sm:space-y-5">
+      <QoldiqHero
+        jamiQoldiq={nazorat.jamiQoldiq}
+        turBoyicha={nazorat.turBoyicha}
+        bugungiKirim={nazorat.bugungiKirim}
+        bugungiChiqim={nazorat.bugungiChiqim}
+        bugungiSof={nazorat.bugungiSof}
+        kutilayotganSoni={nazorat.kutilayotganlar.length}
+        amallar={
+          <>
             {transferQila && (
               <Button
                 variant="secondary"
-                onClick={() => setTransferModal(true)}
-                disabled={faollar.length < 2}
+                onClick={() => setOyna({ tur: "transfer", fromId: meniKassam?.id ?? null })}
+                disabled={!otkazaOladi}
               >
                 Pul o&apos;tkazish
               </Button>
             )}
-            {boshqaruvchi && <Button onClick={() => setKassaModal("yangi")}>Yangi kassa</Button>}
-          </div>
-        </div>
-        {faollar.length < 2 && transferQila && (
-          <p className="text-2xs text-faint mt-3">
-            Pul o&apos;tkazish uchun kamida ikkita faol kassa kerak.
-          </p>
-        )}
-      </Card>
+            {transferQila && (
+              <Button
+                variant="secondary"
+                onClick={() => setOyna({ tur: "topshirish", fromId: meniKassam?.id ?? null })}
+                disabled={!topshiraOladi}
+              >
+                Kassani topshirish
+              </Button>
+            )}
+            {boshqaruvchi && (
+              <Button onClick={() => setOyna({ tur: "kassa", kassa: null })}>Yangi kassa</Button>
+            )}
+          </>
+        }
+      />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {qoldiqlar.map((q) => (
+      {transferQila && faollar.length < 2 && (
+        <p className="text-2xs text-faint px-1">
+          Pul o&apos;tkazish uchun kamida 2 ta faol kassa kerak.
+        </p>
+      )}
+
+      <KutilayotganPanel
+        transferlar={nazorat.kutilayotganlar}
+        meniUserId={meniUserId}
+        boshqaruvchi={boshqaruvchi}
+        qabulQila={qabulQila}
+      />
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+        {nazorat.kartalar.map((k) => (
           <KassaKarta
-            key={q.id}
-            kassa={q}
-            kunlik={kunlik[q.id]}
-            meniki={q.userId === meniUserId}
-            onTahrir={boshqaruvchi ? () => setKassaModal(q) : undefined}
+            key={k.id}
+            kassa={k}
+            meniki={k.userId === meniUserId}
+            amallar={kartaAmallari(k)}
           />
         ))}
       </div>
 
-      <Card>
-        <h2 className="font-semibold text-fg mb-1">Kassa harakatlari</h2>
-        <p className="text-2xs text-faint mb-3">
-          Barcha pul o&apos;tkazmalari va smena topshiriqlari — yangi ham, eski tizimdan
-          ko&apos;chirilgan arxiv ham bitta ro&apos;yxatda.
-        </p>
-        {transferlar.length === 0 ? (
-          <EmptyState
-            icon="↔"
-            title="Hali harakat yo'q"
-            description="Bir kassadan boshqasiga pul o'tkazsangiz — shu yerda ko'rinadi."
-          />
-        ) : (
-          <ul className="divide-y divide-line">
-            {transferlar.map((t) => {
-              const holat = HOLAT_YORLIQ[t.holat];
-              const otmagan = t.holat === "bekor" || t.holat === "rad";
-              return (
-                <li key={t.id} className="py-3 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p
-                      className={`text-sm truncate ${otmagan ? "text-faint line-through" : "text-fg"}`}
-                    >
-                      {t.fromUserIsm ?? t.fromNomi} → {t.toUserIsm ?? t.toNomi}
-                    </p>
-                    <p className="text-2xs text-faint">
-                      {formatToshkentVaqt(new Date(t.createdAt))}
-                      {t.turi === "smena" ? " · Smena topshirish" : ""}
-                      {t.izoh ? ` · ${t.izoh}` : ""}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {holat && <Badge tone={holat.tone}>{holat.matn}</Badge>}
-                    <Money value={t.summa} size="md" tone="neutral" />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </Card>
+      <HarakatlarPaneli harakatlar={harakatlar} davr={davr} />
 
-      {kassaModal && (
-        <KassaModal
-          kassa={kassaModal === "yangi" ? null : kassaModal}
-          onClose={() => setKassaModal(null)}
-          onDone={yangilash}
-        />
+      {boshqaruvchi && (
+        <SozlamalarPanel businessId={businessId} shaxsiyKassa={shaxsiyKassa} />
       )}
-      {transferModal && (
+
+      <AmalTugma
+        amallar={[
+          {
+            label: "Pul o'tkazish",
+            izoh: "Kassadan kassaga",
+            ochiq: transferQila,
+            sabab: otkazaOladi ? undefined : "Kamida 2 ta faol kassa kerak",
+            onClick: () => setOyna({ tur: "transfer", fromId: meniKassam?.id ?? null }),
+          },
+          {
+            label: "Kassani topshirish",
+            izoh: "Smena oxirida pulni topshirish",
+            ochiq: transferQila,
+            sabab: topshiraOladi ? undefined : "Topshiriladigan pul yo'q",
+            onClick: () => setOyna({ tur: "topshirish", fromId: meniKassam?.id ?? null }),
+          },
+          {
+            label: "Yangi kassa",
+            izoh: "Naqd, plastik yoki bank hisobi",
+            ochiq: boshqaruvchi,
+            onClick: () => setOyna({ tur: "kassa", kassa: null }),
+          },
+        ]}
+      />
+
+      {oyna?.tur === "transfer" && (
         <TransferModal
           kassalar={faollar}
-          meniKassam={meniKassam}
-          onClose={() => setTransferModal(false)}
-          onDone={yangilash}
+          boshlangichId={
+            oyna.fromId && manbalar.some((k) => k.id === oyna.fromId) ? oyna.fromId : null
+          }
+          meniKassam={meniKassam?.id ?? null}
+          onClose={() => setOyna(null)}
+          onDone={yopVaYangila}
+        />
+      )}
+      {oyna?.tur === "topshirish" && (
+        <TopshirishModal
+          kassalar={manbalar.filter((k) => k.mavjud > 0)}
+          boshlangichId={oyna.fromId}
+          nishonlar={faollar}
+          onClose={() => setOyna(null)}
+          onDone={yopVaYangila}
+        />
+      )}
+      {oyna?.tur === "kassa" && (
+        <KassaModal
+          kassa={oyna.kassa}
+          onClose={() => setOyna(null)}
+          onDone={yopVaYangila}
         />
       )}
     </div>

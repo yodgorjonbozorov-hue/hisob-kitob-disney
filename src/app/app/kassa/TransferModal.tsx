@@ -1,62 +1,79 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { parseSomInput, formatMoney } from "@/lib/format";
-import { TRANSFER_TURLARI, TRANSFER_TURI_NOMI, type TransferTuri } from "@/lib/validation/account";
-import type { AccountQoldiq } from "@/lib/queries/accounts";
+import { parseSomInput, formatSom, formatMoney } from "@/lib/format";
+import type { KassaNazoratKarta } from "@/lib/queries/kassaNazorat";
+
+const input =
+  "w-full px-3 py-2.5 min-h-[44px] rounded-lg bg-surface-2 border border-line text-fg " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand";
 
 /**
  * KASSADAN KASSAGA PUL O'TKAZISH.
  *
- * Ikki qadam: forma → TASDIQLASH ekrani. Moliyaviy amal bir bosishda
- * bajarilmaydi — foydalanuvchi kim kimga qancha yuborayotganini o'qib
- * tasdiqlaydi.
+ * Ikki qadam: forma → TASDIQLASH. Moliyaviy amal bir bosishda bajarilmaydi —
+ * foydalanuvchi kim kimga qancha yuborayotganini o'qib tasdiqlaydi.
  *
- * Qabul qiluvchi kassa boshqa odamniki bo'lsa, o'tkazma DARHOL yakunlanmaydi:
- * u tasdiq kutadi va faqat qabul qiluvchi "Qabul qilish"ni bosgandan keyin
- * pul ko'chadi (lib/services/kassaTransfer.ts).
+ * MAVJUD qoldiq ko'rsatiladi (qoldiq − tasdiq kutayotgan chiqim), chunki
+ * server aynan shuni tekshiradi: tasdiq kutayotgan pul kassada turgan
+ * bo'lsa ham qayta jo'natib bo'lmaydi. Aks holda forma "yetadi" deb turib,
+ * server rad etardi.
+ *
+ * Qabul qiluvchi kassa boshqa odamniki bo'lsa o'tkazma DARHOL yakunlanmaydi:
+ * u tasdiq kutadi (lib/services/kassaTransfer.ts).
  */
 export function TransferModal({
   kassalar,
+  boshlangichId,
   meniKassam,
   onClose,
   onDone,
 }: {
   /** Faol kassalar — yuboruvchi ham, qabul qiluvchi ham shu ro'yxatdan. */
-  kassalar: AccountQoldiq[];
+  kassalar: KassaNazoratKarta[];
+  boshlangichId: string | null;
   /** Joriy foydalanuvchining kassasi (bo'lsa) — standart yuboruvchi. */
   meniKassam: string | null;
   onClose: () => void;
   onDone: () => void;
 }) {
-  const [fromAccountId, setFrom] = useState(meniKassam ?? kassalar[0]?.id ?? "");
-  const [toAccountId, setTo] = useState(
-    kassalar.find((k) => k.id !== (meniKassam ?? kassalar[0]?.id))?.id ?? ""
-  );
+  const boshFrom = boshlangichId ?? meniKassam ?? kassalar[0]?.id ?? "";
+  const [fromId, setFrom] = useState(boshFrom);
+  const [toId, setTo] = useState(kassalar.find((k) => k.id !== boshFrom)?.id ?? "");
   const [summaMatn, setSummaMatn] = useState("");
-  const [turi, setTuri] = useState<TransferTuri>("transfer");
   const [izoh, setIzoh] = useState("");
   const [tasdiq, setTasdiq] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [yuborilmoqda, setYuborilmoqda] = useState(false);
   const [xato, setXato] = useState<string | null>(null);
 
   const summa = parseSomInput(summaMatn);
-  const manba = kassalar.find((k) => k.id === fromAccountId);
-  const qabul = kassalar.find((k) => k.id === toAccountId);
-  const yetarli = !manba || summa <= manba.qoldiq;
+  const manba = kassalar.find((k) => k.id === fromId);
+  const qabul = kassalar.find((k) => k.id === toId);
+  const mavjud = manba?.mavjud ?? 0;
+  const yetarli = summa <= mavjud;
   const tasdiqKerak = !!qabul?.userId && qabul.id !== meniKassam;
 
-  async function yubor(e: FormEvent) {
-    e.preventDefault();
-    setLoading(true);
+  function manbaAlmash(id: string) {
+    setFrom(id);
+    if (toId === id) setTo(kassalar.find((k) => k.id !== id)?.id ?? "");
+  }
+
+  async function yubor() {
+    setYuborilmoqda(true);
     setXato(null);
     try {
       const res = await fetch("/api/kassa-transfer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fromAccountId, toAccountId, summa, turi, izoh: izoh || null }),
+        body: JSON.stringify({
+          fromAccountId: fromId,
+          toAccountId: toId,
+          summa,
+          turi: "transfer",
+          izoh: izoh.trim() || null,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -69,34 +86,37 @@ export function TransferModal({
       setXato("Serverga ulanib bo'lmadi");
       setTasdiq(false);
     } finally {
-      setLoading(false);
+      setYuborilmoqda(false);
     }
   }
 
-  const select = "w-full px-3 py-2 rounded-lg bg-surface-2 border border-line text-fg";
-
-  // ── TASDIQLASH QADAMI ──────────────────────────────────────────────────
   if (tasdiq) {
     return (
       <Modal open onClose={() => setTasdiq(false)} title="Tasdiqlaysizmi?">
         <div className="space-y-4">
           <div className="rounded-xl bg-surface-2 border border-line p-4 text-center space-y-1">
-            <p className="text-sm text-muted">{manba?.nomi} kassasidan</p>
-            <p className="text-2xl font-bold text-fg tnum">{formatMoney(summa)}</p>
-            <p className="text-sm text-muted">{qabul?.nomi} kassasiga</p>
-            <p className="text-sm font-medium text-fg">o&apos;tkazilsinmi?</p>
+            <p className="text-sm text-muted">{manba?.nomi}</p>
+            <p className="text-2xl font-display font-bold text-fg tnum">{formatMoney(summa)}</p>
+            <p className="text-sm text-muted">↓</p>
+            <p className="text-sm font-medium text-fg">{qabul?.nomi}</p>
           </div>
           {tasdiqKerak && (
             <p className="text-2xs text-muted">
               {qabul?.egaIsm ?? "Qabul qiluvchi"} tasdiqlamaguncha pul sizning kassangizda qoladi.
             </p>
           )}
+          <p className="text-2xs text-faint">
+            O&apos;tkazma kirim ham, chiqim ham hisoblanmaydi — savdo va sof foyda
+            o&apos;zgarmaydi.
+          </p>
           {xato && <p className="text-sm text-expense">{xato}</p>}
           <div className="flex gap-2">
-            <Button type="button" variant="secondary" onClick={() => setTasdiq(false)}>
-              Bekor qilish
+            <Button variant="secondary" onClick={() => setTasdiq(false)} disabled={yuborilmoqda}>
+              Orqaga
             </Button>
-            <Button type="button" loading={loading} onClick={yubor}>
+            {/* Yuborilayotganda tugma o'chadi; server esa aynan shu yo'nalish
+                va summadagi ochiq o'tkazmani ikkinchi marta yaratmaydi. */}
+            <Button loading={yuborilmoqda} onClick={yubor}>
               Tasdiqlash
             </Button>
           </div>
@@ -105,7 +125,6 @@ export function TransferModal({
     );
   }
 
-  // ── FORMA QADAMI ───────────────────────────────────────────────────────
   return (
     <Modal open onClose={onClose} title="Pul o'tkazish">
       <form
@@ -117,12 +136,17 @@ export function TransferModal({
       >
         <div>
           <label className="block text-sm text-muted mb-1" htmlFor="tr-from">
-            Kassadan
+            Qaysi kassadan
           </label>
-          <select id="tr-from" value={fromAccountId} onChange={(e) => setFrom(e.target.value)} className={select}>
+          <select
+            id="tr-from"
+            value={fromId}
+            onChange={(e) => manbaAlmash(e.target.value)}
+            className={input}
+          >
             {kassalar.map((k) => (
               <option key={k.id} value={k.id}>
-                {k.nomi} · {formatMoney(k.qoldiq)}
+                {k.nomi} · {formatSom(k.mavjud)}
               </option>
             ))}
           </select>
@@ -130,15 +154,15 @@ export function TransferModal({
 
         <div>
           <label className="block text-sm text-muted mb-1" htmlFor="tr-to">
-            Kassaga
+            Qaysi kassaga
           </label>
-          <select id="tr-to" value={toAccountId} onChange={(e) => setTo(e.target.value)} className={select}>
+          <select id="tr-to" value={toId} onChange={(e) => setTo(e.target.value)} className={input}>
             <option value="">— tanlang —</option>
             {kassalar
-              .filter((k) => k.id !== fromAccountId)
+              .filter((k) => k.id !== fromId)
               .map((k) => (
                 <option key={k.id} value={k.id}>
-                  {k.nomi} · {formatMoney(k.qoldiq)}
+                  {k.nomi} · {formatSom(k.mavjud)}
                 </option>
               ))}
           </select>
@@ -151,35 +175,22 @@ export function TransferModal({
           <input
             id="tr-summa"
             inputMode="numeric"
+            autoComplete="off"
             value={summaMatn}
-            onChange={(e) => setSummaMatn(e.target.value)}
+            // Guruhlab ko'rsatish — "2 000 000" ni "20 000 00" dan ajratish
+            // uchun (ilovadagi boshqa summa maydonlari bilan bir xil).
+            onChange={(e) =>
+              setSummaMatn(e.target.value ? formatSom(parseSomInput(e.target.value)) : "")
+            }
             required
             placeholder="0"
-            className={select}
+            className={`${input} text-lg font-display tnum`}
           />
-          {summa > 0 && !yetarli && (
-            <p className="text-2xs text-expense mt-1">
-              Kassada yetarli mablag&apos; mavjud emas. Mavjud: {formatMoney(manba!.qoldiq)}
-            </p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-sm text-muted mb-1" htmlFor="tr-turi">
-            Sabab
-          </label>
-          <select
-            id="tr-turi"
-            value={turi}
-            onChange={(e) => setTuri(e.target.value as TransferTuri)}
-            className={select}
-          >
-            {TRANSFER_TURLARI.map((t) => (
-              <option key={t} value={t}>
-                {TRANSFER_TURI_NOMI[t]}
-              </option>
-            ))}
-          </select>
+          <p className={`text-2xs mt-1.5 ${summa > 0 && !yetarli ? "text-expense" : "text-faint"}`}>
+            {summa > 0 && !yetarli
+              ? `Kassada yetarli mablag' yo'q. Mavjud: ${formatSom(mavjud)} soʻm`
+              : `Mavjud: ${formatSom(mavjud)} soʻm`}
+          </p>
         </div>
 
         <div>
@@ -191,22 +202,18 @@ export function TransferModal({
             value={izoh}
             onChange={(e) => setIzoh(e.target.value)}
             maxLength={300}
-            placeholder="Masalan: kechki smena topshirildi"
-            className={select}
+            placeholder="Masalan: bankka topshirish uchun"
+            className={input}
           />
         </div>
 
         {xato && <p className="text-sm text-expense">{xato}</p>}
 
-        <p className="text-2xs text-faint">
-          Pul o&apos;tkazish kirim ham, chiqim ham hisoblanmaydi — savdo va sof foyda o&apos;zgarmaydi.
-        </p>
-
         <div className="flex gap-2 pt-1">
-          <Button type="submit" disabled={summa <= 0 || !toAccountId || !yetarli}>
+          <Button type="submit" disabled={summa <= 0 || !toId || !yetarli}>
             Davom etish
           </Button>
-          <Button type="button" variant="secondary" onClick={onClose}>
+          <Button variant="secondary" onClick={onClose}>
             Bekor qilish
           </Button>
         </div>

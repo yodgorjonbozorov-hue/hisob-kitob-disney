@@ -4072,3 +4072,68 @@ Test: `npm run test:crm` (24 ta) — rol matritsasi (4 rol kiradi, maxfiy
 modullar yopiq), sidebar havolalari, to'liq oqim (buyurtma → Yutildi →
 Kirim → bosh sahifadagi kategoriya kesimi), idempotentlik, eski
 kategoriyasiz buyurtma va ko'p-bizneslik izolyatsiyasi.
+
+---
+
+## 2026-08-25 · Kassalar sahifasi — pul nazorati markazi
+
+Branch: `claude/kassalar-cash-control-center-ayo90h`. Faqat `/app/kassa`
+(va uning `[id]` detali) qayta ishlandi; boshqa sahifalar tegilmadi.
+
+### Nima o'zgardi
+
+Sahifa "qoldiq ko'rsatadigan ro'yxat" edi: `Jami kassalar` summasi, kassa
+kartalari, katta bo'sh "Kassa harakatlari" bloki va sahifa pastida katta
+"Shaxsiy kassa rejimi" paneli. Kassani TOPSHIRISH bu sahifada umuman yo'q
+edi — u faqat `/app/kassam` da bor edi, kassa FARQI esa hech qayerda
+saqlanmasdi.
+
+Endi sahifa oltita savolga javob beradi: jami qancha pul bor, u qaysi
+kassada, bugun qancha kirdi/chiqdi, kim topshirmadi, farq bormi, pul
+kimdan kimga o'tdi. `Jami kassalar` → **`Jami qoldiq`** (+ naqd/plastik/
+bank taqsimoti), tepada bugungi kirim/chiqim/sof/kutilmoqda KPI qatori,
+kutilayotgan topshirishlar ixcham panelda FARQ bilan, har kassa kartasida
+bugungi kesim va "⋯" amallari, harakatlar lentasi Bugun/Hafta/Oy/Barchasi
+filtri bilan, rejim esa "⚙ Kassa sozlamalari" ichiga yig'ildi.
+Mobil (375/390px): 2×2 KPI, karta-ro'yxat, pastda yopishqoq "+ Amal"
+tugmasi (tab-bar ustida) va pastdan chiqadigan varaqlar.
+
+### Biznes mantig'i
+
+Hisob-kitob qoidalari O'ZGARMADI: qoldiq ledgerdan (`Transaction` +
+`AccountTransfer`), o'tkazma kirim/chiqim yozmaydi, manfiy qoldiq
+taqiqlangan, atomiklik `runBusinessTx` da.
+
+Yagona qo'shimcha — **kassa farqi**: `AccountTransfer` ga ikkita NULL
+bo'lishi mumkin ustun qo'shildi (`hisoblangan`, `farq`) va ular faqat
+`turi = "smena"` da to'ldiriladi. Server topshirish paytidagi mavjud
+qoldiqni O'ZI hisoblab qatorga muzlatadi, farq = `summa − hisoblangan`.
+Farq nolga teng bo'lmasa izoh (kamomad sababi) majburiy — serverda ham,
+formada ham. Farq va sabab auditga tushadi. Kamomad kassirning kassasida
+OCHIQ qoladi (pul o'z-o'zidan yo'qolmaydi).
+
+Audit kengaytirildi: kassa ochish/tahrirlash/o'chirish va shaxsiy kassa
+rejimi o'zgarishi endi `logAudit` ga yoziladi.
+
+Migratsiya: `20260825120000_kassa_topshirish_farqi` — faqat ikkita
+`ALTER TABLE ... ADD COLUMN`, mavjud ma'lumot tegilmaydi. Postgres init
+migratsiyasi `npm run pg:migratsiya` bilan qayta generatsiya qilindi.
+
+### Testlar
+
+`npm run test:kassa-nazorat` (23 ta) — balans, bugungi kesim, o'tkazma
+(kirim/chiqim o'zgarmasligi), kamomadli topshirish va farqning
+muzlatilishi, izohsiz farqning rad etilishi, ikki marta yuborish/qabul
+qilish, tenant va biznes izolyatsiyasi, huquqlar, davr filtri.
+
+`npm run test:kassa-brauzer` (8 ta) — 375/390/768/1280/1440px da sahifa
+chiziladi, gorizontal siljish yo'q, yopishqoq tugma tab-bar bilan
+urishmaydi, varaqlar ochiladi, farq jonli hisoblanadi, detal filtri
+ishlaydi. Skrinshotlar: `.screenshots/kassa-nazorat/`.
+
+Regressiya: `test:kassa`, `test:kassa-transfer`, `test:kassir-kassa`,
+`test:handover-migratsiya`, `test:isolation`, `test:izolyatsiya-royxati`,
+`test:agregat`, `test:audit`, `test:audit-qoldiq`, `test:atomik`,
+`test:soft-delete`, `test:backup`, `test:migratsiya`, `test:postgres`,
+`test:kunlik`, `test:smena`, `test:pro`, `test:visibility`, `test:smoke`
+— hammasi yashil. `npm run build` o'tadi.
