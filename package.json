@@ -40,6 +40,7 @@
     "test:tozalash": "node -r ts-node/register tests/tozalash.test.ts",
     "test:qarz": "node -r ts-node/register tests/qarz.test.ts",
     "test:qarzdorlik": "node -r ts-node/register tests/qarzdorlik.test.ts",
+    "test:qarz-mijoz": "node -r ts-node/register tests/qarz-mijoz.test.ts",
     "test:kategoriya": "node -r ts-node/register tests/kategoriya-tafsilot.test.ts",
     "test:tolov-taqsimoti": "node -r ts-node/register tests/tolov-taqsimoti.test.ts",
     "test:ombor-kartasi": "node -r ts-node/register tests/ombor-kartasi.test.ts",

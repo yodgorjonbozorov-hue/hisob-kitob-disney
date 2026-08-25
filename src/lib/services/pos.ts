@@ -3,6 +3,7 @@ import { runBusinessTx, type BusinessTx } from "@/lib/db/businessTx";
 import { createTransactionTx } from "@/lib/services/transactionService";
 import { ensureCategoryTx } from "@/lib/services/inventory";
 import { qarzLimitTekshirTx } from "@/lib/services/mijoz";
+import { mijozniAniqlaTx } from "@/lib/services/mijozAniqla";
 import { logAudit } from "@/lib/services/audit";
 import { todayDateOnlyString, dateOnlyStringToUTCDate } from "@/lib/date";
 import { biznesQatorQulfiSql } from "@/lib/db/dialect";
@@ -71,6 +72,8 @@ export interface PosSotuvParams {
   contactId?: string | null;
   mijozNomi?: string | null;
   mijozTel?: string | null;
+  /** Mijoz kartochkasi yaratilsinmi (MIJOZLAR moduli yoqiq bo'lgandagina). */
+  mijozSaqla?: boolean;
   /** "YYYY-MM-DD". Berilmasa bugun. */
   sana?: string | null;
   userId: string;
@@ -280,8 +283,30 @@ export async function posSotuv(params: PosSotuvParams): Promise<PosChekNatija> {
       // zararsiz: u yozuvlarni baribir ketma-ketlashtiradi.
       hisob.sort((a, b) => (a.product.id < b.product.id ? -1 : a.product.id > b.product.id ? 1 : 0));
 
-      if (params.tolovTuri === "qarz" && params.contactId) {
-        await qarzLimitTekshirTx(tx, params.businessId, params.contactId, jamiSumma);
+      // MIJOZ — qarzga sotuvda kartochka MAJBURAN aniqlanadi (yoki yaratiladi).
+      // Ilgari bu yerda faqat `params.contactId` ishlatilardi va kassir ismni
+      // qo'lda yozganda qarz kartochkasiz qolardi — bir mijozning har bir
+      // qarzi alohida qarzdor bo'lib ko'rinardi (lib/services/mijozAniqla.ts).
+      // Naqd/karta/click sotuvda kartochka YARATILMAYDI: har o'tkinchi xaridor
+      // uchun kartochka ochish mijozlar ro'yxatini axlatga to'ldirardi.
+      const mijoz =
+        params.tolovTuri === "qarz"
+          ? await mijozniAniqlaTx(tx, {
+              businessId: params.businessId,
+              userId: params.userId,
+              contactId: params.contactId,
+              mijozNomi: params.mijozNomi,
+              mijozTel: params.mijozTel,
+              mijozSaqla: params.mijozSaqla,
+            })
+          : {
+              contactId: params.contactId ?? null,
+              ism: params.mijozNomi?.trim() || null,
+              tel: params.mijozTel?.trim() || null,
+            };
+
+      if (params.tolovTuri === "qarz" && mijoz.contactId) {
+        await qarzLimitTekshirTx(tx, params.businessId, mijoz.contactId, jamiSumma);
       }
 
       // ---- Ombor: shartli atomik kamaytirish (parallel kassalar himoyasi) ----
@@ -305,9 +330,9 @@ export async function posSotuv(params: PosSotuvParams): Promise<PosChekNatija> {
           raqam,
           jamiSumma,
           tolovTuri: params.tolovTuri,
-          contactId: params.contactId ?? undefined,
-          mijozNomi: params.mijozNomi?.trim() || undefined,
-          mijozTel: params.mijozTel?.trim() || undefined,
+          contactId: mijoz.contactId ?? undefined,
+          mijozNomi: mijoz.ism ?? undefined,
+          mijozTel: mijoz.tel ?? undefined,
           userId: params.userId,
           sana: sanaDate,
         },
@@ -328,9 +353,9 @@ export async function posSotuv(params: PosSotuvParams): Promise<PosChekNatija> {
             // tarixan ikki qiymatli ("naqd" | "qarz") va uni kengaytirish
             // eski sotuv hisobotlarini o'zgartirib yuborardi.
             tolovTuri: params.tolovTuri === "qarz" ? "qarz" : "naqd",
-            contactId: params.contactId ?? undefined,
-            mijozNomi: params.mijozNomi?.trim() || undefined,
-            mijozTel: params.mijozTel?.trim() || undefined,
+            contactId: mijoz.contactId ?? undefined,
+            mijozNomi: mijoz.ism ?? undefined,
+            mijozTel: mijoz.tel ?? undefined,
             sana: sanaDate,
             userId: params.userId,
             chekId: chek.id,
@@ -345,9 +370,9 @@ export async function posSotuv(params: PosSotuvParams): Promise<PosChekNatija> {
           data: {
             businessId: params.businessId,
             turi: "olinadigan",
-            contactId: params.contactId ?? undefined,
-            mijozNomi: params.mijozNomi!.trim(),
-            mijozTel: params.mijozTel?.trim() || undefined,
+            contactId: mijoz.contactId ?? undefined,
+            mijozNomi: mijoz.ism!,
+            mijozTel: mijoz.tel ?? undefined,
             jamiSumma,
             status: "OPEN",
             sana: sanaDate,

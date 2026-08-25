@@ -69,8 +69,11 @@ export function QarzdorRoyxat({
               )}
             </div>
 
-            {/* Qarz miqdori — kartadagi eng muhim vizual element. */}
-            <p className="mt-3 text-2xl font-bold tnum text-debt">{formatSomLabel(q.qarz)}</p>
+            {/* Qarz miqdori — kartadagi eng muhim vizual element. Bu SHAXSNING
+                barcha ochiq qarzlari yig'indisi, bitta yozuv emas — shuning
+                uchun "Jami" so'zi ataylab yozilgan. */}
+            <p className="mt-3 text-2xs text-muted">Jami qarz</p>
+            <p className="text-2xl font-bold tnum text-debt">{formatSomLabel(q.qarz)}</p>
 
             <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-muted">
               <span>

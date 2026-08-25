@@ -5,6 +5,7 @@ import { resolveActiveBusinessId, requireMagazin } from "@/lib/business";
 import { posSotuvSchema } from "@/lib/validation/pos";
 import { posSotuv } from "@/lib/services/pos";
 import { listPosCheklar } from "@/lib/queries/pos";
+import { isModuleOnForTenant } from "@/lib/modules/guard";
 import { dashboardYangilandi } from "@/lib/cache";
 
 /** Kassa tarixi — oxirgi cheklar. */
@@ -21,7 +22,8 @@ export const GET = withTenant(
 
 /** Savatni sotish — bitta atomik amal (lib/services/pos.ts). */
 export const POST = withTenant(
-  async (request, _ctx, { session: user }) => {
+  async (request, _ctx, tenantCtx) => {
+    const user = tenantCtx.session;
     forbidSeller(user.rol);
 
     const businessId = await resolveActiveBusinessId(user);
@@ -36,6 +38,10 @@ export const POST = withTenant(
       );
     }
 
+    // Mijoz kartochkasi faqat MIJOZLAR moduli yoqiq bo'lsa yaratiladi —
+    // o'chirilgan modul uchun ma'lumot to'planmasin (/api/debts bilan bir xil qoida).
+    const mijozlarModuli = await isModuleOnForTenant(tenantCtx.tenantId, "MIJOZLAR");
+
     const chek = await posSotuv({
       businessId,
       satrlar: parsed.data.satrlar,
@@ -44,6 +50,7 @@ export const POST = withTenant(
       contactId: parsed.data.contactId,
       mijozNomi: parsed.data.mijozNomi,
       mijozTel: parsed.data.mijozTel,
+      mijozSaqla: mijozlarModuli,
       sana: parsed.data.sana,
       userId: user.userId,
     });

@@ -17,28 +17,25 @@ export default async function SotuvPage() {
   if (session.rol === "SELLER") {
     redirect("/app");
   }
-  const { getEnabledModules } = await import("@/lib/modules/guard");
-  // Guard, biznes va modullar parallel — har biri alohida kutilsa Turso'da
+  // Guard va biznes parallel — har biri alohida kutilsa Turso'da
   // ketma-ket round-trip yig'ilib sahifani sekinlashtiradi.
-  const [, business, yoqilgan] = await Promise.all([
+  const [, business] = await Promise.all([
     // OMBOR moduli yoqilmagan bo'lsa — asosiy sahifaga.
     requireModulePage(ctx, "OMBOR"),
     getActiveBusiness(session),
-    getEnabledModules(ctx),
   ]);
   if (!business || !business.omborli) {
     redirect("/app");
   }
 
   // Kassir uchun ham, admin uchun ham sotuv formasi bir xil (miqdorsiz — faqat mavjudlik).
-  // MIJOZLAR moduli yoqiq bo'lsa — qarzga sotuvda mijoz kartochkasini tanlash
-  // mumkin (shunda qarz limiti ishlaydi). Yoqilmagan bo'lsa ro'yxat bo'sh.
-  const [products, sales, mijozlar, kassalar] = await Promise.all([
+  // Mijozlar ro'yxati BU YERDA YUKLANMAYDI: qarzga sotuvda mijoz
+  // `/api/debts/mijozlar` orqali qidiriladi (ism/telefon bo'yicha, joriy
+  // qarzi bilan) — butun ro'yxatni yuklash mijoz soni o'sgan sari
+  // sahifani sekinlashtirardi.
+  const [products, sales, kassalar] = await Promise.all([
     listProducts(business.id, { forKassir: true }) as Promise<ProductKassirDTO[]>,
     listRecentSales(business.id, 15),
-    yoqilgan.has("MIJOZLAR")
-      ? (await import("@/lib/queries/mijoz")).listMijozlar(business.id)
-      : Promise.resolve([]),
     // Naqd sotuvda pul qaysi kassaga tushishini tanlash uchun (Naqd / Click / terminal).
     (await import("@/lib/queries/accounts")).listAccounts(business.id, true),
   ]);
@@ -56,7 +53,6 @@ export default async function SotuvPage() {
         initialSales={sales}
         biznesTuri={business.turi}
         bekorQilaOladi={isManager(session.rol)}
-        mijozlar={mijozlar}
         kassalar={kassalar}
       />
     </div>
