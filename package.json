@@ -52,6 +52,7 @@
     "test:kirim-chiqim": "node -r ts-node/register tests/kirim-chiqim.test.ts",
     "test:tolov-taqsimoti": "node -r ts-node/register tests/tolov-taqsimoti.test.ts",
     "test:ombor-kartasi": "node -r ts-node/register tests/ombor-kartasi.test.ts",
+    "test:panel": "node -r ts-node/register tests/panel.test.ts",
     "test:kunlik": "node -r ts-node/register tests/kunlik.test.ts",
     "test:kunlik-kassa": "node -r ts-node/register tests/kunlik-kassa.test.ts",
     "test:smena": "node -r ts-node/register tests/smena.test.ts",
