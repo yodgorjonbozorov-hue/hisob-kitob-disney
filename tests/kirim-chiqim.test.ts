@@ -31,6 +31,7 @@ let createTransaction: any;
 let txQ: any;
 let tezQ: any;
 let bolimLib: any;
+let huquqLib: any;
 
 let T: any;
 let xodim: any;
@@ -98,6 +99,7 @@ before(async () => {
   txQ = await import("@/lib/queries/transactions");
   tezQ = await import("@/lib/queries/tezKategoriyalar");
   bolimLib = await import("@/lib/tolovBolimi");
+  huquqLib = await import("@/lib/permissions/tekshir");
 
   T = await createTenantWithOwner({
     kompaniyaNomi: "Disney Navoiy",
@@ -288,6 +290,118 @@ test("tez kategoriyalar xodim uchun faqat O'Z tarixidan", async () => {
   const tez = await A(async () => tezQ.getTezKategoriyalar(T.business.id, xodim.id));
   assert.deepEqual(tez.kirim, [katKirim2.id], "xodim faqat 'Reklama' ni ishlatgan");
   assert.deepEqual(tez.chiqim, []);
+});
+
+// ---------------------------------------------------------------------------
+// 7. KATEGORIYA KESIMI — sahifaning asosiy ro'yxati
+// ---------------------------------------------------------------------------
+
+function kesim(qoshimcha: Record<string, unknown> = {}) {
+  return A(async () =>
+    txQ.listKategoriyaJamlari({
+      businessId: T.business.id,
+      from: FROM,
+      to: TO,
+      ...qoshimcha,
+    })
+  );
+}
+
+test("kategoriya kesimi: har kategoriya BIR MARTA, jami o'z yozuvlari yig'indisi", async () => {
+  const k = await kesim();
+  const idlar = k.map((x: any) => x.categoryId);
+  assert.equal(new Set(idlar).size, idlar.length, "kategoriya takrorlanmaydi");
+
+  const bezak = k.find((x: any) => x.categoryId === katKirim.id);
+  // Bezak: 100 (naqd) + 200 (click) + 30 + 20 + 500 (qarz) = 850, 5 ta yozuv.
+  assert.equal(bezak.summa, 850);
+  assert.equal(bezak.soni, 5);
+  assert.equal(bezak.turi, "kirim");
+
+  const reklama = k.find((x: any) => x.categoryId === katKirim2.id);
+  assert.equal(reklama.summa, 70);
+  assert.equal(reklama.soni, 1);
+
+  const xarajat = k.find((x: any) => x.categoryId === katChiqim.id);
+  assert.equal(xarajat.summa, 110, "40 + 60 + 10");
+  assert.equal(xarajat.soni, 3);
+  assert.equal(xarajat.turi, "chiqim");
+});
+
+test("kategoriya jamisi ro'yxatdagi AYNI yozuvlardan chiqadi", async () => {
+  // Kartadagi summa ochilgandagi yozuvlar yig'indisiga teng bo'lishi shart.
+  const k = await kesim();
+  for (const kat of k) {
+    const r = await royxat({ categoryId: kat.categoryId });
+    assert.equal(r.total, kat.soni, `${kat.nomi}: yozuvlar soni`);
+    assert.equal(
+      r.items.reduce((a: number, t: any) => a + t.summa, 0),
+      kat.summa,
+      `${kat.nomi}: yozuvlar yig'indisi`
+    );
+  }
+});
+
+test("kirim va chiqim kategoriyalari ARALASHMAYDI", async () => {
+  const faqatKirim = await kesim({ turi: "kirim" });
+  assert.equal(faqatKirim.every((x: any) => x.turi === "kirim"), true);
+  assert.equal(faqatKirim.some((x: any) => x.categoryId === katChiqim.id), false);
+
+  const faqatChiqim = await kesim({ turi: "chiqim" });
+  assert.deepEqual(
+    faqatChiqim.map((x: any) => x.categoryId),
+    [katChiqim.id]
+  );
+});
+
+test("sana filtri kategoriya jamlarini ham o'zgartiradi", async () => {
+  // Yozuvlarning hammasi 2026-08-12 da — undan oldingi kunda hech nima yo'q.
+  const bosh = await kesim({ from: "2026-08-01", to: "2026-08-11" });
+  assert.deepEqual(bosh, [], "davrda yozuv yo'q — kesim ham bo'sh");
+
+  const bir = await kesim({ from: "2026-08-12", to: "2026-08-12" });
+  assert.equal(bir.length, 3, "uchala kategoriya ham shu kunda");
+});
+
+test("qidiruv kategoriya kesimiga ham qo'llanadi", async () => {
+  const k = await kesim({ q: "Reklama" });
+  assert.deepEqual(
+    k.map((x: any) => x.categoryId),
+    [katKirim2.id]
+  );
+  assert.equal(k[0].summa, 70);
+});
+
+test("kategoriya kesimi ko'rinuvchanlik chegarasiga bo'ysunadi", async () => {
+  const k = await kesim({ userId: xodim.id });
+  assert.deepEqual(
+    k.map((x: any) => x.categoryId),
+    [katKirim2.id],
+    "xodim faqat o'z yozuvining kategoriyasini ko'radi"
+  );
+  assert.equal(k[0].summa, 70);
+});
+
+// ---------------------------------------------------------------------------
+// 8. DAVR YAKUNI HUQUQI — mavjud granular huquq (`hisobot.korish`)
+// ---------------------------------------------------------------------------
+
+test("hisobot.korish: direktorda bor, kassirda yo'q", async () => {
+  assert.equal(
+    await A(async () => huquqLib.hasPermission(T.user.id, "hisobot.korish")),
+    true,
+    "direktor davr yakunini ko'radi"
+  );
+  assert.equal(
+    await A(async () => huquqLib.hasPermission(xodim.id, "hisobot.korish")),
+    false,
+    "kassir davr yakunini KO'RMAYDI"
+  );
+  // Yozuv kiritish huquqi esa kassirda saqlanadi — kundalik ishi to'xtamaydi.
+  assert.equal(
+    await A(async () => huquqLib.hasPermission(xodim.id, "tranzaksiya.yaratish")),
+    true
+  );
 });
 
 // ---------------------------------------------------------------------------
