@@ -4072,3 +4072,83 @@ Test: `npm run test:crm` (24 ta) — rol matritsasi (4 rol kiradi, maxfiy
 modullar yopiq), sidebar havolalari, to'liq oqim (buyurtma → Yutildi →
 Kirim → bosh sahifadagi kategoriya kesimi), idempotentlik, eski
 kategoriyasiz buyurtma va ko'p-bizneslik izolyatsiyasi.
+
+
+## 2026-08-25 — BALANSA AI: savol-javob blokidan BUSINESS COPILOT'ga
+
+Faqat `/app/ai` va unga kerak bo'lgan backend AI/analitika qatlami
+o'zgardi. Boshqa sahifalar va modullar tegilmadi.
+
+### Muammo
+
+Eski AI bloki ~135 satrlik kichik kartochka edi va olti dona umumiy
+tool'ga tayanardi (`oylik_xulosa`, `kategoriya_taqsimoti`, `oylik_trend`,
+`qarzdorlik`, `crm_holati`, `vazifalar_holati`). Uchta jiddiy kamchilik:
+
+1. **Ruxsat qatlami yo'q edi.** Tool'lar faqat MODUL yoqilganini
+   tekshirardi, granular huquqni emas — ya'ni hisobot huquqi olib
+   qo'yilgan foydalanuvchi AI orqali sof foydani so'rab olaverardi.
+2. **Davr tushunchasi yo'q edi.** Faqat "oy" bor edi: "bugun qancha
+   kirdi?", "shu hafta?", "iyulni avgust bilan solishtir" — javobsiz.
+3. **Raqamni model yozardi.** Tool xom JSON qaytarardi, foiz va farqni
+   model o'zi hisoblardi — ya'ni taxminiy raqam yozish yo'li ochiq edi.
+
+### Yechim: to'rt qatlam
+
+`lib/ai/davr.ts` — davr kodini ("bugun", "3oy", "2026-07",
+"2026-07-01:2026-07-15") chegaraga aylantiradi. Model sana hisoblamaydi.
+
+`lib/ai/ruxsat.ts` — XAVFSIZLIK CHEGARASI. Sakkiz soha (moliya, hisobot,
+kassa, qarz, ombor, crm, vazifalar, mijozlar), har biri o'sha sohaning
+SAHIFASI talab qiladigan AYNI huquq bilan ochiladi (`lib/permissions`).
+Ruxsatsiz soha tool'i modelga umuman yuborilmaydi.
+
+`lib/ai/analitika.ts` — deterministik agregatlar. Farq, foiz, ulush va
+"eng kattasi" SERVERDA hisoblanadi, modelga tayyor raqam va tayyor matn
+("138,3 mln so'm") boradi. Qarz filtri (`QARZ_EMAS`) va soft-delete
+butun tizim bilan bir xil, ya'ni AI javobi bosh sahifa va oylik hisobot
+bilan bitta raqamni ko'rsatadi.
+
+`lib/ai/tools.ts` — 12 ta tool, hammasi FAQAT O'QISH. `businessId`
+har doim serverdagi kontekstdan; savol matnidagi "boshqa biznes ID sini
+tekshir" kabi ko'rsatma tool darajasida ta'sirsiz.
+
+### Hallutsinatsiyaga qarshi uch qavat
+
+1. Tool natijasi tayyor matn beradi — model formatlamaydi va hisoblamaydi.
+2. System prompt: ma'lumot yo'q bo'lsa "Bu ma'lumotni aniq hisoblash uchun
+   yetarli ma'lumot topilmadi" deb ayt, taxmin qilma.
+3. `raqamNazorati()` — model birorta tool chaqirmagan bo'lsa, javobdagi
+   pul ko'rinishidagi raqam BLOKLANADI (o'ylab topilgan bo'lishi aniq).
+
+### Chat tarixi — yangi jadval
+
+`AiConversation` da foydalanuvchi × biznes uchun ATIGI BITTA qator bor
+edi. `AiSuhbat` o'sha cheklovni olib tashlaydi (ko'p suhbat, sarlavha
+bilan). Migratsiya eski yozishmalarni ko'chiradi va shundan keyin eski
+jadvalni o'chiradi — ma'lumot yo'qolmaydi.
+
+Egalik kaliti o'zgarmagan: `(businessId, userId)`. `rawPrisma` ataylab —
+har chat xabari scoped klient orqali audit jurnaliga tushib, jurnalni
+shovqinga to'ldirardi (`tests/audit.test.ts` buni qo'riqlaydi).
+
+### AI'siz ishlaydigan qismlar (token tejash)
+
+"Bugungi xulosa" kartasi, tayyor savollar va javobdan keyingi chiplar —
+hammasi deterministik. Sahifa ochilishi bitta ham AI so'rovi sarflamaydi.
+
+Fayllar: `src/lib/ai/{davr,ruxsat,analitika,xulosa,tools,claude,suhbatlar,takliflar,javobFormat}.ts`,
+`src/app/api/ai/chat/route.ts`, `src/app/api/ai/suhbatlar/**`,
+`src/app/app/ai/**` (7 ta komponent), `prisma/schema.prisma`,
+`prisma/migrations/20260825140000_ai_copilot_suhbatlar/`.
+
+**Migratsiya bor** — `--create-only` uslubida yozildi, apply QILINMADI
+(deploy paytida `scripts/db-migrate.mjs` o'zi qo'llaydi; undan oldin
+`scripts/deploy-zaxira.mjs` xom surat oladi). Xavf darajasi: past —
+bitta CREATE TABLE + INSERT…SELECT + DROP; ko'chirish scratch bazada
+haqiqiy yozuv bilan sinaldi.
+
+Test: `npm run test:ai` (28 ta — aniqlik, RBAC, tenant, prompt injection,
+hallutsinatsiya, suhbat izolyatsiyasi) va `npm run test:ai-e2e` (8 ta —
+1440/1280/768/390/375 da gorizontal siljish yo'q, kompozer ko'rinadi,
+pastki menyu bilan ustma-ust tushmaydi). `npm run build` ✅.
