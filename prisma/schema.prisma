@@ -320,25 +320,33 @@ model AppSetting {
   value String
 }
 
-/// AI YORDAMCHI SUHBATI — server tomonda saqlanadi.
+/// AI COPILOT SUHBATI — server tomonda saqlanadi.
 ///
-/// Nega: ilgari suhbat tarixi mijozdan (brauzerdan) kelardi. Foydalanuvchi
-/// soxta `assistant` xabarini yuborib modelni chalg'itishi mumkin edi
-/// (prompt injection). Endi mijoz faqat SAVOL yuboradi, tarix esa shu
-/// jadvaldan olinadi.
+/// Nega serverda: ilgari suhbat tarixi mijozdan (brauzerdan) kelardi.
+/// Foydalanuvchi soxta `assistant` xabarini yuborib modelni chalg'itishi
+/// mumkin edi (prompt injection). Endi mijoz faqat SAVOL va suhbat ID'sini
+/// yuboradi, tarix esa shu jadvaldan olinadi.
 ///
-/// Bitta foydalanuvchi + biznes uchun bitta faol suhbat.
-model AiConversation {
+/// Bitta foydalanuvchi + biznes uchun BIR NECHTA suhbat bo'ladi ("Yangi
+/// suhbat" har safar yangi qator ochadi) — avvalgi `AiConversation` bitta
+/// faol suhbat bilan cheklangan edi va chat tarixi umuman yo'q edi.
+/// Egalik kaliti — (businessId, userId): boshqa foydalanuvchining suhbati
+/// hech qachon o'qilmaydi.
+model AiSuhbat {
   id         String   @id @default(cuid())
   tenantId   String
   businessId String
   userId     String
-  /// Xabarlar JSON massivi: [{ rol: "user" | "assistant", matn: string }]
+  /// Ro'yxatda ko'rinadigan qisqa nom — birinchi savoldan kesib olinadi
+  /// (AI chaqirilmaydi: sarlavha uchun token sarflashning ma'nosi yo'q).
+  sarlavha   String
+  /// Xabarlar JSON massivi:
+  /// [{ rol: "user" | "assistant", matn: string, havolalar?: [...], takliflar?: [...] }]
   xabarlar   String
   updatedAt  DateTime @updatedAt
   createdAt  DateTime @default(now())
 
-  @@unique([businessId, userId])
+  @@index([businessId, userId, updatedAt])
   @@index([tenantId, updatedAt])
 }
 

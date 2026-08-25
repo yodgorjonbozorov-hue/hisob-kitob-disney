@@ -135,16 +135,17 @@ CREATE TABLE "AppSetting" (
 );
 
 -- CreateTable
-CREATE TABLE "AiConversation" (
+CREATE TABLE "AiSuhbat" (
     "id" TEXT NOT NULL,
     "tenantId" TEXT NOT NULL,
     "businessId" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
+    "sarlavha" TEXT NOT NULL,
     "xabarlar" TEXT NOT NULL,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "AiConversation_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "AiSuhbat_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -987,10 +988,10 @@ CREATE INDEX "UserBusiness_businessId_idx" ON "UserBusiness"("businessId");
 CREATE UNIQUE INDEX "UserBusiness_userId_businessId_key" ON "UserBusiness"("userId", "businessId");
 
 -- CreateIndex
-CREATE INDEX "AiConversation_tenantId_updatedAt_idx" ON "AiConversation"("tenantId", "updatedAt");
+CREATE INDEX "AiSuhbat_businessId_userId_updatedAt_idx" ON "AiSuhbat"("businessId", "userId", "updatedAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "AiConversation_businessId_userId_key" ON "AiConversation"("businessId", "userId");
+CREATE INDEX "AiSuhbat_tenantId_updatedAt_idx" ON "AiSuhbat"("tenantId", "updatedAt");
 
 -- CreateIndex
 CREATE INDEX "BotConversation_updatedAt_idx" ON "BotConversation"("updatedAt");
