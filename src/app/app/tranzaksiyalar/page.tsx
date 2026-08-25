@@ -1,17 +1,19 @@
 import { prisma } from "@/lib/prisma";
 import { requireTenantPage } from "@/lib/auth/tenant";
 import { runWithTenant } from "@/lib/db/tenantContext";
-import { resolveActiveBusinessId, getAccessibleBusinesses } from "@/lib/business";
+import { resolveActiveBusinessId, getAccessibleBusinesses, getActiveBusiness } from "@/lib/business";
 import { isManager } from "@/lib/auth/roles";
 import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { listTransactions } from "@/lib/queries/transactions";
 import { formatSom } from "@/lib/format";
-import { dateOnlyStringToUTCDate } from "@/lib/date";
+import { dateOnlyStringToUTCDate, todayTashkentDateOnlyString } from "@/lib/date";
 import { isModuleOnForTenant } from "@/lib/modules/guard";
 import { TransactionsClient } from "./TransactionsClient";
 import { listAccounts, getMeningKassam } from "@/lib/queries/accounts";
 import { toshkentBugunBoshi } from "@/lib/services/kassirKassa";
 import { KassamKartasi } from "@/components/kassa/KassamKartasi";
+import { SotilganMahsulotlar } from "./SotilganMahsulotlar";
+import { getSotuvStatistika, type SotuvStatistikaDTO } from "@/lib/queries/sotuvStatistika";
 import type { Prisma } from "@prisma/client";
 
 interface SearchParams {
@@ -129,6 +131,26 @@ export default async function TranzaksiyalarPage({
     qarzSumma = agg._sum.summa ?? 0;
   }
 
+  // SOTILGAN MAHSULOTLAR (Kirim bo'limi) — ombor yuritadigan biznesda.
+  //
+  // Sotuvchiga ko'rsatilmaydi: Sotuv sahifasi ham unga yopiq (API'da
+  // `forbidSeller`), shu bois bu yerda ham ko'rinmaydi.
+  //
+  // Birinchi ko'rinish "Bugun" — server sanasi (Toshkent) bo'yicha. Filtr
+  // almashtirilganda klient /api/sales/statistika ga o'tadi va sahifa qayta
+  // yuklanmaydi.
+  const bugun = todayTashkentDateOnlyString();
+  let sotuvStatistika: SotuvStatistikaDTO | null = null;
+  if (session.rol !== "SELLER") {
+    const [omborYoqiq, biznes] = await Promise.all([
+      isModuleOnForTenant(tenantId, "OMBOR"),
+      getActiveBusiness(session),
+    ]);
+    if (omborYoqiq && biznes?.omborli) {
+      sotuvStatistika = await getSotuvStatistika(businessId, { from: bugun, to: bugun });
+    }
+  }
+
   // Ko'chirish maqsadlari — direktor uchun joriy bizneskan boshqa bizneslar.
   const canMove = isManager(session.rol);
   const moveTargets = canMove
@@ -168,6 +190,12 @@ export default async function TranzaksiyalarPage({
           maxSumma: searchParams.maxSumma ? formatSom(parseInt(searchParams.maxSumma, 10)) : "",
         }}
       />
+      {/* OMBOR → SOTUV → STATISTIKA. Blok tranzaksiya ro'yxatidan keyin
+          turadi: u kirimning MAHSULOT KESIMI, ya'ni pul yozuvlarining
+          tafsiloti — ularning o'rnini bosmaydi. */}
+      {sotuvStatistika && (
+        <SotilganMahsulotlar bugun={bugun} initial={sotuvStatistika} />
+      )}
       {/* Asosiy moliyaviy blokdan ALOHIDA karta — kassirning real kassasi. */}
       <KassamKartasi kassa={meningKassam} />
     </div>

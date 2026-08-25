@@ -3868,3 +3868,149 @@ farqi bilan), ikkilanishda taxmin qilmaslik, POS qarzga sotuvining mavjud
 kartochkaga tushishi va naqd sotuv qarz yaratmasligi.
 
 `tests/pos-brauzer.test.ts` yangi qidiruv maydoniga moslandi.
+
+## CRM — kunlik buyurtmalar va Kirim bilan bitta hisob-kitob (2026-08-25)
+
+CRM "bitimlar doskasi" edi: bitimning kategoriyasi yo'q, sanasi yo'q, kirim
+esa QOTIRILGAN "Sotuv" kategoriyasiga yozilardi. Ya'ni Disney Navoiy uchun
+buyurtma "Onajon" bo'lsa ham, Kirimdagi kategoriya kesimida u "Sotuv"
+ichida ko'rinardi — CRM bir haqiqatni, Kirim boshqasini ko'rsatardi.
+Dublikat kirimga qarshi himoya ham faqat KODDA edi (`if (!deal.transactionId)`),
+bazada hech qanday cheklov yo'q edi.
+
+### Kategoriya manbai BITTA
+
+CRM o'zining kategoriya tizimini qurmaydi — `Deal.categoryId` to'g'ridan-to'g'ri
+Kirim modulining `Category` jadvaliga FK bilan bog'landi (faqat `turi="kirim"`,
+xizmat qatlamida ham, API'da ham tekshiriladi). Buyurtma kirimga
+o'tkazilganda tranzaksiya AYNAN o'sha kategoriya bilan yoziladi, shuning
+uchun Kirimdagi kategoriya filtri CRM yozuvlarini alohida ish qilmasdan
+qamrab oladi (`tests/crm.test.ts` da tekshiriladi).
+
+### Dublikat kirim: himoya BAZADA
+
+`Deal.transactionId` endi `@unique` va `Transaction` ga FK (`SET NULL`).
+Uch qatlam:
+
+1. **Baza** — UNIQUE indeks + tranzaksiya ichida
+   `updateMany({ where: { transactionId: null } })`. Shart bajarilmasa 0 qator
+   yangilanadi va butun `runBusinessTx` bekor qilinadi, ya'ni yuqorida
+   yaratilgan kirim ham bazaga TUSHMAYDI. Ikki so'rov bir vaqtda kelsa
+   ikkinchisi shu yerda to'xtaydi.
+2. **Xizmat qatlami** — boshida ochiq tekshiruv (tushunarli xato matni).
+3. **Frontend** — tugma o'chadi, "🟢 Kirim yozilgan" va yozuvga havola.
+
+Uchinchisi faqat qulaylik: test ilova kodini chetlab o'tib to'g'ridan-to'g'ri
+`rawPrisma.deal.update` bilan ikkinchi buyurtmani o'sha kirimga bog'lashga
+urinadi va UNIQUE cheklovga urilishini tekshiradi.
+
+Migratsiya `Deal` jadvalini qayta quradi (SQLite'da mavjud ustunga FK
+qo'shishning boshqa yo'li yo'q). UNIQUE indeksdan OLDIN ehtimoliy
+dublikatlar tozalanadi — eski kodda ular paydo bo'lmasligi kerak edi, lekin
+bazada cheklov bo'lmagani uchun buni kafolatlab bo'lmasdi; migratsiya
+"UNIQUE constraint failed" bilan yarim yo'lda to'xtamasin.
+
+### Pul faqat bitta yo'ldan yoziladi
+
+`moveDeal` ichidagi kirim yozish kodi olib tashlandi — u endi
+`lib/crm/kirim.ts` dagi `kirimgaKochirish` ni chaqiradi. Dublikat himoyasi,
+kategoriya tanlash va kunlik hisobot sinxroni YAGONA joyda tursin. Kanbanda
+"Yutildi" ga sudrab o'tkazish ham endi kirimni jimgina yozmaydi: tasdiq
+oynasi ochiladi (summa va kategoriya ko'rinib turadi). Pul yozadigan amal
+sudrab tashlash bilan bo'lmasin.
+
+`kunlikSinxron` ATAYLAB tranzaksiyadan TASHQARIDA chaqiriladi — u o'zi
+`runBusinessTx` ochadi, ichkarida chaqirilsa SQLite yozuv qulfida deadlock
+bo'lardi (`transactionService.createTransaction` dagi bilan bir xil sabab).
+
+### Statistika: summa yozuvning O'ZIDAN
+
+`lib/crm/statistika.ts` — "Bugungi buyurtmalar" va kategoriya kesimi.
+"Kirimga o'tgan" summa buyurtmaning `summa` sidan EMAS, bog'langan
+tranzaksiyadan olinadi (va `deletedAt` bo'lsa hisobga kirmaydi). Aks holda
+buyurtma summasi kirim yozilgandan keyin tahrirlansa ikki raqam ajralib
+ketardi. Shu sababdan API kirim yozilgan buyurtmaning summasi va
+kategoriyasini o'zgartirishni ham rad etadi.
+
+### Kirim ro'yxatida "CRM" belgisi
+
+`listTransactions` ga `crmBuyurtma` bog'lanishi qo'shildi — yozuv CRM
+buyurtmasidan kelgan bo'lsa ro'yxatda `CRM` belgisi ko'rinadi. Boshqa hech
+nima o'zgarmaydi: yozuv oddiy kirim kabi tahrirlanadi, o'chiriladi,
+hisobotlarga va kunlik hisobotga kiradi.
+
+### Fayllar
+
+Yangi: `lib/crm/kirim.ts`, `lib/crm/statistika.ts`, `lib/validation/crm.ts`,
+`api/crm/deals/[id]/kirim/route.ts`, `app/crm/{turlar,BuyurtmaKarta,
+BuyurtmaModal,BuyurtmaSheet,KirimTasdiq,BugungiPanel}.tsx`.
+Har komponent 250 satrdan qisqa (eng kattasi — 199).
+
+Testlar: `npm run test:crm` (19 ta). Qo'shimcha tekshirildi —
+`test:isolation`, `test:izolyatsiya-royxati`, `test:backup`, `test:postgres`,
+`test:migratsiya`, `test:apply-oqimi`, `test:agregat`, `test:kunlik`,
+`test:kategoriya`, `test:atomik`, `test:soft-delete`, `test:visibility`,
+`test:tasks`, `test:mijozlar` — hammasi yashil, `npm run build` o'tdi.
+
+---
+
+## Kirim bo'limida "Sotilgan mahsulotlar" statistikasi (2026-08-25)
+
+Ombordan sotilgan mahsulotlar endi Kirim bo'limida (Yozuvlar sahifasi)
+kategoriya va mahsulot kesimida ko'rinadi. Qo'lda hech narsa kiritilmaydi:
+**Ombor → Sotuv → Statistika** zanjiri `Sale` yozuvi orqali o'zi yuradi.
+
+### Nega `Sale`, `Transaction` emas
+
+Kirim tranzaksiyasidan mahsulot kesimini tiklab BO'LMAYDI:
+
+* naqd sotuv — bitta kirim tranzaksiya (`izoh` da nom bor, lekin matn);
+* POS cheki — 10 satr uchun ham BITTA tranzaksiya;
+* qarzga sotuv — tranzaksiya umuman yozilmaydi (kassa usuli).
+
+`Sale` esa uchala holatda ham bir xil to'ldiriladi va har satr bitta yozuv.
+Shu bois statistika `Sale` dan o'qiladi — chek darajasidagi pul yozuvi
+umuman ishtirok etmaydi va **ikki marta sanash imkoni yo'q**.
+
+### Qaytarish o'zi ayriladi
+
+`cancelSale` va `posChekBekor` `Sale.deletedAt` ni belgilaydi va AYNI
+paytda ombor qoldig'ini tiklaydi. So'rovdagi `deletedAt: null` sharti
+shuning uchun qaytarilgan mahsulotni statistikadan avtomatik chiqaradi —
+qoldiq va statistika bitta qoidadan yuradi, ajralib keta olmaydi.
+Qaytarilganlar soni/summasi ma'lumot uchun alohida qatorda ko'rsatiladi.
+
+### Jamlash bazada
+
+Bir mahsulot kun davomida 5 marta sotilsa 5 ta qator emas, bitta
+"25 dona sotildi" qatori chiqadi. Guruhlash `groupBy` bilan BAZADA
+bajariladi: 100 000 sotuvli bizneste barcha satrlarni RAM'ga yuklab
+JS'da jamlash serverni yiqitardi. `@@index([businessId, deletedAt, sana])`
+allaqachon bor edi — yangi indeks kerak bo'lmadi.
+
+**Sxema o'zgarmadi, migratsiya yo'q.**
+
+### Sana filtri klientda, sahifa qayta yuklanmaydi
+
+Birinchi ko'rinish ("Bugun") serverdan keladi, filtr almashtirilganda
+`/api/sales/statistika` chaqiriladi. Sabab: blokning sanasi yuqoridagi
+tranzaksiya ro'yxati filtridan MUSTAQIL — bitta `searchParams` ga
+bog'lansa "Bugungi sotuvlar" ni ochish butun ro'yxatni ham qaytadan
+filtrlab yuborardi.
+
+Presetlar brauzer soatidan emas, serverdan kelgan `bugun` satridan
+hisoblanadi: telefon vaqt mintaqasi noto'g'ri bo'lsa "Bugun" tugmasi
+bo'sh ro'yxat berardi.
+
+### Miqdor birliklar bo'yicha
+
+"93 dona + 40 kg = 133" ma'nosiz, shuning uchun yakun har birlikni
+alohida ko'rsatadi (bosh sahifadagi ombor kartasi bilan bir xil qoida).
+
+Fayllar: `src/lib/queries/sotuvStatistika.ts`,
+`src/app/api/sales/statistika/route.ts`,
+`src/app/app/tranzaksiyalar/SotilganMahsulotlar.tsx`,
+`SotuvKategoriyaGuruhi.tsx`, `sotuvSana.ts`.
+
+Test: `npm run test:sotuv-statistika` (13 ta) — jamlash, guruhlash, sana
+filtri, qaytarish, POS cheki, ombor qoldig'i bilan moslik, izolyatsiya.
