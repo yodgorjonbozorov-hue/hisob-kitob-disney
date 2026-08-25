@@ -32,6 +32,8 @@ import {
   getOmborKartasiKesh,
 } from "@/lib/queries/dashboardCached";
 import { getTodayTotals } from "@/lib/queries/shift";
+import { getKassaHolati } from "@/lib/queries/accounts";
+import { getBugungiHolat } from "@/lib/queries/bugun";
 import { listTransactions } from "@/lib/queries/transactions";
 import { getProBugun } from "@/lib/queries/proDashboard";
 import { getKgSavdo } from "@/lib/queries/selos";
@@ -43,6 +45,7 @@ import { KategoriyaBloki } from "./KategoriyaBloki";
 import { PulOqimiKartalari } from "./PulOqimiKartalari";
 import { YASHIRIN_COOKIE, yashirinniOqi } from "@/lib/pulYashirish";
 import { SelosBugunKartasi } from "./SelosBugunKartasi";
+import { BugungiHolatBloki } from "./BugungiHolatBloki";
 
 export default async function DashboardPage({
   searchParams,
@@ -118,7 +121,11 @@ export default async function DashboardPage({
   const business = await getActiveBusiness(session);
   const omborKorinadi =
     (business?.omborli ?? false) && (await isModuleOnForTenant(tenantId, "OMBOR"));
-  const [summary, kirimBreakdown, chiqimBreakdown, trend, daily, qarzTotal, kirimTaqsimot, chiqimTaqsimot, ombor, categoryCount, proBugun, kgBugun] = await Promise.all([
+  // "Bugungi holat" CRM qatorlari faqat CRM yoqilgan biznesda so'raladi —
+  // moduli yo'q mijozda so'rov ham ketmaydi, blok ham CRM'siz chiziladi.
+  const crmKorinadi = await isModuleOnForTenant(tenantId, "CRM");
+  const bugunStr = todayDateOnlyString();
+  const [summary, kirimBreakdown, chiqimBreakdown, trend, daily, qarzTotal, kirimTaqsimot, chiqimTaqsimot, ombor, categoryCount, proBugun, kgBugun, kassaHolati, bugungiHolat] = await Promise.all([
     getMonthSummaryKesh(businessId, month),
     getCategoryBreakdownKesh(businessId, month, "kirim"),
     getCategoryBreakdownKesh(businessId, month, "chiqim"),
@@ -137,6 +144,10 @@ export default async function DashboardPage({
     bugunPanel ? getProBugun(businessId) : Promise.resolve(null),
     // Bugungi kg savdosi (yozuvlardan): jami kg, tushum va sotuvchilar kesimi.
     kgPanel ? getKgSavdo(businessId, todayTashkentDateOnlyString()) : Promise.resolve(null),
+    // "Kassadagi pul" kartasi — FAOL kassalardagi joriy qoldiq. Bu oy
+    // ko'rsatkichi EMAS: butun davr bo'yicha kirim − chiqim ± o'tkazmalar.
+    getKassaHolati(businessId),
+    getBugungiHolat(businessId, bugunStr, crmKorinadi),
   ]);
 
   // Kategoriya tafsiloti uchun oy oralig'i, "YYYY-MM-DD" (ikkala chet kiradi).
@@ -182,12 +193,20 @@ export default async function DashboardPage({
         </Card>
       )}
 
-      {/* Barcha kartalar TANLANGAN OY ko'rsatkichlari — umumiy (butun davr)
-          kassa qoldig'i ataylab ko'rsatilmaydi: oy raqamlari bilan yonma-yon
-          turganda chalg'itardi. Kassalar bo'yicha qoldiq /app/kassa sahifasida. */}
+      {/* KPI QATORI: Jami kirim · Jami chiqim · Sof foyda · Kassadagi pul ·
+          Menga qarzdor (+ ombor yuritadigan biznesda 6-karta).
+
+          Uchta birinchi karta TANLANGAN OY ko'rsatkichlari, "Kassadagi pul"
+          va "Menga qarzdor" esa JORIY holat (butun davr). Ular ataylab shu
+          qatorda: biznes egasining birinchi savoli "hozir qancha pulim bor?"
+          va u javobni oy tanlashdan oldin ko'rishi kerak. Farq karta ichidagi
+          izohda yozilgan, shuning uchun raqamlar chalkashmaydi. */}
+      {/* Bir qatorga 5-6 karta faqat JUDA keng ekranda sig'adi: 1440px'da
+          ular ~180px ga siqilib, "125 ming" ikki qatorga tushib ketardi.
+          Shuning uchun 2xl'gacha 3 ustun (5 karta -> 3+2, 6 karta -> 3+3). */}
       <div
-        className={`grid grid-cols-2 gap-3 sm:gap-4 ${
-          ombor ? "lg:grid-cols-5" : "lg:grid-cols-4"
+        className={`grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 lg:grid-cols-3 ${
+          ombor ? "2xl:grid-cols-6" : "2xl:grid-cols-5"
         }`}
       >
         {/* Kirim va chiqim kartalari bosiladi — to'lov turlari bo'yicha
@@ -209,6 +228,28 @@ export default async function DashboardPage({
           oyNomi={oyNomi}
           yashirinBoshlangich={yashirin}
         />
+        {/* KASSADAGI PUL — barcha FAOL kassalardagi real joriy qoldiq
+            (lib/queries/accounts.ts -> getKassaHolati). Kirim bilan
+            adashtirilmaydi: bu davr summasi emas, ayni paytdagi qoldiq. */}
+        <StatCard
+          label="Kassadagi pul"
+          value={formatMoneyCompact(kassaHolati.faolJami)}
+          title={formatSomLabel(kassaHolati.faolJami)}
+          accent={kassaHolati.faolJami >= 0 ? "brand" : "expense"}
+          href="/app/kassa"
+        >
+          <p className="text-2xs mt-1 tnum text-muted">
+            {kassaHolati.faolSoni} ta faol kassa · joriy qoldiq
+          </p>
+          {/* Nofaol kassada qolib ketgan pul YASHIRILMAYDI, lekin asosiy
+              raqamga ham qo'shilmaydi (u "joriy kassa" emas). */}
+          {kassaHolati.nofaolJami !== 0 && (
+            <p className="text-2xs mt-0.5 tnum text-muted">
+              Nofaol kassalarda: {formatMoneyCompact(kassaHolati.nofaolJami)}
+            </p>
+          )}
+        </StatCard>
+
         {/* Yagona bosiladigan karta — qarzdorlar ro'yxatiga olib kiradi.
             Raqam har yuklashda yozuvlardan qayta hisoblanadi (qo'lda
             yuritiladigan "joriy balans" ustuni yo'q). */}
@@ -218,6 +259,9 @@ export default async function DashboardPage({
           title={formatSomLabel(qarzTotal.olinadigan)}
           accent={qarzTotal.olinadigan > 0 ? "debt" : "neutral"}
           href="/app/qarzlar?turi=olinadigan"
+          /* Ombor kartasi yo'q bo'lsa bu — 5-karta va telefondagi 2 ustunli
+             tarmoqda yakka qoladi; shu holda ikkala ustunni egallaydi. */
+          className={ombor ? "" : "col-span-2 sm:col-span-1"}
         >
           <p className="text-2xs mt-1 tnum text-muted">
             {qarzTotal.olinadiganSoni} ta qarzdor
@@ -233,16 +277,14 @@ export default async function DashboardPage({
           )}
         </StatCard>
 
-        {/* 5-KARTA — faqat ombor yuritadigan biznesda. Mobil ekranda ikkala
-            ustunni egallaydi: 2 ustunli tarmoqda yakka qolgan karta yarim
-            bo'sh qator qoldirardi. */}
+        {/* 6-KARTA — faqat ombor yuritadigan biznesda. U "Menga qarzdor"
+            bilan juftlashadi, shuning uchun ustun cho'zish kerak emas. */}
         {ombor && (
           <StatCard
             label="Ombordagi mahsulotlar"
             value={omborQiymat(ombor)}
             accent="brand"
             href="/app/ombor"
-            className="col-span-2 lg:col-span-1"
           >
             {/* Boshqa birliklar ALOHIDA qatorda: "500 dona + 120 kg" ni
                 bitta raqamga qo'shish matematik jihatdan noto'g'ri. */}
@@ -265,6 +307,12 @@ export default async function DashboardPage({
           </StatCard>
         )}
       </div>
+
+      {/* BUGUNGI HOLAT — kunlik kesim (KPI kartalari oy bo'yicha).
+          `proBugun` bloki ochiq mijozda (Fortex Selos) chizilmaydi: u yerda
+          shu raqamlarni kg ko'rsatkichlari bilan birga beradigan o'z "Bugun"
+          paneli bor va ikkalasi yonma-yon turganda takrorlanardi. */}
+      {!proBugun && <BugungiHolatBloki holat={bugungiHolat} />}
 
       {/* Kg savdosi (mijozga xos — Fortex Selos): bugun necha kg, qancha tushum,
           sotuvchilar bo'yicha. Boshqa mijozlarda bu blok umuman yo'q. */}

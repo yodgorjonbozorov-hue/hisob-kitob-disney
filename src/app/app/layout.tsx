@@ -58,7 +58,7 @@ export default async function ProtectedLayout({
   };
   const navItems = computeNav(navHolati);
   const mobileTabs = computeMobileTabs(navHolati);
-  const menyu = navItems.map((n) => ({ label: n.label, href: n.href }));
+  const menyu = navItems.map((n) => ({ label: n.label, href: n.href, guruh: n.guruh ?? ("ish" as const) }));
 
   return (
     <ToastProvider>

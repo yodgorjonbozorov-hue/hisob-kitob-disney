@@ -4,12 +4,22 @@ import { useRouter, usePathname } from "next/navigation";
 import { shiftMonthString, parseMonthString } from "@/lib/date";
 import { formatMonthLabel } from "@/lib/format";
 
-export function MonthSelector({ month }: { month: string }) {
+export function MonthSelector({
+  month,
+  qoshimcha,
+}: {
+  month: string;
+  /**
+   * Oy almashtirilganda SAQLANADIGAN qo'shimcha query (masalan "davr=kunlik").
+   * Berilmasa avvalgi xatti-harakat: URL'da faqat `month` qoladi.
+   */
+  qoshimcha?: string;
+}) {
   const router = useRouter();
   const pathname = usePathname();
 
   function goTo(newMonth: string) {
-    router.push(`${pathname}?month=${newMonth}`);
+    router.push(`${pathname}?month=${newMonth}${qoshimcha ? `&${qoshimcha}` : ""}`);
   }
 
   const { year, monthIndex0 } = parseMonthString(month);

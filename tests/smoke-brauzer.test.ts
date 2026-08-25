@@ -348,8 +348,8 @@ test("yangi modul sahifalari to'g'ri sarlavha bilan ochiladi", { skip: sabab }, 
   // lekin bo'sh" holatini ushlaydi.
   const SAHIFALAR: Array<[string, string]> = [
     ["/app", "Boshqaruv paneli"],
-    ["/app/tranzaksiyalar", "Tranzaksiyalar"],
-    ["/app/hisobot", "Oylik hisobot"],
+    ["/app/tranzaksiyalar", "Kirim / Chiqim"],
+    ["/app/hisobot", "Hisobotlar"],
     ["/app/xarid", "Xarid"],
     ["/app/tasdiqlash", "Tasdiqlash"],
     ["/app/mijozlar", "Mijozlar"],

@@ -34,6 +34,7 @@
     "test:soft-delete": "node -r ts-node/register tests/soft-delete.test.ts",
     "test:atomik": "node -r ts-node/register tests/atomik.test.ts",
     "test:agregat": "node -r ts-node/register tests/agregat.test.ts",
+    "test:dashboard-ux": "node -r ts-node/register tests/dashboard-ux.test.ts",
     "test:audit": "node -r ts-node/register tests/audit.test.ts",
     "test:kassa": "node -r ts-node/register tests/kassa.test.ts",
     "test:kassir-kassa": "node -r ts-node/register tests/kassir-kassa.test.ts",

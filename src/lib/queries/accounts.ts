@@ -188,6 +188,41 @@ export async function getJamiKassaQoldiq(businessId: string): Promise<number> {
   return qoldiqlar.reduce((a, q) => a + q.qoldiq, 0);
 }
 
+/** Dashboard "Kassadagi pul" kartasi uchun kesim. */
+export interface KassaHolati {
+  /** FAOL kassalardagi joriy qoldiq yig'indisi. */
+  faolJami: number;
+  /** Nechta faol kassa hisobga olindi. */
+  faolSoni: number;
+  /**
+   * Nofaol (arxivlangan) kassalarda qolib ketgan pul. Odatda 0.
+   * Nolga teng bo'lmasa kartada alohida qatorda ko'rsatiladi — pul
+   * yashirilmasin, lekin "joriy kassa" raqamini ham buzmasin.
+   */
+  nofaolJami: number;
+}
+
+/**
+ * "KASSADAGI PUL" — faol kassalardagi REAL joriy qoldiq.
+ *
+ * Bu KIRIM emas va oylik jami ham emas: qoldiq butun davr bo'yicha
+ * kirim − chiqim ± o'tkazmalar (`getAccountBalances`). Dashboard kartasi
+ * aynan "hozir qo'limda qancha pul bor" savoliga javob beradi.
+ *
+ * Nofaol kassa summasi ALOHIDA qaytariladi: kassani nofaol qilish uchun
+ * qoldiq nol bo'lishi shart emas (lib/services/accounts.ts), shuning uchun
+ * uni jimgina jamiga qo'shib yuborish "joriy kassa" ma'nosini buzardi.
+ */
+export async function getKassaHolati(businessId: string): Promise<KassaHolati> {
+  const qoldiqlar = await getAccountBalances(businessId);
+  const faol = qoldiqlar.filter((q) => q.isActive);
+  return {
+    faolJami: faol.reduce((a, q) => a + q.qoldiq, 0),
+    faolSoni: faol.length,
+    nofaolJami: qoldiqlar.filter((q) => !q.isActive).reduce((a, q) => a + q.qoldiq, 0),
+  };
+}
+
 export interface TransferDTO {
   id: string;
   fromAccountId: string;
