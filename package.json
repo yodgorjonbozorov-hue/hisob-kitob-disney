@@ -77,6 +77,7 @@
     "test:bot-avto": "node -r ts-node/register tests/bot-avto.test.ts",
     "test:tolov": "node -r ts-node/register tests/tolov.test.ts",
     "test:xarid": "node -r ts-node/register tests/xarid.test.ts",
+    "test:taminot": "node -r ts-node/register tests/taminot.test.ts",
     "test:tasdiqlash": "node -r ts-node/register tests/tasdiqlash.test.ts",
     "test:mijozlar": "node -r ts-node/register tests/mijozlar.test.ts",
     "test:hr": "node -r ts-node/register tests/hr.test.ts",
