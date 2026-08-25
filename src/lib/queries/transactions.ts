@@ -86,6 +86,10 @@ export async function listTransactions(params: TransactionListParams) {
         category: true,
         user: { select: { id: true, ism: true } },
         account: { select: { id: true, nomi: true, turi: true } },
+        // MANBA: CRM — yozuv CRM buyurtmasidan ko'chirilganmi. Ro'yxatda
+        // belgi sifatida ko'rsatiladi; boshqa hech nima o'zgarmaydi
+        // (yozuv oddiy kirim kabi tahrirlanadi va hisobotlarga kiradi).
+        crmBuyurtma: { select: { id: true, nomi: true } },
       },
       orderBy: [{ sana: "desc" }, { createdAt: "desc" }],
       skip: (page - 1) * pageSize,

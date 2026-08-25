@@ -115,7 +115,15 @@ export function TransactionList({
                 >
                   {formatSomLabel(t.summa)}
                 </td>
-                <td className="px-4 py-3 text-muted max-w-[200px] truncate">{t.izoh ?? "—"}</td>
+                <td className="px-4 py-3 text-muted max-w-[200px] truncate">
+                  {t.izoh ?? "—"}
+                  {/* MANBA: CRM — yozuv CRM buyurtmasidan ko'chirilgan. */}
+                  {t.crmBuyurtma && (
+                    <span className="ml-1.5 align-middle">
+                      <Badge tone="info">CRM</Badge>
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-muted">{t.user.ism}</td>
                 <td className="px-4 py-3 text-right whitespace-nowrap">
                   {canModify(t) && (
@@ -154,7 +162,8 @@ export function TransactionList({
               summa: t.summa,
               // Mobil lentada to'lov bo'limi kategoriya yonida ko'rinadi.
               categoryNomi: `${tolovBelgi(t)} · ${t.category.nomi}`,
-              izoh: t.izoh,
+              // Mobil lentada "CRM" manbasi izoh boshida ko'rinadi.
+              izoh: t.crmBuyurtma ? `CRM · ${t.izoh ?? t.crmBuyurtma.nomi}` : t.izoh,
               userIsm: t.user.ism,
               miqdorGr: t.miqdorGr,
               kgNarxi: t.kgNarxi,

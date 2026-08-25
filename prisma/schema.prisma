@@ -478,6 +478,9 @@ model Category {
   approvalRules    ApprovalRule[]
   approvalRequests ApprovalRequest[]
   debts            Debt[]
+  /// CRM kunlik buyurtmalari — KATEGORIYA MANBAI BITTA: CRM alohida
+  /// kategoriya tizimi qurmaydi, aynan shu jadvaldan foydalanadi.
+  deals            Deal[]
 
   @@unique([nomi, turi, businessId])
   @@index([turi, isActive])
@@ -524,6 +527,11 @@ model Transaction {
   /// HR: shu tranzaksiya oylik yoki avans to'lovi bo'lsa — o'sha yozuv.
   payroll         Payroll?         @relation("OylikChiqimi")
   advance         PayrollAdvance?  @relation("AvansChiqimi")
+  /// CRM: shu kirim CRM buyurtmasidan ko'chirilgan bo'lsa — o'sha buyurtma.
+  /// Bog'lanish BIR-BIRGA (Deal.transactionId UNIQUE), ya'ni bitta kirim
+  /// ortida ko'pi bilan bitta buyurtma turadi. Kirim ro'yxatidagi
+  /// "Manba: CRM" belgisi shu bog'lanishdan o'qiladi.
+  crmBuyurtma     Deal?            @relation("CrmBuyurtmaKirimi")
 
   // KOMPOZIT INDEKSLAR: SQLite bitta so'rovda bitta indeks ishlatadi, shuning uchun
   // 6 ta bitta-ustunli indeks deyarli foydasiz edi (va har yozuvni sekinlashtirardi).
@@ -995,28 +1003,48 @@ model Stage {
 /// Bitim. Alohida "Lead" modeli YO'Q — birinchi bosqichdagi bitim = lead
 /// (sodda UX, konvertatsiya bosqichi degan ortiqcha qadam yo'q).
 model Deal {
-  id            String     @id @default(cuid())
+  id            String       @id @default(cuid())
   businessId    String
-  business      Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business      Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
   contactId     String?
-  contact       Contact?   @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contact       Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
   nomi          String
-  summa         Int        @default(0)
+  summa         Int          @default(0)
+  /// KUNLIK BUYURTMA: buyurtma kategoriyasi — KIRIM modulidagi AYNAN o'sha
+  /// `Category`. CRM uchun alohida kategoriya tizimi YO'Q: buyurtma kirimga
+  /// ko'chirilganda tranzaksiya shu kategoriya bilan yoziladi, shuning uchun
+  /// Kirimdagi kategoriya filtri CRM yozuvlarini o'zi qamrab oladi.
+  /// null — eski bitimlar (kategoriyasiz yaratilgan).
+  categoryId    String?
+  category      Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   stageId       String
-  stage         Stage      @relation(fields: [stageId], references: [id], onDelete: Restrict)
-  masulId       String // mas'ul foydalanuvchi
+  stage         Stage        @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  masulId       String // mas'ul xodim (foydalanuvchi)
   manba         String? // "qolda" | "telegram" | ...
+  /// Buyurtma sanasi (UTC-yarim tun, `lib/date.ts`). "Bugungi buyurtmalar"
+  /// paneli va kategoriya statistikasi shu maydon bo'yicha kesiladi.
+  /// `muddat` bilan ARALASHTIRILMAYDI: `muddat` — kelishilgan muddat,
+  /// `sana` — buyurtma qabul qilingan kun.
+  sana          DateTime?
   muddat        DateTime?
   yopilganAt    DateTime?
-  transactionId String? // Yutildi -> yozilgan kirim tranzaksiyasi
+  /// Shu buyurtmadan yozilgan KIRIM tranzaksiyasi.
+  /// UNIQUE — bitta buyurtma hech qachon ikkita kirim yarata olmaydi.
+  /// Himoya BAZA darajasida: frontend holatiga ham, faqat kod tekshiruviga
+  /// ham tayanilmaydi (parallel ikki so'rovda ikkinchisi cheklovga uriladi).
+  transactionId String?      @unique
+  transaction   Transaction? @relation("CrmBuyurtmaKirimi", fields: [transactionId], references: [id], onDelete: SetNull)
   izoh          String?
-  createdAt     DateTime   @default(now())
+  createdAt     DateTime     @default(now())
   deletedAt     DateTime?
   activities    Activity[]
   tasks         Task[]
 
   @@index([businessId, stageId])
   @@index([businessId, masulId])
+  /// "Bugungi buyurtmalar" va kategoriya statistikasi — eng ko'p o'qiladigan kesim.
+  @@index([businessId, sana])
+  @@index([categoryId])
 }
 
 // ==== Vazifalar moduli (BOS-3) ====
