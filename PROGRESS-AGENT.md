@@ -4939,3 +4939,29 @@ Test: `npm run test:ai` (28 ta — aniqlik, RBAC, tenant, prompt injection,
 hallutsinatsiya, suhbat izolyatsiyasi) va `npm run test:ai-e2e` (8 ta —
 1440/1280/768/390/375 da gorizontal siljish yo'q, kompozer ko'rinadi,
 pastki menyu bilan ustma-ust tushmaydi). `npm run build` ✅.
+
+### 2026-08-25 — Kassir/sotuvchi bosh sahifasi yiqilishi (tugadi)
+
+**Muammo (production, foydalanuvchi skrinshoti):** kassir yoki sotuvchi
+tizimga kirganda `/app` sahifasi "Tizimda vaqtincha nosozlik" xato ekraniga
+tushardi. Direktor/administratorda hammasi ishlagani uchun sinovlarda
+sezilmagan.
+
+**Ildiz sabab:** `src/app/app/page.tsx` da kassir/sotuvchi tarmog'i
+`runWithTenant(...)` callback ichidan `<XodimEkrani/>` ni JSX sifatida
+qaytarardi. React async server komponentni callback TUGAGANDAN KEYIN render
+qiladi — AsyncLocalStorage konteksti allaqachon yopilgan, `XodimEkrani`
+ichidagi tenant-scoped `prisma` so'rovlari "Tenant konteksti yo'q" bilan
+yiqilardi. Panel redizayni (fc98003) kassir mantiqini alohida async
+komponentga ajratganda kirib qolgan regressiya.
+
+**Tuzatish:** JSX o'rniga to'g'ridan-to'g'ri chaqiruv —
+`return await XodimEkrani({ session })`. Shunda barcha so'rovlar kontekst
+ichida bajariladi. Boshqa sahifa komponentlari tekshirildi: faqat
+`XodimEkrani` o'zi ma'lumot yuklaydi, qolganlari props orqali oladi —
+xato boshqa joyda takrorlanmaydi.
+
+**Tekshiruv:** production build + haqiqiy brauzerda (390px, iPhone UA)
+kassir bilan `/app`, tranzaksiyalar, kunlik, pos, sotuv, qarzlar, crm,
+vazifalar — hammasi ochiladi; admin paneli o'zgarmagan. `npm run build` ✅,
+`test:isolation` (22) ✅, `test:panel` (22) ✅, `test:visibility` (10) ✅.
