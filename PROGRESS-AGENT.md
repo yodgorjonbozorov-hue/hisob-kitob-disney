@@ -4207,6 +4207,132 @@ YO'Q, JS xatosi yo'q, oqimlar (kirim/chiqim qo'shish, filtr varag'i,
 tafsilot, `⋯` menyu, o'chirish tasdig'i, Import/Export menyusi) ishlaydi.
 ---
 
+## Bizneslar sahifasi — zamonaviy business management (2026-08-25)
+
+Branch: `claude/modernize-bizneslar-page-jtopkl`. **Sxema o'zgarmadi,
+migratsiya yo'q.**
+
+### Eski holat
+
+`/app/admin/bizneslar` texnik jadval edi: 7 ustun (Rejim, Ombor, Kassa,
+Kategoriyalar…) va har qatorda 6 ta yonma-yon amal — "Omborni yoqish",
+"Kassani yoqish", "Avto rejim", "Nofaollashtirish", "Tozalash",
+"O'chirish". Qaytarib bo'lmaydigan ikki amal kundalik amallar bilan bir
+qatorda turardi. Qidiruv, filtr, saralash va tafsilot sahifasi yo'q edi.
+Mobil ko'rinish `Jadval` komponentining umumiy kartochkasi edi.
+
+### Yangi tuzilma
+
+- Ro'yxat: xulosa (jami/faol/nofaol/tranzaksiya) → qidiruv + filtr +
+  saralash → jadval (≥1024px) yoki kartochkalar (<1024px). Qatorda faqat
+  **[Ochish]** va **[•••]**.
+- `•••` ichida: Sozlamalar, Modullar, Xodimlar, Kassa sozlamalari, Ombor
+  sozlamalari, Faollashtirish/Nofaollashtirish va (faqat OWNER) "Xavfli
+  zona…" havolasi. Tozalash/O'chirishning O'ZI menyuda YO'Q.
+- Tafsilot `/app/admin/bizneslar/[id]` — bo'limlar: Umumiy, Modullar,
+  Xodimlar, Kassa, Ombor, Xavfsizlik. Desktopda tab, mobilda navigatsiya
+  kartochkalari.
+- Yangi biznes — 5 qadamli sozlash oqimi (nomi/faoliyat → modullar →
+  kassa → xodimlar → tayyor).
+
+### Backend (yangi xizmat qatlami)
+
+`lib/services/biznesRoyxat.ts` (agregatsiya, N+1 yo'q),
+`biznesTafsilot.ts`, `biznesYaratish.ts` (takroriy yuborish to'sig'i,
+kassa uzilsa biznes ortga qaytariladi), `biznesOchirish.ts` (OWNER + nom
+tasdig'i + bo'sh biznes sharti). `lib/modules/biznesModullari.ts` — biznes
+uchun amalda ishlaydigan modullar (tenant moduli ∩ biznes bayrog'i),
+`computeNav` bilan bir xil qoida.
+
+Kuchaytirilgan qoidalar: biznesni o'chirish `requireManager` dan
+**OWNER**ga toraytirildi va endi so'rov tanasida nom tasdig'ini talab
+qiladi; PATCH da `magazin` faqat `omborli` bilan yoqiladi (ilgari bu
+qoida faqat UI'da edi).
+
+### Yo'l-yo'lakay topilgan maket xatosi
+
+`app/layout.tsx` konteyneri `md:flex-row` edi, yon panel esa `lg:flex`.
+768–1023px oraligida maket qator bo'lib qolar, lekin yon panel o'rniga
+MobileNav va BottomNav yonma-yon turib butun enni yeb qo'yardi — `main`
+bor-yo'g'i **64px** ga siqilardi va bu BARCHA sahifalarga tegishli edi.
+Konteyner `lg:flex-row` ga o'tkazildi. (Xuddi shu xatoni Kirim/Chiqim
+redesign sessiyasi ham topgan — merge paytida ikkalasi bir xil o'zgarish
+bo'lib chiqdi, faqat izoh matni farq qildi.)
+
+### Test
+
+`npm run test:bizneslar` (21 ta — izolyatsiya, IDOR, qidiruv/filtr/
+saralash, yaratish va dublikat, tarif chegarasi, nofaollashtirish,
+o'chirish huquqi) va `npm run test:bizneslar-brauzer` (10 ta — 1440/1280/
+768/390/375px, gorizontal siljish yo'q, `•••` tarkibi, xavfli zona,
+wizard). Regressiya: isolation, kop-biznes, modules, tozalash, kassa,
+magazin, crm, audit, signup, billing, visibility, backup, pro,
+soft-delete, atomik va smoke — hammasi yashil.
+
+---
+
+## 2026-08-25 — OMBOR VA TA'MINOT BITTA MODULDA
+
+Ombor uch joyga bo'lingan edi: **Ombor** (jadval), **Xarid** (uch qadamli
+buyurtma) va **Ta'minotchilar** (reyestr). "Tovar keldi" deyish uchun
+foydalanuvchi avval qaysi bo'limga borishni, keyin qoralama → tasdiqlash →
+qabul qilish zanjirini o'tishi kerak edi. Gul do'koni yoki kichik magazin
+uchun bu ortiqcha: tovar allaqachon kelgan, uni faqat yozib qo'yish kerak.
+
+### Nima o'zgardi
+
+- Yon panelda faqat **Ombor** qoldi. `XARID` moduli o'chirilmadi —
+  navigatsiyasi bo'shatildi (`registry.ts`), sahifalari yangi manzilga
+  yo'naltirildi (`/app/xarid` → `/app/ombor?tab=taminotlar`).
+- Ombor uch tabga bo'lindi: **Mahsulotlar | Ta'minotlar | Inventarizatsiya**.
+  Tab URL'da (`?tab=`) — server faqat ochiq tab ma'lumotini yuklaydi.
+- Asosiy amal bitta: **"+ Tovar keldi"** — 4 qadamli oqim (kimdan → qanday
+  to'landi → nima keldi → saqlash). Ikkinchi darajali amallar `•••` menyusida,
+  telefonda pastki o'ngdagi 📦 tugmasi ostida.
+- Mahsulotlar POS uslubidagi **rasmli kartochka gridida** (telefonda 2 ustun,
+  desktopda 4–5). Rasm mavjud saqlagichga (`lib/storage/driver.ts`) yuklanadi.
+- AVTO (olib-sotar) rejimi ESKI ko'rinishida qoldi — `/app/ombor/avtopark`.
+  U yerda bitta yozuv = bitta mashina, kartochka gridi ham, miqdor kiritish
+  ham ma'nosiz.
+
+### Hisob qoidasi — bitta manba
+
+Ombor va pul yozuvlari **faqat** `qabulYozuvlariTx` da (`services/xarid.ts`).
+Yangi bir qadamli oqim ham, eski uch qadamli qabul ham o'shani chaqiradi —
+ikki oqim hech qachon ikki xil natija bera olmaydi.
+
+- **Naqd/Karta** → chiqim tranzaksiya (karta uchun kassa aniq tanlanadi:
+  `createTransactionTx` ning kassasiz tarmog'i birinchi faol kassani olardi
+  va pulni naqd kassadan chiqarib yuborardi).
+- **Qarzga** → "beriladigan" `Debt`; pul umuman qimirlamaydi, faqat
+  "Men qarzdorman" oshadi.
+- Tannarx qoidasi O'ZGARMADI (oxirgi kelgan narx snapshot) — yangi hisob
+  usuli ATAYLAB kiritilmadi.
+
+### Takror saqlashdan himoya
+
+`PurchaseOrder.idempotencyKey` + `@@unique([businessId, idempotencyKey])`.
+Frontend oqim ochilganda bir marta kalit yaratadi; ikkinchi so'rov bazada
+to'xtaydi va xizmat MAVJUD yozuvni qaytaradi (xato emas). Faqat ilova
+darajasidagi tekshiruv yetarli emas: parallel ikki so'rov ikkalasi ham
+"hali yo'q" deb ko'rardi.
+
+### Bekor qilish — teskari yozuvlar
+
+`taminotBekor`: qoldiq qaytariladi + `StockAdjustment` (tarix qayta
+yozilmaydi), qarz o'chiriladi, chiqim yumshoq o'chiriladi. Tovarning bir
+qismi sotilgan yoki qarz bo'yicha to'lov qilingan bo'lsa — RAD ETILADI.
+
+### Ishlash
+
+Qidiruv va sahifalash SERVER tomonda (`lib/queries/ombor.ts`). 1200 mahsulotli
+bazada Ombor sahifasi telefonda ~0,9 s, qidiruv ~1,2 s da ochiladi.
+
+Migratsiya: `20260825120000_taminot_idempotentlik`.
+Test: `npm run test:taminot` (18 ta).
+
+---
+
 ## 2026-08-25 · Kassalar sahifasi — pul nazorati markazi
 
 Branch: `claude/kassalar-cash-control-center-ayo90h`. Faqat `/app/kassa`

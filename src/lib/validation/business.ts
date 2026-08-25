@@ -26,6 +26,13 @@ export const createBusinessSchema = z.object({
    * Yoqilganda biznesning har faol xodimiga kassa ochiladi (route'da).
    */
   shaxsiyKassa: z.boolean().optional(),
+  /**
+   * Boshlang'ich kassa nomi (setup wizard'ning "Kassa" qadami). Berilmasa
+   * standart nom ishlatiladi — har biznesda kamida bitta kassa BO'LISHI
+   * SHART, shuning uchun bu maydon kassani ixtiyoriy qilmaydi, faqat nomini
+   * so'raydi.
+   */
+  kassaNomi: z.string().max(60).optional(),
 });
 
 export const updateBusinessSchema = z.object({

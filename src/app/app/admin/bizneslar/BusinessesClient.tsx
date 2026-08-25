@@ -1,186 +1,199 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Building2, Plus } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
-import { Jadval, type Ustun } from "@/components/ui/Jadval";
-import { isAvto } from "@/lib/biznesTuri";
-import { YangiBiznesModal } from "./YangiBiznesModal";
-import { TozalashModal } from "./TozalashModal";
-import type { BusinessDTO, YangiBiznes } from "./turlar";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { useToast } from "@/components/ui/Toast";
+import { Asboblar } from "./Asboblar";
+import { BiznesJadval } from "./BiznesJadval";
+import { BiznesKartalar } from "./BiznesKartalar";
+import { HolatModal } from "./HolatModal";
+import { Xulosa } from "./Xulosa";
+import { YangiBiznesWizard } from "./YangiBiznesWizard";
+import { royxatniTayyorla, type BusinessDTO, type Filtr, type Saralash } from "./turlar";
 
-export function BusinessesClient({ initialBusinesses }: { initialBusinesses: BusinessDTO[] }) {
+/** Bir sahifada ko'rsatiladigan biznes soni — qolgani "Ko'proq" bilan ochiladi. */
+const SAHIFA = 30;
+
+export function BusinessesClient({
+  initialBusinesses,
+  rol,
+  tarifModullari,
+  yoqilganModullar,
+}: {
+  initialBusinesses: BusinessDTO[];
+  rol: string;
+  tarifModullari: string[];
+  yoqilganModullar: string[];
+}) {
   const router = useRouter();
-  const [businesses, setBusinesses] = useState(initialBusinesses);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [tozalash, setTozalash] = useState<BusinessDTO | null>(null);
-
-  /** PATCH yuborib, javobdagi maydonlarni jadvalga qaytaradi. */
-  async function patch(b: BusinessDTO, data: Record<string, unknown>) {
-    const res = await fetch(`/api/businesses/${b.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-      alert((await res.json()).error ?? "Saqlab bo'lmadi");
-      return;
-    }
-    const updated: BusinessDTO = await res.json();
-    setBusinesses((prev) =>
-      prev.map((x) =>
-        x.id === updated.id
-          ? {
-              ...x,
-              isActive: updated.isActive,
-              turi: updated.turi,
-              omborli: updated.omborli,
-              magazin: updated.magazin,
-            }
-          : x
-      )
-    );
-    router.refresh();
+  const { toast } = useToast();
+  const [bizneslar, setBizneslar] = useState(initialBusinesses);
+  // `router.refresh()` dan keyin server yangi ro'yxat beradi — mahalliy holat
+  // unga ergashadi (React'ning "prop o'zgarganda holatni moslash" uslubi).
+  const [oxirgiProp, setOxirgiProp] = useState(initialBusinesses);
+  if (oxirgiProp !== initialBusinesses) {
+    setOxirgiProp(initialBusinesses);
+    setBizneslar(initialBusinesses);
   }
+  const [qidiruv, setQidiruv] = useState("");
+  const [filtr, setFiltr] = useState<Filtr>("hammasi");
+  const [saralash, setSaralash] = useState<Saralash>("faollik");
+  const [limit, setLimit] = useState(SAHIFA);
+  const [wizard, setWizard] = useState(false);
+  const [holat, setHolat] = useState<BusinessDTO | null>(null);
+  const [band, setBand] = useState(false);
 
-  /** Biznes rejimi: umumiy ombor ↔ avto (olib-sotar). */
-  function toggleTuri(b: BusinessDTO) {
-    return patch(b, { turi: isAvto(b.turi) ? "umumiy" : "avto" });
-  }
+  const owner = rol === "OWNER";
 
-  /**
-   * Ombor va sotuvni shu bizneste yoqish/o'chirish. OMBOR moduli tenantda
-   * yoqilgan bo'lsa ham, nav'da "Ombor"/"Sotuv" faqat shu bayroq bilan chiqadi.
-   */
-  function toggleOmbor(b: BusinessDTO) {
-    if (isAvto(b.turi)) {
-      alert("Avto rejimi ombor tizimisiz ishlamaydi. Avval rejimni \"Umumiy\" ga o'tkazing.");
-      return;
-    }
-    if (b.omborli && !confirm(`"${b.nomi}" da ombor va sotuv bo'limlari yopilsinmi?\n\nMahsulot va sotuv ma'lumotlari o'chmaydi — qayta yoqsangiz joyida bo'ladi.`)) {
-      return;
-    }
-    // Ombor o'chirilsa kassa ham ma'nosini yo'qotadi (mahsulot va qoldiq
-    // ombordan keladi) — shu bois birga o'chiriladi.
-    return patch(b, { omborli: !b.omborli, ...(b.omborli ? { magazin: false } : {}) });
-  }
+  const sonlar = useMemo(
+    () => ({
+      hammasi: bizneslar.length,
+      faol: bizneslar.filter((b) => b.isActive).length,
+      nofaol: bizneslar.filter((b) => !b.isActive).length,
+    }),
+    [bizneslar]
+  );
+  const jamiTranzaksiya = useMemo(
+    () => bizneslar.reduce((s, b) => s + b.tranzaksiyalar, 0),
+    [bizneslar]
+  );
+  const korinadigan = useMemo(
+    () => royxatniTayyorla(bizneslar, { qidiruv, filtr, saralash }),
+    [bizneslar, qidiruv, filtr, saralash]
+  );
+  const kesilgan = korinadigan.slice(0, limit);
 
-  /**
-   * Do'kon kassasini (POS) shu bizneste yoqish/o'chirish.
-   *
-   * O'chirilganda MA'LUMOT O'CHMAYDI: cheklar, sotuvlar, mahsulot kodlari va
-   * qoldiqlar joyida qoladi — faqat kassa bo'limi ko'rinmay qoladi.
-   */
-  function toggleMagazin(b: BusinessDTO) {
-    if (!b.omborli && !b.magazin) {
-      alert("Kassa ombor ustida ishlaydi. Avval shu bizneste omborni yoqing.");
-      return;
-    }
-    if (
-      b.magazin &&
-      !confirm(
-        `"${b.nomi}" da kassa (POS) bo'limi yopilsinmi?\n\n` +
-          "Cheklar, sotuvlar va mahsulot kodlari o'chmaydi — qayta yoqsangiz joyida bo'ladi."
-      )
-    ) {
-      return;
-    }
-    return patch(b, { magazin: !b.magazin });
-  }
-
-  async function deleteBusiness(b: BusinessDTO) {
-    if (!confirm(`"${b.nomi}" biznesini butunlay o'chirasizmi?\n\nFaqat BO'SH biznes o'chiriladi (yozuv/mahsulot/foydalanuvchi yo'q). Ma'lumot bor bo'lsa — o'chmaydi.`)) return;
-    const res = await fetch(`/api/businesses/${b.id}`, { method: "DELETE" });
-    if (res.ok) {
-      setBusinesses((prev) => prev.filter((x) => x.id !== b.id));
+  /** Faol/nofaol holatini almashtiradi (ma'lumot o'chmaydi). */
+  async function holatniAlmashtir(b: BusinessDTO) {
+    setBand(true);
+    try {
+      const res = await fetch(`/api/businesses/${b.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: !b.isActive }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ message: data.error ?? "Saqlab bo'lmadi", tone: "error" });
+        return;
+      }
+      setBizneslar((prev) =>
+        prev.map((x) => (x.id === b.id ? { ...x, isActive: data.isActive } : x))
+      );
+      setHolat(null);
+      toast({
+        message: data.isActive ? `"${b.nomi}" faollashtirildi` : `"${b.nomi}" nofaollashtirildi`,
+        tone: "success",
+      });
       router.refresh();
-    } else {
-      alert((await res.json()).error ?? "O'chirib bo'lmadi");
+    } catch {
+      toast({ message: "Serverga ulanib bo'lmadi", tone: "error" });
+    } finally {
+      setBand(false);
     }
   }
 
-  function handleCreated(b: YangiBiznes) {
-    setBusinesses((prev) => [...prev, { ...b, kategoriyalar: 0, tranzaksiyalar: 0 }]);
-    setModalOpen(false);
-    router.refresh();
-  }
-
-  // Ustun ta'rifi BITTA — desktop jadval ham, mobil kartochka ham shundan.
-  const ustunlar: Ustun<BusinessDTO>[] = [
-    { kalit: "nomi", sarlavha: "Nomi", katak: (b) => b.nomi, className: "font-medium" },
-    {
-      kalit: "rejim",
-      sarlavha: "Rejim",
-      katak: (b) => (
-        <Badge tone={isAvto(b.turi) ? "kirim" : "neutral"}>
-          {isAvto(b.turi) ? "Avto" : "Umumiy"}
-        </Badge>
-      ),
-    },
-    {
-      kalit: "ombor",
-      sarlavha: "Ombor",
-      katak: (b) => <Badge tone={b.omborli ? "kirim" : "neutral"}>{b.omborli ? "Yoqiq" : "O'chiq"}</Badge>,
-    },
-    {
-      kalit: "kassa",
-      sarlavha: "Kassa",
-      katak: (b) => <Badge tone={b.magazin ? "kirim" : "neutral"}>{b.magazin ? "Yoqiq" : "O'chiq"}</Badge>,
-    },
-    { kalit: "kategoriyalar", sarlavha: "Kategoriyalar", raqam: true, katak: (b) => b.kategoriyalar },
-    { kalit: "tranzaksiyalar", sarlavha: "Tranzaksiyalar", raqam: true, katak: (b) => b.tranzaksiyalar },
-    {
-      kalit: "holati",
-      sarlavha: "Holati",
-      katak: (b) => <Badge tone={b.isActive ? "kirim" : "neutral"}>{b.isActive ? "Faol" : "Nofaol"}</Badge>,
-    },
-  ];
+  const boshRoyxat = bizneslar.length === 0;
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button onClick={() => setModalOpen(true)}>+ Yangi biznes</Button>
-      </div>
+    <div className="space-y-5">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-fg">Bizneslar</h1>
+          <p className="text-sm text-muted mt-1">Barcha bizneslaringizni bir joydan boshqaring</p>
+        </div>
+        <Button onClick={() => setWizard(true)} className="shrink-0 min-h-[44px]">
+          <Plus size={16} aria-hidden />
+          <span className="hidden sm:inline">Yangi biznes</span>
+          <span className="sm:hidden">Yangi</span>
+        </Button>
+      </header>
 
-      <Card>
-        <Jadval
-          ustunlar={ustunlar}
-          qatorlar={businesses}
-          kalit={(b) => b.id}
-          minKenglik="min-w-[60rem]"
-          amallar={(b) => [
-            { label: b.omborli ? "Omborni o'chirish" : "Omborni yoqish", onClick: () => void toggleOmbor(b), tur: "asosiy" },
-            { label: b.magazin ? "Kassani o'chirish" : "Kassani yoqish", onClick: () => void toggleMagazin(b), tur: "asosiy" },
-            { label: isAvto(b.turi) ? "Umumiy rejim" : "Avto rejim", onClick: () => void toggleTuri(b), tur: "asosiy" },
-            {
-              label: b.isActive ? "Nofaollashtirish" : "Faollashtirish",
-              onClick: () => void patch(b, { isActive: !b.isActive }),
-              tur: "ijobiy",
-            },
-            { label: "Tozalash", onClick: () => setTozalash(b), tur: "ogoh" },
-            { label: "O'chirish", onClick: () => void deleteBusiness(b), tur: "xavf" },
-          ]}
+      {boshRoyxat ? (
+        <Card>
+          <EmptyState
+            icon={<Building2 size={22} aria-hidden />}
+            title="Birinchi biznesingizni yarating"
+            description="Balansa'da kirim, chiqim, kassa va boshqa jarayonlarni boshqarishni boshlang."
+            action={<Button onClick={() => setWizard(true)}>+ Biznes yaratish</Button>}
+          />
+        </Card>
+      ) : (
+        <>
+          <Xulosa
+            jami={sonlar.hammasi}
+            faol={sonlar.faol}
+            nofaol={sonlar.nofaol}
+            tranzaksiyalar={jamiTranzaksiya}
+          />
+
+          <Asboblar
+            qidiruv={qidiruv}
+            filtr={filtr}
+            saralash={saralash}
+            sonlar={sonlar}
+            onQidiruv={(v) => {
+              setQidiruv(v);
+              setLimit(SAHIFA);
+            }}
+            onFiltr={(v) => {
+              setFiltr(v);
+              setLimit(SAHIFA);
+            }}
+            onSaralash={setSaralash}
+          />
+
+          {korinadigan.length === 0 ? (
+            <Card>
+              <EmptyState
+                title="Hech narsa topilmadi"
+                description="Qidiruv so'zini yoki filtrni o'zgartirib ko'ring."
+              />
+            </Card>
+          ) : (
+            <>
+              <Card className="p-0 sm:p-0 lg:p-5 border-0 lg:border shadow-none lg:shadow-card bg-transparent lg:bg-surface">
+                <BiznesJadval bizneslar={kesilgan} owner={owner} onHolat={setHolat} />
+                <BiznesKartalar bizneslar={kesilgan} owner={owner} onHolat={setHolat} />
+              </Card>
+
+              {korinadigan.length > kesilgan.length && (
+                <div className="flex justify-center">
+                  <Button variant="secondary" onClick={() => setLimit((n) => n + SAHIFA)}>
+                    Yana {Math.min(SAHIFA, korinadigan.length - kesilgan.length)} ta ko&apos;rsatish
+                    <span className="text-faint">
+                      ({kesilgan.length}/{korinadigan.length})
+                    </span>
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+        </>
+      )}
+
+      {wizard && (
+        <YangiBiznesWizard
+          tarifModullari={tarifModullari}
+          yoqilganModullar={yoqilganModullar}
+          onClose={() => setWizard(false)}
+          // Yaratilgach oyna YOPILMAYDI: wizard'ning oxirgi qadamlari
+          // (xodimlar, "Biznes tayyor") shundan keyin ko'rsatiladi. Ro'yxat
+          // esa fonda yangilanadi.
+          onCreated={() => router.refresh()}
         />
-      </Card>
+      )}
 
-      <p className="text-xs text-faint">
-        &quot;Ombor&quot; ustuni — shu bizneste mahsulot qoldig&apos;i, sotuv va ombor kirimi yuritiladimi.
-        Menyuda &quot;Ombor&quot; va &quot;Sotuv&quot; ko&apos;rinishi uchun Sozlamalar → Modullar da
-        &quot;Ombor va sotuv&quot; moduli ham yoqilgan bo&apos;lishi kerak.
-      </p>
-
-      {modalOpen && <YangiBiznesModal onClose={() => setModalOpen(false)} onCreated={handleCreated} />}
-      {tozalash && (
-        <TozalashModal
-          biznes={tozalash}
-          onClose={() => setTozalash(null)}
-          onDone={(xabar) => {
-            setTozalash(null);
-            alert(xabar);
-            router.refresh();
-          }}
+      {holat && (
+        <HolatModal
+          biznes={holat}
+          band={band}
+          onClose={() => setHolat(null)}
+          onTasdiq={() => void holatniAlmashtir(holat)}
         />
       )}
     </div>

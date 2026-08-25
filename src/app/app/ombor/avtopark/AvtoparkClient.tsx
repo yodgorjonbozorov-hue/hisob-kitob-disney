@@ -10,12 +10,12 @@ import { Jadval, type Ustun } from "@/components/ui/Jadval";
 import { formatSom, formatSomLabel, parseSomInput } from "@/lib/format";
 import { omborMatn, isAvto } from "@/lib/biznesTuri";
 import type { ProductAdminDTO, OmborStats } from "@/lib/queries/inventory";
-import { TogrilashModal } from "./TogrilashModal";
+import { TogrilashModal } from "../TogrilashModal";
 import Link from "next/link";
-import { ImportModal } from "./ImportModal";
+import { ImportModal } from "../ImportModal";
 import { BIRLIKLAR } from "@/lib/validation/inventory";
 
-export function OmborClient({
+export function AvtoparkClient({
   initialProducts,
   stats,
   biznesTuri = "umumiy",

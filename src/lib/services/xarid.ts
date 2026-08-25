@@ -98,7 +98,7 @@ export async function deleteSupplier(businessId: string, id: string) {
 // ---------------------------------------------------------------------------
 
 /** Satrlarni tekshiradi va jami summani hisoblaydi (tranzaksiya ichida). */
-async function satrlarniTayyorla(
+export async function satrlarniTayyorla(
   tx: BusinessTx,
   businessId: string,
   satrlar: CreateOrderInput["satrlar"]
@@ -196,22 +196,223 @@ export async function updateOrder(
   });
 }
 
+export interface QabulYozuvlariNatija {
+  jamiSumma: number;
+  tolangan: number;
+  transactionId: string | null;
+  transferId: string | null;
+  debtId: string | null;
+}
+
 /**
- * BUYURTMANI QABUL QILISH — modulning yuragi.
+ * QABUL YOZUVLARI — OMBOR VA PUL HARAKATINING YAGONA MANBASI.
+ *
+ * Bu funksiya tranzaksiya ICHIDA ishlaydi va ikki chaqiruvchisi bor:
+ *   - `qabulQilish` — oldindan tuzilgan buyurtmani qabul qilish (eski oqim);
+ *   - `taminotYarat` (lib/services/taminot.ts) — "Tovar keldi" bir qadamli oqim.
+ *
+ * Ataylab BITTA joyda: aks holda ikki oqim ikki xil hisob qoidasi bilan
+ * ishlab, bir xil ta'minot ikki xil natija berardi.
  *
  * Bitta atomik amalda:
  *   1. har satr uchun `StockEntry` (ombor qoldig'i oshadi, tannarx snapshot);
- *   2. `Product.kelganNarx` yangi tannarxga yangilanadi;
+ *   2. `Product.kelganNarx` yangi tannarxga yangilanadi (mavjud qoida —
+ *      oxirgi xarid narxi tannarx bo'ladi; sotuvda `Sale.tannarx` shundan
+ *      snapshot olinadi va ombor qiymati ham shu narxdan hisoblanadi);
  *   3. pul harakati:
  *      - TASHQI ta'minotchi: to'langan qism chiqim tranzaksiya;
  *      - ICHKI ta'minotchi (supplier.userId, PRO): to'langan qism xaridor
  *        kassasidan ta'minotchi-userning SHAXSIY kassasiga transfer — pul
  *        biznes ichida qolgani uchun bu chiqim EMAS (AccountTransfer falsafasi);
- *      - to'lanmagan qoldiq — "beriladigan" qarz (keyin DebtPayment bilan yopiladi).
- *   `tolanganSumma` berilmasa eski xatti-harakat: naqd → to'liq, qarz → 0.
+ *      - to'lanmagan qoldiq — "beriladigan" qarz ("Men qarzdorman" bo'limi).
+ */
+export async function qabulYozuvlariTx(
+  tx: BusinessTx,
+  params: {
+    businessId: string;
+    orderId: string;
+    userId: string;
+    tenantId: string;
+    /** "YYYY-MM-DD" — qabul (ta'minot) sanasi. */
+    sana: string;
+    supplierId: string;
+    tolovTuri: string;
+    /** Berilmasa eski xatti-harakat: naqd → to'liq, qarz → 0. */
+    tolanganSumma?: number | null;
+    /** To'lov qaysi kassadan chiqadi. */
+    accountId?: string | null;
+    /**
+     * TO'LOV USULI — "Tovar keldi" oqimidagi 💵 Naqd / 💳 Click tanlovi.
+     *
+     * Berilmasa (eski xarid oqimi) tranzaksiyaga `tolovTuri` YOZILMAYDI va
+     * usul avvalgidek kassa turidan chiqariladi (`lib/tolovBolimi.ts`) —
+     * ya'ni mavjud yozuvlarning tasnifi bir bitga ham o'zgarmaydi.
+     */
+    tolovUsuli?: "naqd" | "karta" | null;
+    /** Chiqim tranzaksiya izohi uchun qo'shimcha belgi. */
+    izohBelgisi?: string | null;
+  }
+): Promise<QabulYozuvlariNatija> {
+  const satrlar = await tx.purchaseOrderItem.findMany({
+    where: { orderId: params.orderId, businessId: params.businessId },
+  });
+  if (satrlar.length === 0) throw new BadRequestError("Buyurtmada satr yo'q");
+
+  const supplier = await tx.supplier.findFirst({
+    where: { id: params.supplierId, businessId: params.businessId },
+    select: { nomi: true, userId: true },
+  });
+
+  let jamiSumma = 0;
+  for (const s of satrlar) {
+    jamiSumma += s.jamiSumma;
+
+    // Ombor kirimi + tannarx snapshot.
+    await tx.stockEntry.create({
+      data: {
+        businessId: params.businessId,
+        productId: s.productId,
+        miqdor: s.miqdor,
+        birlikNarx: s.birlikNarx,
+        userId: params.userId,
+        izoh: `Ta'minot: ${supplier?.nomi ?? "ta'minotchi"}`,
+      },
+    });
+    await tx.product.updateMany({
+      where: { id: s.productId, businessId: params.businessId },
+      data: { miqdor: { increment: s.miqdor }, kelganNarx: s.birlikNarx },
+    });
+  }
+
+  // To'langan qism: berilmasa eski xatti-harakat (naqd → to'liq, qarz → 0).
+  const tolangan = params.tolanganSumma ?? (params.tolovTuri === "naqd" ? jamiSumma : 0);
+  if (tolangan < 0 || tolangan > jamiSumma) {
+    throw new BadRequestError("To'langan summa 0 va jami summa oralig'ida bo'lishi kerak");
+  }
+
+  let transactionId: string | null = null;
+  let transferId: string | null = null;
+  let debtId: string | null = null;
+
+  // ICHKI ta'minotchi (tizim useri) — to'lov shaxsiy kassaga transfer.
+  const supplierUser = supplier?.userId
+    ? await tx.user.findFirst({
+        where: { id: supplier.userId, tenantId: params.tenantId, isActive: true },
+        select: { id: true, ism: true },
+      })
+    : null;
+
+  if (tolangan > 0) {
+    if (supplierUser) {
+      const xaridor = await tx.user.findFirst({
+        where: { id: params.userId, tenantId: params.tenantId, isActive: true },
+        select: { id: true, ism: true },
+      });
+      if (!xaridor) throw new ForbiddenError("Foydalanuvchi topilmadi");
+      if (xaridor.id === supplierUser.id) {
+        throw new BadRequestError("Ta'minotchi va xaridor bitta foydalanuvchi bo'lishi mumkin emas");
+      }
+
+      let fromAccountId: string;
+      if (params.accountId) {
+        const acc = await tx.account.findFirst({
+          where: { id: params.accountId, businessId: params.businessId, isActive: true },
+          select: { id: true },
+        });
+        if (!acc) throw new ForbiddenError("Kassa topilmadi yoki nofaol");
+        fromAccountId = acc.id;
+      } else {
+        fromAccountId = (await ensureUserKassaTx(tx, params.businessId, xaridor)).id;
+      }
+      const toAccount = await ensureUserKassaTx(tx, params.businessId, supplierUser);
+
+      const transfer = await tx.accountTransfer.create({
+        data: {
+          businessId: params.businessId,
+          fromAccountId,
+          toAccountId: toAccount.id,
+          summa: tolangan,
+          valyuta: "UZS",
+          sana: dateOnlyStringToUTCDate(params.sana),
+          izoh: `Xarid to'lovi: ${supplier?.nomi ?? ""}`.trim(),
+          userId: params.userId,
+          fromUserId: xaridor.id,
+          fromUserIsm: xaridor.ism,
+          toUserId: supplierUser.id,
+          toUserIsm: supplierUser.ism,
+          holat: "bajarildi",
+          relatedType: "purchaseOrder",
+          relatedId: params.orderId,
+        },
+      });
+      transferId = transfer.id;
+    } else {
+      // KASSA TANLASH. `createTransactionTx` ning kassasiz tarmog'i BIRINCHI
+      // faol kassani oladi — bu naqd uchun to'g'ri, Click/karta uchun esa
+      // pulni naqd kassadan chiqarib yuborardi. Shu bois karta to'lovida
+      // kassa shu yerda ANIQ tanlanadi (naqdsiz kassalar orasidan).
+      let accountId = params.accountId ?? null;
+      if (accountId) {
+        const acc = await tx.account.findFirst({
+          where: { id: accountId, businessId: params.businessId, isActive: true },
+          select: { id: true },
+        });
+        if (!acc) throw new ForbiddenError("Kassa topilmadi yoki nofaol");
+      } else if (params.tolovUsuli === "karta") {
+        const mos = await tx.account.findFirst({
+          where: { businessId: params.businessId, isActive: true, turi: { in: ["plastik", "bank"] } },
+          orderBy: [{ tartib: "asc" }, { createdAt: "asc" }],
+          select: { id: true },
+        });
+        if (!mos) {
+          throw new BadRequestError(
+            "Click/karta kassasi topilmadi — Sozlamalar → Kassalar bo'limida qo'shing"
+          );
+        }
+        accountId = mos.id;
+      }
+
+      const categoryId = await ensureCategoryTx(tx, params.businessId, XARID_KATEGORIYA, "chiqim");
+      const txn = await createTransactionTx(tx, params.userId, params.businessId, {
+        turi: "chiqim",
+        categoryId,
+        summa: tolangan,
+        sana: params.sana,
+        accountId: accountId ?? undefined,
+        // Eski oqimda berilmaydi — o'sha yozuvlar avvalgidek `null` qoladi.
+        tolovTuri: params.tolovUsuli ? (params.tolovUsuli === "karta" ? "click" : "naqd") : undefined,
+        izoh: `Xarid: ${supplier?.nomi ?? ""}${params.izohBelgisi ? ` — ${params.izohBelgisi}` : ""}`.trim(),
+      });
+      transactionId = txn.id;
+    }
+  }
+
+  // To'lanmagan qoldiq — ta'minotchiga qarz ("Men qarzdorman").
+  const qoldiq = jamiSumma - tolangan;
+  if (qoldiq > 0) {
+    const debt = await tx.debt.create({
+      data: {
+        businessId: params.businessId,
+        turi: "beriladigan",
+        mijozNomi: supplier?.nomi ?? "Ta'minotchi",
+        jamiSumma: qoldiq,
+        izoh: `Ta'minot`,
+        sana: dateOnlyStringToUTCDate(params.sana),
+        userId: params.userId,
+      },
+    });
+    debtId = debt.id;
+  }
+
+  return { jamiSumma, tolangan, transactionId, transferId, debtId };
+}
+
+/**
+ * BUYURTMANI QABUL QILISH — rejadagi buyurtmani haqiqatga aylantiradi.
  *
- * Qoralama va tasdiqlangan buyurtma hech narsaga ta'sir qilmaydi — reja
- * bilan haqiqat aralashmasligi kerak.
+ * Ombor va pul yozuvlari `qabulYozuvlariTx` da (yagona qoida). Qoralama va
+ * tasdiqlangan buyurtma hech narsaga ta'sir qilmaydi — reja bilan haqiqat
+ * aralashmasligi kerak.
  */
 export async function qabulQilish(params: {
   businessId: string;
@@ -238,140 +439,28 @@ export async function qabulQilish(params: {
       throw new BadRequestError("Bekor qilingan buyurtmani qabul qilib bo'lmaydi");
     }
 
-    const satrlar = await tx.purchaseOrderItem.findMany({
-      where: { orderId: order.id, businessId: params.businessId },
+    const yozuv = await qabulYozuvlariTx(tx, {
+      businessId: params.businessId,
+      orderId: order.id,
+      userId: params.userId,
+      tenantId,
+      sana,
+      supplierId: order.supplierId,
+      tolovTuri: order.tolovTuri,
+      tolanganSumma: params.tolanganSumma,
+      accountId: params.accountId,
     });
-    if (satrlar.length === 0) throw new BadRequestError("Buyurtmada satr yo'q");
-
-    const supplier = await tx.supplier.findFirst({
-      where: { id: order.supplierId, businessId: params.businessId },
-      select: { nomi: true, userId: true },
-    });
-
-    let jamiSumma = 0;
-    for (const s of satrlar) {
-      jamiSumma += s.jamiSumma;
-
-      // Ombor kirimi + tannarx snapshot.
-      await tx.stockEntry.create({
-        data: {
-          businessId: params.businessId,
-          productId: s.productId,
-          miqdor: s.miqdor,
-          birlikNarx: s.birlikNarx,
-          userId: params.userId,
-          izoh: `Xarid: ${supplier?.nomi ?? "ta'minotchi"}`,
-        },
-      });
-      await tx.product.updateMany({
-        where: { id: s.productId, businessId: params.businessId },
-        data: { miqdor: { increment: s.miqdor }, kelganNarx: s.birlikNarx },
-      });
-    }
-
-    // To'langan qism: berilmasa eski xatti-harakat (naqd → to'liq, qarz → 0).
-    const tolangan =
-      params.tolanganSumma ?? (order.tolovTuri === "naqd" ? jamiSumma : 0);
-    if (tolangan < 0 || tolangan > jamiSumma) {
-      throw new BadRequestError("To'langan summa 0 va jami summa oralig'ida bo'lishi kerak");
-    }
-
-    let transactionId: string | null = null;
-    let transferId: string | null = null;
-    let debtId: string | null = null;
-
-    // ICHKI ta'minotchi (tizim useri) — to'lov shaxsiy kassaga transfer.
-    const supplierUser = supplier?.userId
-      ? await tx.user.findFirst({
-          where: { id: supplier.userId, tenantId, isActive: true },
-          select: { id: true, ism: true },
-        })
-      : null;
-
-    if (tolangan > 0) {
-      if (supplierUser) {
-        const xaridor = await tx.user.findFirst({
-          where: { id: params.userId, tenantId, isActive: true },
-          select: { id: true, ism: true },
-        });
-        if (!xaridor) throw new ForbiddenError("Foydalanuvchi topilmadi");
-        if (xaridor.id === supplierUser.id) {
-          throw new BadRequestError("Ta'minotchi va xaridor bitta foydalanuvchi bo'lishi mumkin emas");
-        }
-
-        let fromAccountId: string;
-        if (params.accountId) {
-          const acc = await tx.account.findFirst({
-            where: { id: params.accountId, businessId: params.businessId, isActive: true },
-            select: { id: true },
-          });
-          if (!acc) throw new ForbiddenError("Kassa topilmadi yoki nofaol");
-          fromAccountId = acc.id;
-        } else {
-          fromAccountId = (await ensureUserKassaTx(tx, params.businessId, xaridor)).id;
-        }
-        const toAccount = await ensureUserKassaTx(tx, params.businessId, supplierUser);
-
-        const transfer = await tx.accountTransfer.create({
-          data: {
-            businessId: params.businessId,
-            fromAccountId,
-            toAccountId: toAccount.id,
-            summa: tolangan,
-            valyuta: "UZS",
-            sana: dateOnlyStringToUTCDate(sana),
-            izoh: `Xarid to'lovi: ${supplier?.nomi ?? ""}`.trim(),
-            userId: params.userId,
-            fromUserId: xaridor.id,
-            fromUserIsm: xaridor.ism,
-            toUserId: supplierUser.id,
-            toUserIsm: supplierUser.ism,
-            holat: "bajarildi",
-            relatedType: "purchaseOrder",
-            relatedId: order.id,
-          },
-        });
-        transferId = transfer.id;
-      } else {
-        const categoryId = await ensureCategoryTx(tx, params.businessId, XARID_KATEGORIYA, "chiqim");
-        const txn = await createTransactionTx(tx, params.userId, params.businessId, {
-          turi: "chiqim",
-          categoryId,
-          summa: tolangan,
-          sana,
-          accountId: params.accountId ?? undefined,
-          izoh: `Xarid: ${supplier?.nomi ?? ""}`.trim(),
-        });
-        transactionId = txn.id;
-      }
-    }
-
-    // To'lanmagan qoldiq — ta'minotchiga qarz.
-    const qoldiq = jamiSumma - tolangan;
-    if (qoldiq > 0) {
-      const debt = await tx.debt.create({
-        data: {
-          businessId: params.businessId,
-          turi: "beriladigan",
-          mijozNomi: supplier?.nomi ?? "Ta'minotchi",
-          jamiSumma: qoldiq,
-          izoh: `Xarid buyurtmasi`,
-          userId: params.userId,
-        },
-      });
-      debtId = debt.id;
-    }
 
     return tx.purchaseOrder.update({
       where: { id: order.id },
       data: {
         holat: "qabul_qilingan",
         qabulSana: dateOnlyStringToUTCDate(sana),
-        jamiSumma,
-        tolanganSumma: tolangan,
-        transactionId,
-        transferId,
-        debtId,
+        jamiSumma: yozuv.jamiSumma,
+        tolanganSumma: yozuv.tolangan,
+        transactionId: yozuv.transactionId,
+        transferId: yozuv.transferId,
+        debtId: yozuv.debtId,
       },
     });
   });
