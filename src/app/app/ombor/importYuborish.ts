@@ -47,6 +47,15 @@ export interface Natija {
  */
 const MUDDAT = 60_000;
 
+/**
+ * Fayl hajmi chegarasi — server bilan bir xil (10 MB).
+ *
+ * Tekshiruv aynan KLIENTDA ham turadi, chunki katta fayl (masalan 180 MB)
+ * avval to'liq tarmoqqa yuklanib bo'lishi kerak edi — sekin internetda bu
+ * o'zi o'nlab daqiqa "yuklanmoqda" degani. Endi javob bir zumda chiqadi.
+ */
+export const MAKS_FAYL_HAJM = 10 * 1024 * 1024;
+
 export type YuborishJavobi<T> = { ok: true; data: T } | { ok: false; xabar: string };
 
 export async function importYubor<T>(
@@ -54,6 +63,18 @@ export async function importYubor<T>(
   rejim: "qoshish" | "yangilash",
   tekshirish: boolean
 ): Promise<YuborishJavobi<T>> {
+  if (fayl.size > MAKS_FAYL_HAJM) {
+    const mb = Math.round(fayl.size / (1024 * 1024));
+    return {
+      ok: false,
+      xabar:
+        `Fayl ${mb} MB — 10 MB chegarasidan katta, yuborilmadi. ` +
+        "Katalog uchun rasm va formatlar kerak emas: faylni Excel'da " +
+        "\"CSV UTF-8\" sifatida saqlang (hajmi keskin kichrayadi) yoki faqat " +
+        "kerakli ustunlarni 500 qatordan bo'lib yuklang.",
+    };
+  }
+
   const form = new FormData();
   form.append("fayl", fayl);
   form.append("rejim", rejim);

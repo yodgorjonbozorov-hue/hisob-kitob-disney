@@ -467,6 +467,27 @@ test("satr chegarasi ulkan CSV matn yasashning oldini oladi", async () => {
   assert.equal(csv.trim().split("\n").length, 5);
 });
 
+test("10 MB dan katta fayl KLIENTDAN chiqmasdan rad etiladi", async () => {
+  // 180 MB fayl avval to'liq tarmoqqa yuklanishi kerak edi — sekin internetda
+  // bu o'zi o'nlab daqiqa "yuklanmoqda" degani. Endi fetch umuman chaqirilmaydi.
+  const { importYubor, MAKS_FAYL_HAJM } = await import("@/app/app/ombor/importYuborish");
+  const asliFetch = globalThis.fetch;
+  let fetchChaqirildi = false;
+  globalThis.fetch = (async () => {
+    fetchChaqirildi = true;
+    throw new Error("chaqirilmasligi kerak");
+  }) as typeof fetch;
+  try {
+    const katta = new File([new Uint8Array(MAKS_FAYL_HAJM + 1)], "katta.xlsx");
+    const javob = await importYubor(katta, "qoshish", true);
+    assert.equal(javob.ok, false);
+    assert.match((javob as { xabar: string }).xabar, /10 MB/);
+    assert.equal(fetchChaqirildi, false);
+  } finally {
+    globalThis.fetch = asliFetch;
+  }
+});
+
 test("zip bo'lmagan 'xlsx' tushunarli xato bilan rad etiladi", async () => {
   const { xlsxdanCsv, XlsxXato } = await import("@/lib/excel/xlsxOqi");
   const soxta = new TextEncoder().encode("bu excel emas, oddiy matn").buffer;

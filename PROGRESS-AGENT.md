@@ -4996,3 +4996,11 @@ tiqilishi — so'rov hech qachon javob qaytarmaydi, klientda esa muddat
 rad etiladi; oddiy 300 qatorli fayl avvalgidek o'qiladi. `npm run build` ✅,
 `test:mahsulot-import` (23, 3 tasi yangi) ✅, `test:isolation` (22) ✅,
 `test:csv-import` (13) ✅.
+
+**Qo'shimcha (foydalanuvchi aniqlashtirdi — fayl 180 MB):** bunday fayl
+avval to'liq tarmoqqa yuklanib bo'lishi kerak edi, sekin internetda bu o'zi
+o'nlab daqiqa. Endi hajm KLIENTDA, yuborishdan oldin tekshiriladi
+(`MAKS_FAYL_HAJM`, server bilan bir xil 10 MB): javob bir zumda chiqadi va
+CSV sifatida saqlash / 500 qatordan bo'lish maslahat qilinadi. Modal matniga
+"10 MB gacha" qo'shildi. Test: fetch umuman chaqirilmasligi tekshiriladi
+(`test:mahsulot-import` — 24) ✅.

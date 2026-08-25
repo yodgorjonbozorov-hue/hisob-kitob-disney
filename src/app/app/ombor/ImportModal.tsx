@@ -75,7 +75,7 @@ export function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: 
     <Modal open onClose={onClose} title="Katalogni fayldan yuklash">
       <div className="space-y-3">
         <p className="text-sm text-muted">
-          CSV yoki Excel (.xlsx) fayl. Sarlavhada kamida{" "}
+          CSV yoki Excel (.xlsx) fayl, 10 MB gacha. Sarlavhada kamida{" "}
           <code className="text-fg">Nomi</code> ustuni bo&apos;lishi shart; qolganlari ixtiyoriy:{" "}
           <code className="text-fg">SKU, Shtrix kod, Kategoriya, Birlik, Tannarx, Sotuv narxi,
           Qoldiq, Min qoldiq, Izoh</code>. Boshqa dasturdan olingan fayl ustunlari ham tanilishi
