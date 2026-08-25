@@ -125,7 +125,7 @@ async function kategoriyaniOl(businessId: string, id: string) {
  *
  * Bu tekshiruv FOYDALANUVCHI UCHUN — tushunarli xabar berish uchun. Haqiqiy
  * kafolat bazadagi ifodali unique indeks (migratsiya
- * 20260825120000_kategoriya_registrsiz_unique): ikki so'rov bir vaqtda kelsa
+ * 20260825130000_kategoriya_registrsiz_unique): ikki so'rov bir vaqtda kelsa
  * ikkalasi ham bu tekshiruvdan o'tib ketadi, lekin bazaga faqat bittasi
  * yoziladi. Ikkinchisining xatosi `dublikatXatosi()` da ushlanadi.
  */

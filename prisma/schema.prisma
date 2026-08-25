@@ -484,7 +484,7 @@ model Category {
 
   /// DIQQAT: bu cheklov registrga SEZGIR ("Bantik" ≠ "bantik"). Registrga
   /// befarq yagonalik esa IFODALI indeks bilan beriladi — `lower(trim("nomi"))`
-  /// bo'yicha, migratsiya `20260825120000_kategoriya_registrsiz_unique` da.
+  /// bo'yicha, migratsiya `20260825130000_kategoriya_registrsiz_unique` da.
   /// Prisma sxemasi ifodali indeksni ifodalay olmaydi, shuning uchun u faqat
   /// SQL'da yashaydi (Postgres yo'li: scripts/pg-migratsiya.mjs, QOLDA bloki).
   @@unique([nomi, turi, businessId])
@@ -939,10 +939,29 @@ model PurchaseOrder {
   tolanganSumma Int                 @default(0)
   /// Ta'minotchi tizim useri bo'lsa — qabul paytidagi kassa transferi.
   transferId    String?
+  /// TAKROR YUBORISHDAN HIMOYA (idempotentlik kaliti).
+  ///
+  /// "Ta'minotni saqlash" tugmasi ikki marta bosilsa (yoki tarmoq javobni
+  /// yo'qotib qayta yuborsa) ombor ikki marta oshib, qarz ikki marta
+  /// yozilardi. Frontend har oqim uchun BITTA kalit yaratadi va uni
+  /// har urinishda o'zgarmagan holda yuboradi; ikkinchi so'rov shu
+  /// UNIQUE cheklovga uriladi va xizmat MAVJUD yozuvni qaytaradi.
+  ///
+  /// Himoya ATAYLAB bazada: ilova kodi ham, brauzer ham xato qilsa
+  /// (yoki ikki so'rov bir vaqtda kelsa) baza ikkinchisini o'tkazmaydi.
+  idempotencyKey String?
+  /// Bekor qilingan payt (holat = "bekor" bo'lganda to'ldiriladi).
+  bekorSana     DateTime?
+  /// Bekor qilish sababi — auditda saqlanadi.
+  bekorSabab    String?
+  /// Kim bekor qilgani.
+  bekorUserId   String?
   createdAt     DateTime            @default(now())
   items         PurchaseOrderItem[]
 
+  @@unique([businessId, idempotencyKey])
   @@index([businessId, holat, sana])
+  @@index([businessId, qabulSana])
   @@index([supplierId])
 }
 

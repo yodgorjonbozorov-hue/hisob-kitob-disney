@@ -53,7 +53,7 @@ CREATE INDEX "User_login_lower_idx" ON "User" (LOWER("login"));
 -- Sxemadagi @@unique([nomi, turi, businessId]) registrga sezgir, ya'ni
 -- "Bantik" va "bantik" ikki alohida kategoriya bo'lib qolardi. Ifodali
 -- indeksni Prisma sxemasi ifodalay olmaydi — SQLite yo'li migratsiya
--- 20260825120000_kategoriya_registrsiz_unique da, Postgres yo'li shu yerda.
+-- 20260825130000_kategoriya_registrsiz_unique da, Postgres yo'li shu yerda.
 -- ---------------------------------------------------------------------------
 CREATE UNIQUE INDEX "Category_businessId_turi_nomi_registrsiz_key"
   ON "Category" ("businessId", "turi", LOWER(TRIM("nomi")));

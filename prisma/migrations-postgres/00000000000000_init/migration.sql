@@ -460,6 +460,10 @@ CREATE TABLE "PurchaseOrder" (
     "debtId" TEXT,
     "tolanganSumma" INTEGER NOT NULL DEFAULT 0,
     "transferId" TEXT,
+    "idempotencyKey" TEXT,
+    "bekorSana" TIMESTAMP(3),
+    "bekorSabab" TEXT,
+    "bekorUserId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "PurchaseOrder_pkey" PRIMARY KEY ("id")
@@ -1158,7 +1162,13 @@ CREATE INDEX "Supplier_businessId_nomi_idx" ON "Supplier"("businessId", "nomi");
 CREATE INDEX "PurchaseOrder_businessId_holat_sana_idx" ON "PurchaseOrder"("businessId", "holat", "sana");
 
 -- CreateIndex
+CREATE INDEX "PurchaseOrder_businessId_qabulSana_idx" ON "PurchaseOrder"("businessId", "qabulSana");
+
+-- CreateIndex
 CREATE INDEX "PurchaseOrder_supplierId_idx" ON "PurchaseOrder"("supplierId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PurchaseOrder_businessId_idempotencyKey_key" ON "PurchaseOrder"("businessId", "idempotencyKey");
 
 -- CreateIndex
 CREATE INDEX "PurchaseOrderItem_orderId_idx" ON "PurchaseOrderItem"("orderId");
@@ -1688,7 +1698,7 @@ CREATE INDEX "User_login_lower_idx" ON "User" (LOWER("login"));
 -- Sxemadagi @@unique([nomi, turi, businessId]) registrga sezgir, ya'ni
 -- "Bantik" va "bantik" ikki alohida kategoriya bo'lib qolardi. Ifodali
 -- indeksni Prisma sxemasi ifodalay olmaydi — SQLite yo'li migratsiya
--- 20260825120000_kategoriya_registrsiz_unique da, Postgres yo'li shu yerda.
+-- 20260825130000_kategoriya_registrsiz_unique da, Postgres yo'li shu yerda.
 -- ---------------------------------------------------------------------------
 CREATE UNIQUE INDEX "Category_businessId_turi_nomi_registrsiz_key"
   ON "Category" ("businessId", "turi", LOWER(TRIM("nomi")));
