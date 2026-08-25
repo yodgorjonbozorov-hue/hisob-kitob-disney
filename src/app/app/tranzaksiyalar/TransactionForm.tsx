@@ -1,24 +1,42 @@
 "use client";
 
-import { useState, useMemo, FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, FormEvent } from "react";
 import { formatSom, parseSomInput } from "@/lib/format";
 import { todayDateOnlyString } from "@/lib/date";
 import { Button } from "@/components/ui/Button";
-import { TOLOV_TURLARI, TOLOV_NOMI, TOLOV_BELGI, type TolovTuri } from "@/lib/validation/transaction";
+import type { TolovTuri } from "@/lib/validation/transaction";
+import { TurVaTolov } from "./TurVaTolov";
 import { QarzForm, type QarzMasul } from "./QarzForm";
 import { KG_BOSH, KgMaydonlari, type KgQiymat } from "./KgMaydonlari";
+import { SummaMaydoni } from "./SummaMaydoni";
+import { KategoriyaTanlov } from "./KategoriyaTanlov";
 import type { TransactionDTO } from "@/lib/queries/transactions";
 import type { CategoryOption } from "./turlar";
+import type { TezKategoriyalar } from "@/lib/queries/tezKategoriyalar";
 
 interface AccountOption {
   id: string;
   nomi: string;
 }
 
+/**
+ * KIRIM / CHIQIM FORMASI — pastdan chiqadigan varaq (mobil) yoki dialog
+ * (desktop) ichida ishlaydi, shuning uchun o'zining kartasi YO'Q.
+ *
+ * Maydonlar tezlik tartibida: tur → summa → to'lov → kategoriya → sana →
+ * (kassa) → izoh. Summa eng tepada va eng katta: kassir uni birinchi yozadi.
+ *
+ * IKKI MARTA YUBORISH HIMOYASI: `yuborilmoqda` refi bosishni STATE
+ * yangilanishini kutmasdan bloklaydi (React state asinxron — ikki tez
+ * bosishda `loading` hali `true` bo'lib ulgurmasdi va bir xil yozuv ikki
+ * marta yaratilardi).
+ */
 export function TransactionForm({
   categories,
   accounts,
   masullar = [],
+  tezKategoriyalar,
+  boshTuri = "kirim",
   onCreated,
   onQarzCreated,
 }: {
@@ -27,11 +45,15 @@ export function TransactionForm({
   accounts: AccountOption[];
   /** Qarzga mas'ul qilib belgilash mumkin bo'lgan xodimlar. */
   masullar?: QarzMasul[];
-  onCreated: (t: TransactionDTO) => void;
+  /** Ko'p ishlatiladigan kategoriyalar — faqat tartib uchun. */
+  tezKategoriyalar?: TezKategoriyalar;
+  boshTuri?: "kirim" | "chiqim";
+  /** `t === null` — tasdiqlash so'rovi yaratildi, yozuv hali yo'q. */
+  onCreated: (t: TransactionDTO | null, xabar: string) => void;
   /** Qarz yozilgach sahifani yangilash (qarz tranzaksiya emas). */
   onQarzCreated?: () => void;
 }) {
-  const [turi, setTuri] = useState<"kirim" | "chiqim">("kirim");
+  const [turi, setTuri] = useState<"kirim" | "chiqim">(boshTuri);
   const [tolovTuri, setTolovTuri] = useState<TolovTuri>("naqd");
   const [categoryId, setCategoryId] = useState("");
   const [summaText, setSummaText] = useState("");
@@ -40,47 +62,53 @@ export function TransactionForm({
   const [accountId, setAccountId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const yuborilmoqda = useRef(false);
+  const ildiz = useRef<HTMLDivElement>(null);
+
+  // Varaq ochilganda Modal birinchi maydonga (summa) fokus beradi va brauzer
+  // uni ko'rinishga surib, tepadagi "Kirim/Chiqim" va "To'lov turi"
+  // tanlovlarini ekrandan chiqarib yuboradi — kassir nima tanlanganini
+  // ko'rmay qoladi. Fokusdan KEYIN (rAF) varaqni boshiga qaytaramiz.
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      const varaq = ildiz.current?.closest<HTMLElement>(".overflow-y-auto");
+      if (varaq) varaq.scrollTop = 0;
+    });
+    return () => cancelAnimationFrame(id);
+  }, []);
 
   const filteredCategories = useMemo(
     () => categories.filter((c) => c.turi === turi),
     [categories, turi]
   );
+  const tezIdlar = turi === "kirim" ? tezKategoriyalar?.kirim : tezKategoriyalar?.chiqim;
 
   // KG SAVDOSI (mijozga xos — Fortex Selos): kg kategoriyasi tanlansa summa
   // maydoni o'rniga miqdor va 1 kg narxi so'raladi (KgMaydonlari).
   const [kg, setKg] = useState<KgQiymat>(KG_BOSH);
   const [kgTozalash, setKgTozalash] = useState(0);
-  const tanlangan = filteredCategories.find((c) => c.id === (categoryId || filteredCategories[0]?.id));
+  const tanlangan = filteredCategories.find((c) => c.id === categoryId);
   const kgRejimi = !!tanlangan?.kgAsosli;
 
-  function handleSummaChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const numeric = parseSomInput(e.target.value);
-    setSummaText(numeric ? formatSom(numeric) : "");
+  function turiAlmash(yangi: "kirim" | "chiqim") {
+    setTuri(yangi);
+    setCategoryId("");
+    // Qarz faqat kirim uchun — chiqimga o'tilganda naqdga qaytariladi.
+    if (yangi === "chiqim" && tolovTuri === "qarz") setTolovTuri("naqd");
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (yuborilmoqda.current) return;
     setError(null);
 
     const summa = kgRejimi ? kg.jami : parseSomInput(summaText);
-    const catId = categoryId || filteredCategories[0]?.id;
-    if (!catId) {
-      setError("Kategoriya tanlanmagan");
-      return;
-    }
-    if (kgRejimi && kg.miqdorKg <= 0) {
-      setError("Miqdorni (kg) kiriting");
-      return;
-    }
-    if (kgRejimi && kg.kgNarxi <= 0) {
-      setError("1 kg narxini kiriting");
-      return;
-    }
-    if (summa <= 0) {
-      setError("Summani kiriting");
-      return;
-    }
+    if (!categoryId) return setError("Kategoriya tanlanmagan");
+    if (kgRejimi && kg.miqdorKg <= 0) return setError("Miqdorni (kg) kiriting");
+    if (kgRejimi && kg.kgNarxi <= 0) return setError("1 kg narxini kiriting");
+    if (summa <= 0) return setError("Summani kiriting");
 
+    yuborilmoqda.current = true;
     setLoading(true);
     try {
       const res = await fetch("/api/transactions", {
@@ -89,7 +117,7 @@ export function TransactionForm({
         body: JSON.stringify({
           turi,
           tolovTuri,
-          categoryId: catId,
+          categoryId,
           summa,
           sana,
           izoh: izoh || undefined,
@@ -103,10 +131,16 @@ export function TransactionForm({
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "Xatolik yuz berdi");
-        setLoading(false);
         return;
       }
-      onCreated(data);
+      // TASDIQLASH moduli: chegaradan oshgan chiqim YOZILMAYDI, so'rov
+      // yaratiladi (202). Uni ro'yxatga qo'shish yolg'on bo'lardi.
+      if (data.tasdiqKutilmoqda) {
+        onCreated(null, data.message ?? "Tasdiq kutilmoqda");
+        return;
+      }
+      const nom = turi === "kirim" ? "Kirim" : "Chiqim";
+      onCreated(data, `${formatSom(summa)} so'm ${nom} qo'shildi`);
       setSummaText("");
       setKgTozalash((n) => n + 1);
       setIzoh("");
@@ -114,6 +148,7 @@ export function TransactionForm({
     } catch {
       setError("Serverga ulanib bo'lmadi");
     } finally {
+      yuborilmoqda.current = false;
       setLoading(false);
     }
   }
@@ -121,144 +156,91 @@ export function TransactionForm({
   const qarzRejimi = tolovTuri === "qarz";
 
   return (
-    // Tashqi element ATAYLAB `div`: qarz rejimida ichkarida QarzForm o'zining
-    // `form`ini chiqaradi va forma ichida forma yaroqsiz HTML bo'lardi.
-    <div className="bg-surface rounded-2xl shadow-sm border border-line p-5 space-y-4">
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => {
-            setTuri("kirim");
-            setCategoryId("");
-          }}
-          className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
-            turi === "kirim" ? "bg-income text-white" : "bg-income-soft text-income-fg"
-          }`}
-        >
-          Kirim
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setTuri("chiqim");
-            setCategoryId("");
-            // Qarz faqat kirim uchun — chiqimga o'tilganda naqdga qaytariladi.
-            if (tolovTuri === "qarz") setTolovTuri("naqd");
-          }}
-          className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
-            turi === "chiqim" ? "bg-expense text-white" : "bg-expense-soft text-expense-fg"
-          }`}
-        >
-          Chiqim
-        </button>
-      </div>
-
-      <div>
-        <label className="block text-xs font-medium text-muted mb-1">To&apos;lov turi</label>
-        <div className="grid grid-cols-3 gap-2">
-          {TOLOV_TURLARI.filter((t) => t !== "qarz" || turi === "kirim").map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTolovTuri(t)}
-              className={`px-3 py-2 rounded-lg border text-sm transition ${
-                tolovTuri === t
-                  ? "border-brand bg-brand-wash text-brand font-medium"
-                  : "border-line bg-surface-2 text-fg hover:border-brand"
-              }`}
-            >
-              {TOLOV_BELGI[t]} {TOLOV_NOMI[t]}
-            </button>
-          ))}
-        </div>
-      </div>
+    <div ref={ildiz} className="space-y-4">
+      <TurVaTolov turi={turi} tolovTuri={tolovTuri} onTuri={turiAlmash} onTolov={setTolovTuri} />
 
       {/* QARZ — butunlay boshqa forma: tranzaksiya emas, majburiyat yoziladi.
           Shuning uchun kassa/summa maydonlari o'rniga mijoz formasi chiqadi. */}
       {qarzRejimi ? (
-        <QarzForm
-          kategoriyalar={filteredCategories}
-          masullar={masullar}
-          onCreated={() => onQarzCreated?.()}
-        />
+        <QarzForm kategoriyalar={filteredCategories} masullar={masullar} onCreated={() => onQarzCreated?.()} />
       ) : (
-      <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label className="block text-xs font-medium text-muted mb-1">Kategoriya</label>
-          <select
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            className="w-full rounded-lg border border-line px-3 py-2 text-sm"
-          >
-            <option value="">Tanlang...</option>
-            {filteredCategories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nomi}
-              </option>
-            ))}
-          </select>
-        </div>
-        {kgRejimi ? (
-          <KgMaydonlari onChange={setKg} tozalash={kgTozalash} />
-        ) : (
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1">Summa (so'm)</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={summaText}
-              onChange={handleSummaChange}
-              placeholder="0"
-              className="w-full rounded-lg border border-line px-3 py-2 text-sm"
-            />
-          </div>
-        )}
-        <div>
-          <label className="block text-xs font-medium text-muted mb-1">Sana</label>
-          <input
-            type="date"
-            value={sana}
-            onChange={(e) => setSana(e.target.value)}
-            className="w-full rounded-lg border border-line px-3 py-2 text-sm"
-          />
-        </div>
-        {accounts.length > 1 && (
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1" htmlFor="tx-kassa">
-              Kassa
-            </label>
-            <select
-              id="tx-kassa"
-              value={accountId}
-              onChange={(e) => setAccountId(e.target.value)}
-              className="w-full rounded-lg border border-line px-3 py-2 text-sm"
-            >
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.nomi}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-        <div>
-          <label className="block text-xs font-medium text-muted mb-1">Izoh (ixtiyoriy)</label>
-          <input
-            type="text"
-            value={izoh}
-            onChange={(e) => setIzoh(e.target.value)}
-            className="w-full rounded-lg border border-line px-3 py-2 text-sm"
-          />
-        </div>
-      </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {kgRejimi ? (
+            <KgMaydonlari onChange={setKg} tozalash={kgTozalash} />
+          ) : (
+            <SummaMaydoni qiymat={summaText} onChange={setSummaText} turi={turi} disabled={loading} />
+          )}
 
-      {error && <p className="text-expense text-sm">{error}</p>}
+          <KategoriyaTanlov
+            kategoriyalar={filteredCategories}
+            qiymat={categoryId}
+            onChange={setCategoryId}
+            tezIdlar={tezIdlar}
+            disabled={loading}
+          />
 
-      <Button type="submit" disabled={loading} className="w-full">
-        {loading ? "Saqlanmoqda..." : "Qo'shish"}
-      </Button>
-      </form>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-fg mb-1.5" htmlFor="tx-sana">
+                Sana
+              </label>
+              <input
+                id="tx-sana"
+                type="date"
+                value={sana}
+                disabled={loading}
+                onChange={(e) => setSana(e.target.value)}
+                className="w-full rounded-lg border border-line bg-surface text-fg px-3 py-2.5 text-base min-h-[44px]"
+              />
+            </div>
+            {accounts.length > 1 && (
+              <div>
+                <label className="block text-sm font-medium text-fg mb-1.5" htmlFor="tx-kassa">
+                  Kassa
+                </label>
+                <select
+                  id="tx-kassa"
+                  value={accountId}
+                  disabled={loading}
+                  onChange={(e) => setAccountId(e.target.value)}
+                  className="w-full rounded-lg border border-line bg-surface text-fg px-3 py-2.5 text-base min-h-[44px]"
+                >
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.nomi}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-medium text-fg mb-1.5" htmlFor="tx-izoh">
+                Izoh (ixtiyoriy)
+              </label>
+              <input
+                id="tx-izoh"
+                type="text"
+                value={izoh}
+                disabled={loading}
+                onChange={(e) => setIzoh(e.target.value)}
+                className="w-full rounded-lg border border-line bg-surface text-fg px-3 py-2.5 text-base min-h-[44px]"
+              />
+            </div>
+          </div>
+
+          {error && (
+            <p role="alert" className="text-expense text-sm">
+              {error}
+            </p>
+          )}
+
+          {/* Yopishqoq: uzun formada ham "Saqlash" barmoq ostida qoladi. */}
+          <div className="sticky bottom-0 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-surface border-t border-line">
+            <Button type="submit" size="lg" loading={loading} className="w-full">
+              {turi === "kirim" ? "Kirimni saqlash" : "Chiqimni saqlash"}
+            </Button>
+          </div>
+        </form>
       )}
     </div>
   );
