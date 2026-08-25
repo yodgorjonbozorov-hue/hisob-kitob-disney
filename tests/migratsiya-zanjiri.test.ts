@@ -239,12 +239,17 @@ test("yangi jadvallar yaratildi", async () => {
   ).rows.map((r: any) => String(r.name));
 
   for (const j of [
-    "BotConversation", "AiConversation", "Account", "AccountTransfer", "StockAdjustment",
+    "BotConversation", "AiSuhbat", "Account", "AccountTransfer", "StockAdjustment",
     "Supplier", "PurchaseOrder", "PurchaseOrderItem", "ApprovalRule", "ApprovalRequest",
     "Employee", "Attendance", "Payroll", "PayrollAdvance", "Contract", "Attachment",
   ]) {
     assert.ok(jadvallar.includes(j), `${j} jadvali yaratilmadi`);
   }
+
+  // AI copilot migratsiyasi eski `AiConversation` ni `AiSuhbat` bilan
+  // ALMASHTIRADI (yozishmalar ko'chirilgach o'chiriladi) — eski jadval
+  // qolib ketmaganini ham tekshiramiz.
+  assert.ok(!jadvallar.includes("AiConversation"), "eski AiConversation jadvali o'chirilishi kerak");
 });
 
 // ---------- Majburiy keyingi qadam ----------

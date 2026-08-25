@@ -155,11 +155,26 @@ export async function createTransactionTx(
     // Shaxsiy kassa rejimida naqd pul xodimning o'z kassasiga tushadi.
     accountId = await shaxsiyKassaId(tx, businessId, userId, data.tolovTuri);
     if (!accountId) {
-      const birinchi = await tx.account.findFirst({
-        where: { businessId, isActive: true },
-        orderBy: [{ tartib: "asc" }, { createdAt: "asc" }],
-        select: { id: true },
-      });
+      // TO'LOV TURIGA MOS KASSA (`resolveAccountId` bilan bir xil qoida).
+      // Ilgari bu yerda shunchaki BIRINCHI faol kassa olinardi: Click
+      // tushumi naqd kassaga tushib, "kassada bo'lishi kerak" raqamini
+      // yolg'on oshirib yuborardi (pul terminalda, kassada emas).
+      const mosTurlar =
+        data.tolovTuri === "naqd" ? ["naqd"] : data.tolovTuri === "click" ? ["plastik", "bank"] : null;
+      const mos = mosTurlar
+        ? await tx.account.findFirst({
+            where: { businessId, isActive: true, turi: { in: mosTurlar } },
+            orderBy: [{ tartib: "asc" }, { createdAt: "asc" }],
+            select: { id: true },
+          })
+        : null;
+      const birinchi =
+        mos ??
+        (await tx.account.findFirst({
+          where: { businessId, isActive: true },
+          orderBy: [{ tartib: "asc" }, { createdAt: "asc" }],
+          select: { id: true },
+        }));
       accountId = birinchi?.id ?? null;
     }
   }

@@ -349,13 +349,30 @@ test("yangi modul sahifalari to'g'ri sarlavha bilan ochiladi", { skip: sabab }, 
   const SAHIFALAR: Array<[string, string]> = [
     ["/app", "Boshqaruv paneli"],
     ["/app/tranzaksiyalar", "Kirim va chiqimlar"],
-    ["/app/hisobot", "Oylik hisobot"],
-    ["/app/ombor", "Ombor"],
+    // Sarlavha "Hisobotlar": sahifada endi Kunlik/Haftalik/Oylik/Yillik
+    // tablari bor (app/hisobot/DavrTablari.tsx).
+    ["/app/hisobot", "Hisobotlar"],
+    ["/app/kunlik", "Kunlik hisobot"],
+    // "/app/ombor" bu ro'yxatda EMAS: E2E'da aktiv biznes ("Demo Xizmatlar")
+    // ATAYLAB omborsiz (scripts/e2e-tayyorla.mjs) va sahifa /app ga
+    // qaytaradi. U keyingi testda — ombor yuritadigan biznesga o'tib —
+    // tekshiriladi.
     ["/app/tasdiqlash", "Tasdiqlash"],
     ["/app/mijozlar", "Mijozlar"],
     ["/app/hr", "Xodimlar"],
     ["/app/hujjatlar", "Shartnomalar"],
   ];
+
+  /*
+   * `/app/ombor` bu ro'yxatdan CHIQARILDI — u endi sarlavha tekshiruvi
+   * emas, REDIREKT tekshiruvi (pastda).
+   *
+   * Sabab: Ombor/Ta'minot birlashtirilgandan keyin sahifa `business.omborli`
+   * bo'lmasa `/app` ga qaytaradi. Seed'dagi faol biznes ("Demo Xizmatlar")
+   * xizmat ko'rsatuvchi, ya'ni omborsiz — sahifa TO'G'RI qaytaradi, lekin
+   * ro'yxat undan "Ombor" sarlavhasini kutib turgani uchun to'plam qizil
+   * bo'lib qolgan edi.
+   */
 
   const page = await yangiSahifa();
   await kir(page);
@@ -372,8 +389,42 @@ test("yangi modul sahifalari to'g'ri sarlavha bilan ochiladi", { skip: sabab }, 
     }
   }
 
+  // OMBOR: omborsiz bizneste sahifa ochilmasligi KERAK.
+  await och(page, "/app/ombor");
+  const omborSarlavha = (await page.locator("h1").first().innerText()).trim();
+  if (omborSarlavha !== "Boshqaruv paneli") {
+    xatolar.push(`/app/ombor: omborsiz bizneste "${omborSarlavha}" ochildi (redirekt kutilgan)`);
+  }
+
   await page.context().close();
   assert.deepEqual(xatolar, [], `sarlavhalar mos kelmadi:\n  ${xatolar.join("\n  ")}`);
+});
+
+test("Ombor sahifasi ombor yuritadigan bizneste ochiladi", { skip: sabab }, async () => {
+  /*
+   * Ombor sahifasi ikki shartga bog'liq: OMBOR moduli yoqiq VA aktiv
+   * biznesning `omborli` bayrog'i. E2E'da ular ataylab ikki xil biznesga
+   * bo'lingan (scripts/e2e-tayyorla.mjs): "Demo Xizmatlar" — omborsiz,
+   * "Salyut" — omborli. Shu bois sahifani tekshirishdan oldin aktiv
+   * biznes almashtiriladi.
+   */
+  const page = await yangiSahifa();
+  await kir(page);
+
+  const bizneslar = await sorov(page, "/api/businesses");
+  assert.ok(bizneslar.ok, `bizneslar olinmadi: HTTP ${bizneslar.status}`);
+  const royxat = JSON.parse(bizneslar.matn) as Array<{ id: string; nomi: string; omborli?: boolean }>;
+  const omborli = royxat.find((b) => b.omborli);
+  assert.ok(omborli, `omborli biznes topilmadi: ${royxat.map((b) => b.nomi).join(", ")}`);
+
+  const almashtir = await sorov(page, "/api/me/active-business", { businessId: omborli.id });
+  assert.ok(almashtir.ok, `biznes almashtirilmadi: HTTP ${almashtir.status} — ${almashtir.matn.slice(0, 200)}`);
+
+  await och(page, "/app/ombor");
+  await page.waitForSelector("h1", { timeout: 15_000 });
+  assert.equal((await page.locator("h1").first().innerText()).trim(), "Ombor");
+  await xatosiz(page);
+  await page.context().close();
 });
 
 // ---------- Yozish oqimi ----------
@@ -417,7 +468,154 @@ test("kirim qo'shiladi va ro'yxatda ko'rinadi", { skip: sabab }, async () => {
     `kirim saqlanmadi: HTTP ${javob.status()} — ${(await javob.text()).slice(0, 300)}`
   );
 
+  // REDESIGN: sahifaning asosiy ro'yxati KATEGORIYA kesimi, ya'ni yangi
+  // yozuv o'z kategoriyasi ochilgandagina ko'rinadi. Shu bois oqim oxirigacha
+  // tekshiriladi: kategoriya qatori bosiladi va yozuv ichidan topiladi.
+  const kategoriyaQator = page.locator("section li button[aria-expanded]").first();
+  await kategoriyaQator.waitFor({ timeout: 30_000 });
+  await kategoriyaQator.click();
   await page.waitForSelector(`text=${izoh}`, { timeout: 30_000 });
+
+  // "Ro'yxat" ko'rinishi ham saqlangan — tekis lentada ham o'sha yozuv.
+  await page.getByRole("tab", { name: "Ro'yxat" }).click();
+  await page.waitForURL(/korinish=royxat/, { timeout: 15_000 });
+  await page.waitForSelector(`text=${izoh}`, { timeout: 30_000 });
+
+  await xatosiz(page);
+  await page.context().close();
+});
+
+// ---------- Dashboard keshi (haqiqiy Next runtime) ----------
+
+/*
+ * NEGA AYNAN BRAUZERDA.
+ *
+ * `unstable_cache` faqat Next server ichida ishlaydi — node:test muhitida
+ * `keshlangan()` fallback bilan to'g'ridan-to'g'ri chaqiruvga tushadi
+ * (lib/cache.ts). Ya'ni "kesh bekor qilinmayapti" xatosini FAQAT shu yerda,
+ * haqiqiy `next start` ostida ushlash mumkin.
+ *
+ * Sinov mantiqi: dashboard raqamini o'qiymiz -> API orqali ma'lumot
+ * o'zgartiramiz -> sahifani QAYTA ochamiz. Kesh 60 soniya yashaydi, test esa
+ * bir necha soniyada tugaydi; demak raqam o'zgargan bo'lsa — uni faqat
+ * `dashboardYangilandi()` yangilagan bo'ladi, TTL emas.
+ */
+
+/**
+ * Sahifa ichidan API so'rovi (sessiya cookie'si bilan).
+ * `tana` berilsa POST/PATCH, aks holda GET.
+ */
+async function sorov(
+  page: Page,
+  yol: string,
+  tana?: unknown,
+  metod: "POST" | "PATCH" = "POST"
+): Promise<{ ok: boolean; status: number; matn: string }> {
+  return page.evaluate(
+    async ([u, b, m]) => {
+      const res = await fetch(u as string, {
+        method: b === null ? "GET" : (m as string),
+        headers: b === null ? {} : { "Content-Type": "application/json" },
+        body: b === null ? undefined : JSON.stringify(b),
+      });
+      return { ok: res.ok, status: res.status, matn: await res.text() };
+    },
+    [yol, tana === undefined ? null : tana, metod] as [string, unknown, string]
+  );
+}
+
+/** "Kassada" KPI kartasidagi TO'LIQ summa (title atributidan — ixcham emas). */
+async function kassadaSummasi(page: Page): Promise<string> {
+  // StatCard ildizi — `bg-surface rounded-2xl` (components/ui/StatCard.tsx).
+  // Aynan shu sinf bo'yicha filtrlaymiz: aks holda ota-div'lar ham mos
+  // kelib, boshqa kartaning summasi o'qilib qolardi.
+  const karta = page
+    .locator("div.bg-surface.rounded-2xl")
+    .filter({ has: page.locator("p", { hasText: /^Kassada/ }) })
+    .first();
+  const title = await karta.locator("p.tnum[title]").first().getAttribute("title");
+  assert.ok(title, "\"Kassada\" kartasidagi summa topilmadi");
+  return title;
+}
+
+/** "Bugungi holat" blokidagi ko'rsatkich qiymati (dt -> dd). */
+async function bugungiKorsatkich(page: Page, nomi: string): Promise<string> {
+  const qiymat = page.locator("dl div").filter({ has: page.locator("dt", { hasText: nomi }) }).first();
+  const matn = (await qiymat.locator("dd").first().innerText()).trim();
+  assert.ok(matn.length > 0, `"${nomi}" ko'rsatkichi topilmadi`);
+  return matn;
+}
+
+test("kassa nofaol qilinganda dashboard keshi darhol bekor qilinadi", { skip: sabab }, async () => {
+  const page = await yangiSahifa();
+  await kir(page);
+  await och(page, "/app");
+
+  const oldin = await kassadaSummasi(page);
+
+  // Zaxira kassa: biznesda OXIRGI faol kassani nofaol qilib bo'lmaydi
+  // (lib/services/accounts.ts), shuning uchun avval ikkinchisini ochamiz.
+  const yangi = await sorov(page, "/api/accounts", {
+    nomi: `E2E zaxira ${Date.now()}`,
+    turi: "bank",
+  });
+  assert.ok(yangi.ok, `zaxira kassa ochilmadi: HTTP ${yangi.status} — ${yangi.matn.slice(0, 200)}`);
+
+  // Puli bor FAOL kassani topamiz — uni nofaol qilsak "Kassada" kamayadi.
+  const royxat = await sorov(page, "/api/accounts?qoldiq=1");
+  assert.ok(royxat.ok, `kassalar olinmadi: HTTP ${royxat.status}`);
+  const kassalar = JSON.parse(royxat.matn) as Array<{ id: string; isActive: boolean; qoldiq: number }>;
+  const nishon = kassalar.find((k) => k.isActive && k.qoldiq !== 0);
+  assert.ok(nishon, "puli bor faol kassa topilmadi — E2E ma'lumoti yetarli emas");
+
+  const ochir = await sorov(page, `/api/accounts/${nishon.id}`, { isActive: false }, "PATCH");
+  assert.ok(ochir.ok, `kassa nofaol qilinmadi: HTTP ${ochir.status} — ${ochir.matn.slice(0, 200)}`);
+
+  await och(page, "/app");
+  const keyin = await kassadaSummasi(page);
+  assert.notEqual(keyin, oldin, "kassa nofaol qilingach dashboard eski (keshlangan) summani ko'rsatdi");
+
+  // Qaytarib faollashtiramiz — summa avvalgi holatga qaytishi kerak
+  // (ikkinchi marta ham kesh bekor qilinadi).
+  const qaytar = await sorov(page, `/api/accounts/${nishon.id}`, { isActive: true }, "PATCH");
+  assert.ok(qaytar.ok, `kassa qaytarilmadi: HTTP ${qaytar.status}`);
+  await och(page, "/app");
+  assert.equal(await kassadaSummasi(page), oldin, "kassa qaytarilgach summa tiklanmadi");
+
+  await xatosiz(page);
+  await page.context().close();
+});
+
+test("CRM buyurtmasi 'Bugungi holat' blokini darhol yangilaydi", { skip: sabab }, async () => {
+  const page = await yangiSahifa();
+  await kir(page);
+  await och(page, "/app");
+
+  const oqi = async () => Number((await bugungiKorsatkich(page, "Yangi buyurtma")).match(/(\d+)/)?.[1]);
+  const oldin = await oqi();
+  assert.ok(Number.isFinite(oldin), "\"Yangi buyurtma\" ko'rsatkichi o'qilmadi");
+
+  // Buyurtma KIRIM kategoriyasini talab qiladi.
+  const katJavob = await sorov(page, "/api/categories?turi=kirim");
+  assert.ok(katJavob.ok, `kategoriyalar olinmadi: HTTP ${katJavob.status}`);
+  const kategoriyalar = JSON.parse(katJavob.matn) as Array<{ id: string }>;
+  assert.ok(kategoriyalar.length > 0, "kirim kategoriyasi yo'q — seed ishlamagan");
+
+  const bugun = new Date().toISOString().slice(0, 10);
+  const javob = await sorov(page, "/api/crm/deals", {
+    nomi: `E2E buyurtma ${Date.now()}`,
+    categoryId: kategoriyalar[0].id,
+    summa: 250000,
+    sana: bugun,
+  });
+  assert.ok(javob.ok, `buyurtma yaratilmadi: HTTP ${javob.status} — ${javob.matn.slice(0, 200)}`);
+
+  await och(page, "/app");
+  assert.equal(
+    await oqi(),
+    oldin + 1,
+    "buyurtmadan keyin 'Bugungi holat' eski (keshlangan) sonni ko'rsatdi"
+  );
   await xatosiz(page);
   await page.context().close();
 });

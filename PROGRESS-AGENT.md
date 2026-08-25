@@ -4395,6 +4395,94 @@ Regressiya: `test:kassa`, `test:kassa-transfer`, `test:kassir-kassa`,
 `test:soft-delete`, `test:backup`, `test:migratsiya`, `test:postgres`,
 `test:kunlik`, `test:smena`, `test:pro`, `test:visibility`, `test:smoke`
 — hammasi yashil. `npm run build` o'tadi.
+
+---
+
+## Kunlik hisobot / smena / kassa topshirish — to'liq qayta ishlash (2026-08-25)
+
+Kunlik hisobot sahifasi (`/app/kunlik`) auditdan o'tkazildi. Uchta jiddiy
+buxgalteriya xatosi topildi va tuzatildi; UI kassirning haqiqiy ish oqimiga
+qarab qayta qurildi.
+
+### Topilgan xatolar
+
+**1. IKKITA KIRIM DAFTARI.** "Tushum kiritish" faqat `DailyTransaction`
+yozardi — hech qanday `Transaction` yaratmasdi. Natijada o'sha pul kunlik
+hisobotda ko'rinardi, lekin Dashboard "Jami Kirim", oylik hisobot,
+kategoriya kesimi va kassa qoldig'ida UMUMAN yo'q edi. Teskari yo'nalish esa
+ishlardi (`kunlikSinxron`), ya'ni ko'prik bir tomonlama edi va ikki daftar
+birinchi uzilishdayoq ajralardi.
+
+**2. "KASSADA BO'LISHI KERAK" MANFIY CHIQARDI** (mijozda −12 679 000).
+Smena oynasida KIRIM `DailyTransaction` dan, CHIQIM esa `Transaction` dan
+olinardi. `DailyTransaction` faqat BUGUNGI sanali va kun OCHIQ bo'lgandagina
+yaratilardi, chiqim esa `createdAt` bo'yicha hech qanday sana shartisiz
+sanalardi. Kechagi sana bilan kiritilgan kirim oynaga tushmasdi, o'sha
+paytda kiritilgan chiqim esa tushardi — hisob asta-sekin minusga ketardi.
+
+**3. FARQ YOLG'ON KAMOMAD KO'RSATARDI.** `sanalganNaqd` kunning NAQD KIRIMI
+(`naqdSumma`) bilan solishtirilardi. Naqd chiqim va kun boshidagi qoldiq
+hisobga olinmasdi: 10 mln kirim + 3 mln naqd chiqim bo'lgan kunda kassada
+7 mln bo'ladi, tizim esa 10 mln kutib "3 mln KAMOMAD" deb ogohlantirardi.
+
+**4. PUL HECH QAYERGA KO'CHMASDI.** Kun "tasdiqlangan" bo'lsa ham
+kassirning kassa qoldig'i o'zgarmasdi — `submitKunlikReport` va
+`confirmKunlikReport` faqat holatni almashtirardi.
+
+### Yechim
+
+Kunlik hisobot endi YAGONA ledger (`Transaction` + `AccountTransfer`) ustidagi
+HOSILA ko'rinish:
+
+- **Tushum** haqiqiy `Transaction` (kirim) yaratadi va unga bog'langan
+  `DailyTransaction` qatori bitta tranzaksiyada quriladi (`transactionId`).
+  Kategoriya tanlanadi — mavjud Kirim modulining kategoriyalaridan.
+  O'chirish ikkala tomonni birga oladi.
+- **Smena oynasi** kirimni ham, chiqimni ham `Transaction` dan va bitta
+  naqdlik qoidasidan (`naqdChiqimmi`) oladi — simmetriya tiklandi.
+- **Tizim hisobi** kassirning HAQIQIY kassa qoldig'idan olinadi
+  (`topshiruvchiKassaTx` → ledger) va topshirishda MUZLATILADI
+  (`DailyReport.kutilganNaqd`).
+- **Pul harakati** mavjud `AccountTransfer` (`turi = "smena"`) ledgerida:
+  topshirishda "kutilmoqda", direktor qabul qilganda "bajarildi". Ya'ni
+  `Transaction` YOZILMAYDI — Jami Kirim ham, Jami Chiqim ham o'zgarmaydi.
+  Qayta ochilsa STORNO yoziladi (ledger append-only).
+
+Ortiqcha pul ko'chmaydi (`kochadiganSumma`): uning ledgerda manbasi yo'q,
+ko'chirilsa kassir qoldig'i manfiyga tushardi. U `kassaFarq` da yozib
+qoldiriladi — direktor ko'rib, kerak bo'lsa alohida kirim qiladi.
+
+### RBAC o'zgarishi
+
+`getKunlikRuxsat.tasdiqlaydi` endi `direktormi || boshqaruvchimi`. Ilgari
+boshqaruvchi faqat direktor tayinlanmagan bo'lsa tasdiqlardi — direktor
+etib tayinlangan kassirning O'ZI kunni topshirsa, kunni yopadigan hech kim
+qolmasdi. O'rniga `qarorKunlikReport` da O'ZINI O'ZI TASDIQLASH TAQIQI
+qo'shildi: topshirgan xodim (boshqaruvchi bo'lmasa) o'z topshirig'ini yopa
+olmaydi.
+
+### Migratsiya
+
+`20260825120000_kunlik_kassa_topshirish` — `DailyReport` ga 5 ta NULLABLE
+ustun (`kutilganNaqd`, `kassaFarq`, `transferId`, `izoh`, `qarorIzoh`).
+Jadval qayta qurilmaydi, eski kunlar avvalgidek o'qiladi (ularda
+`kutilganNaqd` null — o'sha yerda eski taqqoslash saqlanadi, tarixdagi
+raqamlar "o'z-o'zidan" o'zgarmasin).
+
+### Test
+
+- `npm run test:kunlik-kassa` (18 ta) — accounting invarianti:
+  10 mln kirim / 3 mln chiqim → 7 mln topshirildi → kassir 0, direktor
+  +7 mln, Jami Kirim HALI HAM 10 mln, Jami Chiqim HALI HAM 3 mln, pul
+  harakati bitta, dublikat yozuv nol; farq (kamomad/ortiqcha) sababsiz
+  yopilmaydi va totallarni buzmaydi; 5 ta parallel topshirish/tasdiqlashda
+  faqat bittasi o'tadi; storno; RBAC; tenant izolyatsiyasi.
+- `npm run test:kunlik-e2e` (8 ta) — 1440/1280/768/390/375 da gorizontal
+  siljish yo'q, element ekrandan chiqmaydi, sticky amal paneli pastki
+  navigatsiya bilan kesishmaydi, raqamli klaviatura va solishtiruv varag'i
+  ishlaydi.
+- `npm run test:kunlik` (27) va `test:smena` (14) yangi shartnomaga
+  moslashtirildi.
 ---
 
 ## Kategoriyalar sahifasi — xavfsiz boshqaruv va registrsiz dublikat himoyasi (2026-08-25)
@@ -4538,6 +4626,107 @@ O'tdi: kirim-chiqim, visibility, isolation, qarz, tolov-taqsimoti,
 kategoriya, soft-delete, csv-import, kunlik, agregat, modules, crm,
 tasdiqlash, kop-biznes, selos-kg, smoke — hammasi yashil, build ham.
 
+## Kirim/Chiqim: kategoriya kesimi qaytarildi, davr yakuni huquqqa bog'landi (2026-08-25)
+
+Uch talab: (1) asosiy ro'yxat sana emas, KATEGORIYA bo'yicha bo'lsin;
+(2) to'lov usuli taqsimoti yuqoridan olib tashlansin; (3) Kirim/Chiqim/Sof
+faqat direktorga ko'rinsin — CSS bilan yashirish emas.
+
+(2) va (3) ning UI qismi oldingi yozuvda bajarilgan edi; bu yozuv
+kategoriya kesimini va huquqning SERVER tomonidagi majburlanishini
+qo'shadi.
+
+### 1. Kategoriya kesimi — sahifaning asosiy ro'yxati
+
+Ierarxiya endi: Kirim/Chiqim → BO'LIM (Kirim / Chiqim) → KATEGORIYA →
+o'sha kategoriyaning yozuvlari → yozuvlar ichida sana guruhi (Bugun /
+Kecha / eskiroq).
+
+Kategoriya jamlari SERVERDA hisoblanadi — `listKategoriyaJamlari`
+(`lib/queries/transactions.ts`). U mavjud `buildTransactionWhere` dan
+yuradi, ya'ni ro'yxat, eksport va kategoriya kesimi AYNI filtrdan
+chiqadi. Bu eng muhim invariant: kartadagi summa ochilgandagi yozuvlar
+yig'indisiga TENG (test bilan qulflangan — har kategoriya uchun
+`total` va yig'indi solishtiriladi).
+
+Kategoriya ochilganda yozuvlar `/api/transactions?categoryId=...` dan,
+joriy filtr parametrlari bilan keladi. Sana filtri, qidiruv, to'lov va
+xodim filtri kesimga ham, ichkaridagi yozuvlarga ham bir xil qo'llanadi.
+
+Kirim va chiqim ikki ALOHIDA bo'limda: bitta ro'yxatda aralashsa,
+"+"/"−" belgilariga qaramay ko'z ularni qo'shib o'qiydi va bo'lim
+yig'indisi ma'nosini yo'qotadi.
+
+Tekis ro'yxat YO'QOLMADI: "Kategoriya | Ro'yxat" almashtirgichi bor
+(`?korinish=royxat`), asosiysi — kategoriya. Ro'yxat ko'rinishida
+desktop jadvali, ommaviy belgilash, ko'chirish va sahifalash avvalgidek
+ishlaydi.
+
+QARZ haqida: bu sahifadagi ro'yxat qarzga yozilgan yozuvlarni HAM
+ko'rsatadi (`realPul` yoqilmagan), demak kategoriya jamisi ham ularni
+o'z ichiga oladi. Yuqoridagi "Sof" esa ataylab REAL pul
+(`lib/qarzFiltr.ts`) — u boshqa savolga javob beradi.
+
+### 2. Davr yakuni — mavjud granular huquq bilan
+
+Yangi ruxsat tizimi kiritilmadi. Mavjud `lib/permissions` katalogidagi
+`hisobot.korish` huquqi ishlatiladi:
+
+* OWNER va ADMIN — bor (`BARCHA_HUQUQLAR`);
+* CASHIER va SELLER — YO'Q;
+* maxsus rol (PRO) — biznes egasi o'zi bera oladi.
+
+Sahifa: huquq yo'q bo'lsa `totals` klientga UMUMAN yuborilmaydi
+(`totals={jamiKorish ? result.totals : null}`) — HTMLda ham yo'q, bo'sh
+karta ham qolmaydi, filtrlar tepaga suriladi.
+
+API: `/api/transactions` GET huquq yo'q bo'lsa javobdan `totals` ni
+olib tashlaydi. Ro'yxat, sahifalash va kunlik jamlar hammaga avvalgidek
+qaytadi — xodimning kundalik ishi to'xtamaydi. Brauzerda tekshirildi:
+kassir uchun `"totals" in javob === false`, `items` esa joyida.
+
+Eslatma: ADMIN ham ko'radi. `isManager` va `BARCHA_HUQUQLAR` bo'yicha
+ADMIN — OWNER bilan teng huquqli va bosh sahifada AYNI raqamlarni
+ko'radi; uni faqat shu kartadan uzish himoya bermas, shunchaki
+nomuvofiqlik tug'dirardi. Faqat OWNER kerak bo'lsa — `katalog.ts` dagi
+ADMIN to'plamidan `hisobot.korish` ni olib tashlash kifoya.
+
+### 3. Fayllar
+
+Yangi: `KategoriyaKorinish.tsx` (kesim + yuklash), `KategoriyaBolimi.tsx`
+(bir bo'lim), `YozuvOynalari.tsx` (tafsilot/tahrirlash/o'chirish oynalari
+— ikkala ko'rinish uchun bitta to'plam), `useYozuvHolati.ts` (ro'yxat
+holati va optimistik amallar).
+
+O'zgargan: `page.tsx` (filtr bitta joyda, kesim + huquq so'rovi),
+`TransactionsClient.tsx`, `TransactionList.tsx`, `TransactionCards.tsx`
+(kategoriya ichida nomi takrorlanmaydi), `lib/queries/transactions.ts`,
+`api/transactions/route.ts`.
+
+**Sxema o'zgarmadi, migratsiya yo'q.**
+
+### 4. Test
+
+`test:kirim-chiqim` 12 → 19 ta. Yangi: kategoriya takrorlanmasligi,
+jami = yozuvlar yig'indisi (har kategoriya uchun), kirim/chiqim
+aralashmasligi, sana filtri kesimni o'zgartirishi, qidiruv, ko'rinuvchanlik
+chegarasi, `hisobot.korish` matritsasi.
+
+`test:smoke` — kirim qo'shish oqimi yangi ko'rinishga moslandi: yozuv
+kategoriya ochilganda va "Ro'yxat" ko'rinishida topiladi.
+
+O'tdi (fail 0): kirim-chiqim 19, visibility 10, isolation 22,
+izolyatsiya-royxati 9, qarz 16, tolov-taqsimoti 11, kategoriya 11,
+soft-delete 8, csv-import 13, kunlik 27, agregat 7, modules 15, crm 24,
+tasdiqlash 20, kop-biznes 18, selos-kg 21, foydalanuvchilar 34,
+kassa-nazorat 23. Build va TypeScript ham toza.
+
+QOLGAN QIZIL (meniki emas): `test:smoke` dagi `/app/ombor` sarlavha
+tekshiruvi. Ombor/Ta'minot birlashtirish commiti smoke ro'yxatidagi
+`/app/xarid` ni `/app/ombor` ga almashtirgan, lekin e2e fixture'da
+admin biznesi ataylab `omborli = 0` (`scripts/e2e-tayyorla.mjs`), yangi
+`/app/ombor/page.tsx` esa bunda `/app` ga yo'naltiradi. Mahsulot xatosi
+emas — testning o'z fixture'i bilan ziddiyati.
 ## Boshqaruv paneli (/app) — Business Control Center
 
 Bosh sahifa oddiy statistika ro'yxatidan biznes holatini 10 soniyada
@@ -4724,3 +4913,107 @@ MODULE_NOT_ENABLED alohida qayta ishlanadi).
   (isolation va h.k.) ishga tushirilmadi; sxema/migratsiya O'ZGARMAGAN.
 
 **Sxema o'zgarmadi, migratsiya yo'q.**
+## 2026-08-25 — BALANSA AI: savol-javob blokidan BUSINESS COPILOT'ga
+
+Faqat `/app/ai` va unga kerak bo'lgan backend AI/analitika qatlami
+o'zgardi. Boshqa sahifalar va modullar tegilmadi.
+
+### Muammo
+
+Eski AI bloki ~135 satrlik kichik kartochka edi va olti dona umumiy
+tool'ga tayanardi (`oylik_xulosa`, `kategoriya_taqsimoti`, `oylik_trend`,
+`qarzdorlik`, `crm_holati`, `vazifalar_holati`). Uchta jiddiy kamchilik:
+
+1. **Ruxsat qatlami yo'q edi.** Tool'lar faqat MODUL yoqilganini
+   tekshirardi, granular huquqni emas — ya'ni hisobot huquqi olib
+   qo'yilgan foydalanuvchi AI orqali sof foydani so'rab olaverardi.
+2. **Davr tushunchasi yo'q edi.** Faqat "oy" bor edi: "bugun qancha
+   kirdi?", "shu hafta?", "iyulni avgust bilan solishtir" — javobsiz.
+3. **Raqamni model yozardi.** Tool xom JSON qaytarardi, foiz va farqni
+   model o'zi hisoblardi — ya'ni taxminiy raqam yozish yo'li ochiq edi.
+
+### Yechim: to'rt qatlam
+
+`lib/ai/davr.ts` — davr kodini ("bugun", "3oy", "2026-07",
+"2026-07-01:2026-07-15") chegaraga aylantiradi. Model sana hisoblamaydi.
+
+`lib/ai/ruxsat.ts` — XAVFSIZLIK CHEGARASI. Sakkiz soha (moliya, hisobot,
+kassa, qarz, ombor, crm, vazifalar, mijozlar), har biri o'sha sohaning
+SAHIFASI talab qiladigan AYNI huquq bilan ochiladi (`lib/permissions`).
+Ruxsatsiz soha tool'i modelga umuman yuborilmaydi.
+
+`lib/ai/analitika.ts` — deterministik agregatlar. Farq, foiz, ulush va
+"eng kattasi" SERVERDA hisoblanadi, modelga tayyor raqam va tayyor matn
+("138,3 mln so'm") boradi. Qarz filtri (`QARZ_EMAS`) va soft-delete
+butun tizim bilan bir xil, ya'ni AI javobi bosh sahifa va oylik hisobot
+bilan bitta raqamni ko'rsatadi.
+
+`lib/ai/tools.ts` — 12 ta tool, hammasi FAQAT O'QISH. `businessId`
+har doim serverdagi kontekstdan; savol matnidagi "boshqa biznes ID sini
+tekshir" kabi ko'rsatma tool darajasida ta'sirsiz.
+
+### Hallutsinatsiyaga qarshi uch qavat
+
+1. Tool natijasi tayyor matn beradi — model formatlamaydi va hisoblamaydi.
+2. System prompt: ma'lumot yo'q bo'lsa "Bu ma'lumotni aniq hisoblash uchun
+   yetarli ma'lumot topilmadi" deb ayt, taxmin qilma.
+3. `raqamNazorati()` — model birorta tool chaqirmagan bo'lsa, javobdagi
+   pul ko'rinishidagi raqam BLOKLANADI (o'ylab topilgan bo'lishi aniq).
+
+### Chat tarixi — yangi jadval
+
+`AiConversation` da foydalanuvchi × biznes uchun ATIGI BITTA qator bor
+edi. `AiSuhbat` o'sha cheklovni olib tashlaydi (ko'p suhbat, sarlavha
+bilan). Migratsiya eski yozishmalarni ko'chiradi va shundan keyin eski
+jadvalni o'chiradi — ma'lumot yo'qolmaydi.
+
+Egalik kaliti o'zgarmagan: `(businessId, userId)`. `rawPrisma` ataylab —
+har chat xabari scoped klient orqali audit jurnaliga tushib, jurnalni
+shovqinga to'ldirardi (`tests/audit.test.ts` buni qo'riqlaydi).
+
+### AI'siz ishlaydigan qismlar (token tejash)
+
+"Bugungi xulosa" kartasi, tayyor savollar va javobdan keyingi chiplar —
+hammasi deterministik. Sahifa ochilishi bitta ham AI so'rovi sarflamaydi.
+
+Fayllar: `src/lib/ai/{davr,ruxsat,analitika,xulosa,tools,claude,suhbatlar,takliflar,javobFormat}.ts`,
+`src/app/api/ai/chat/route.ts`, `src/app/api/ai/suhbatlar/**`,
+`src/app/app/ai/**` (7 ta komponent), `prisma/schema.prisma`,
+`prisma/migrations/20260825140000_ai_copilot_suhbatlar/`.
+
+**Migratsiya bor** — `--create-only` uslubida yozildi, apply QILINMADI
+(deploy paytida `scripts/db-migrate.mjs` o'zi qo'llaydi; undan oldin
+`scripts/deploy-zaxira.mjs` xom surat oladi). Xavf darajasi: past —
+bitta CREATE TABLE + INSERT…SELECT + DROP; ko'chirish scratch bazada
+haqiqiy yozuv bilan sinaldi.
+
+Test: `npm run test:ai` (28 ta — aniqlik, RBAC, tenant, prompt injection,
+hallutsinatsiya, suhbat izolyatsiyasi) va `npm run test:ai-e2e` (8 ta —
+1440/1280/768/390/375 da gorizontal siljish yo'q, kompozer ko'rinadi,
+pastki menyu bilan ustma-ust tushmaydi). `npm run build` ✅.
+
+### 2026-08-25 — Kassir/sotuvchi bosh sahifasi yiqilishi (tugadi)
+
+**Muammo (production, foydalanuvchi skrinshoti):** kassir yoki sotuvchi
+tizimga kirganda `/app` sahifasi "Tizimda vaqtincha nosozlik" xato ekraniga
+tushardi. Direktor/administratorda hammasi ishlagani uchun sinovlarda
+sezilmagan.
+
+**Ildiz sabab:** `src/app/app/page.tsx` da kassir/sotuvchi tarmog'i
+`runWithTenant(...)` callback ichidan `<XodimEkrani/>` ni JSX sifatida
+qaytarardi. React async server komponentni callback TUGAGANDAN KEYIN render
+qiladi — AsyncLocalStorage konteksti allaqachon yopilgan, `XodimEkrani`
+ichidagi tenant-scoped `prisma` so'rovlari "Tenant konteksti yo'q" bilan
+yiqilardi. Panel redizayni (fc98003) kassir mantiqini alohida async
+komponentga ajratganda kirib qolgan regressiya.
+
+**Tuzatish:** JSX o'rniga to'g'ridan-to'g'ri chaqiruv —
+`return await XodimEkrani({ session })`. Shunda barcha so'rovlar kontekst
+ichida bajariladi. Boshqa sahifa komponentlari tekshirildi: faqat
+`XodimEkrani` o'zi ma'lumot yuklaydi, qolganlari props orqali oladi —
+xato boshqa joyda takrorlanmaydi.
+
+**Tekshiruv:** production build + haqiqiy brauzerda (390px, iPhone UA)
+kassir bilan `/app`, tranzaksiyalar, kunlik, pos, sotuv, qarzlar, crm,
+vazifalar — hammasi ochiladi; admin paneli o'zgarmagan. `npm run build` ✅,
+`test:isolation` (22) ✅, `test:panel` (22) ✅, `test:visibility` (10) ✅.

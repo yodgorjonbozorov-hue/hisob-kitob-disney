@@ -9,19 +9,40 @@ import {
   KUNLIK_TOLOV_TURLARI,
   type KunlikTolovTuri,
 } from "@/lib/validation/kunlik";
+import { SummaInput, sonOqi } from "./SummaInput";
 
-/** Bugungi kunga tushum kiritish kartasi — xodimning asosiy amali. */
-export function TushumForm({ onDone }: { onDone: () => void }) {
+/**
+ * TUSHUM KIRITISH — xodimning asosiy amali.
+ *
+ * ═══ BU ODDIY KIRIM (dublikat emas) ═══
+ * Yuborilganda serverda HAQIQIY kirim yozuvi (`Transaction`) yaraladi va
+ * unga bog'langan kunlik qatori quriladi. Ya'ni bu forma "ikkinchi kirim
+ * daftari" emas — u Yozuvlar bo'limidagi kirim bilan AYNAN bir xil yozuvni
+ * yaratadi, faqat kassir uchun qisqartirilgan ko'rinishda: kategoriya,
+ * summa, to'lov turi.
+ *
+ * Shu sababli kategoriya tanlanadi — aks holda pul "Kunlik tushum" degan
+ * yagona zaxira kategoriyaga to'planib, kategoriya kesimini ma'nosiz
+ * qilib qo'yardi.
+ */
+export function TushumForm({
+  kategoriyalar,
+  onDone,
+}: {
+  kategoriyalar: { id: string; nomi: string }[];
+  onDone: () => void;
+}) {
   const [summa, setSumma] = useState("");
   const [tolovTuri, setTolovTuri] = useState<KunlikTolovTuri>("CASH");
+  const [categoryId, setCategoryId] = useState(kategoriyalar[0]?.id ?? "");
   const [izoh, setIzoh] = useState("");
   const [loading, setLoading] = useState(false);
   const [xato, setXato] = useState<string | null>(null);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    const son = Number(summa.replace(/[\s,]/g, ""));
-    if (!Number.isInteger(son) || son <= 0) {
+    const son = sonOqi(summa);
+    if (son === null || son <= 0) {
       setXato("Summa 0 dan katta butun son bo'lishi kerak");
       return;
     }
@@ -31,7 +52,12 @@ export function TushumForm({ onDone }: { onDone: () => void }) {
       const res = await fetch("/api/kunlik/tushum", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ summa: son, tolovTuri, izoh: izoh.trim() || undefined }),
+        body: JSON.stringify({
+          summa: son,
+          tolovTuri,
+          categoryId: categoryId || undefined,
+          izoh: izoh.trim() || undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -50,58 +76,77 @@ export function TushumForm({ onDone }: { onDone: () => void }) {
 
   return (
     <Card>
-      <h2 className="font-semibold text-fg mb-3">Tushum kiritish</h2>
+      <h2 className="font-semibold text-fg">Tushum kiritish</h2>
+      <p className="text-2xs text-faint mb-3">
+        Bu oddiy KIRIM yozuvi — Jami Kirim va kassa qoldig&apos;iga darhol tushadi.
+      </p>
+
       <form onSubmit={submit} className="space-y-3">
-        <div className="grid grid-cols-3 gap-2">
-          {KUNLIK_TOLOV_TURLARI.map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTolovTuri(t)}
-              className={`px-3 py-2 rounded-lg border text-sm transition ${
-                tolovTuri === t
-                  ? "border-brand bg-brand-wash text-brand font-medium"
-                  : "border-line bg-surface-2 text-fg hover:border-brand"
-              }`}
-            >
-              {KUNLIK_TOLOV_BELGI[t]} {KUNLIK_TOLOV_NOMI[t]}
-            </button>
-          ))}
+        <div>
+          <p className="text-sm text-muted mb-1.5">To&apos;lov turi</p>
+          <div className="grid grid-cols-3 gap-2">
+            {KUNLIK_TOLOV_TURLARI.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTolovTuri(t)}
+                aria-pressed={tolovTuri === t}
+                className={`min-h-[48px] px-2 rounded-xl border text-sm transition ${
+                  tolovTuri === t
+                    ? "border-brand bg-brand-wash text-brand font-medium"
+                    : "border-line bg-surface-2 text-fg hover:border-brand"
+                }`}
+              >
+                {KUNLIK_TOLOV_BELGI[t]} {KUNLIK_TOLOV_NOMI[t]}
+              </button>
+            ))}
+          </div>
+          {tolovTuri === "DEBT" && (
+            <p className="text-2xs text-faint mt-1">
+              📋 Qarz — pul kassaga tushmaydi, kassa qoldig&apos;i o&apos;zgarmaydi.
+            </p>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {kategoriyalar.length > 0 && (
           <div>
-            <label className="block text-sm text-muted mb-1" htmlFor="kunlik-summa">
-              Summa (so&apos;m)
+            <label className="block text-sm text-muted mb-1" htmlFor="kunlik-kategoriya">
+              Kategoriya
             </label>
-            <input
-              id="kunlik-summa"
-              value={summa}
-              onChange={(e) => setSumma(e.target.value)}
-              required
-              inputMode="numeric"
-              placeholder="150 000"
-              className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-line text-fg tnum"
-            />
+            <select
+              id="kunlik-kategoriya"
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+              className="w-full min-h-[48px] px-3 py-2 rounded-xl bg-surface-2 border border-line text-fg focus:border-brand focus:outline-none"
+            >
+              {kategoriyalar.map((k) => (
+                <option key={k.id} value={k.id}>
+                  {k.nomi}
+                </option>
+              ))}
+            </select>
           </div>
-          <div>
-            <label className="block text-sm text-muted mb-1" htmlFor="kunlik-izoh">
-              Izoh (ixtiyoriy)
-            </label>
-            <input
-              id="kunlik-izoh"
-              value={izoh}
-              onChange={(e) => setIzoh(e.target.value)}
-              maxLength={300}
-              placeholder="Masalan: guldasta buyurtmasi"
-              className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-line text-fg"
-            />
-          </div>
+        )}
+
+        <SummaInput id="kunlik-summa" label="Summa (so'm)" value={summa} onChange={setSumma} />
+
+        <div>
+          <label className="block text-sm text-muted mb-1" htmlFor="kunlik-izoh">
+            Izoh (ixtiyoriy)
+          </label>
+          <input
+            id="kunlik-izoh"
+            value={izoh}
+            onChange={(e) => setIzoh(e.target.value)}
+            maxLength={300}
+            placeholder="Masalan: guldasta buyurtmasi"
+            className="w-full min-h-[44px] px-3 py-2 rounded-xl bg-surface-2 border border-line text-fg focus:border-brand focus:outline-none"
+          />
         </div>
 
         {xato && <p className="text-sm text-expense">{xato}</p>}
 
-        <Button type="submit" loading={loading}>
+        <Button type="submit" loading={loading} size="lg" className="w-full sm:w-auto">
           Qo&apos;shish
         </Button>
       </form>

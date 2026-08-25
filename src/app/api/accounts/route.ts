@@ -5,6 +5,7 @@ import { resolveActiveBusinessId } from "@/lib/business";
 import { listAccounts, getAccountBalances } from "@/lib/queries/accounts";
 import { createAccount } from "@/lib/services/accounts";
 import { createAccountSchema } from "@/lib/validation/account";
+import { dashboardYangilandi } from "@/lib/cache";
 
 /**
  * Kassa/hisob-raqamlar ro'yxati.
@@ -35,5 +36,7 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
   }
 
   const account = await createAccount(businessId, parsed.data);
+  // Dashboard "Kassadagi pul" kartasi faol kassalar SONINI ham ko'rsatadi.
+  dashboardYangilandi(businessId);
   return NextResponse.json(account, { status: 201 });
 });

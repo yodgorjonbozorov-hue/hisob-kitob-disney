@@ -3,6 +3,7 @@ import { withTenant } from "@/lib/auth/tenant";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { createDeal } from "@/lib/crm/service";
 import { buyurtmaSchema } from "@/lib/validation/crm";
+import { dashboardYangilandi } from "@/lib/cache";
 
 /** Yangi kunlik buyurtma (kategoriya + mijoz + narx + sana). */
 export const POST = withTenant(
@@ -16,6 +17,8 @@ export const POST = withTenant(
     }
 
     const deal = await createDeal({ businessId, userId: user.userId, ...parsed.data });
+    // Dashboard "Bugungi holat" bloki bugungi buyurtmalarni sanaydi.
+    dashboardYangilandi(businessId);
     return NextResponse.json(deal, { status: 201 });
   },
   { module: "CRM" }

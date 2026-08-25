@@ -4,91 +4,27 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import type { SmenaDTO, SmenaHolatDTO } from "@/lib/queries/smena";
+import type { SmenaHolatDTO } from "@/lib/queries/smena";
 import type { KunlikRuxsat } from "@/lib/services/kunlik";
 import { SmenaYopishModal } from "./SmenaYopishModal";
+import { SmenaQatori, Qator } from "./SmenaQatori";
 import { soatToshkent } from "./vaqt";
 
-/** Farq satri — nazoratning yuragi: kam chiqqan pul darhol ko'rinadi. */
-function Farq({ farq }: { farq: number }) {
-  if (farq === 0) return <span className="text-brand font-medium">✅ Mos</span>;
-  return (
-    <span className="text-expense font-semibold">
-      {farq < 0
-        ? `⚠️ KAM: −${Math.abs(farq).toLocaleString("uz-UZ")} so'm`
-        : `⚠️ Ortiqcha: +${farq.toLocaleString("uz-UZ")} so'm`}
-    </span>
-  );
-}
-
-function YopilganSmena({
-  s,
-  oxirgimi,
-  ruxsat,
-  onQaytaOch,
-  loading,
-}: {
-  s: SmenaDTO;
-  oxirgimi: boolean;
-  ruxsat: KunlikRuxsat;
-  onQaytaOch: (id: string) => void;
-  loading: boolean;
-}) {
-  return (
-    <li className="py-3 space-y-1">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-medium text-fg">
-          {s.raqam}-smena
-          <span className="text-muted font-normal">
-            {" "}
-            · {soatToshkent(s.boshlanishAt)}–{soatToshkent(s.tugashAt)} ·{" "}
-            {s.yopganIsm ?? "—"}
-          </span>
-        </p>
-        <Farq farq={s.farq} />
-      </div>
-      <div className="text-2xs text-muted tnum flex flex-wrap gap-x-3 gap-y-0.5">
-        <span>
-          Tizim hisobi: <span className="text-fg">{s.kutilganNaqd.toLocaleString("uz-UZ")}</span>
-        </span>
-        <span>
-          Sanaldi: <span className="text-fg">{s.sanalganNaqd.toLocaleString("uz-UZ")}</span>
-        </span>
-        <span>💵 {s.naqd.toLocaleString("uz-UZ")}</span>
-        <span>💳 {s.click.toLocaleString("uz-UZ")}</span>
-        <span>📋 {s.qarz.toLocaleString("uz-UZ")}</span>
-        {s.naqdChiqim > 0 && <span>📉 {s.naqdChiqim.toLocaleString("uz-UZ")}</span>}
-        {s.boshlangichQoldiq > 0 && (
-          <span>Boshida: {s.boshlangichQoldiq.toLocaleString("uz-UZ")}</span>
-        )}
-        <span>
-          Kassada qoldi:{" "}
-          <span className="text-fg">{s.qoldirilganNaqd.toLocaleString("uz-UZ")}</span>
-        </span>
-      </div>
-      {s.izoh && <p className="text-2xs text-faint">Izoh: {s.izoh}</p>}
-      {oxirgimi && ruxsat.tahrirlaydi && (
-        <button
-          onClick={() => onQaytaOch(s.id)}
-          disabled={loading}
-          className="text-2xs text-muted hover:underline disabled:opacity-50"
-        >
-          Qayta ochish (xato yopilgan bo&apos;lsa)
-        </button>
-      )}
-    </li>
-  );
-}
-
 /**
- * SMENA KARTASI — ikki smenali savdo uchun kassa nazorati.
+ * SMENA NAZORATI — kassa solishtiruvi (cash reconciliation).
  *
- * Joriy smena oxirgi yopilgan smenadan boshlanadi: 1-smena yopilib pul
- * topshirilgach, 2-smena 0 dan boshlanadi va o'z puli bilan yuradi.
- * Kunning JAMI kirim/chiqim raqamlariga tegilmaydi — smena kun ichidagi kesim.
+ * ═══ NIMA KO'RSATILADI ═══
+ * Ilgari bu yerda faqat "Kassada bo'lishi kerak: N" degan yalang'och raqam
+ * turardi va u qayerdan chiqqani ko'rinmasdi. Endi zanjir to'liq:
+ *   smena boshi → +naqd kirim → −naqd chiqim → tizim bo'yicha kassada.
+ * Foydalanuvchi raqamni tekshira oladi, ishonmasa qaysi qadam noto'g'ri
+ * ekanini ko'radi.
  *
- * Tizim hisobi (kutilgan naqd) joriy smena uchun faqat direktor/boshqaruvchiga
- * ko'rsatiladi: xodim uni oldindan ko'rsa sanashning ma'nosi qolmaydi.
+ * ═══ OYNA — BIZNES BO'YICHA ═══
+ * Smena oynasi butun biznesning naqd harakati (kim kiritganidan qat'i nazar).
+ * Shaxsiy kassa rejimidagi biznesda "sizning kassangiz" raqami ALOHIDA —
+ * u kun yakuni kartasida ko'rsatiladi. Ikkalasi ataylab turlicha nomlangan,
+ * chunki ular turli savolga javob beradi.
  */
 export function SmenaCard({
   holat,
@@ -135,54 +71,86 @@ export function SmenaCard({
   return (
     <Card>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <p className="text-sm text-muted">🔁 Smena nazorati</p>
           {joriy ? (
-            <>
-              <p className="text-lg font-semibold text-fg mt-1">
-                {joriy.raqam}-smena · ochiq
-                <span className="text-sm text-muted font-normal">
-                  {" "}
-                  {soatToshkent(joriy.boshlanishAt)} dan beri
-                </span>
-              </p>
-              {ruxsat.tarixniKoradi ? (
-                <p className="text-sm text-muted mt-1 tnum">
-                  Kassada bo&apos;lishi kerak:{" "}
-                  <span className="text-fg font-medium">
-                    {joriy.kutilganNaqd.toLocaleString("uz-UZ")} so&apos;m
-                  </span>
-                  {joriy.boshlangichQoldiq > 0 && (
-                    <span className="text-faint">
-                      {" "}
-                      (boshida {joriy.boshlangichQoldiq.toLocaleString("uz-UZ")})
-                    </span>
-                  )}
-                </p>
-              ) : (
-                <p className="text-sm text-muted mt-1">
-                  Smena oxirida kassadagi naqdni sanab kiriting.
-                </p>
-              )}
-            </>
+            <p className="text-base sm:text-lg font-semibold text-fg mt-0.5">
+              {joriy.raqam}-smena · ochiq
+              <span className="text-sm text-muted font-normal">
+                {" "}
+                · {soatToshkent(joriy.boshlanishAt)} dan beri
+              </span>
+            </p>
           ) : (
             <p className="text-sm text-muted mt-1">
               O&apos;tgan kun — shu kunda yopilgan smenalar quyida.
             </p>
           )}
         </div>
-        {joriy && bugungi && (
-          <div className="text-right">
-            <Button onClick={() => setModal(true)}>🔒 Smenani yopish</Button>
-            <p className="text-2xs text-faint mt-1">Pul topshiriladi, keyingisi 0 dan boshlanadi</p>
-          </div>
-        )}
       </div>
+
+      {joriy && (
+        <div className="mt-3 rounded-xl border border-line bg-surface-2 p-3">
+          {joriy.boshlangichQoldiq > 0 && (
+            <Qator belgi="🔓" nomi="Smena boshida kassada" summa={joriy.boshlangichQoldiq} />
+          )}
+          <Qator belgi="📈" nomi="Naqd kirim" summa={joriy.naqd} tone="income" signed />
+          <Qator belgi="📉" nomi="Naqd chiqim" summa={-joriy.naqdChiqim} tone="expense" signed />
+          <div className="border-t border-line mt-1 pt-1">
+            <Qator
+              belgi="💵"
+              nomi="Tizim bo'yicha kassada"
+              summa={joriy.kutilganNaqd}
+              tone={joriy.kutilganNaqd < 0 ? "expense" : "brand"}
+              kuchli
+            />
+          </div>
+          {(joriy.click > 0 || joriy.qarz > 0) && (
+            <p className="text-2xs text-faint mt-1.5">
+              💳 Click {joriy.click.toLocaleString("uz-UZ")} · 📋 Qarz{" "}
+              {joriy.qarz.toLocaleString("uz-UZ")} — bu pul jismoniy kassada emas, shuning uchun
+              yuqoridagi hisobga kirmaydi.
+            </p>
+          )}
+
+          {/* MANFIY QOLDIQ — sabab bilan tushuntiriladi, jim qoldirilmaydi. */}
+          {joriy.kutilganNaqd < 0 && (
+            <div className="mt-2 rounded-lg bg-expense-soft p-2.5">
+              <p className="text-2xs text-expense-fg">
+                ⚠ Kassa qoldig&apos;i manfiy. Bu odatda naqd chiqim naqd kirimdan ko&apos;p
+                bo&apos;lganini bildiradi: masalan pul boshqa kassadan olib ishlatilgan yoki
+                chiqim to&apos;lov turi xato tanlangan.
+              </p>
+              <p className="text-2xs text-muted mt-1">
+                Tekshirish: pastdagi &quot;Bugungi operatsiyalar&quot; ro&apos;yxatida naqd
+                chiqimlarni ko&apos;rib chiqing.
+              </p>
+            </div>
+          )}
+
+          {!ruxsat.tarixniKoradi && (
+            <p className="text-2xs text-faint mt-2">
+              Smena oxirida kassadagi naqdni SANAB kiriting — tizim solishtiradi.
+            </p>
+          )}
+        </div>
+      )}
+
+      {joriy && bugungi && (
+        <div className="mt-3">
+          <Button variant="secondary" onClick={() => setModal(true)}>
+            🔒 Smenani yopish
+          </Button>
+          <p className="text-2xs text-faint mt-1">
+            Pul topshiriladi, keyingi smena 0 dan boshlanadi
+          </p>
+        </div>
+      )}
 
       {holat.yopilganlar.length > 0 && (
         <ul className="mt-4 divide-y divide-line border-t border-line">
           {holat.yopilganlar.map((s) => (
-            <YopilganSmena
+            <SmenaQatori
               key={s.id}
               s={s}
               oxirgimi={s.id === oxirgiId && bugungi}
@@ -206,6 +174,7 @@ export function SmenaCard({
       {modal && joriy && (
         <SmenaYopishModal
           raqam={joriy.raqam}
+          kutilganNaqd={ruxsat.tarixniKoradi ? joriy.kutilganNaqd : null}
           onClose={() => setModal(false)}
           onDone={() => {
             setModal(false);

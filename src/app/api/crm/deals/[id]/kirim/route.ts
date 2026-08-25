@@ -3,6 +3,7 @@ import { withTenant } from "@/lib/auth/tenant";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { kirimgaKochirish, buyurtmaKirimi } from "@/lib/crm/kirim";
 import { kirimgaSchema } from "@/lib/validation/crm";
+import { dashboardYangilandi } from "@/lib/cache";
 
 /**
  * BUYURTMANI KIRIMGA O'TKAZISH.
@@ -29,6 +30,9 @@ export const POST = withTenant<{ params: { id: string } }>(
       accountId: parsed.data.accountId,
       tolovTuri: parsed.data.tolovTuri,
     });
+    // Bu amal HAQIQIY kirim tranzaksiyasi yozadi: "Jami kirim", kassa
+    // qoldig'i va "Bugungi holat" — hammasi darhol yangilanishi shart.
+    dashboardYangilandi(businessId);
     return NextResponse.json({ transactionId: txn.id, summa: txn.summa }, { status: 201 });
   },
   { module: "CRM" }

@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
-import { dateOnlyStringToUTCDate, utcDateToDateOnlyString } from "@/lib/date";
+import { dateOnlyStringToUTCDate, utcDateToDateOnlyString, TOSHKENT_OFFSET_MS } from "@/lib/date";
 import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
+import { naqdChiqimmi } from "@/lib/services/smena";
+import { QOLDIQ_HOLATLARI } from "@/lib/validation/account";
 
 /**
  * KUNLIK HISOBOT o'qish so'rovlari. Faqat o'qish — yozish lib/services/kunlik.ts da.
@@ -38,9 +40,20 @@ export interface KunlikReportDTO {
   /** Kassa topshiruvi (pul nazorati). */
   submittedByIsm: string | null;
   submittedAt: string | null;
+  /** Kassir SANAB topshirgan naqd. */
   sanalganNaqd: number | null;
-  /** sanalganNaqd − naqdSumma; topshirilmagan bo'lsa null. Manfiy = KAM. */
+  /**
+   * TIZIM HISOBI — topshirish paytida muzlatilgan kassa qoldig'i.
+   * Eski (migratsiyagacha) kunlarda null.
+   */
+  kutilganNaqd: number | null;
+  /** sanalganNaqd − kutilganNaqd; topshirilmagan bo'lsa null. Manfiy = KAM. */
   naqdFarq: number | null;
+  /** Kassirning topshirish izohi va direktorning qaror izohi. */
+  izoh: string | null;
+  qarorIzoh: string | null;
+  /** Kun topshirig'ining pul harakati (AccountTransfer) IDsi — bo'lmasa null. */
+  transferId: string | null;
   confirmedByIsm: string | null;
   confirmedAt: string | null;
   items: KunlikTushumDTO[];
@@ -89,7 +102,11 @@ export async function getKunlikReport(businessId: string, sanaStr: string): Prom
       submittedByIsm: null,
       submittedAt: null,
       sanalganNaqd: null,
+      kutilganNaqd: null,
       naqdFarq: null,
+      izoh: null,
+      qarorIzoh: null,
+      transferId: null,
       confirmedByIsm: null,
       confirmedAt: null,
       items: [],
@@ -108,7 +125,16 @@ export async function getKunlikReport(businessId: string, sanaStr: string): Prom
     submittedByIsm: report.submittedByIsm,
     submittedAt: report.submittedAt ? report.submittedAt.toISOString() : null,
     sanalganNaqd: report.sanalganNaqd,
-    naqdFarq: report.sanalganNaqd === null ? null : report.sanalganNaqd - report.naqdSumma,
+    kutilganNaqd: report.kutilganNaqd,
+    // Farq MUZLATILGAN qiymatdan o'qiladi. Eski kunlarda u yo'q — o'sha
+    // yerda avvalgi (naqd kirimga qarab) taqqoslash saqlanadi, aks holda
+    // tarixdagi raqamlar "o'z-o'zidan" o'zgarib ketardi.
+    naqdFarq:
+      report.kassaFarq ??
+      (report.sanalganNaqd === null ? null : report.sanalganNaqd - report.naqdSumma),
+    izoh: report.izoh,
+    qarorIzoh: report.qarorIzoh,
+    transferId: report.transferId,
     confirmedByIsm: report.confirmedByIsm,
     confirmedAt: report.confirmedAt ? report.confirmedAt.toISOString() : null,
     items: report.items.map((t) => ({
@@ -136,7 +162,11 @@ export interface KunlikTarixDTO {
   chiqimSumma: number;
   /** jamiSumma − chiqimSumma — kun sof natijasi. */
   sofSumma: number;
-  /** sanalganNaqd − naqdSumma; topshirilmagan bo'lsa null. */
+  /** Kassir topshirgan naqd (topshirilmagan bo'lsa null). */
+  sanalganNaqd: number | null;
+  /** Tizim hisobi (muzlatilgan) — eski kunlarda null. */
+  kutilganNaqd: number | null;
+  /** sanalganNaqd − kutilganNaqd; topshirilmagan bo'lsa null. */
   naqdFarq: number | null;
   submittedByIsm: string | null;
   confirmedByIsm: string | null;
@@ -178,7 +208,10 @@ export async function listKunlikTarix(businessId: string, limit = 60): Promise<K
       jamiSumma: r.jamiSumma,
       chiqimSumma,
       sofSumma: r.jamiSumma - chiqimSumma,
-      naqdFarq: r.sanalganNaqd === null ? null : r.sanalganNaqd - r.naqdSumma,
+      sanalganNaqd: r.sanalganNaqd,
+      kutilganNaqd: r.kutilganNaqd,
+      naqdFarq:
+        r.kassaFarq ?? (r.sanalganNaqd === null ? null : r.sanalganNaqd - r.naqdSumma),
       submittedByIsm: r.submittedByIsm,
       confirmedByIsm: r.confirmedByIsm,
     };
@@ -227,4 +260,301 @@ export async function listKunlikNomzodlar(businessId: string): Promise<KunlikNom
     orderBy: { ism: "asc" },
   });
   return rows;
+}
+
+// ---------------------------------------------------------------------------
+// KASSA HOLATI — "Kassada bo'lishi kerak" raqamining JONLI ko'rinishi.
+//
+// Manbasi bitta: ledger (Transaction + AccountTransfer). Xizmat qatlamidagi
+// `topshiruvchiKassaTx` bilan AYNAN bir xil formula — u tranzaksiya ichida,
+// bu esa sahifa uchun. Ikki xil hisob bo'lsa UI va topshiriq raqamlari
+// ajralib ketardi.
+// ---------------------------------------------------------------------------
+
+/** NAQD kassa filtri — jismoniy pul faqat shu turdagi kassalarda yotadi. */
+const NAQD_KASSA = { turi: "naqd" } as const;
+
+export interface KunlikKassaDTO {
+  /** Kassa qoldig'i — topshirilishi kerak bo'lgan naqd. */
+  qoldiq: number;
+  /** Pul aynan foydalanuvchining shaxsiy kassasidami. */
+  shaxsiy: boolean;
+  /** Shaxsiy kassa nomi (bo'lsa). */
+  kassaNomi: string | null;
+  /** Tasdiq kutayotgan chiqim (topshirilgan, lekin hali qabul qilinmagan). */
+  kutilayotgan: number;
+}
+
+async function kassaQoldiq(businessId: string, accountId: string): Promise<number> {
+  const [kirim, chiqim, kirgan, chiqqan] = await Promise.all([
+    prisma.transaction.aggregate({
+      where: { businessId, accountId, turi: "kirim", deletedAt: null },
+      _sum: { summa: true },
+    }),
+    prisma.transaction.aggregate({
+      where: { businessId, accountId, turi: "chiqim", deletedAt: null },
+      _sum: { summa: true },
+    }),
+    prisma.accountTransfer.aggregate({
+      where: { businessId, toAccountId: accountId, holat: { in: [...QOLDIQ_HOLATLARI] } },
+      _sum: { summa: true },
+    }),
+    prisma.accountTransfer.aggregate({
+      where: { businessId, fromAccountId: accountId, holat: { in: [...QOLDIQ_HOLATLARI] } },
+      _sum: { summa: true },
+    }),
+  ]);
+  return (
+    (kirim._sum.summa ?? 0) -
+    (chiqim._sum.summa ?? 0) +
+    (kirgan._sum.summa ?? 0) -
+    (chiqqan._sum.summa ?? 0)
+  );
+}
+
+/**
+ * Foydalanuvchining topshiradigan kassasi. Shaxsiy kassa yo'q bo'lsa —
+ * biznesning jami naqdi (u holda pul ko'chirilmaydi, faqat solishtiriladi).
+ */
+export async function getKunlikKassa(businessId: string, userId: string): Promise<KunlikKassaDTO> {
+  const shaxsiy = await prisma.account.findFirst({
+    where: { businessId, userId, isActive: true },
+    select: { id: true, nomi: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (shaxsiy) {
+    const [qoldiq, kutilayotgan] = await Promise.all([
+      kassaQoldiq(businessId, shaxsiy.id),
+      prisma.accountTransfer.aggregate({
+        where: { businessId, fromAccountId: shaxsiy.id, holat: "kutilmoqda" },
+        _sum: { summa: true },
+      }),
+    ]);
+    return {
+      qoldiq,
+      shaxsiy: true,
+      kassaNomi: shaxsiy.nomi,
+      kutilayotgan: kutilayotgan._sum.summa ?? 0,
+    };
+  }
+
+  const [kirim, chiqim, kirgan, chiqqan] = await Promise.all([
+    prisma.transaction.aggregate({
+      where: { businessId, turi: "kirim", deletedAt: null, account: NAQD_KASSA },
+      _sum: { summa: true },
+    }),
+    prisma.transaction.aggregate({
+      where: { businessId, turi: "chiqim", deletedAt: null, account: NAQD_KASSA },
+      _sum: { summa: true },
+    }),
+    prisma.accountTransfer.aggregate({
+      where: { businessId, holat: { in: [...QOLDIQ_HOLATLARI] }, toAccount: NAQD_KASSA },
+      _sum: { summa: true },
+    }),
+    prisma.accountTransfer.aggregate({
+      where: { businessId, holat: { in: [...QOLDIQ_HOLATLARI] }, fromAccount: NAQD_KASSA },
+      _sum: { summa: true },
+    }),
+  ]);
+  return {
+    qoldiq:
+      (kirim._sum.summa ?? 0) -
+      (chiqim._sum.summa ?? 0) +
+      (kirgan._sum.summa ?? 0) -
+      (chiqqan._sum.summa ?? 0),
+    shaxsiy: false,
+    kassaNomi: null,
+    kutilayotgan: 0,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// BUGUNGI OPERATSIYALAR — kun lentasi.
+//
+// Ikki TURDAGI qator ATAYLAB ajratiladi:
+//   - "kirim"/"chiqim" — BIZNES TRANZAKSIYASI, Jami Kirim/Chiqimga kiradi;
+//   - "kochish"        — ICHKI PUL HARAKATI (kassa topshirish), hisobotga
+//                        KIRMAYDI, faqat kassa egasi almashadi.
+// UI ularni turlicha ko'rsatadi — foydalanuvchi "7 mln topshirildi"ni
+// yangi kirim deb o'ylamasligi uchun.
+// ---------------------------------------------------------------------------
+
+export type KunlikOperatsiyaTuri = "kirim" | "chiqim" | "kochish";
+
+export interface KunlikOperatsiyaDTO {
+  id: string;
+  turi: KunlikOperatsiyaTuri;
+  summa: number;
+  /** Kategoriya nomi yoki ko'chirish yo'nalishi. */
+  sarlavha: string;
+  /** "Naqd" | "Click" | "Qarz" — ko'chirishda null. */
+  tolov: string | null;
+  izoh: string | null;
+  kim: string | null;
+  /** ISO — soat UI'da Toshkent bo'yicha ko'rsatiladi. */
+  vaqt: string;
+  /** Ichki ko'chirish holati: "kutilmoqda" | "bajarildi" | "rad" | "bekor". */
+  holat: string | null;
+}
+
+const TOLOV_NOMI: Record<string, string> = { naqd: "Naqd", click: "Click", qarz: "Qarz" };
+
+/** Kassa turidan to'lov nomi — to'lov turi ko'rsatilmagan eski yozuvlar uchun. */
+function tolovNomi(tolovTuri: string | null, kassaTuri: string | null): string {
+  if (tolovTuri) return TOLOV_NOMI[tolovTuri] ?? tolovTuri;
+  return naqdChiqimmi(null, kassaTuri) ? "Naqd" : "Click";
+}
+
+/**
+ * Bir kunning operatsiyalari (eng yangisi birinchi).
+ *
+ * Yozuvlar `sana` bo'yicha (hisobot bilan bir xil kesim), pul ko'chishlari
+ * esa Toshkent kun oynasi bo'yicha olinadi — ko'chirish kalendar sanaga
+ * emas, haqiqiy paytga bog'liq.
+ */
+export async function listKunlikOperatsiyalar(
+  businessId: string,
+  sanaStr: string,
+  limit = 100
+): Promise<KunlikOperatsiyaDTO[]> {
+  const sana = dateOnlyStringToUTCDate(sanaStr);
+  const kunBoshi = new Date(sana.getTime() - TOSHKENT_OFFSET_MS);
+  const kunOxiri = new Date(kunBoshi.getTime() + 24 * 60 * 60 * 1000);
+
+  const [yozuvlar, kochishlar] = await Promise.all([
+    prisma.transaction.findMany({
+      where: { businessId, deletedAt: null, sana },
+      select: {
+        id: true,
+        turi: true,
+        summa: true,
+        tolovTuri: true,
+        izoh: true,
+        createdAt: true,
+        category: { select: { nomi: true } },
+        account: { select: { turi: true } },
+        user: { select: { ism: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    }),
+    prisma.accountTransfer.findMany({
+      where: { businessId, sana: { gte: kunBoshi, lt: kunOxiri } },
+      select: {
+        id: true,
+        summa: true,
+        izoh: true,
+        sana: true,
+        holat: true,
+        turi: true,
+        fromUserIsm: true,
+        toUserIsm: true,
+        fromAccount: { select: { nomi: true } },
+        toAccount: { select: { nomi: true } },
+      },
+      orderBy: { sana: "desc" },
+      take: limit,
+    }),
+  ]);
+
+  const qatorlar: KunlikOperatsiyaDTO[] = [
+    ...yozuvlar.map((t) => ({
+      id: t.id,
+      turi: (t.turi === "kirim" ? "kirim" : "chiqim") as KunlikOperatsiyaTuri,
+      summa: t.summa,
+      sarlavha: t.category?.nomi ?? "—",
+      tolov: tolovNomi(t.tolovTuri, t.account?.turi ?? null),
+      izoh: t.izoh,
+      kim: t.user?.ism ?? null,
+      vaqt: t.createdAt.toISOString(),
+      holat: null,
+    })),
+    ...kochishlar.map((k) => ({
+      id: k.id,
+      turi: "kochish" as KunlikOperatsiyaTuri,
+      summa: k.summa,
+      sarlavha:
+        k.turi === "smena"
+          ? `Kassa topshirildi: ${k.fromUserIsm ?? k.fromAccount?.nomi ?? "—"} → ${
+              k.toUserIsm ?? k.toAccount?.nomi ?? "—"
+            }`
+          : `Pul ko'chirildi: ${k.fromAccount?.nomi ?? "—"} → ${k.toAccount?.nomi ?? "—"}`,
+      tolov: null,
+      izoh: k.izoh,
+      kim: k.fromUserIsm,
+      vaqt: k.sana.toISOString(),
+      holat: k.holat,
+    })),
+  ];
+
+  return qatorlar.sort((a, b) => (a.vaqt < b.vaqt ? 1 : -1)).slice(0, limit);
+}
+
+// ---------------------------------------------------------------------------
+// DIREKTOR PANELI — tasdiq kutayotgan kunlar.
+// ---------------------------------------------------------------------------
+
+export interface KutilayotganKunDTO {
+  sana: string;
+  jamiSumma: number;
+  chiqimSumma: number;
+  sofSumma: number;
+  kutilganNaqd: number | null;
+  sanalganNaqd: number | null;
+  naqdFarq: number | null;
+  izoh: string | null;
+  submittedByIsm: string | null;
+  submittedAt: string | null;
+}
+
+/** Topshirilgan, lekin hali tasdiqlanmagan kunlar (eng eskisi birinchi). */
+export async function listKutilayotganKunlar(
+  businessId: string,
+  limit = 20
+): Promise<KutilayotganKunDTO[]> {
+  const rows = await prisma.dailyReport.findMany({
+    where: { businessId, holat: "SUBMITTED" },
+    orderBy: { sana: "asc" },
+    take: limit,
+  });
+  if (rows.length === 0) return [];
+
+  const chiqimlar = await prisma.transaction.groupBy({
+    by: ["sana"],
+    where: { businessId, turi: "chiqim", deletedAt: null, sana: { in: rows.map((r) => r.sana) } },
+    _sum: { summa: true },
+  });
+  const chiqimMap = new Map(
+    chiqimlar.map((c) => [utcDateToDateOnlyString(c.sana), c._sum.summa ?? 0])
+  );
+
+  return rows.map((r) => {
+    const sana = utcDateToDateOnlyString(r.sana);
+    const chiqimSumma = chiqimMap.get(sana) ?? 0;
+    return {
+      sana,
+      jamiSumma: r.jamiSumma,
+      chiqimSumma,
+      sofSumma: r.jamiSumma - chiqimSumma,
+      kutilganNaqd: r.kutilganNaqd,
+      sanalganNaqd: r.sanalganNaqd,
+      naqdFarq:
+        r.kassaFarq ?? (r.sanalganNaqd === null ? null : r.sanalganNaqd - r.naqdSumma),
+      izoh: r.izoh,
+      submittedByIsm: r.submittedByIsm,
+      submittedAt: r.submittedAt ? r.submittedAt.toISOString() : null,
+    };
+  });
+}
+
+/** "Tushum kiritish" formasi uchun kirim kategoriyalari. */
+export async function listKunlikKategoriyalar(
+  businessId: string
+): Promise<{ id: string; nomi: string }[]> {
+  return prisma.category.findMany({
+    where: { businessId, turi: "kirim", isActive: true },
+    select: { id: true, nomi: true },
+    orderBy: [{ tartib: "asc" }, { nomi: "asc" }],
+  });
 }

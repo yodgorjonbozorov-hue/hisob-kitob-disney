@@ -14,6 +14,35 @@ import { isManager } from "@/lib/auth/roles";
  * Client va server ikkalasida ishlatiladi — server-only import qo'shilmasin.
  */
 
+/**
+ * SIDEBAR BO'LIMLARI.
+ *
+ * Yon menyu uzayib ketganda foydalanuvchi kundalik amalni admin sozlamasidan
+ * ajrata olmay qoladi. Shu bois har havola uch bo'limdan biriga tegishli:
+ *   asosiy      — kunlik "pul qayerda?" savollari (Asosiy, CRM, Kirim/Chiqim,
+ *                 Qarzlar, Kassalar, Ombor, Hisobotlar);
+ *   ish         — ish jarayoni (Kontaktlar, Vazifalar, Takroriy, Kun yakuni,
+ *                 sotuv/xarid/HR va boshqa modul amallari);
+ *   sozlamalar  — kamdan-kam ochiladigan boshqaruv (yig'iladigan bo'lim).
+ *
+ * Bo'lim FAQAT ko'rinishga ta'sir qiladi. Kim qaysi havolani ko'rishini
+ * avvalgidek `rollar` + modul yoqilganligi hal qiladi.
+ */
+export type NavGuruh = "asosiy" | "ish" | "sozlamalar";
+
+/** Bo'lim sarlavhalari (sidebar va mobil menyu bir xil so'zni ishlatadi). */
+export const GURUH_YORLIQ: Record<NavGuruh, string> = {
+  asosiy: "Asosiy",
+  ish: "Ish jarayoni",
+  sozlamalar: "Sozlamalar",
+};
+
+/** Bo'limlar ekranda shu tartibda chiziladi. */
+export const GURUH_TARTIBI: NavGuruh[] = ["asosiy", "ish", "sozlamalar"];
+
+/** AI yordamchi havolasi — Sidebar uni ro'yxatdan ajratib olishi uchun. */
+export const AI_HREF = "/app/ai";
+
 export interface NavItem {
   href: string;
   label: string;
@@ -21,6 +50,11 @@ export interface NavItem {
   icon: string;
   /** Global tartib — sidebar shu bo'yicha saralanadi. */
   tartib: number;
+  /**
+   * Sidebar bo'limi. Berilmasa — "ish" (kundalik amallar).
+   * Yagona maqsad — KO'RSATISH: huquq va modul shartlariga ta'siri YO'Q.
+   */
+  guruh?: NavGuruh;
   /** Qaysi rollar ko'radi. */
   rollar: Rol[];
   /** Faqat PRO tarifda ko'rinadi — boshqa mijozlar menyusi O'ZGARMAYDI. */
@@ -62,10 +96,15 @@ export const MODULLAR: ModulTarifi[] = [
     core: true,
     rollar: HAMMA,
     nav: [
-      { href: "/app", label: "Asosiy", icon: "dashboard", tartib: 10, rollar: BOSHQARUVCHILAR },
-      { href: "/app/tranzaksiyalar", label: "Kirim / Chiqim", icon: "receipt", tartib: 11, rollar: HAMMA },
-      { href: "/app/hisobot", label: "Oylik hisobot", icon: "report", tartib: 12, rollar: BOSHQARUVCHILAR },
-      { href: "/app/byudjet", label: "Budjet", icon: "budget", tartib: 13, rollar: BOSHQARUVCHILAR },
+      { href: "/app", label: "Asosiy", icon: "dashboard", tartib: 10, rollar: BOSHQARUVCHILAR, guruh: "asosiy" },
+      // "Yozuvlar" -> "Kirim / Chiqim": sahifa aynan kirim va chiqim
+      // tranzaksiyalarini yuritadi. Faqat YORLIQ o'zgardi — route, API va
+      // huquqlar (`tranzaksiya.*`) o'sha-o'sha.
+      { href: "/app/tranzaksiyalar", label: "Kirim / Chiqim", icon: "receipt", tartib: 12, rollar: HAMMA, guruh: "asosiy" },
+      // Barcha davriy hisobotlar (kunlik/haftalik/oylik/yillik) bitta
+      // sahifada tab bo'lib turadi, shuning uchun yorliq "Hisobotlar".
+      { href: "/app/hisobot", label: "Hisobotlar", icon: "report", tartib: 16, rollar: BOSHQARUVCHILAR, guruh: "asosiy" },
+      { href: "/app/byudjet", label: "Budjet", icon: "budget", tartib: 26, rollar: BOSHQARUVCHILAR },
       // KASSALAR — kassirga ham ochiq: u boshqa kassalarda qancha pul borligini
       // ko'rishi va ularga pul o'tkazishi kerak. Sahifadagi BOSHQARUV amallari
       // (kassa ochish/o'chirish, rejim) baribir huquq bilan qulflangan.
@@ -75,16 +114,17 @@ export const MODULLAR: ModulTarifi[] = [
         icon: "wallet",
         tartib: 14,
         rollar: ["OWNER", "ADMIN", "CASHIER"],
+        guruh: "asosiy",
       },
       // QARZLAR — MOLIYA ichida, OMBOR emas. Qarz ombordan mustaqil moliyaviy
       // majburiyat: ombori yo'q biznes ham "Kirim → Qarz" yozadi va uni
       // ko'radigan joyi bo'lishi shart.
-      { href: "/app/qarzlar", label: "Qarzlar", icon: "debt", tartib: 16, rollar: ["OWNER", "ADMIN", "CASHIER"] },
+      { href: "/app/qarzlar", label: "Qarzlar", icon: "debt", tartib: 13, rollar: ["OWNER", "ADMIN", "CASHIER"], guruh: "asosiy" },
       // "Mening kassam" — direktor ham yozuv kiritadi va uning qo'lida ham
       // naqd qolishi mumkin, shuning uchun boshqaruvchilarga ham ochiq.
       // SELLER menyusi ATAYLAB tegilmaydi ("Sotuvchi faqat Yozuvlar ko'radi"
       // qoidasi) — u o'z kassasiga Yozuvlar sahifasidagi karta orqali kiradi.
-      { href: "/app/kassam", label: "Mening kassam", icon: "cash", tartib: 17, rollar: ["OWNER", "ADMIN", "CASHIER"] },
+      { href: "/app/kassam", label: "Mening kassam", icon: "cash", tartib: 25, rollar: ["OWNER", "ADMIN", "CASHIER"] },
       // KG SAVDOSI kesimi (mijozga xos — Fortex Selos): bugun necha kg sotildi,
       // qaysi sotuvchi/kassa bo'yicha va o'rtacha narx qancha. Kassir ham
       // ko'radi — u o'z savdosini tekshirib turishi kerak.
@@ -92,12 +132,14 @@ export const MODULLAR: ModulTarifi[] = [
         href: "/app/selos",
         label: "Kg savdosi",
         icon: "weight",
-        tartib: 18,
+        tartib: 27,
         rollar: ["OWNER", "ADMIN", "CASHIER", "SELLER"],
         faqatKgSavdo: true,
       },
-      { href: "/app/takroriy", label: "Takroriy", icon: "repeat", tartib: 40, rollar: BOSHQARUVCHILAR },
-      { href: "/app/smena", label: "Kun yakuni", icon: "shift", tartib: 41, rollar: ["OWNER", "ADMIN", "CASHIER"] },
+      { href: "/app/takroriy", label: "Takroriy", icon: "repeat", tartib: 22, rollar: BOSHQARUVCHILAR },
+      // "Kun yakuni" — hisobot EMAS, kunlik operatsion amal (kassa
+      // solishtiruvi), shuning uchun Hisobotlar bo'limiga ko'chirilmaydi.
+      { href: "/app/smena", label: "Kun yakuni", icon: "shift", tartib: 23, rollar: ["OWNER", "ADMIN", "CASHIER"] },
     ],
   },
   {
@@ -110,7 +152,9 @@ export const MODULLAR: ModulTarifi[] = [
     // tasdiqlash/tarix server tomonda direktor/boshqaruvchi bilan cheklanadi.
     rollar: HAMMA,
     nav: [
-      { href: "/app/kunlik", label: "Kunlik hisobot", icon: "daily", tartib: 15, rollar: HAMMA },
+      // Bu — kunlik TUSHUM kiritish oqimi (direktor tasdig'i bilan), davriy
+      // moliyaviy hisobot emas: shu bois "Hisobotlar" ichiga qo'shilmaydi.
+      { href: "/app/kunlik", label: "Kunlik hisobot", icon: "daily", tartib: 24, rollar: HAMMA },
     ],
   },
   {
@@ -121,8 +165,8 @@ export const MODULLAR: ModulTarifi[] = [
     // Sotuvchi (SELLER) faqat kirim/chiqim kiritadi — ombor unga yopiq (foydalanuvchi qarori).
     rollar: ["OWNER", "ADMIN", "CASHIER"],
     nav: [
-      { href: "/app/ombor", label: "Ombor", icon: "package", tartib: 20, rollar: BOSHQARUVCHILAR },
-      { href: "/app/sotuv", label: "Sotuv", icon: "cart", tartib: 21, rollar: ["OWNER", "ADMIN", "CASHIER"] },
+      { href: "/app/ombor", label: "Ombor", icon: "package", tartib: 15, rollar: BOSHQARUVCHILAR, guruh: "asosiy" },
+      { href: "/app/sotuv", label: "Sotuv", icon: "cart", tartib: 31, rollar: ["OWNER", "ADMIN", "CASHIER"] },
       // "Qarzlar" ataylab bu yerda EMAS — u MOLIYA (core) modulida, chunki
       // qarz ombori yo'q bizneslarda ham yuritiladi.
     ],
@@ -149,9 +193,9 @@ export const MODULLAR: ModulTarifi[] = [
     // kirmaydi: u faqat kirim/chiqim kiritadi (OMBOR bilan bir xil qoida).
     rollar: ["OWNER", "ADMIN", "CASHIER"],
     nav: [
-      { href: "/app/pos", label: "Kassa (POS)", icon: "pos", tartib: 19, rollar: ["OWNER", "ADMIN", "CASHIER"] },
-      { href: "/app/pos/cheklar", label: "Cheklar", icon: "chek", tartib: 22, rollar: ["OWNER", "ADMIN", "CASHIER"] },
-      { href: "/app/pos/qr", label: "QR / Shtrix-kod", icon: "qr", tartib: 22, rollar: BOSHQARUVCHILAR },
+      { href: "/app/pos", label: "Kassa (POS)", icon: "pos", tartib: 30, rollar: ["OWNER", "ADMIN", "CASHIER"] },
+      { href: "/app/pos/cheklar", label: "Cheklar", icon: "chek", tartib: 32, rollar: ["OWNER", "ADMIN", "CASHIER"] },
+      { href: "/app/pos/qr", label: "QR / Shtrix-kod", icon: "qr", tartib: 33, rollar: BOSHQARUVCHILAR },
     ],
   },
   {
@@ -182,8 +226,8 @@ export const MODULLAR: ModulTarifi[] = [
     // Xodim o'z so'rovini ko'radi; qaror faqat boshqaruvchida.
     rollar: HAMMA,
     nav: [
-      { href: "/app/tasdiqlash", label: "Tasdiqlash", icon: "approval", tartib: 25, rollar: HAMMA },
-      { href: "/app/tasdiqlash/qoidalar", label: "Tasdiq qoidalari", icon: "rule", tartib: 26, rollar: BOSHQARUVCHILAR },
+      { href: "/app/tasdiqlash", label: "Tasdiqlash", icon: "approval", tartib: 37, rollar: HAMMA },
+      { href: "/app/tasdiqlash/qoidalar", label: "Tasdiq qoidalari", icon: "rule", tartib: 38, rollar: BOSHQARUVCHILAR },
     ],
   },
   {
@@ -194,7 +238,7 @@ export const MODULLAR: ModulTarifi[] = [
     core: false,
     rollar: HAMMA,
     nav: [
-      { href: "/app/mijozlar", label: "Mijozlar", icon: "customers", tartib: 27, rollar: HAMMA },
+      { href: "/app/mijozlar", label: "Mijozlar", icon: "customers", tartib: 36, rollar: HAMMA },
     ],
   },
   {
@@ -206,8 +250,8 @@ export const MODULLAR: ModulTarifi[] = [
     // Oylik — pul va shaxsiy ma'lumot, shuning uchun faqat boshqaruvchilar.
     rollar: BOSHQARUVCHILAR,
     nav: [
-      { href: "/app/hr", label: "Xodimlar", icon: "hr", tartib: 28, rollar: BOSHQARUVCHILAR },
-      { href: "/app/hr/davomat", label: "Davomat", icon: "attendance", tartib: 29, rollar: BOSHQARUVCHILAR },
+      { href: "/app/hr", label: "Xodimlar", icon: "hr", tartib: 39, rollar: BOSHQARUVCHILAR },
+      { href: "/app/hr/davomat", label: "Davomat", icon: "attendance", tartib: 40, rollar: BOSHQARUVCHILAR },
     ],
   },
   {
@@ -218,7 +262,7 @@ export const MODULLAR: ModulTarifi[] = [
     core: false,
     rollar: HAMMA,
     nav: [
-      { href: "/app/hujjatlar", label: "Shartnomalar", icon: "contract", tartib: 30, rollar: HAMMA },
+      { href: "/app/hujjatlar", label: "Shartnomalar", icon: "contract", tartib: 41, rollar: HAMMA },
     ],
   },
   {
@@ -240,8 +284,8 @@ export const MODULLAR: ModulTarifi[] = [
     // BOSHQARUVCHILAR'da qolgan — bu o'zgarish ularga tegmaydi.
     rollar: HAMMA,
     nav: [
-      { href: "/app/crm", label: "CRM", icon: "crm", tartib: 30, rollar: HAMMA },
-      { href: "/app/crm/kontaktlar", label: "Kontaktlar", icon: "contacts", tartib: 31, rollar: HAMMA },
+      { href: "/app/crm", label: "CRM", icon: "crm", tartib: 11, rollar: HAMMA, guruh: "asosiy" },
+      { href: "/app/crm/kontaktlar", label: "Kontaktlar", icon: "contacts", tartib: 20, rollar: HAMMA },
     ],
   },
   {
@@ -251,7 +295,7 @@ export const MODULLAR: ModulTarifi[] = [
     core: false,
     rollar: HAMMA,
     nav: [
-      { href: "/app/vazifalar", label: "Vazifalar", icon: "tasks", tartib: 35, rollar: HAMMA },
+      { href: "/app/vazifalar", label: "Vazifalar", icon: "tasks", tartib: 21, rollar: HAMMA },
     ],
   },
   {
@@ -261,7 +305,10 @@ export const MODULLAR: ModulTarifi[] = [
     core: false,
     rollar: BOSHQARUVCHILAR,
     nav: [
-      { href: "/app/ai", label: "AI yordamchi", icon: "ai", tartib: 14, rollar: BOSHQARUVCHILAR },
+      // Sidebar buni ro'yxatdan AJRATIB, yuqorida "✨ Balansa AI" tugmasi
+      // sifatida chizadi (nav/Sidebar.tsx). Havola shu yerda qoladi —
+      // modul/rol shartlari va mobil menyu o'zgarmasin.
+      { href: AI_HREF, label: "Balansa AI", icon: "ai", tartib: 17, rollar: BOSHQARUVCHILAR, guruh: "asosiy" },
     ],
   },
   {
@@ -272,14 +319,14 @@ export const MODULLAR: ModulTarifi[] = [
     korinmas: true,
     rollar: BOSHQARUVCHILAR,
     nav: [
-      { href: "/app/admin/bizneslar", label: "Bizneslar", icon: "business", tartib: 50, rollar: BOSHQARUVCHILAR },
-      { href: "/app/admin/kategoriyalar", label: "Kategoriyalar", icon: "tags", tartib: 51, rollar: BOSHQARUVCHILAR },
-      { href: "/app/admin/foydalanuvchilar", label: "Foydalanuvchilar", icon: "users", tartib: 52, rollar: BOSHQARUVCHILAR },
-      { href: "/app/admin/rollar", label: "Rollar va huquqlar", icon: "shield", tartib: 52, rollar: BOSHQARUVCHILAR, faqatPro: true },
-      { href: "/app/admin/ochirilganlar", label: "O'chirilganlar", icon: "trash", tartib: 53, rollar: BOSHQARUVCHILAR },
-      { href: "/app/admin/audit", label: "Audit jurnali", icon: "audit", tartib: 54, rollar: BOSHQARUVCHILAR },
-      { href: "/app/sozlamalar/modullar", label: "Modullar", icon: "modules", tartib: 55, rollar: ["OWNER"] },
-      { href: "/billing", label: "Obuna va to'lov", icon: "billing", tartib: 56, rollar: BOSHQARUVCHILAR },
+      { href: "/app/admin/bizneslar", label: "Bizneslar", icon: "business", tartib: 50, rollar: BOSHQARUVCHILAR, guruh: "sozlamalar" },
+      { href: "/app/admin/kategoriyalar", label: "Kategoriyalar", icon: "tags", tartib: 51, rollar: BOSHQARUVCHILAR, guruh: "sozlamalar" },
+      { href: "/app/admin/foydalanuvchilar", label: "Foydalanuvchilar", icon: "users", tartib: 52, rollar: BOSHQARUVCHILAR, guruh: "sozlamalar" },
+      { href: "/app/admin/rollar", label: "Rollar va huquqlar", icon: "shield", tartib: 52, rollar: BOSHQARUVCHILAR, faqatPro: true, guruh: "sozlamalar" },
+      { href: "/app/admin/ochirilganlar", label: "O'chirilganlar", icon: "trash", tartib: 53, rollar: BOSHQARUVCHILAR, guruh: "sozlamalar" },
+      { href: "/app/admin/audit", label: "Audit jurnali", icon: "audit", tartib: 54, rollar: BOSHQARUVCHILAR, guruh: "sozlamalar" },
+      { href: "/app/sozlamalar/modullar", label: "Modullar", icon: "modules", tartib: 55, rollar: ["OWNER"], guruh: "sozlamalar" },
+      { href: "/billing", label: "Obuna va to'lov", icon: "billing", tartib: 56, rollar: BOSHQARUVCHILAR, guruh: "sozlamalar" },
     ],
   },
 ];
@@ -354,6 +401,34 @@ export function computeNav({
     }
   }
   return items.sort((a, b) => a.tartib - b.tartib);
+}
+
+/** Bo'limga bo'lingan menyu (Sidebar va mobil menyu varag'i uchun). */
+export interface NavBolim {
+  guruh: NavGuruh;
+  yorliq: string;
+  items: NavItem[];
+}
+
+/**
+ * `computeNav()` natijasini bo'limlarga ajratadi.
+ *
+ * Havolalar ro'yxati O'ZGARMAYDI — faqat guruhlanadi va bo'sh bo'lim
+ * tashlab yuboriladi. Guruhi ko'rsatilmagan havola "ish" ga tushadi.
+ */
+export function guruhlanganNav(items: NavItem[]): NavBolim[] {
+  const xarita = new Map<NavGuruh, NavItem[]>();
+  for (const item of items) {
+    const g = item.guruh ?? "ish";
+    const royxat = xarita.get(g) ?? [];
+    royxat.push(item);
+    xarita.set(g, royxat);
+  }
+  return GURUH_TARTIBI.filter((g) => (xarita.get(g)?.length ?? 0) > 0).map((g) => ({
+    guruh: g,
+    yorliq: GURUH_YORLIQ[g],
+    items: xarita.get(g) ?? [],
+  }));
 }
 
 export interface MobileTab {

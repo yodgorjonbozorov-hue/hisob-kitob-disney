@@ -83,17 +83,116 @@ test("computeNav: SELLER faqat Yozuvlar ko'radi", () => {
 test("computeNav: CASHIER — yozuvlar, qarzlar, smena va (omborli bo'lsa) sotuv", () => {
   const items = registry.computeNav({ rol: "CASHIER", yoqilgan: new Set(["MOLIYA", "OMBOR", "BOSHQARUV"]), omborli: true });
   const hrefs = items.map((i: any) => i.href);
-  // "Qarzlar" MOLIYA (core) modulida — shuning uchun "Sotuv" dan OLDIN turadi.
+  // Tartib "asosiy" bo'limdan boshlanadi (Kirim/Chiqim, Qarzlar, Kassalar),
+  // keyin ish jarayoni havolalari keladi.
   // "Kassalar" kassirga ham ochiq: u boshqa kassalarda qancha pul borligini
   // ko'rishi va ularga pul o'tkazishi kerak (boshqaruv amallari huquq bilan).
   assert.deepEqual(hrefs, [
     "/app/tranzaksiyalar",
-    "/app/kassa",
     "/app/qarzlar",
+    "/app/kassa",
+    "/app/smena",
     "/app/kassam",
     "/app/sotuv",
-    "/app/smena",
   ]);
+});
+
+// ---------- Sidebar bo'limlari (UX guruhlash) ----------
+test("guruhlanganNav: asosiy / ish jarayoni / sozlamalar bo'limlari", () => {
+  const items = registry.computeNav({
+    rol: "OWNER",
+    yoqilgan: new Set(["MOLIYA", "OMBOR", "CRM", "VAZIFALAR", "BOSHQARUV"]),
+    omborli: true,
+  });
+  const bolimlar = registry.guruhlanganNav(items);
+  const kodlar = bolimlar.map((b: any) => b.guruh);
+  assert.deepEqual(kodlar, ["asosiy", "ish", "sozlamalar"]);
+
+  const asosiy = bolimlar.find((b: any) => b.guruh === "asosiy").items.map((i: any) => i.href);
+  // Ustuvor havolalar — aynan shu tartibda.
+  assert.deepEqual(asosiy, [
+    "/app",
+    "/app/crm",
+    "/app/tranzaksiyalar",
+    "/app/qarzlar",
+    "/app/kassa",
+    "/app/ombor",
+    "/app/hisobot",
+  ]);
+
+  const ish = bolimlar.find((b: any) => b.guruh === "ish").items.map((i: any) => i.href);
+  for (const href of ["/app/crm/kontaktlar", "/app/vazifalar", "/app/takroriy", "/app/smena"]) {
+    assert.ok(ish.includes(href), `${href} "Ish jarayoni" bo'limida bo'lishi kerak`);
+  }
+
+  const sozlamalar = bolimlar
+    .find((b: any) => b.guruh === "sozlamalar")
+    .items.map((i: any) => i.href);
+  assert.deepEqual(sozlamalar, [
+    "/app/admin/bizneslar",
+    "/app/admin/kategoriyalar",
+    "/app/admin/foydalanuvchilar",
+    "/app/admin/ochirilganlar",
+    "/app/admin/audit",
+    "/app/sozlamalar/modullar",
+    "/billing",
+  ]);
+});
+
+test("guruhlanganNav: bo'sh bo'lim chizilmaydi (SELLER)", () => {
+  const items = registry.computeNav({ rol: "SELLER", yoqilgan: new Set(["MOLIYA", "BOSHQARUV"]), omborli: false });
+  const bolimlar = registry.guruhlanganNav(items);
+  assert.deepEqual(bolimlar.map((b: any) => b.guruh), ["asosiy"]);
+  assert.deepEqual(bolimlar[0].items.map((i: any) => i.href), ["/app/tranzaksiyalar"]);
+});
+
+test("guruhlanganNav: hech bir havola yo'qolmaydi", () => {
+  const items = registry.computeNav({
+    rol: "OWNER",
+    yoqilgan: new Set(registry.MODULLAR.map((m: any) => m.code)),
+    omborli: true,
+    magazin: true,
+    pro: true,
+    kgSavdo: true,
+  });
+  const bolimlar = registry.guruhlanganNav(items);
+  const jami = bolimlar.reduce((a: number, b: any) => a + b.items.length, 0);
+  assert.equal(jami, items.length);
+});
+
+test("Rollar va huquqlar — PRO'da sozlamalar bo'limida", () => {
+  const items = registry.computeNav({
+    rol: "OWNER",
+    yoqilgan: new Set(["MOLIYA", "BOSHQARUV"]),
+    omborli: false,
+    pro: true,
+  });
+  const sozlamalar = registry
+    .guruhlanganNav(items)
+    .find((b: any) => b.guruh === "sozlamalar")
+    .items.map((i: any) => i.href);
+  assert.ok(sozlamalar.includes("/app/admin/rollar"));
+});
+
+test("AI yordamchi havolasi registry'da qoladi (Sidebar uni tugma qilib chizadi)", () => {
+  const yoqiq = registry.computeNav({ rol: "OWNER", yoqilgan: new Set(["MOLIYA", "AI"]), omborli: false });
+  assert.ok(yoqiq.some((i: any) => i.href === registry.AI_HREF));
+  // Modul yoqilmagan bo'lsa havola ham, tugma ham yo'q.
+  const yoq = registry.computeNav({ rol: "OWNER", yoqilgan: new Set(["MOLIYA"]), omborli: false });
+  assert.ok(!yoq.some((i: any) => i.href === registry.AI_HREF));
+  // Kassirga AI ochiq emas (rol matritsasi o'zgarmagan).
+  const kassir = registry.computeNav({ rol: "CASHIER", yoqilgan: new Set(["MOLIYA", "AI"]), omborli: false });
+  assert.ok(!kassir.some((i: any) => i.href === registry.AI_HREF));
+});
+
+test("yorliqlar: Kirim / Chiqim va Hisobotlar", () => {
+  const items = registry.computeNav({ rol: "OWNER", yoqilgan: new Set(["MOLIYA"]), omborli: false });
+  const yorliq = (href: string) => items.find((i: any) => i.href === href)?.label;
+  assert.equal(yorliq("/app/tranzaksiyalar"), "Kirim / Chiqim");
+  assert.equal(yorliq("/app/hisobot"), "Hisobotlar");
+  const tabs = registry.computeMobileTabs({ rol: "SELLER", yoqilgan: new Set(["MOLIYA"]), omborli: false });
+  // Pastki panel yorlig'i ataylab qisqaroq (375px da uch tab sig'ishi kerak).
+  assert.equal(tabs.find((t: any) => t.href === "/app/tranzaksiyalar")?.label, "Kirim/Chiqim");
 });
 
 test("computeNav: OMBORSIZ biznesda ham Qarzlar ko'rinadi", () => {

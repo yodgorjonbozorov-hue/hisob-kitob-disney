@@ -45,7 +45,7 @@ before(async () => {
   ({ runWithTenant } = await import("@/lib/db/tenantContext"));
   inventory = await import("@/lib/services/inventory");
   rateLimitMod = await import("@/lib/rateLimit");
-  suhbat = await import("@/lib/ai/suhbat");
+  suhbat = await import("@/lib/ai/suhbatlar");
 
   await rawPrisma.tenant.create({ data: { id: TENANT, name: "Audit", slug: "audit", status: "ACTIVE" } });
   await rawPrisma.business.create({ data: { id: BIZ, nomi: "Audit biznes", tenantId: TENANT, omborli: true } });
@@ -218,25 +218,34 @@ test("eskirgan rate limit yozuvlari tozalanadi, joriylari qoladi", async () => {
 
 // ---------- AI suhbati serverda ----------
 
-test("AI suhbat tarixi serverda saqlanadi va MAX_TARIX bilan cheklanadi", async () => {
+test("AI suhbati serverda saqlanadi va audit jurnalini shovqinga to'ldirmaydi", async () => {
   const kalit = { businessId: BIZ, userId: USER };
-  assert.deepEqual(await suhbat.tarixniOl(kalit), [], "boshida bo'sh");
+  assert.deepEqual(await suhbat.suhbatlarRoyxati(kalit), [], "boshida bo'sh");
 
-  for (let i = 0; i < 15; i++) {
-    await suhbat.tarixgaYoz({ ...kalit, tenantId: TENANT }, `savol ${i}`, `javob ${i}`);
+  const oldingiAudit = await rawPrisma.auditLog.count({ where: { tenantId: TENANT } });
+
+  let id: string | null = null;
+  for (let i = 0; i < 3; i++) {
+    const r = await suhbat.suhbatgaYoz(
+      { ...kalit, tenantId: TENANT },
+      id,
+      { rol: "user", matn: `savol ${i}` },
+      { rol: "assistant", matn: `javob ${i}` }
+    );
+    id = r.id;
   }
-  const tarix = await suhbat.tarixniOl(kalit);
-  assert.equal(tarix.length, suhbat.MAX_TARIX, "tarix cheklanishi kerak");
-  assert.equal(tarix[tarix.length - 1].matn, "javob 14", "oxirgi javob saqlanadi");
-  assert.equal(tarix[tarix.length - 2].matn, "savol 14");
 
-  await suhbat.tarixniTozala(kalit);
-  assert.deepEqual(await suhbat.tarixniOl(kalit), []);
-});
+  const suhbatlar = await suhbat.suhbatlarRoyxati(kalit);
+  assert.equal(suhbatlar.length, 1, "davomi ayni suhbatga yoziladi");
+  const olindi = await suhbat.suhbatniOl(kalit, id!);
+  assert.equal(olindi.xabarlar.length, 6);
+  assert.equal(olindi.xabarlar[5].matn, "javob 2");
 
-test("buzilgan suhbat yozuvi xato bermaydi (bo'sh tarix)", async () => {
-  await rawPrisma.aiConversation.create({
-    data: { tenantId: TENANT, businessId: BIZ, userId: "u_buzuq", xabarlar: "{buzuq" },
-  });
-  assert.deepEqual(await suhbat.tarixniOl({ businessId: BIZ, userId: "u_buzuq" }), []);
+  // Chat xabari — biznes amali emas: har savol audit yozuvi yaratmasligi kerak
+  // (shu sabab `AiSuhbat` scoped klient orqali emas, rawPrisma bilan yoziladi).
+  const yangiAudit = await rawPrisma.auditLog.count({ where: { tenantId: TENANT } });
+  assert.equal(yangiAudit, oldingiAudit, "AI suhbati audit jurnaliga tushmaydi");
+
+  await suhbat.suhbatniOchir(kalit, id!);
+  assert.deepEqual(await suhbat.suhbatlarRoyxati(kalit), []);
 });

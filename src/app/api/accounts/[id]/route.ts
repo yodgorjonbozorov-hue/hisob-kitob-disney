@@ -4,6 +4,7 @@ import { requireManager } from "@/lib/auth/guard";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { updateAccount, deleteAccount } from "@/lib/services/accounts";
 import { updateAccountSchema } from "@/lib/validation/account";
+import { dashboardYangilandi } from "@/lib/cache";
 
 export const PATCH = withTenant<{ params: { id: string } }>(
   async (request, { params }, { session: user }) => {
@@ -17,6 +18,9 @@ export const PATCH = withTenant<{ params: { id: string } }>(
     }
 
     const account = await updateAccount(businessId, params.id, parsed.data);
+    // `isActive` almashsa kassa qoldig'i "faol" dan "nofaol" ga ko'chadi —
+    // dashboard kartasidagi ikkala raqam ham o'zgaradi.
+    dashboardYangilandi(businessId);
     return NextResponse.json(account);
   }
 );
@@ -27,6 +31,8 @@ export const DELETE = withTenant<{ params: { id: string } }>(
     const businessId = await resolveActiveBusinessId(user);
     if (!businessId) return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });
 
-    return NextResponse.json(await deleteAccount(businessId, params.id));
+    const natija = await deleteAccount(businessId, params.id);
+    dashboardYangilandi(businessId);
+    return NextResponse.json(natija);
   }
 );
