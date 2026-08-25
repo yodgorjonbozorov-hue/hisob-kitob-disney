@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { kirimgaKochirish } from "@/lib/crm/kirim";
+import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
 
 /**
  * CRM xizmat qatlami. Barcha funksiyalar tenant kontekstida chaqiriladi —
@@ -85,6 +86,23 @@ async function kirimKategoriyasi(businessId: string, categoryId: string): Promis
   return cat.id;
 }
 
+/**
+ * MAS'UL XODIM — shu biznesda ishlaydigan faol foydalanuvchi bo'lishi shart.
+ *
+ * Tenant filtri o'zi yetarli emas: bir kompaniyada bir necha biznes bo'lsa,
+ * A biznesining sotuvchisi buyurtmani B biznesining xodimiga yozib
+ * qo'yardi. `biznesXodimlariWhere` uchala holatni qamraydi — biriktirilgan,
+ * eski usulda biriktirilgan va umuman biriktirilmagan (direktor).
+ */
+export async function biznesXodimi(businessId: string, userId: string): Promise<string> {
+  const masul = await prisma.user.findFirst({
+    where: { id: userId, isActive: true, ...biznesXodimlariWhere(businessId) },
+    select: { id: true },
+  });
+  if (!masul) throw new ForbiddenError("Mas'ul xodim bu biznesda ishlamaydi");
+  return masul.id;
+}
+
 /** Kontakt: mavjudini qayta ishlatadi (telefon bo'yicha), bo'lmasa yaratadi. */
 async function kontaktTop(params: YangiBuyurtma): Promise<string | null> {
   if (params.contactId) {
@@ -133,12 +151,10 @@ export async function createDeal(params: YangiBuyurtma) {
   const categoryId = params.categoryId ? await kirimKategoriyasi(params.businessId, params.categoryId) : null;
   const contactId = await kontaktTop(params);
 
-  // Mas'ul xodim shu tenantning faol foydalanuvchisi bo'lishi shart.
+  // Mas'ul xodim shu BIZNESning faol foydalanuvchisi bo'lishi shart.
   let masulId = params.userId;
   if (params.masulId && params.masulId !== params.userId) {
-    const masul = await prisma.user.findFirst({ where: { id: params.masulId }, select: { id: true } });
-    if (!masul) throw new ForbiddenError("Mas'ul xodim topilmadi");
-    masulId = masul.id;
+    masulId = await biznesXodimi(params.businessId, params.masulId);
   }
 
   const deal = await prisma.deal.create({

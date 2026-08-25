@@ -346,7 +346,13 @@ test("legacy kassir qoldiqlari hisobotda qayd etiladi", async () => {
 
 test("TEST 10: Kassalar sahifasida eski 'Kassa topshiriqlari' oqimi yo'q", async () => {
   const { readFileSync } = await import("node:fs");
-  const sahifa = readFileSync("src/app/app/kassa/page.tsx", "utf8");
+  // Sahifa server qismi + client orkestratori: nazorat markazi redizaynidan
+  // keyin tasdiq paneli `KassaClient` ichida ko'rsatiladi (nomi ham
+  // `KutilayotganPanel` ga o'zgardi). Test tekshirayotgan QOIDA o'sha:
+  // legacy ikkinchi oqim yo'q, yangi tasdiq paneli bor.
+  const sahifa =
+    readFileSync("src/app/app/kassa/page.tsx", "utf8") +
+    readFileSync("src/app/app/kassa/KassaClient.tsx", "utf8");
 
   for (const eski of ["TopshiriqlarPaneli", "KassirlarPaneli", "listKassirQoldiqlari"]) {
     assert.ok(
@@ -354,7 +360,7 @@ test("TEST 10: Kassalar sahifasida eski 'Kassa topshiriqlari' oqimi yo'q", async
       `Kassalar sahifasida legacy blok qolib ketgan: ${eski}`
     );
   }
-  assert.ok(sahifa.includes("KutilayotganTransferlar"), "yangi tasdiq paneli bo'lishi kerak");
+  assert.ok(sahifa.includes("KutilayotganPanel"), "yangi tasdiq paneli bo'lishi kerak");
 });
 
 test("legacy yozish API'si 410 qaytaradi (ikkinchi oqim yopiq)", async () => {

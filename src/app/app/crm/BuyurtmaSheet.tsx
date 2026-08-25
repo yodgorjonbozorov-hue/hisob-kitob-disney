@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { formatMoney, formatDateUZ } from "@/lib/format";
 import { Badge } from "@/components/ui/Badge";
 import { KirimTasdiq } from "./KirimTasdiq";
-import { kirimHavolasi, type BuyurtmaDTO, type StageDTO } from "./turlar";
+import { BuyurtmaTahrir } from "./BuyurtmaTahrir";
+import { kirimHavolasi, type BuyurtmaDTO, type KategoriyaDTO, type StageDTO } from "./turlar";
 
 interface ActivityDTO {
   id: string;
@@ -22,12 +23,17 @@ interface ActivityDTO {
 export function BuyurtmaSheet({
   b,
   stages,
+  kategoriyalar,
   onKochirish,
+  onTahrirlandi,
   onClose,
 }: {
   b: BuyurtmaDTO;
   stages: StageDTO[];
+  /** Kirim modulining kategoriyalari — tahrirlash uchun (CRM alohida ro'yxat yuritmaydi). */
+  kategoriyalar: KategoriyaDTO[];
   onKochirish: (s: StageDTO) => void;
+  onTahrirlandi: (yangi: { categoryId: string; kategoriya: string; summa: number }) => void;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -95,6 +101,12 @@ export function BuyurtmaSheet({
           {b.masulIsm && <p className="text-xs text-faint">Mas&apos;ul: {b.masulIsm}</p>}
           {b.izoh && <p className="text-xs text-muted whitespace-pre-line pt-1">{b.izoh}</p>}
         </div>
+
+        {/* Kategoriya/narx — faqat kirim yozilmagan buyurtmada (server ham
+            o'sha paytdan boshlab ikkalasini qulflaydi). */}
+        {!kirimBor && (
+          <BuyurtmaTahrir b={b} kategoriyalar={kategoriyalar} onSaqlandi={onTahrirlandi} />
+        )}
 
         {/* KIRIMGA O'TKAZISH (4- va 5-talab) */}
         <div className="rounded-xl border border-line bg-surface-2/50 p-3 space-y-2">

@@ -4014,3 +4014,126 @@ Fayllar: `src/lib/queries/sotuvStatistika.ts`,
 
 Test: `npm run test:sotuv-statistika` (13 ta) — jamlash, guruhlash, sana
 filtri, qaytarish, POS cheki, ombor qoldig'i bilan moslik, izolyatsiya.
+
+## CRM sotuvchilarga ko'rinmasdi — rol matritsasi va kategoriya tuzatildi (2026-08-25)
+
+Uch shikoyat bitta joydan chiqdi: CRM "ayrim sotuvchilarga" umuman
+ko'rinmasdi, eski buyurtmalardan yozilgan kirim kategoriyasiz tushardi.
+
+### 1. Rol matritsasi — asosiy sabab
+
+`lib/modules/registry.ts` dagi CRM moduli `rollar: ["OWNER", "ADMIN",
+"SELLER"]` edi. Sidebar, BottomNav, CommandPalette, sahifa guard'i
+(`requireModulePage`) va API guard'i (`withTenant({ module: "CRM" })`) —
+BESHALASI ham shu bitta ro'yxatdan o'qiladi. Ya'ni savdo maydonida
+"sotuvchi" bo'lib ishlaydigan, lekin hisobi KASSIR (CASHIER) rolida
+ochilgan xodim uchun menyuda CRM yo'q edi va to'g'ridan-to'g'ri
+`/app/crm` ga kirsa ham `/app` ga qaytarilardi.
+
+Endi CRM `HAMMA` (OWNER, ADMIN, CASHIER, SELLER) uchun ochiq. Bu FAQAT
+CRM: BOSHQARUV (bizneslar, foydalanuvchilar, rollar, audit, obuna), HR,
+XARID va oylik hisobot o'z ro'yxatlari bilan boshqaruvchilarda qoldi —
+test buni alohida majburlaydi.
+
+### 2. Kategoriya — "Kategoriyasiz" ning sababi
+
+Yangi buyurtmada kategoriya allaqachon Kirim modulining
+`Category` jadvalidan (`turi: "kirim"`, `businessId` bo'yicha) kelardi.
+Muammo ESKI buyurtmalarda edi: kategoriya maydoni qo'shilgunga qadar
+yaratilganlarda `categoryId` NULL, va uni interfeysdan TANLASH imkoni
+yo'q edi — bunday buyurtma kirimga o'tkazilganda zaxira kategoriyaga
+tushardi.
+
+`BuyurtmaTahrir.tsx` — buyurtma oynasida kategoriya va narxni tuzatish
+bloki. Faqat kirim YOZILMAGAN buyurtmada ko'rinadi: yozilgandan keyin
+server (`api/crm/deals/[id]`) ikkalasini qulflaydi, aks holda CRM bir
+raqamni, Kirim boshqasini ko'rsatardi.
+
+Kirimga o'tkazish yo'li o'zgarmadi — kategoriya avvalgidek buyurtmadan
+tranzaksiyaga ko'chadi va `Deal.transactionId` UNIQUE cheklovi bitta
+buyurtmadan ikkinchi kirim yozilishiga baza darajasida yo'l qo'ymaydi.
+
+### 3. Ko'p-bizneslik teshigi
+
+"Mas'ul xodim" ro'yxati `prisma.user.findMany({ isActive: true })` edi —
+tenant bo'yicha filtrlangan, lekin BIZNES bo'yicha emas. Bir kompaniyada
+ikki biznes bo'lsa, A biznesining sotuvchisi B biznesining xodimlarini
+ko'rar va buyurtmani ularga yozib qo'yishi mumkin edi. Endi ro'yxat ham,
+server tekshiruvi ham (`biznesXodimi`, `createDeal` va PATCH) mavjud
+`biznesXodimlariWhere` filtridan yuradi.
+
+Fayllar: `src/lib/modules/registry.ts`, `src/lib/crm/service.ts`,
+`src/app/api/crm/deals/[id]/route.ts`, `src/app/app/crm/page.tsx`,
+`CrmClient.tsx`, `BuyurtmaSheet.tsx`, `BuyurtmaTahrir.tsx` (yangi).
+
+**Sxema o'zgarmadi, migratsiya yo'q.**
+
+Test: `npm run test:crm` (24 ta) — rol matritsasi (4 rol kiradi, maxfiy
+modullar yopiq), sidebar havolalari, to'liq oqim (buyurtma → Yutildi →
+Kirim → bosh sahifadagi kategoriya kesimi), idempotentlik, eski
+kategoriyasiz buyurtma va ko'p-bizneslik izolyatsiyasi.
+
+---
+
+## 2026-08-25 · Kassalar sahifasi — pul nazorati markazi
+
+Branch: `claude/kassalar-cash-control-center-ayo90h`. Faqat `/app/kassa`
+(va uning `[id]` detali) qayta ishlandi; boshqa sahifalar tegilmadi.
+
+### Nima o'zgardi
+
+Sahifa "qoldiq ko'rsatadigan ro'yxat" edi: `Jami kassalar` summasi, kassa
+kartalari, katta bo'sh "Kassa harakatlari" bloki va sahifa pastida katta
+"Shaxsiy kassa rejimi" paneli. Kassani TOPSHIRISH bu sahifada umuman yo'q
+edi — u faqat `/app/kassam` da bor edi, kassa FARQI esa hech qayerda
+saqlanmasdi.
+
+Endi sahifa oltita savolga javob beradi: jami qancha pul bor, u qaysi
+kassada, bugun qancha kirdi/chiqdi, kim topshirmadi, farq bormi, pul
+kimdan kimga o'tdi. `Jami kassalar` → **`Jami qoldiq`** (+ naqd/plastik/
+bank taqsimoti), tepada bugungi kirim/chiqim/sof/kutilmoqda KPI qatori,
+kutilayotgan topshirishlar ixcham panelda FARQ bilan, har kassa kartasida
+bugungi kesim va "⋯" amallari, harakatlar lentasi Bugun/Hafta/Oy/Barchasi
+filtri bilan, rejim esa "⚙ Kassa sozlamalari" ichiga yig'ildi.
+Mobil (375/390px): 2×2 KPI, karta-ro'yxat, pastda yopishqoq "+ Amal"
+tugmasi (tab-bar ustida) va pastdan chiqadigan varaqlar.
+
+### Biznes mantig'i
+
+Hisob-kitob qoidalari O'ZGARMADI: qoldiq ledgerdan (`Transaction` +
+`AccountTransfer`), o'tkazma kirim/chiqim yozmaydi, manfiy qoldiq
+taqiqlangan, atomiklik `runBusinessTx` da.
+
+Yagona qo'shimcha — **kassa farqi**: `AccountTransfer` ga ikkita NULL
+bo'lishi mumkin ustun qo'shildi (`hisoblangan`, `farq`) va ular faqat
+`turi = "smena"` da to'ldiriladi. Server topshirish paytidagi mavjud
+qoldiqni O'ZI hisoblab qatorga muzlatadi, farq = `summa − hisoblangan`.
+Farq nolga teng bo'lmasa izoh (kamomad sababi) majburiy — serverda ham,
+formada ham. Farq va sabab auditga tushadi. Kamomad kassirning kassasida
+OCHIQ qoladi (pul o'z-o'zidan yo'qolmaydi).
+
+Audit kengaytirildi: kassa ochish/tahrirlash/o'chirish va shaxsiy kassa
+rejimi o'zgarishi endi `logAudit` ga yoziladi.
+
+Migratsiya: `20260825120000_kassa_topshirish_farqi` — faqat ikkita
+`ALTER TABLE ... ADD COLUMN`, mavjud ma'lumot tegilmaydi. Postgres init
+migratsiyasi `npm run pg:migratsiya` bilan qayta generatsiya qilindi.
+
+### Testlar
+
+`npm run test:kassa-nazorat` (23 ta) — balans, bugungi kesim, o'tkazma
+(kirim/chiqim o'zgarmasligi), kamomadli topshirish va farqning
+muzlatilishi, izohsiz farqning rad etilishi, ikki marta yuborish/qabul
+qilish, tenant va biznes izolyatsiyasi, huquqlar, davr filtri.
+
+`npm run test:kassa-brauzer` (8 ta) — 375/390/768/1280/1440px da sahifa
+chiziladi, gorizontal siljish yo'q, yopishqoq tugma tab-bar bilan
+urishmaydi, varaqlar ochiladi, farq jonli hisoblanadi, detal filtri
+ishlaydi. Skrinshotlar: `.screenshots/kassa-nazorat/`.
+
+Regressiya: `test:kassa`, `test:kassa-transfer`, `test:kassir-kassa`,
+`test:handover-migratsiya`, `test:isolation`, `test:izolyatsiya-royxati`,
+`test:agregat`, `test:audit`, `test:audit-qoldiq`, `test:atomik`,
+`test:soft-delete`, `test:backup`, `test:migratsiya`, `test:postgres`,
+`test:kunlik`, `test:smena`, `test:pro`, `test:visibility`, `test:smoke`
+— hammasi yashil. `npm run build` o'tadi.

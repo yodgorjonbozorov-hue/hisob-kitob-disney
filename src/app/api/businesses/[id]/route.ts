@@ -4,6 +4,7 @@ import { requireManager } from "@/lib/auth/guard";
 import { withTenant } from "@/lib/auth/tenant";
 import { updateBusinessSchema } from "@/lib/validation/business";
 import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
+import { logAudit } from "@/lib/services/audit";
 
 export const PATCH = withTenant<{ params: { id: string } }>(async (request, { params }, { session: user }) => {
   requireManager(user.rol);
@@ -18,10 +19,32 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
   // Umumiy rejimga qaytganda `omborli` o'z-o'zidan o'chmaydi: tovar savdosi
   // rejimdan mustaqil, uni faqat direktor qo'lda o'chiradi.
   const avtoMajburiy = parsed.data.turi === "avto" ? { omborli: true } : {};
+  const eski =
+    parsed.data.shaxsiyKassa === undefined
+      ? null
+      : await prisma.business.findUnique({
+          where: { id: params.id },
+          select: { shaxsiyKassa: true },
+        });
   const business = await prisma.business.update({
     where: { id: params.id },
     data: { ...parsed.data, ...avtoMajburiy },
   });
+
+  // KASSA SOZLAMASI auditga tushadi: shaxsiy kassa rejimi naqd pul QAYSI
+  // kassaga tushishini o'zgartiradi, ya'ni bu moliyaviy oqim sozlamasi.
+  // Boshqa biznes maydonlari bu yerda ataylab yozilmaydi — ular kassa
+  // nazoratiga daxlsiz.
+  if (parsed.data.shaxsiyKassa !== undefined && eski) {
+    await logAudit({
+      businessId: business.id,
+      action: "update",
+      entity: "business",
+      entityId: business.id,
+      before: { shaxsiyKassa: eski.shaxsiyKassa },
+      after: { shaxsiyKassa: business.shaxsiyKassa },
+    });
+  }
 
   // Shaxsiy kassa rejimi YOQILGANDA har faol xodimga kassa ochiladi. Aks holda
   // rejim yoqilgan bo'lsa-yu kassalar yo'q bo'lsa, naqd pul avvalgidek umumiy
