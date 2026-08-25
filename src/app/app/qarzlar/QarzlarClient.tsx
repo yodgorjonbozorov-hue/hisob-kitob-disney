@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { formatSomLabel } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
@@ -127,7 +127,14 @@ export function QarzlarClient({
   const [ochilgan, setOchilgan] = useState<string | null>(null);
   const [ochilganQarzdor, setOchilganQarzdor] = useState<QarzdorDTO | null>(null);
   const [tolov, setTolov] = useState<TolovNishoni | null>(null);
-  const [yangi, setYangi] = useState<{ turi: QarzTuri; mijoz: MijozTanlov | null } | null>(null);
+  // Bosh sahifadagi "+ Yangi → Qarz" shu havola bilan keladi (`?yangi=1`):
+  // qarz formasi shu yerda qoladi, dashboard uni QAYTA yozmaydi.
+  const yangiSoralgan = useSearchParams().get("yangi") === "1";
+  const [yangi, setYangi] = useState<{ turi: QarzTuri; mijoz: MijozTanlov | null } | null>(
+    yangiSoralgan
+      ? { turi: boshlangichYonalish === "beriladigan" ? "beriladigan" : "olinadigan", mijoz: null }
+      : null
+  );
 
   const matn = q.trim().toLowerCase();
   const bugun = todayDateOnlyString();

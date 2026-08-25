@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 interface UserDTO {
   id: string;
@@ -39,7 +39,9 @@ function muddatKorinishi(iso: string | null, holat: string): { matn: string; otg
 export function VazifalarClient({ meId, users, tasks }: { meId: string; users: UserDTO[]; tasks: TaskDTO[] }) {
   const router = useRouter();
   const [faqatMeniki, setFaqatMeniki] = useState(false);
-  const [yangiOchiq, setYangiOchiq] = useState(false);
+  // Bosh sahifadagi "+ Yangi → Vazifa" shu havola bilan keladi.
+  const yangiSoralgan = useSearchParams().get("yangi") === "1";
+  const [yangiOchiq, setYangiOchiq] = useState(yangiSoralgan);
   const [tanlangan, setTanlangan] = useState<TaskDTO | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [xato, setXato] = useState<string | null>(null);
