@@ -95,3 +95,58 @@ export function tolovBolimiWhere(bolim: TolovBolimi): Prisma.TransactionWhereInp
       };
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TO'LOV GURUHI — foydalanuvchi ko'radigan ro'yxat (Kirim/Chiqim sahifasidagi
+// filtr va taqsimot qatori).
+//
+// Bo'limdan (`TolovBolimi`) farqi FAQAT ikkita:
+//   1. `plastik` va `bank` bitta "Karta / hisob" guruhiga qo'shiladi —
+//      kassir uchun ular bir xil: "naqd emas, Click ham emas";
+//   2. `qarz` alohida guruh bo'lib QAYTADI (bo'limlarda u null edi).
+//
+// Guruhlar KESISHMAYDI va butun to'plamni qoplaydi, shuning uchun
+// naqd+click+karta yig'indisi jami kirimga (qarzsiz) TENG bo'ladi va
+// qarz o'zi alohida turadi — ikki xil haqiqat paydo bo'lmaydi.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const TOLOV_GURUHLARI = ["naqd", "click", "karta", "qarz"] as const;
+export type TolovGuruhi = (typeof TOLOV_GURUHLARI)[number];
+
+export const TOLOV_GURUHI_NOMI: Record<TolovGuruhi, string> = {
+  naqd: "Naqd",
+  click: "Click",
+  karta: "Karta / hisob",
+  qarz: "Qarz",
+};
+
+export const TOLOV_GURUHI_BELGI: Record<TolovGuruhi, string> = {
+  naqd: "\u{1F4B5}",
+  click: "\u{1F4B3}",
+  karta: "\u{1F3E6}",
+  qarz: "\u{1F4D2}",
+};
+
+export function isTolovGuruhi(v: unknown): v is TolovGuruhi {
+  return TOLOV_GURUHLARI.includes(v as TolovGuruhi);
+}
+
+/** Yozuvni guruhga biriktiradi — `amaldagiBolim` ustiga qurilgan (bitta qoida). */
+export function tolovGuruhi(
+  tolovTuri: string | null,
+  kassaTuri: string | null | undefined
+): TolovGuruhi {
+  if (tolovTuri === "qarz") return "qarz";
+  const bolim = amaldagiBolim(tolovTuri, kassaTuri);
+  if (bolim === "plastik" || bolim === "bank") return "karta";
+  return bolim ?? "naqd";
+}
+
+/** `tolovGuruhi` ning SQL ko'rinishi — ro'yxat filtri uchun. */
+export function tolovGuruhiWhere(guruh: TolovGuruhi): Prisma.TransactionWhereInput {
+  if (guruh === "qarz") return { tolovTuri: "qarz" };
+  if (guruh === "karta") {
+    return { OR: [tolovBolimiWhere("plastik"), tolovBolimiWhere("bank")] };
+  }
+  return tolovBolimiWhere(guruh);
+}

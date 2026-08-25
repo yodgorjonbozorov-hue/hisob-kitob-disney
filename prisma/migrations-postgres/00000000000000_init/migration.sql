@@ -194,6 +194,8 @@ CREATE TABLE "AccountTransfer" (
     "tasdiqlanganAt" TIMESTAMP(3),
     "radAt" TIMESTAMP(3),
     "qarorIzoh" TEXT,
+    "hisoblangan" INTEGER,
+    "farq" INTEGER,
     "relatedType" TEXT,
     "relatedId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -460,6 +462,10 @@ CREATE TABLE "PurchaseOrder" (
     "debtId" TEXT,
     "tolanganSumma" INTEGER NOT NULL DEFAULT 0,
     "transferId" TEXT,
+    "idempotencyKey" TEXT,
+    "bekorSana" TIMESTAMP(3),
+    "bekorSabab" TEXT,
+    "bekorUserId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "PurchaseOrder_pkey" PRIMARY KEY ("id")
@@ -1163,7 +1169,13 @@ CREATE INDEX "Supplier_businessId_nomi_idx" ON "Supplier"("businessId", "nomi");
 CREATE INDEX "PurchaseOrder_businessId_holat_sana_idx" ON "PurchaseOrder"("businessId", "holat", "sana");
 
 -- CreateIndex
+CREATE INDEX "PurchaseOrder_businessId_qabulSana_idx" ON "PurchaseOrder"("businessId", "qabulSana");
+
+-- CreateIndex
 CREATE INDEX "PurchaseOrder_supplierId_idx" ON "PurchaseOrder"("supplierId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PurchaseOrder_businessId_idempotencyKey_key" ON "PurchaseOrder"("businessId", "idempotencyKey");
 
 -- CreateIndex
 CREATE INDEX "PurchaseOrderItem_orderId_idx" ON "PurchaseOrderItem"("orderId");

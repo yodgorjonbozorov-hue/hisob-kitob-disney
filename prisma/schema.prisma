@@ -446,6 +446,18 @@ model AccountTransfer {
   radAt                DateTime?
   /// Rad etish yoki bekor qilish sababi (qabul qiluvchi yozadi).
   qarorIzoh            String?
+  /// KASSA TOPSHIRISH SNAPSHOTI (`turi = "smena"` da to'ldiriladi; boshqa
+  /// o'tkazmalarda null). Topshirish PAYTIDA server hisoblagan kassa
+  /// qoldig'i — kutilayotgan chiqim ayrilgan holda. MUZLATILADI: qaror
+  /// kutayotgan paytda kassaga yangi yozuv tushsa ham topshirish farqi
+  /// o'zgarmaydi, aks holda direktor tasdiqlayotgan raqam u ko'rgan
+  /// raqamdan boshqa bo'lib qolardi.
+  hisoblangan          Int?
+  /// `summa − hisoblangan` — KASSA FARQI. Manfiy = kamomad (kassir tizim
+  /// hisobidan kam topshirdi; qolgani uning kassasida ochiq turadi).
+  /// Manfiy qoldiq taqiqlangani uchun bu qiymat hech qachon musbat
+  /// bo'lmaydi — mavjud qoldiqdan ko'p pul o'tkazib bo'lmaydi.
+  farq                 Int?
   /// Bog'liq hujjat: "purchaseOrder" | "debt" | "storno" (+ relatedId).
   relatedType          String?
   relatedId            String?
@@ -934,10 +946,29 @@ model PurchaseOrder {
   tolanganSumma Int                 @default(0)
   /// Ta'minotchi tizim useri bo'lsa — qabul paytidagi kassa transferi.
   transferId    String?
+  /// TAKROR YUBORISHDAN HIMOYA (idempotentlik kaliti).
+  ///
+  /// "Ta'minotni saqlash" tugmasi ikki marta bosilsa (yoki tarmoq javobni
+  /// yo'qotib qayta yuborsa) ombor ikki marta oshib, qarz ikki marta
+  /// yozilardi. Frontend har oqim uchun BITTA kalit yaratadi va uni
+  /// har urinishda o'zgarmagan holda yuboradi; ikkinchi so'rov shu
+  /// UNIQUE cheklovga uriladi va xizmat MAVJUD yozuvni qaytaradi.
+  ///
+  /// Himoya ATAYLAB bazada: ilova kodi ham, brauzer ham xato qilsa
+  /// (yoki ikki so'rov bir vaqtda kelsa) baza ikkinchisini o'tkazmaydi.
+  idempotencyKey String?
+  /// Bekor qilingan payt (holat = "bekor" bo'lganda to'ldiriladi).
+  bekorSana     DateTime?
+  /// Bekor qilish sababi — auditda saqlanadi.
+  bekorSabab    String?
+  /// Kim bekor qilgani.
+  bekorUserId   String?
   createdAt     DateTime            @default(now())
   items         PurchaseOrderItem[]
 
+  @@unique([businessId, idempotencyKey])
   @@index([businessId, holat, sana])
+  @@index([businessId, qabulSana])
   @@index([supplierId])
 }
 

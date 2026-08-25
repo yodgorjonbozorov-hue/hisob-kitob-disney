@@ -138,6 +138,43 @@ export async function getKassaKunlik(
   return natija;
 }
 
+/** Bir kassaga bir kunda KIRGAN va undan CHIQQAN o'tkazmalar. */
+export interface KassaKunlikTransfer {
+  kirgan: number;
+  chiqqan: number;
+}
+
+/**
+ * HAR KASSANING BUGUNGI O'TKAZMA HARAKATI.
+ *
+ * Bu kirim/chiqim EMAS — biznesning savdo va xarajat raqamlariga umuman
+ * qo'shilmaydi. Lekin BITTA kassaning qoldig'ini o'zgartiradi, shuning uchun
+ * "kassada bugun nima bo'ldi" savoliga javob berish uchun alohida ko'rsatiladi.
+ * Aks holda kassir "bugungi kirim 5 mln edi, qoldiq nega 2 mln" deb qolardi.
+ */
+export async function getKassaKunlikTransfer(
+  businessId: string,
+  boshlanish: Date
+): Promise<Map<string, KassaKunlikTransfer>> {
+  const rows = await prisma.accountTransfer.groupBy({
+    by: ["fromAccountId", "toAccountId"],
+    where: { businessId, holat: "bajarildi", createdAt: { gte: boshlanish } },
+    _sum: { summa: true },
+  });
+  const natija = new Map<string, KassaKunlikTransfer>();
+  const olish = (id: string) => {
+    const bor = natija.get(id) ?? { kirgan: 0, chiqqan: 0 };
+    natija.set(id, bor);
+    return bor;
+  };
+  for (const r of rows) {
+    const summa = r._sum.summa ?? 0;
+    olish(r.fromAccountId).chiqqan += summa;
+    olish(r.toAccountId).kirgan += summa;
+  }
+  return natija;
+}
+
 /** "Mening kassam" ixcham kartasi uchun — ledgerdan. */
 export interface MeningKassam {
   accountId: string;
@@ -210,6 +247,10 @@ export interface TransferDTO {
   tasdiqlaganId: string | null;
   tasdiqlaganIsm: string | null;
   qarorIzoh: string | null;
+  /** Topshirish paytidagi TIZIM qoldig'i (faqat `turi = "smena"` da). */
+  hisoblangan: number | null;
+  /** `summa − hisoblangan` — kassa farqi. Manfiy = kamomad. */
+  farq: number | null;
   createdAt: string;
 }
 
@@ -239,6 +280,8 @@ function transferDto(t: TransferRow): TransferDTO {
     tasdiqlaganId: t.tasdiqlaganId,
     tasdiqlaganIsm: t.tasdiqlaganIsm,
     qarorIzoh: t.qarorIzoh,
+    hisoblangan: t.hisoblangan,
+    farq: t.farq,
     createdAt: t.createdAt.toISOString(),
   };
 }
@@ -248,6 +291,34 @@ export async function listTransfers(businessId: string, limit = 50): Promise<Tra
     where: { businessId },
     include: TRANSFER_INCLUDE,
     orderBy: [{ sana: "desc" }, { createdAt: "desc" }],
+    take: limit,
+  });
+  return rows.map(transferDto);
+}
+
+/**
+ * KASSA HARAKATLARI RO'YXATI — davr bo'yicha kesilgan.
+ *
+ * `kutilmoqda` ATAYLAB chiqarib tashlanadi: hali pul ko'chmagan va u
+ * "Kutilayotgan topshirishlar" panelida harakat talab qilib turibdi —
+ * ikkinchi marta tarixda ko'rsatilsa bir voqea ikki joyda ko'rinardi.
+ *
+ * Davr `createdAt` bo'yicha kesiladi (`sana` emas) — kassadagi pul yozuv
+ * qaysi kunga tegishli ekaniga emas, QACHON kiritilganiga qarab harakatlanadi.
+ */
+export async function listKassaHarakatlari(
+  businessId: string,
+  boshlanish: Date | null,
+  limit = 50
+): Promise<TransferDTO[]> {
+  const rows = await prisma.accountTransfer.findMany({
+    where: {
+      businessId,
+      holat: { not: "kutilmoqda" },
+      ...(boshlanish ? { createdAt: { gte: boshlanish } } : {}),
+    },
+    include: TRANSFER_INCLUDE,
+    orderBy: { createdAt: "desc" },
     take: limit,
   });
   return rows.map(transferDto);

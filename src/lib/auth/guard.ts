@@ -24,6 +24,17 @@ export class UnauthorizedError extends Error {
   }
 }
 
+/**
+ * ZIDDIYAT (409) — so'rov to'g'ri, lekin joriy holat unga yo'l bermaydi:
+ * masalan shu nomli biznes allaqachon bor yoki biznes bo'sh emas.
+ */
+export class ConflictError extends Error {
+  constructor(message = "Amalni bajarib bo'lmadi") {
+    super(message);
+    this.name = "ConflictError";
+  }
+}
+
 /** Foydalanuvchi xatosi (400) — masalan "Omborda yetarli emas". */
 export class BadRequestError extends Error {
   constructor(message = "Xato so'rov") {
@@ -72,6 +83,9 @@ export function handleApiError(error: unknown): NextResponse {
   }
   if (error instanceof BadRequestError) {
     return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+  if (error instanceof ConflictError) {
+    return NextResponse.json({ error: error.message }, { status: 409 });
   }
   console.error(error);
   return NextResponse.json({ error: "Server xatosi yuz berdi" }, { status: 500 });

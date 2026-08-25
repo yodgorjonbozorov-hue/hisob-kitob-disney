@@ -255,6 +255,14 @@ export async function kunTopshiriqYaratTx(
       fromUserIsm: aktor.ism,
       toUserId,
       toUserIsm: ism(toUserId),
+      // KASSA FARQI o'tkazma qatorida ham muzlatiladi — Kassalar nazorat
+      // markazi ("kim qancha kam topshirdi") aynan shu ikki ustundan
+      // o'qiydi. Kun yakuni alohida haqiqat manbai qurmaydi.
+      // `kochadiganSumma` tufayli farq hech qachon MUSBAT bo'lmaydi:
+      // mavjud qoldiqdan ko'p pul o'tkazilmaydi (kassaTransfer bilan bir xil
+      // invariant).
+      hisoblangan: kutilganNaqd,
+      farq: summa - kutilganNaqd,
       holat: "kutilmoqda",
     },
     select: { id: true },
