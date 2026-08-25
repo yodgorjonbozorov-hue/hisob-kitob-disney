@@ -348,9 +348,9 @@ test("yangi modul sahifalari to'g'ri sarlavha bilan ochiladi", { skip: sabab }, 
   // lekin bo'sh" holatini ushlaydi.
   const SAHIFALAR: Array<[string, string]> = [
     ["/app", "Boshqaruv paneli"],
-    ["/app/tranzaksiyalar", "Tranzaksiyalar"],
+    ["/app/tranzaksiyalar", "Kirim va chiqimlar"],
     ["/app/hisobot", "Oylik hisobot"],
-    ["/app/xarid", "Xarid"],
+    ["/app/ombor", "Ombor"],
     ["/app/tasdiqlash", "Tasdiqlash"],
     ["/app/mijozlar", "Mijozlar"],
     ["/app/hr", "Xodimlar"],
@@ -385,16 +385,22 @@ test("kirim qo'shiladi va ro'yxatda ko'rinadi", { skip: sabab }, async () => {
 
   const izoh = `E2E sinov ${Math.floor(Date.now() / 1000)}`;
 
-  await page.getByRole("button", { name: "Kirim", exact: true }).click();
+  // REDESIGN: forma doim ochiq turmaydi — "+ Kirim" tugmasi uni varaq
+  // (dialog) sifatida ochadi.
+  await page.getByRole("button", { name: "Yangi kirim", exact: true }).click();
+  const varaq = page.getByRole("dialog", { name: "Yangi kirim" });
+  await varaq.waitFor({ timeout: 10_000 });
 
-  // Kategoriyalar serverdan keladi — birinchi haqiqiy variantni olamiz.
-  const kategoriya = page.locator("form select").first();
-  const qiymat = await kategoriya.locator("option:not([value=''])").first().getAttribute("value");
-  assert.ok(qiymat, "kategoriya ro'yxati bo'sh — seed ishlamagan");
-  await kategoriya.selectOption(qiymat);
+  // Summa — formadagi birinchi va eng katta maydon.
+  await varaq.locator("#tx-summa").fill("125000");
 
-  await page.locator("form input[placeholder='0']").first().fill("125000");
-  await page.locator("form input[type='text']").last().fill(izoh);
+  // Kategoriyalar serverdan keladi: dropdown emas, katakchalar ro'yxati —
+  // birinchisini bir bosishda tanlaymiz.
+  const birinchiKategoriya = varaq.locator("[data-test='kategoriya-royxat'] button").first();
+  await birinchiKategoriya.waitFor({ timeout: 10_000 });
+  await birinchiKategoriya.click();
+
+  await varaq.locator("#tx-izoh").fill(izoh);
 
   // Tugmani bosish bilan BIRGA server javobini kutamiz. Avval faqat yozuv
   // ro'yxatda paydo bo'lishi kutilardi — so'rov yiqilsa yoki formada xato
@@ -404,7 +410,7 @@ test("kirim qo'shiladi va ro'yxatda ko'rinadi", { skip: sabab }, async () => {
       (r) => r.url().endsWith("/api/transactions") && r.request().method() === "POST",
       { timeout: 30_000 }
     ),
-    page.getByRole("button", { name: "Qo'shish" }).click(),
+    varaq.getByRole("button", { name: "Kirimni saqlash" }).click(),
   ]);
   assert.ok(
     javob.ok(),

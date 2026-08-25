@@ -8,6 +8,12 @@ import {
 import { getQarzJamlari } from "@/lib/queries/qarz";
 import { getTolovTaqsimoti } from "@/lib/queries/tolovTaqsimoti";
 import { getOmborKartasi } from "@/lib/queries/inventory";
+import {
+  getKassaXulosa,
+  getPulOqimi,
+  getBugungiHolat,
+  getDiqqatAlertlari,
+} from "@/lib/queries/dashboardPanel";
 
 /**
  * Dashboard so'rovlarining KESHLANGAN variantlari (60 s).
@@ -43,3 +49,18 @@ export const getTolovTaqsimotiKesh = keshlangan("dashboard:tolov-taqsimoti", get
  * o'zgarishi kartada darhol ko'rinadi.
  */
 export const getOmborKartasiKesh = keshlangan("dashboard:ombor-kartasi", getOmborKartasi);
+
+// ---------------------------------------------------------------------------
+// BOSHQARUV PANELI (yangi bloklar) — `queries/dashboardPanel.ts` keshlangan.
+// Kesh tegi bir xil (`dashboard:businessId`), shuning uchun yozuv o'zgarganda
+// KPI ham, grafik ham, ogohlantirishlar ham birga yangilanadi.
+// ---------------------------------------------------------------------------
+
+/** "Kassada" kartasi — barcha faol kassalar joriy qoldig'i. */
+export const getKassaXulosaKesh = keshlangan("dashboard:kassa-xulosa", getKassaXulosa);
+/** "Pul oqimi" grafigi — kunlik (92 kun) va oylik (12 oy) seriya. */
+export const getPulOqimiKesh = keshlangan("dashboard:pul-oqimi", getPulOqimi);
+/** "Bugungi holat" bloki. */
+export const getBugungiHolatKesh = keshlangan("dashboard:bugungi-holat", getBugungiHolat);
+/** "Diqqat talab qiladi" bloki. */
+export const getDiqqatAlertlariKesh = keshlangan("dashboard:diqqat", getDiqqatAlertlari);

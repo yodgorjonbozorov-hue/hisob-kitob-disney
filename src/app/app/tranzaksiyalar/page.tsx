@@ -5,8 +5,10 @@ import { resolveActiveBusinessId, getAccessibleBusinesses, getActiveBusiness } f
 import { isManager } from "@/lib/auth/roles";
 import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { listTransactions } from "@/lib/queries/transactions";
+import { getTezKategoriyalar } from "@/lib/queries/tezKategoriyalar";
+import { isTolovGuruhi, type TolovGuruhi } from "@/lib/tolovBolimi";
 import { formatSom } from "@/lib/format";
-import { dateOnlyStringToUTCDate, todayTashkentDateOnlyString } from "@/lib/date";
+import { todayTashkentDateOnlyString } from "@/lib/date";
 import { isModuleOnForTenant } from "@/lib/modules/guard";
 import { TransactionsClient } from "./TransactionsClient";
 import { listAccounts, getMeningKassam } from "@/lib/queries/accounts";
@@ -14,18 +16,29 @@ import { toshkentBugunBoshi } from "@/lib/services/kassirKassa";
 import { KassamKartasi } from "@/components/kassa/KassamKartasi";
 import { SotilganMahsulotlar } from "./SotilganMahsulotlar";
 import { getSotuvStatistika, type SotuvStatistikaDTO } from "@/lib/queries/sotuvStatistika";
-import type { Prisma } from "@prisma/client";
 
 interface SearchParams {
   from?: string;
   to?: string;
   turi?: string;
+  /** To'lov guruhi: naqd | click | karta | qarz. */
+  tolov?: string;
   categoryId?: string;
+  /** "Kim kiritdi" filtri — xodim uchun so'rovda kelsa ham e'tiborga olinmaydi. */
+  xodimId?: string;
   q?: string;
   minSumma?: string;
   maxSumma?: string;
   page?: string;
 }
+
+/**
+ * Bir sahifada 50 ta yozuv. Ilgari 20 edi — telefonda "Keyingi" ni juda
+ * tez-tez bosishga to'g'ri kelardi; 999 ta yozuvni birdan yuklash esa
+ * brauzerni qotirardi. Filtr, qidiruv va JAMILAR baribir SERVERDA, butun
+ * to'plam bo'yicha hisoblanadi — sahifadagi 50 ta yozuv bo'yicha emas.
+ */
+const SAHIFA_HAJMI = 50;
 
 export default async function TranzaksiyalarPage({
   searchParams,
@@ -36,31 +49,32 @@ export default async function TranzaksiyalarPage({
   // Tenant konteksti: quyidagi barcha prisma so'rovlari shu tenantga avtomatik cheklanadi.
   return runWithTenant(tenantId, async () => {
   const businessId = await resolveActiveBusinessId(session);
-  // Sotuvchi kirim ham, chiqim ham qo'shadi/ko'radi — faqat "Sof foyda" ko'rsatkichi yashirin.
-  const hideProfit = session.rol === "SELLER";
-
   if (!businessId) {
     return (
       <div className="space-y-6">
-        <h1 className="text-xl sm:text-2xl font-bold text-fg">Tranzaksiyalar</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-fg">Kirim va chiqimlar</h1>
         <p className="text-muted">Sizga biznes biriktirilmagan. Admin bilan bog'laning.</p>
       </div>
     );
   }
 
-  const [result, categories, accounts, masullar, meningKassam] = await Promise.all([
+  const scopeUserId = transactionScopeUserId(session);
+  const [result, categories, accounts, masullar, meningKassam, tezKategoriyalar] = await Promise.all([
     listTransactions({
       businessId,
       // Xodim faqat o'zi kiritgan yozuvlarni ko'radi, direktor — barchasini.
-      userId: transactionScopeUserId(session),
+      userId: scopeUserId,
       from: searchParams.from,
       to: searchParams.to,
       turi: searchParams.turi,
+      tolov: isTolovGuruhi(searchParams.tolov) ? (searchParams.tolov as TolovGuruhi) : null,
       categoryId: searchParams.categoryId,
+      xodimId: searchParams.xodimId,
       q: searchParams.q,
       minSumma: searchParams.minSumma ? parseInt(searchParams.minSumma, 10) : null,
       maxSumma: searchParams.maxSumma ? parseInt(searchParams.maxSumma, 10) : null,
       page: searchParams.page ? parseInt(searchParams.page, 10) : 1,
+      pageSize: SAHIFA_HAJMI,
     }),
     prisma.category.findMany({
       where: { businessId, isActive: true },
@@ -78,58 +92,9 @@ export default async function TranzaksiyalarPage({
     // MENING KASSAM: foydalanuvchining shaxsiy kassasi (ledgerdan). Yuqoridagi
     // Naqd/Click/Qarz/Sof raqamlariga hech qanday ta'siri yo'q.
     getMeningKassam(businessId, session.userId, toshkentBugunBoshi()),
+    // Ko'p ishlatiladigan kategoriyalar — FAQAT formadagi tartib uchun.
+    getTezKategoriyalar(businessId, scopeUserId),
   ]);
-
-  // QARZ bo'limi jami — uchta manba qo'shiladi:
-  //  1) `Debt` yozuvlari — yangi qarzlar shu yerga tushadi (asosiy manba);
-  //  2) `totals.qarzKirim` — ESKI `tolovTuri="qarz"` tranzaksiyalari
-  //     (scripts/qarz-migratsiya.ts ko'chirmaguncha);
-  //  3) kunlik hisobotdagi qo'lda kiritilgan qarz tushumlari.
-  // MUHIM: bu ko'rsatkich `totals.sof` ga KIRMAYDI — qarz real pul emas.
-  const qarzWhereDebt: Prisma.DebtWhereInput = {
-    businessId,
-    turi: "olinadigan",
-    status: { not: "CANCELLED" },
-    // Eski tranzaksiyadan ko'chirilgan qarz ikki marta sanalmasin: uning
-    // summasi `totals.qarzKirim` da allaqachon bor.
-    manbaTransactionId: null,
-  };
-  {
-    const scopeUserId = transactionScopeUserId(session);
-    if (scopeUserId) qarzWhereDebt.userId = scopeUserId;
-    if (searchParams.from || searchParams.to) {
-      const sana: Prisma.DateTimeFilter = {};
-      if (searchParams.from) sana.gte = dateOnlyStringToUTCDate(searchParams.from);
-      if (searchParams.to) {
-        sana.lt = new Date(dateOnlyStringToUTCDate(searchParams.to).getTime() + 24 * 60 * 60 * 1000);
-      }
-      qarzWhereDebt.sana = sana;
-    }
-  }
-  const qarzYozuvlari =
-    (await prisma.debt.aggregate({ _sum: { jamiSumma: true }, where: qarzWhereDebt }))._sum.jamiSumma ?? 0;
-
-  let qarzSumma: number | null = null;
-  if (await isModuleOnForTenant(tenantId, "KUNLIK")) {
-    const qarzWhere: Prisma.DailyTransactionWhereInput = {
-      businessId,
-      tolovTuri: "DEBT",
-      transactionId: null,
-      deletedAt: null,
-    };
-    const scopeUserId = transactionScopeUserId(session);
-    if (scopeUserId) qarzWhere.userId = scopeUserId;
-    if (searchParams.from || searchParams.to) {
-      const sana: Prisma.DateTimeFilter = {};
-      if (searchParams.from) sana.gte = dateOnlyStringToUTCDate(searchParams.from);
-      if (searchParams.to) {
-        sana.lt = new Date(dateOnlyStringToUTCDate(searchParams.to).getTime() + 24 * 60 * 60 * 1000);
-      }
-      qarzWhere.report = { sana };
-    }
-    const agg = await prisma.dailyTransaction.aggregate({ _sum: { summa: true }, where: qarzWhere });
-    qarzSumma = agg._sum.summa ?? 0;
-  }
 
   // SOTILGAN MAHSULOTLAR (Kirim bo'limi) — ombor yuritadigan biznesda.
   //
@@ -161,7 +126,9 @@ export default async function TranzaksiyalarPage({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl sm:text-2xl font-bold text-fg">Tranzaksiyalar</h1>
+      {/* Sarlavha va birlamchi amallar (+ Kirim / − Chiqim) bitta qatorda —
+          ular TransactionsClient ichida, chunki tugmalar forma holatini
+          boshqaradi. */}
       <TransactionsClient
         initialItems={result.items}
         initialTotal={result.total}
@@ -170,21 +137,21 @@ export default async function TranzaksiyalarPage({
         categories={categories}
         accounts={accounts}
         masullar={masullar}
+        // "Kim kiritdi" filtri faqat direktorga: xodim baribir o'z
+        // yozuvlarinigina ko'radi, ro'yxat unga faqat yolg'on tanlov berardi.
+        xodimlar={canMove ? masullar : []}
+        tezKategoriyalar={tezKategoriyalar}
         currentUserId={session.userId}
         currentUserRol={session.rol}
-        hideProfit={hideProfit}
         moveTargets={moveTargets}
         totals={result.totals}
-        qarzSumma={
-          qarzSumma === null && result.totals.qarzKirim === 0 && qarzYozuvlari === 0
-            ? null
-            : (qarzSumma ?? 0) + result.totals.qarzKirim + qarzYozuvlari
-        }
         filters={{
           from: searchParams.from ?? "",
           to: searchParams.to ?? "",
           turi: searchParams.turi ?? "",
+          tolov: searchParams.tolov ?? "",
           categoryId: searchParams.categoryId ?? "",
+          xodimId: searchParams.xodimId ?? "",
           q: searchParams.q ?? "",
           minSumma: searchParams.minSumma ? formatSom(parseInt(searchParams.minSumma, 10)) : "",
           maxSumma: searchParams.maxSumma ? formatSom(parseInt(searchParams.maxSumma, 10)) : "",
