@@ -4671,3 +4671,56 @@ Suratlar `tests/suratlar/` ga tushadi (repoga qo'shilmaydi).
 
 Regressiya: 48 to'plam o'tdi (qarz, qarzdorlik, qarz-mijoz, avto, atomik,
 agregat, audit, izolyatsiya, smoke va boshqalar) — yiqilgani yo'q.
+
+## 2026-08-25 · Mobil ilova (React Native / Expo) — birinchi versiya
+
+Bitta kod bazasi iOS + Android uchun: `mobile/` (Expo SDK 57, TypeScript,
+expo-router, TanStack Query, SecureStore). Backend yagona haqiqat manbai
+bo'lib qoldi — mobil hech qanday hisob-kitobni takrorlamaydi.
+
+### Backend qo'shimchalari (veb uchun 100% orqaga mos)
+
+- `src/lib/auth/session.ts` — `Authorization: Bearer <token>` qabul qiladi.
+  Token — cookie'dagi bilan BIR XIL iron-seal (SESSION_SECRET, 7 kun TTL);
+  sessionEpoch/isActive/tenant guard'lari o'zgarishsiz ishlaydi. Bearer
+  sessiya immutable (save/destroy no-op).
+- `src/app/api/auth/login/route.ts` — `x-balansa-client: mobile` header
+  bilan kelgan so'rovga javobda `token` qo'shiladi. Veb javobi o'zgarmagan.
+- `src/lib/business.ts` — aktiv biznes endi `X-Active-Business` header'dan
+  ham o'qiladi (cookie ustuvorligi bilan bir xil validatsiya zanjiri;
+  bitta biznesga biriktirilgan xodim uchun umuman o'qilmaydi).
+- Yangi: `GET /api/me` (profil + bizneslar + modullar + huquqlar; superadmin
+  uchun minimal javob), `GET /api/ombor/kpi` (omborKpi ni HTTP orqali ochadi,
+  requireManager + OMBOR moduli), `GET /api/debts/qarzdorlar`
+  (listQarzdorlar — 1 mijoz = 1 qator, forbidSeller).
+- `tsconfig.json` — `mobile/` exclude qilindi (veb build mobilga tegmaydi).
+
+### Mobil ilova
+
+Ekranlar: Login (sessiya tiklash, mustChangePassword oqimi), Asosiy
+(direktor: oy jamlamasi + kassa + qarz + ombor KPI; xodim: faqat o'z
+kunlik ko'rsatkichlari), Kirim/Chiqim (KATEGORIYA-BIRINCHI ro'yxat,
+direktorgagina Kirim/Chiqim/Sof jamlama, to'lov taqsimoti YO'Q, filtrlar:
+Bugun/Hafta/Oy + tur + to'lov + summa + qidiruv), Kategoriya tafsiloti
+(Bugun/Kecha/sana guruhlari, cheksiz sahifalash), Yangi yozuv (202
+tasdiqlash holati bilan), CRM (board, Yutildi→Kirimga server guard bilan),
+Qarzdorlik (qarzdor ro'yxati/tafsiloti/to'lov — idempotencyKey bilan),
+Ombor (KPI + sahifalangan ro'yxat + mahsulot tarixi), Kunlik hisobot,
+POS (kamera skan + qo'lda kod + savat + 4 to'lov turi; faqat magazin
+bayrog'i yoqilgan biznesda), Menyu (rol/modulga qarab), Biznes almashtirgich
+(server tasdig'i + to'liq kesh tozalash — tenant aralashmaydi).
+
+RBAC: `GET /api/me` dagi rol/modul/bayroqlar UI'ni boshqaradi; server esa
+o'z guard'lari bilan qoladi (401/403 sessiya bekori, 402 billing,
+MODULE_NOT_ENABLED alohida qayta ishlanadi).
+
+### Tekshiruvlar
+
+- mobile: `tsc --noEmit` ✅ · `expo lint` ✅ · `jest` 46/46 ✅ ·
+  `expo export` (ios+android Metro bundle) ✅
+- veb: `tsc --noEmit` — `src/` toza (xatolar faqat eskidan qolgan
+  `tests/*.ts` fayllarida, ts-node transpileOnly rejimda ishlaydi).
+- Bu muhitda `DATABASE_URL` yo'q — DB talab qiladigan test to'plamlari
+  (isolation va h.k.) ishga tushirilmadi; sxema/migratsiya O'ZGARMAGAN.
+
+**Sxema o'zgarmadi, migratsiya yo'q.**
