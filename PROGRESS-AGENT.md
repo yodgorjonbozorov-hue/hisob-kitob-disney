@@ -4072,3 +4072,65 @@ Test: `npm run test:crm` (24 ta) — rol matritsasi (4 rol kiradi, maxfiy
 modullar yopiq), sidebar havolalari, to'liq oqim (buyurtma → Yutildi →
 Kirim → bosh sahifadagi kategoriya kesimi), idempotentlik, eski
 kategoriyasiz buyurtma va ko'p-bizneslik izolyatsiyasi.
+
+---
+
+## Bizneslar sahifasi — zamonaviy business management (2026-08-25)
+
+Branch: `claude/modernize-bizneslar-page-jtopkl`. **Sxema o'zgarmadi,
+migratsiya yo'q.**
+
+### Eski holat
+
+`/app/admin/bizneslar` texnik jadval edi: 7 ustun (Rejim, Ombor, Kassa,
+Kategoriyalar…) va har qatorda 6 ta yonma-yon amal — "Omborni yoqish",
+"Kassani yoqish", "Avto rejim", "Nofaollashtirish", "Tozalash",
+"O'chirish". Qaytarib bo'lmaydigan ikki amal kundalik amallar bilan bir
+qatorda turardi. Qidiruv, filtr, saralash va tafsilot sahifasi yo'q edi.
+Mobil ko'rinish `Jadval` komponentining umumiy kartochkasi edi.
+
+### Yangi tuzilma
+
+- Ro'yxat: xulosa (jami/faol/nofaol/tranzaksiya) → qidiruv + filtr +
+  saralash → jadval (≥1024px) yoki kartochkalar (<1024px). Qatorda faqat
+  **[Ochish]** va **[•••]**.
+- `•••` ichida: Sozlamalar, Modullar, Xodimlar, Kassa sozlamalari, Ombor
+  sozlamalari, Faollashtirish/Nofaollashtirish va (faqat OWNER) "Xavfli
+  zona…" havolasi. Tozalash/O'chirishning O'ZI menyuda YO'Q.
+- Tafsilot `/app/admin/bizneslar/[id]` — bo'limlar: Umumiy, Modullar,
+  Xodimlar, Kassa, Ombor, Xavfsizlik. Desktopda tab, mobilda navigatsiya
+  kartochkalari.
+- Yangi biznes — 5 qadamli sozlash oqimi (nomi/faoliyat → modullar →
+  kassa → xodimlar → tayyor).
+
+### Backend (yangi xizmat qatlami)
+
+`lib/services/biznesRoyxat.ts` (agregatsiya, N+1 yo'q),
+`biznesTafsilot.ts`, `biznesYaratish.ts` (takroriy yuborish to'sig'i,
+kassa uzilsa biznes ortga qaytariladi), `biznesOchirish.ts` (OWNER + nom
+tasdig'i + bo'sh biznes sharti). `lib/modules/biznesModullari.ts` — biznes
+uchun amalda ishlaydigan modullar (tenant moduli ∩ biznes bayrog'i),
+`computeNav` bilan bir xil qoida.
+
+Kuchaytirilgan qoidalar: biznesni o'chirish `requireManager` dan
+**OWNER**ga toraytirildi va endi so'rov tanasida nom tasdig'ini talab
+qiladi; PATCH da `magazin` faqat `omborli` bilan yoqiladi (ilgari bu
+qoida faqat UI'da edi).
+
+### Yo'l-yo'lakay topilgan maket xatosi
+
+`app/layout.tsx` konteyneri `md:flex-row` edi, yon panel esa `lg:flex`.
+768–1023px oraligida maket qator bo'lib qolar, lekin yon panel o'rniga
+MobileNav va BottomNav yonma-yon turib butun enni yeb qo'yardi — `main`
+bor-yo'g'i **64px** ga siqilardi va bu BARCHA sahifalarga tegishli edi.
+Konteyner `lg:flex-row` ga o'tkazildi.
+
+### Test
+
+`npm run test:bizneslar` (21 ta — izolyatsiya, IDOR, qidiruv/filtr/
+saralash, yaratish va dublikat, tarif chegarasi, nofaollashtirish,
+o'chirish huquqi) va `npm run test:bizneslar-brauzer` (10 ta — 1440/1280/
+768/390/375px, gorizontal siljish yo'q, `•••` tarkibi, xavfli zona,
+wizard). Regressiya: isolation, kop-biznes, modules, tozalash, kassa,
+magazin, crm, audit, signup, billing, visibility, backup, pro,
+soft-delete, atomik va smoke — hammasi yashil.
