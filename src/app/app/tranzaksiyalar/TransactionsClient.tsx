@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { TransactionFilters } from "./TransactionFilters";
 import { TransactionList } from "./TransactionList";
@@ -9,13 +9,23 @@ import { YangiYozuv } from "./YangiYozuv";
 import { ImportExportMenu } from "./ImportExportMenu";
 import { ImportModal } from "./ImportModal";
 import { BulkAmallar } from "./BulkAmallar";
+import { KategoriyaKorinish } from "./KategoriyaKorinish";
+import { YozuvOynalari, useYozuvOynalari } from "./YozuvOynalari";
+import { useYozuvHolati } from "./useYozuvHolati";
+import { Segmented } from "@/components/ui/Segmented";
 import { useToast } from "@/components/ui/Toast";
 import { isManager } from "@/lib/auth/roles";
-import type { TransactionDTO } from "@/lib/queries/transactions";
+import type {
+  KategoriyaJami,
+  TransactionDTO,
+} from "@/lib/queries/transactions";
 import type { TezKategoriyalar } from "@/lib/queries/tezKategoriyalar";
 import type { Rol } from "@/lib/auth/session";
 import type { CategoryOption, FiltrQiymati, XodimOption } from "./turlar";
-import { faolFiltrSoni, ozgartirsaBoladi as ozgartirishMumkinmi } from "./turlar";
+import {
+  faolFiltrSoni,
+  ozgartirsaBoladi as ozgartirishMumkinmi,
+} from "./turlar";
 
 export function TransactionsClient({
   initialItems,
@@ -31,6 +41,7 @@ export function TransactionsClient({
   currentUserRol,
   moveTargets = [],
   totals,
+  kategoriyaJamlari,
   filters,
 }: {
   initialItems: TransactionDTO[];
@@ -47,107 +58,67 @@ export function TransactionsClient({
   currentUserId: string;
   currentUserRol: Rol;
   moveTargets?: { id: string; nomi: string }[];
-  totals: { jamiKirim: number; jamiChiqim: number; sof: number };
+  /**
+   * Davr yakuni. `null` — foydalanuvchida `hisobot.korish` huquqi YO'Q,
+   * ya'ni raqamlar serverdan umuman kelmagan (yashirilgan emas, berilmagan).
+   */
+  totals: { jamiKirim: number; jamiChiqim: number; sof: number } | null;
+  /** Joriy filtr bo'yicha kategoriya kesimi — sahifaning asosiy ro'yxati. */
+  kategoriyaJamlari: KategoriyaJami[];
   filters: FiltrQiymati;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { toast } = useToast();
-  const [items, setItems] = useState(initialItems);
-  const [total, setTotal] = useState(initialTotal);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   // CSV import (Faza 4.4) — faqat boshqaruvchilar uchun.
+  const {
+    items,
+    total,
+    selected,
+    yangilanish,
+    toggleSelect,
+    toggleAll,
+    bulkOptimistik,
+    handleCreated,
+    handleUpdated,
+    handleDelete,
+  } = useYozuvHolati(initialItems, initialTotal);
   const [importOpen, setImportOpen] = useState(false);
   const [yangiOchilsin, setYangiOchilsin] = useState(0);
+  const { holat, setHolat, amallar } = useYozuvOynalari();
 
-  // Server ma'lumoti yangilanganda (router.refresh) lokal holatni sinxronlaymiz.
-  useEffect(() => setItems(initialItems), [initialItems]);
-  useEffect(() => setTotal(initialTotal), [initialTotal]);
-  useEffect(() => setSelected(new Set()), [initialItems]);
+  // KO'RINISH: asosiysi — kategoriya kesimi. "Ro'yxat" (tekis lenta,
+  // desktopda jadval) ikkinchi darajali, lekin saqlanadi: ommaviy
+  // belgilash, sahifalash va Excel kesimi o'sha yerda.
+  const korinish =
+    searchParams.get("korinish") === "royxat" ? "royxat" : "kategoriya";
+
+  function korinishAlmash(v: "kategoriya" | "royxat") {
+    const p = new URLSearchParams(searchParams.toString());
+    // Sahifa raqami ko'rinishga bog'liq — almashganda 1-sahifadan boshlanadi.
+    p.delete("page");
+    if (v === "royxat") p.set("korinish", "royxat");
+    else p.delete("korinish");
+    router.push(`${pathname}${p.toString() ? `?${p}` : ""}`);
+  }
 
   const exportUrl = `/api/transactions/export${searchParams.toString() ? `?${searchParams}` : ""}`;
   const manager = isManager(currentUserRol);
   const filtrFaol = faolFiltrSoni(filters) > 0;
   const ozgartirsaBoladi = useMemo(
     () => (t: TransactionDTO) => ozgartirishMumkinmi(t, currentUserId, manager),
-    [currentUserId, manager]
+    [currentUserId, manager],
   );
-
-  function toggleSelect(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-  function toggleAll() {
-    setSelected((prev) => (prev.size === items.length ? new Set() : new Set(items.map((i) => i.id))));
-  }
-
-  /** Ommaviy amal boshlanganda ro'yxatni darhol qisqartiramiz. */
-  function bulkOptimistik(ids: string[]) {
-    const toplam = new Set(ids);
-    setItems((prev) => prev.filter((i) => !toplam.has(i.id)));
-    setTotal((prev) => Math.max(0, prev - ids.length));
-    setSelected(new Set());
-  }
-
-  /** Yangi yozuv. `t === null` — tasdiqlash so'rovi yaratilgan (yozuv hali yo'q). */
-  function handleCreated(t: TransactionDTO | null, xabar: string) {
-    if (t) {
-      setItems((prev) => [t, ...prev]);
-      setTotal((prev) => prev + 1);
-    }
-    toast({ message: t ? `✓ ${xabar}` : xabar, tone: "success" });
-    router.refresh();
-  }
-
-  function handleUpdated(t: TransactionDTO) {
-    setItems((prev) => prev.map((i) => (i.id === t.id ? t : i)));
-    toast({ message: "Yozuv yangilandi", tone: "success" });
-    router.refresh();
-  }
-
-  // Optimistik o'chirish + 5s "Qaytarish" (undo). Soft-delete, keyin undo → restore.
-  async function handleDelete(t: TransactionDTO) {
-    setItems((prev) => prev.filter((i) => i.id !== t.id));
-    setTotal((prev) => Math.max(0, prev - 1));
-    try {
-      const res = await fetch(`/api/transactions/${t.id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        setItems((prev) => [t, ...prev]);
-        setTotal((prev) => prev + 1);
-        toast({ message: data?.error ?? "O'chirib bo'lmadi", tone: "error" });
-        return;
-      }
-      router.refresh();
-      toast({
-        message: "Tranzaksiya o'chirildi",
-        tone: "success",
-        action: {
-          label: "Qaytarish",
-          onClick: async () => {
-            await fetch(`/api/transactions/${t.id}/restore`, { method: "POST" });
-            router.refresh();
-          },
-        },
-      });
-    } catch {
-      setItems((prev) => [t, ...prev]);
-      setTotal((prev) => prev + 1);
-      toast({ message: "Serverga ulanib bo'lmadi", tone: "error" });
-    }
-  }
 
   return (
     <div className="space-y-4">
       {importOpen && <ImportModal onClose={() => setImportOpen(false)} />}
 
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h1 className="text-xl sm:text-2xl font-bold text-fg">Kirim va chiqimlar</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-fg">
+          Kirim va chiqimlar
+        </h1>
         <div className="flex items-center gap-2">
           <YangiYozuv
             ochSignal={yangiOchilsin}
@@ -157,7 +128,10 @@ export function TransactionsClient({
             tezKategoriyalar={tezKategoriyalar}
             onCreated={handleCreated}
             onQarzCreated={() => {
-              toast({ message: "Qarz yozildi — balans o'zgarmadi", tone: "success" });
+              toast({
+                message: "Qarz yozildi — balans o'zgarmadi",
+                tone: "success",
+              });
               router.refresh();
             }}
           />
@@ -168,39 +142,83 @@ export function TransactionsClient({
         </div>
       </div>
 
-      {/* Davr yakuni FAQAT direktor/administratorga: kassir va sotuvchi
-          biznesning umumiy aylanmasi va sof foydasini ko'rmaydi. Bu oyna
-          emas — serverda ham ular faqat O'Z yozuvlarini ko'radi
-          (`transactionScopeUserId`), ya'ni bu raqamlar ularga baribir
-          biznesning to'liq manzarasini bermasdi. */}
-      {manager && (
-        <SummaryBar jamiKirim={totals.jamiKirim} jamiChiqim={totals.jamiChiqim} sof={totals.sof} />
+      {/* Davr yakuni — faqat `hisobot.korish` huquqi bo'lganda. Huquq
+          yo'q bo'lsa `totals` serverdan UMUMAN kelmaydi va bu yerda hech
+          nima render qilinmaydi: bo'sh karta ham, joy ham qolmaydi. */}
+      {totals && (
+        <SummaryBar
+          jamiKirim={totals.jamiKirim}
+          jamiChiqim={totals.jamiChiqim}
+          sof={totals.sof}
+        />
       )}
 
-      <TransactionFilters categories={categories} xodimlar={xodimlar} initial={filters} />
-
-      <BulkAmallar
-        selected={selected}
-        total={total}
-        moveTargets={moveTargets}
-        onOptimistik={bulkOptimistik}
+      <TransactionFilters
+        categories={categories}
+        xodimlar={xodimlar}
+        initial={filters}
       />
 
-      <TransactionList
-        items={items}
-        total={total}
-        page={page}
-        pageSize={pageSize}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <Segmented
+          options={[
+            { value: "kategoriya", label: "Kategoriya" },
+            { value: "royxat", label: "Ro'yxat" },
+          ]}
+          value={korinish}
+          onChange={korinishAlmash}
+        />
+        {korinish === "kategoriya" && (
+          <span className="text-sm text-muted tnum">{total} ta yozuv</span>
+        )}
+      </div>
+
+      {korinish === "kategoriya" ? (
+        <KategoriyaKorinish
+          kategoriyalar={kategoriyaJamlari}
+          filtrQuery={searchParams.toString()}
+          amallar={amallar}
+          ozgartirsaBoladi={ozgartirsaBoladi}
+          filtrFaol={filtrFaol}
+          onFiltrTozalash={() => router.push(pathname)}
+          onYangi={() => setYangiOchilsin((n) => n + 1)}
+          yangilanish={yangilanish}
+        />
+      ) : (
+        <>
+          <BulkAmallar
+            selected={selected}
+            total={total}
+            moveTargets={moveTargets}
+            onOptimistik={bulkOptimistik}
+          />
+
+          <TransactionList
+            items={items}
+            total={total}
+            page={page}
+            pageSize={pageSize}
+            ozgartirsaBoladi={ozgartirsaBoladi}
+            filtrFaol={filtrFaol}
+            amallar={amallar}
+            onYangi={() => setYangiOchilsin((n) => n + 1)}
+            onFiltrTozalash={() => router.push(pathname)}
+            selected={selected}
+            onToggleSelect={toggleSelect}
+            onToggleAll={toggleAll}
+          />
+        </>
+      )}
+
+      {/* Tafsilot / tahrirlash / o'chirish — ikkala ko'rinish uchun BITTA
+          to'plam (YozuvOynalari). */}
+      <YozuvOynalari
+        holat={holat}
+        setHolat={setHolat}
         categories={categories}
         ozgartirsaBoladi={ozgartirsaBoladi}
-        filtrFaol={filtrFaol}
         onUpdated={handleUpdated}
         onDelete={handleDelete}
-        onYangi={() => setYangiOchilsin((n) => n + 1)}
-        onFiltrTozalash={() => router.push(pathname)}
-        selected={selected}
-        onToggleSelect={toggleSelect}
-        onToggleAll={toggleAll}
       />
     </div>
   );

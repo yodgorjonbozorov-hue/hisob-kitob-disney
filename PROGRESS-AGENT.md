@@ -4626,6 +4626,107 @@ O'tdi: kirim-chiqim, visibility, isolation, qarz, tolov-taqsimoti,
 kategoriya, soft-delete, csv-import, kunlik, agregat, modules, crm,
 tasdiqlash, kop-biznes, selos-kg, smoke — hammasi yashil, build ham.
 
+## Kirim/Chiqim: kategoriya kesimi qaytarildi, davr yakuni huquqqa bog'landi (2026-08-25)
+
+Uch talab: (1) asosiy ro'yxat sana emas, KATEGORIYA bo'yicha bo'lsin;
+(2) to'lov usuli taqsimoti yuqoridan olib tashlansin; (3) Kirim/Chiqim/Sof
+faqat direktorga ko'rinsin — CSS bilan yashirish emas.
+
+(2) va (3) ning UI qismi oldingi yozuvda bajarilgan edi; bu yozuv
+kategoriya kesimini va huquqning SERVER tomonidagi majburlanishini
+qo'shadi.
+
+### 1. Kategoriya kesimi — sahifaning asosiy ro'yxati
+
+Ierarxiya endi: Kirim/Chiqim → BO'LIM (Kirim / Chiqim) → KATEGORIYA →
+o'sha kategoriyaning yozuvlari → yozuvlar ichida sana guruhi (Bugun /
+Kecha / eskiroq).
+
+Kategoriya jamlari SERVERDA hisoblanadi — `listKategoriyaJamlari`
+(`lib/queries/transactions.ts`). U mavjud `buildTransactionWhere` dan
+yuradi, ya'ni ro'yxat, eksport va kategoriya kesimi AYNI filtrdan
+chiqadi. Bu eng muhim invariant: kartadagi summa ochilgandagi yozuvlar
+yig'indisiga TENG (test bilan qulflangan — har kategoriya uchun
+`total` va yig'indi solishtiriladi).
+
+Kategoriya ochilganda yozuvlar `/api/transactions?categoryId=...` dan,
+joriy filtr parametrlari bilan keladi. Sana filtri, qidiruv, to'lov va
+xodim filtri kesimga ham, ichkaridagi yozuvlarga ham bir xil qo'llanadi.
+
+Kirim va chiqim ikki ALOHIDA bo'limda: bitta ro'yxatda aralashsa,
+"+"/"−" belgilariga qaramay ko'z ularni qo'shib o'qiydi va bo'lim
+yig'indisi ma'nosini yo'qotadi.
+
+Tekis ro'yxat YO'QOLMADI: "Kategoriya | Ro'yxat" almashtirgichi bor
+(`?korinish=royxat`), asosiysi — kategoriya. Ro'yxat ko'rinishida
+desktop jadvali, ommaviy belgilash, ko'chirish va sahifalash avvalgidek
+ishlaydi.
+
+QARZ haqida: bu sahifadagi ro'yxat qarzga yozilgan yozuvlarni HAM
+ko'rsatadi (`realPul` yoqilmagan), demak kategoriya jamisi ham ularni
+o'z ichiga oladi. Yuqoridagi "Sof" esa ataylab REAL pul
+(`lib/qarzFiltr.ts`) — u boshqa savolga javob beradi.
+
+### 2. Davr yakuni — mavjud granular huquq bilan
+
+Yangi ruxsat tizimi kiritilmadi. Mavjud `lib/permissions` katalogidagi
+`hisobot.korish` huquqi ishlatiladi:
+
+* OWNER va ADMIN — bor (`BARCHA_HUQUQLAR`);
+* CASHIER va SELLER — YO'Q;
+* maxsus rol (PRO) — biznes egasi o'zi bera oladi.
+
+Sahifa: huquq yo'q bo'lsa `totals` klientga UMUMAN yuborilmaydi
+(`totals={jamiKorish ? result.totals : null}`) — HTMLda ham yo'q, bo'sh
+karta ham qolmaydi, filtrlar tepaga suriladi.
+
+API: `/api/transactions` GET huquq yo'q bo'lsa javobdan `totals` ni
+olib tashlaydi. Ro'yxat, sahifalash va kunlik jamlar hammaga avvalgidek
+qaytadi — xodimning kundalik ishi to'xtamaydi. Brauzerda tekshirildi:
+kassir uchun `"totals" in javob === false`, `items` esa joyida.
+
+Eslatma: ADMIN ham ko'radi. `isManager` va `BARCHA_HUQUQLAR` bo'yicha
+ADMIN — OWNER bilan teng huquqli va bosh sahifada AYNI raqamlarni
+ko'radi; uni faqat shu kartadan uzish himoya bermas, shunchaki
+nomuvofiqlik tug'dirardi. Faqat OWNER kerak bo'lsa — `katalog.ts` dagi
+ADMIN to'plamidan `hisobot.korish` ni olib tashlash kifoya.
+
+### 3. Fayllar
+
+Yangi: `KategoriyaKorinish.tsx` (kesim + yuklash), `KategoriyaBolimi.tsx`
+(bir bo'lim), `YozuvOynalari.tsx` (tafsilot/tahrirlash/o'chirish oynalari
+— ikkala ko'rinish uchun bitta to'plam), `useYozuvHolati.ts` (ro'yxat
+holati va optimistik amallar).
+
+O'zgargan: `page.tsx` (filtr bitta joyda, kesim + huquq so'rovi),
+`TransactionsClient.tsx`, `TransactionList.tsx`, `TransactionCards.tsx`
+(kategoriya ichida nomi takrorlanmaydi), `lib/queries/transactions.ts`,
+`api/transactions/route.ts`.
+
+**Sxema o'zgarmadi, migratsiya yo'q.**
+
+### 4. Test
+
+`test:kirim-chiqim` 12 → 19 ta. Yangi: kategoriya takrorlanmasligi,
+jami = yozuvlar yig'indisi (har kategoriya uchun), kirim/chiqim
+aralashmasligi, sana filtri kesimni o'zgartirishi, qidiruv, ko'rinuvchanlik
+chegarasi, `hisobot.korish` matritsasi.
+
+`test:smoke` — kirim qo'shish oqimi yangi ko'rinishga moslandi: yozuv
+kategoriya ochilganda va "Ro'yxat" ko'rinishida topiladi.
+
+O'tdi (fail 0): kirim-chiqim 19, visibility 10, isolation 22,
+izolyatsiya-royxati 9, qarz 16, tolov-taqsimoti 11, kategoriya 11,
+soft-delete 8, csv-import 13, kunlik 27, agregat 7, modules 15, crm 24,
+tasdiqlash 20, kop-biznes 18, selos-kg 21, foydalanuvchilar 34,
+kassa-nazorat 23. Build va TypeScript ham toza.
+
+QOLGAN QIZIL (meniki emas): `test:smoke` dagi `/app/ombor` sarlavha
+tekshiruvi. Ombor/Ta'minot birlashtirish commiti smoke ro'yxatidagi
+`/app/xarid` ni `/app/ombor` ga almashtirgan, lekin e2e fixture'da
+admin biznesi ataylab `omborli = 0` (`scripts/e2e-tayyorla.mjs`), yangi
+`/app/ombor/page.tsx` esa bunda `/app` ga yo'naltiradi. Mahsulot xatosi
+emas — testning o'z fixture'i bilan ziddiyati.
 ## Boshqaruv paneli (/app) — Business Control Center
 
 Bosh sahifa oddiy statistika ro'yxatidan biznes holatini 10 soniyada

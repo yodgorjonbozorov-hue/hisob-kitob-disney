@@ -31,12 +31,19 @@ export function TransactionCards({
   onTahrirlash,
   onOchirish,
   ozgartirsaBoladi,
+  kategoriyaniYashir = false,
 }: {
   items: TransactionDTO[];
   onBatafsil: (t: TransactionDTO) => void;
   onTahrirlash: (t: TransactionDTO) => void;
   onOchirish: (t: TransactionDTO) => void;
   ozgartirsaBoladi: (t: TransactionDTO) => boolean;
+  /**
+   * Kategoriya kesimi ichida: qatorda kategoriya nomini QAYTA yozmaymiz —
+   * u yuqoridagi ochilgan sarlavhada turibdi. O'rniga izoh bosh qator
+   * bo'ladi, ya'ni har qator yangi ma'lumot beradi.
+   */
+  kategoriyaniYashir?: boolean;
 }) {
   const guruhlar: { kalit: string; sana: Date; items: TransactionDTO[]; sof: number }[] = [];
   for (const t of items) {
@@ -51,8 +58,11 @@ export function TransactionCards({
     g.sof += t.turi === "kirim" ? t.summa : -t.summa;
   }
 
+  // `lg:hidden` BU YERDA emas, chaqiruvchida: tekis ro'yxatda kartalar faqat
+  // telefonda ko'rinadi (desktopda jadval), kategoriya ichida esa HAR
+  // o'lchamda — u yerda jadval ustunlari ortiqcha shovqin bo'lardi.
   return (
-    <div className="lg:hidden">
+    <div>
       {guruhlar.map((g) => (
         <div key={g.kalit}>
           <div className="sticky top-0 z-10 flex items-center justify-between gap-2 px-4 py-2
@@ -65,7 +75,7 @@ export function TransactionCards({
           <ul className="divide-y divide-line">
             {g.items.map((t) => (
               <li key={t.id} className="flex items-stretch gap-1 px-2 py-1">
-                <Karta t={t} onBatafsil={() => onBatafsil(t)} />
+                <Karta t={t} onBatafsil={() => onBatafsil(t)} kategoriyaniYashir={kategoriyaniYashir} />
                 <div className="self-center">
                   <AmalMenu
                     onBatafsil={() => onBatafsil(t)}
@@ -82,7 +92,15 @@ export function TransactionCards({
   );
 }
 
-function Karta({ t, onBatafsil }: { t: TransactionDTO; onBatafsil: () => void }) {
+function Karta({
+  t,
+  onBatafsil,
+  kategoriyaniYashir,
+}: {
+  t: TransactionDTO;
+  onBatafsil: () => void;
+  kategoriyaniYashir: boolean;
+}) {
   const kirim = t.turi === "kirim";
   return (
     <button
@@ -100,7 +118,9 @@ function Karta({ t, onBatafsil }: { t: TransactionDTO; onBatafsil: () => void })
             <span aria-hidden="true">{kirim ? "↓" : "↑"}</span>
             {kirim ? "Kirim" : "Chiqim"}
           </span>
-          <span className="block mt-1 font-medium text-fg truncate">{t.category.nomi}</span>
+          <span className="block mt-1 font-medium text-fg truncate">
+            {kategoriyaniYashir ? (t.izoh ?? "Izohsiz") : t.category.nomi}
+          </span>
         </span>
         <span
           className={`font-display tnum font-semibold whitespace-nowrap ${
@@ -122,11 +142,15 @@ function Karta({ t, onBatafsil }: { t: TransactionDTO; onBatafsil: () => void })
         </span>
       )}
 
-      {(t.izoh || t.crmBuyurtma) && (
+      {/* Kategoriya yashirilganda izoh allaqachon bosh qatorda — takrorlanmaydi. */}
+      {!kategoriyaniYashir && (t.izoh || t.crmBuyurtma) && (
         <span className="block text-2xs text-faint truncate">
           {t.crmBuyurtma ? "CRM · " : ""}
           {t.izoh ?? t.crmBuyurtma?.nomi ?? ""}
         </span>
+      )}
+      {kategoriyaniYashir && t.crmBuyurtma && (
+        <span className="block text-2xs text-faint truncate">CRM · {t.crmBuyurtma.nomi}</span>
       )}
     </button>
   );
