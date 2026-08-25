@@ -4,126 +4,91 @@ import { runWithTenant } from "@/lib/db/tenantContext";
 import { requireModulePage } from "@/lib/modules/guard";
 import { isManager } from "@/lib/auth/roles";
 import { getActiveBusiness } from "@/lib/business";
-import { listProducts, getOmborStats, getProductProfitability, type ProductAdminDTO } from "@/lib/queries/inventory";
-import { OmborClient } from "./OmborClient";
-import { Card } from "@/components/ui/Card";
-import { formatSomLabel } from "@/lib/format";
-import { omborMatn, isAvto } from "@/lib/biznesTuri";
+import { isAvto } from "@/lib/biznesTuri";
+import { listAccounts } from "@/lib/queries/accounts";
+import { listSuppliers } from "@/lib/queries/xarid";
+import {
+  listOmborKategoriyalar,
+  listOmborMahsulotlar,
+  listTaminotlar,
+  omborKpi,
+} from "@/lib/queries/ombor";
+import { listStockAdjustments } from "@/lib/queries/inventory";
+import { OmborSahifa } from "./OmborSahifa";
+import { OMBOR_TABLAR, type OmborTab } from "./tablar";
 
-export default async function OmborPage() {
+/**
+ * OMBOR — mahsulot, ta'minot va inventarizatsiya BITTA modulda.
+ *
+ * Ilgari bu uchta joyga bo'lingan edi: Ombor (jadval), Xarid (buyurtma) va
+ * Ta'minotchilar (reyestr). Foydalanuvchi "tovar keldi" deyish uchun avval
+ * qaysi bo'limga borishni bilishi kerak edi, keyin uch qadamli buyurtma
+ * oqimini o'tishi kerak edi. Endi hammasi shu sahifada, asosiy amal esa
+ * bitta tugma — "+ Tovar keldi".
+ *
+ * SERVER TOMONDA faqat KO'RINADIGAN sahifa yuklanadi: mahsulotlar
+ * `listOmborMahsulotlar` bilan sahifalanadi (1000+ tovarda ham brauzerga
+ * 24 ta kartochka boradi), qidiruv va filtr ham bazada bajariladi.
+ */
+const SAHIFA_HAJMI = 24;
+
+export default async function OmborPage({
+  searchParams,
+}: {
+  searchParams?: { tab?: string };
+}) {
   const ctx = await requireTenantPage();
   const { session, tenantId } = ctx;
-  // Tenant konteksti: quyidagi barcha prisma so'rovlari shu tenantga avtomatik cheklanadi.
+  // Tenant konteksti: quyidagi barcha prisma so'rovlari shu tenantga cheklanadi.
   return runWithTenant(tenantId, async () => {
-  // OMBOR moduli yoqilmagan bo'lsa — asosiy sahifaga.
-  await requireModulePage(ctx, "OMBOR");
-  if (!isManager(session.rol)) {
-    redirect("/app");
-  }
-  const business = await getActiveBusiness(session);
-  if (!business || !business.omborli) {
-    redirect("/app");
-  }
+    await requireModulePage(ctx, "OMBOR");
+    if (!isManager(session.rol)) redirect("/app");
 
-  const [products, stats, profit] = await Promise.all([
-    listProducts(business.id, { forKassir: false }) as Promise<ProductAdminDTO[]>,
-    getOmborStats(business.id),
-    getProductProfitability(business.id),
-  ]);
+    const business = await getActiveBusiness(session);
+    if (!business || !business.omborli) redirect("/app");
 
-  const M = omborMatn(business.turi);
-  const avto = isAvto(business.turi);
-  // Sotilganlar bo'yicha yakun — "sof foyda" ko'rsatkichi (avto rejimida ayniqsa muhim).
-  const jami = profit.reduce(
-    (a, p) => ({
-      sotilgan: a.sotilgan + p.sotilgan,
-      daromad: a.daromad + p.daromad,
-      tannarx: a.tannarx + p.tannarx,
-      xarajat: a.xarajat + p.xarajat,
-      foyda: a.foyda + p.foyda,
-    }),
-    { sotilgan: 0, daromad: 0, tannarx: 0, xarajat: 0, foyda: 0 }
-  );
+    // AVTO rejimi (olib-sotar avtopark) — mahsulot kartochkasi, ta'minotchi
+    // va qadam-baqadam ta'minot oqimi u yerda ma'nosiz: bitta mashina bitta
+    // yozuv, narx har safar savdolashib belgilanadi. Shu bois avto bizneslar
+    // eski ko'rinishda qoladi.
+    if (isAvto(business.turi)) redirect("/app/ombor/avtopark");
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-fg">{M.modul}</h1>
-        <p className="text-sm text-muted mt-1">
-          Biznes: <span className="font-medium text-fg">{business.nomi}</span>
-        </p>
-      </div>
-      <OmborClient initialProducts={products} stats={stats} biznesTuri={business.turi} />
+    const tab: OmborTab = OMBOR_TABLAR.some((t) => t.kalit === searchParams?.tab)
+      ? (searchParams!.tab as OmborTab)
+      : "mahsulotlar";
 
-      {profit.length > 0 && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Card>
-            <p className="text-muted text-sm mb-1">{avto ? "Sotilgan mashinalar" : "Sotilgan (dona)"}</p>
-            <p className="text-xl font-semibold text-fg tnum">{jami.sotilgan}</p>
-          </Card>
-          <Card>
-            <p className="text-muted text-sm mb-1">Sotuvdan tushum</p>
-            <p className="text-xl font-semibold text-fg tnum">{formatSomLabel(jami.daromad)}</p>
-          </Card>
-          <Card>
-            <p className="text-muted text-sm mb-1">{avto ? "Mashinalar tannarxi" : "Tannarx"}</p>
-            <p className="text-xl font-semibold text-fg tnum">{formatSomLabel(jami.tannarx)}</p>
-            {jami.xarajat > 0 && (
-              <p className="text-2xs text-muted mt-1">
-                + {formatSomLabel(jami.xarajat)} xarajat
-              </p>
-            )}
-          </Card>
-          <Card>
-            <p className="text-muted text-sm mb-1">Sof foyda</p>
-            <p className={`text-xl font-semibold tnum ${jami.foyda >= 0 ? "text-income" : "text-expense"}`}>
-              {formatSomLabel(jami.foyda)}
-            </p>
-          </Card>
-        </div>
-      )}
+    const [kpi, kategoriyalar, royxat, taminotchilar, kassalar] = await Promise.all([
+      omborKpi(business.id),
+      listOmborKategoriyalar(business.id),
+      listOmborMahsulotlar(business.id, {
+        q: null,
+        categoryId: null,
+        holat: "barchasi",
+        sahifa: 1,
+        limit: SAHIFA_HAJMI,
+      }),
+      listSuppliers(business.id, true),
+      listAccounts(business.id, true),
+    ]);
 
-      {profit.length > 0 && (
-        <Card className="p-0 overflow-hidden">
-          <h2 className="font-semibold text-fg px-5 pt-5 pb-3">{M.foydaSarlavha}</h2>
-          <div className="jadval-siljish">
-            <table className="w-full text-sm min-w-[38rem]">
-              <thead className="bg-surface-2 text-muted text-xs uppercase">
-                <tr>
-                  <th className="text-left px-5 py-2">{avto ? "Mashina" : "Mahsulot"}</th>
-                  <th className="text-right px-3 py-2">{M.sotilgan}</th>
-                  <th className="text-right px-3 py-2">{avto ? "Sotilgan narx" : "Daromad"}</th>
-                  {avto && <th className="text-right px-3 py-2">Xarajat</th>}
-                  <th className="text-right px-3 py-2">{avto ? "Sof foyda" : "Foyda"}</th>
-                  <th className="text-right px-5 py-2">Marja</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {profit.map((p) => (
-                  <tr key={p.productId}>
-                    <td className="px-5 py-2.5 font-medium">
-                      {p.nomi}
-                      {p.foyda < 0 && <span className="ml-2 text-2xs text-expense">zararga</span>}
-                    </td>
-                    <td className="px-3 py-2.5 text-right tnum">{p.sotilgan}</td>
-                    <td className="px-3 py-2.5 text-right tnum">{formatSomLabel(p.daromad)}</td>
-                    {avto && (
-                      <td className="px-3 py-2.5 text-right tnum text-muted">
-                        {p.xarajat > 0 ? formatSomLabel(p.xarajat) : "—"}
-                      </td>
-                    )}
-                    <td className={`px-3 py-2.5 text-right tnum font-medium ${p.foyda >= 0 ? "text-income" : "text-expense"}`}>
-                      {formatSomLabel(p.foyda)}
-                    </td>
-                    <td className={`px-5 py-2.5 text-right tnum ${p.marja >= 0 ? "text-muted" : "text-expense"}`}>{p.marja}%</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
-    </div>
-  );
+    // Faqat ochiq tab uchun ma'lumot yuklanadi — yopiq tabning so'rovlari
+    // har ochilishda bekorga ketardi.
+    const taminotlar =
+      tab === "taminotlar" ? await listTaminotlar(business.id, { limit: 20 }) : null;
+    const togrilashlar = tab === "inventarizatsiya" ? await listStockAdjustments(business.id, 30) : null;
+
+    return (
+      <OmborSahifa
+        tab={tab}
+        biznesNomi={business.nomi}
+        kpi={kpi}
+        kategoriyalar={kategoriyalar}
+        boshlangichRoyxat={royxat}
+        taminotchilar={taminotchilar}
+        kassalar={kassalar}
+        taminotlar={taminotlar}
+        togrilashlar={togrilashlar}
+      />
+    );
   });
 }

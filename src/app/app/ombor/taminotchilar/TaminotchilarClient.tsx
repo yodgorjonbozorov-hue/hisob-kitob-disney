@@ -124,7 +124,7 @@ function SupplierModal({
     setXato(null);
     try {
       const res = await fetch(
-        tahrir ? `/api/xarid/suppliers/${supplier!.id}` : "/api/xarid/suppliers",
+        tahrir ? `/api/ombor/taminotchilar/${supplier!.id}` : "/api/ombor/taminotchilar",
         {
           method: tahrir ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
@@ -155,7 +155,7 @@ function SupplierModal({
     setLoading(true);
     setXato(null);
     try {
-      const res = await fetch(`/api/xarid/suppliers/${supplier!.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/ombor/taminotchilar/${supplier!.id}`, { method: "DELETE" });
       const data = await res.json();
       if (!res.ok) {
         setXato(data.error ?? "O'chirib bo'lmadi");

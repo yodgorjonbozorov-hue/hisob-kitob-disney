@@ -156,16 +156,22 @@ export const MODULLAR: ModulTarifi[] = [
   },
   {
     code: "XARID",
-    nomi: "Xarid",
+    nomi: "Xarid (rejali buyurtma)",
     tavsif:
-      "Ta'minotchilar reyestri, xarid buyurtmasi va qabul qilish. Qabul qilinganda tovar omborga tushadi, chiqim yoki ta'minotchiga qarz avtomatik yoziladi.",
+      "Oldindan rejalashtiriladigan xarid buyurtmasi: qoralama \u2192 tasdiqlash \u2192 qabul qilish. " +
+      "Kundalik \"tovar keldi\" oqimi va ta'minotchilar reyestri endi OMBOR modulida \u2014 " +
+      "bu modul faqat reja bilan ishlaydigan bizneslarga kerak.",
     core: false,
     // Xarid — pul va ombor qarori, shuning uchun faqat boshqaruvchilar.
     rollar: BOSHQARUVCHILAR,
-    nav: [
-      { href: "/app/xarid", label: "Xarid", icon: "purchase", tartib: 23, rollar: BOSHQARUVCHILAR },
-      { href: "/app/xarid/taminotchilar", label: "Ta'minotchilar", icon: "supplier", tartib: 24, rollar: BOSHQARUVCHILAR },
-    ],
+    // NAV ATAYLAB BO'SH. Ilgari yon panelda "Xarid" va "Ta'minotchilar"
+    // alohida turardi va foydalanuvchi "tovar keldi" deyish uchun qaysi
+    // bo'limga borishni o'ylashi kerak edi. Endi ikkalasi ham Ombor ichida:
+    //   /app/ombor?tab=taminotlar   — kelgan tovarlar tarixi;
+    //   /app/ombor/taminotchilar    — reyestr.
+    // Modul o'zi saqlanib qoldi: eski buyurtma yozuvlari va `/api/xarid/*`
+    // ishlayveradi, faqat yon panelda takroriy punkt qolmadi.
+    nav: [],
   },
   {
     code: "TASDIQLASH",
