@@ -1353,6 +1353,24 @@ model DailyReport {
   submittedByIsm String?
   submittedAt    DateTime?
   sanalganNaqd   Int?
+  /// TIZIM HISOBI — topshirish paytida MUZLATILADI: kassirning shaxsiy
+  /// kassasidagi (yoki biznes naqd kassalaridagi) qoldiq. `naqdSumma` dan
+  /// FARQI: bu yerda naqd CHIQIM va kun boshidagi qoldiq ham hisobga olinadi.
+  /// Farq aynan shunga qarab o'lchanadi (`naqdSumma` ga emas).
+  kutilganNaqd   Int?
+  /// sanalganNaqd − kutilganNaqd. Manfiy = KAMOMAD, musbat = ORTIQCHA.
+  /// Muzlatilgan: keyin yozuv tahrirlansa ham kun farqi o'zgarmaydi.
+  kassaFarq      Int?
+  /// KUN TOPSHIRIG'INING PUL HARAKATI — `AccountTransfer` IDsi.
+  /// Topshirishda "kutilmoqda" holatida yaraladi, kun tasdiqlanganda
+  /// "bajarildi" ga o'tadi (kassir kassasi kamayadi, direktornikiga qo'shiladi).
+  /// NULL — pul ko'chmagan kun (naqd 0 yoki shaxsiy kassa rejimi yo'q).
+  /// FK ATAYLAB yo'q: o'tkazma storno bilan bekor qilinsa ham havola qolsin.
+  transferId     String?
+  /// Kassirning topshirish izohi (farq bo'lsa MAJBURIY — validatsiyada).
+  izoh           String?
+  /// Direktor qarorining izohi (ayniqsa rad etishda).
+  qarorIzoh      String?
   /// Tasdiqlagan foydalanuvchi (User.id) va ism snapshot'i — foydalanuvchi
   /// keyin o'chirilsa ham tarixda kim tasdiqlagani ko'rinib turadi.
   confirmedBy    String?

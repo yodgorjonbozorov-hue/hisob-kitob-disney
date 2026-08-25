@@ -1,8 +1,15 @@
 import { requireTenantPage } from "@/lib/auth/tenant";
 import { requireModulePage } from "@/lib/modules/guard";
 import { runWithTenant } from "@/lib/db/tenantContext";
-import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
-import { getKunlikReport, getKunlikDirektor } from "@/lib/queries/kunlik";
+import { resolveActiveBusinessId } from "@/lib/business";
+import {
+  getKunlikReport,
+  getKunlikDirektor,
+  getKunlikKassa,
+  listKunlikKategoriyalar,
+  listKunlikOperatsiyalar,
+  listKutilayotganKunlar,
+} from "@/lib/queries/kunlik";
 import { getSmenaHolat } from "@/lib/queries/smena";
 import { getKunlikRuxsat, kunlikBugun } from "@/lib/services/kunlik";
 import { getKgSavdo } from "@/lib/queries/selos";
@@ -13,8 +20,11 @@ import { SelosBugunKartasi } from "../SelosBugunKartasi";
 export const dynamic = "force-dynamic";
 
 /**
- * KUNLIK HISOBOT — bugungi tushumlar (naqd/Click/qarz) va kun yakuni.
- * Oylik hisobotdan alohida tizim; kun Toshkent yarim tunida almashadi.
+ * KUNLIK HISOBOT — kun kirimi/chiqimi, smena solishtiruvi va kassa topshirish.
+ *
+ * Kun Toshkent yarim tunida almashadi. Barcha raqamlar YAGONA manbadan
+ * (`Transaction` + `AccountTransfer` ledgeri) hosila: kunlik hisobot
+ * alohida daftar yuritmaydi.
  */
 export default async function KunlikPage({
   searchParams,
@@ -27,7 +37,6 @@ export default async function KunlikPage({
     await requireModulePage(ctx, "KUNLIK");
 
     const businessId = await resolveActiveBusinessId(session);
-    const business = await getActiveBusiness(session);
     if (!businessId) {
       return (
         <div className="space-y-6">
@@ -50,23 +59,20 @@ export default async function KunlikPage({
     // bo'yicha yuritiladi; kg ALOHIDA blok bo'lib turadi va tushum
     // summalariga aralashmaydi.
     const kgPanel = kgSavdoKorinadi(ctx.tenant);
-    const [report, direktor, smena, kgSavdo] = await Promise.all([
-      getKunlikReport(businessId, sana),
-      getKunlikDirektor(businessId),
-      getSmenaHolat(businessId, sana, bugun),
-      kgPanel ? getKgSavdo(businessId, sana) : Promise.resolve(null),
-    ]);
+    const [report, direktor, smena, kassa, operatsiyalar, kategoriyalar, kutilayotganlar, kgSavdo] =
+      await Promise.all([
+        getKunlikReport(businessId, sana),
+        getKunlikDirektor(businessId),
+        getSmenaHolat(businessId, sana, bugun),
+        getKunlikKassa(businessId, session.userId),
+        listKunlikOperatsiyalar(businessId, sana),
+        listKunlikKategoriyalar(businessId),
+        ruxsat.tasdiqlaydi ? listKutilayotganKunlar(businessId) : Promise.resolve([]),
+        kgPanel ? getKgSavdo(businessId, sana) : Promise.resolve(null),
+      ]);
 
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-fg">Kunlik hisobot</h1>
-          <p className="text-sm text-muted mt-1">
-            Biznes: <span className="font-medium text-fg">{business?.nomi ?? "—"}</span> · Kun
-            yakunini {direktor.direktorIsm ? `direktor ${direktor.direktorIsm}` : "direktor"}{" "}
-            tasdiqlaydi
-          </p>
-        </div>
+      <div className="space-y-5">
         {kgSavdo && kgSavdo.savdoSoni > 0 && (
           <SelosBugunKartasi
             hisobot={kgSavdo}
@@ -79,6 +85,10 @@ export default async function KunlikPage({
           bugun={bugun}
           direktor={direktor}
           smena={smena}
+          kassa={kassa}
+          operatsiyalar={operatsiyalar}
+          kategoriyalar={kategoriyalar}
+          kutilayotganlar={kutilayotganlar}
         />
       </div>
     );

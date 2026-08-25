@@ -1,127 +1,151 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
-import { Money } from "@/components/ui/Money";
-import { EmptyState } from "@/components/ui/EmptyState";
-import {
-  KUNLIK_TOLOV_BELGI,
-  KUNLIK_TOLOV_NOMI,
-  type KunlikTolovTuri,
-} from "@/lib/validation/kunlik";
-import type { KunlikDirektorDTO, KunlikReportDTO } from "@/lib/queries/kunlik";
+import type {
+  KunlikDirektorDTO,
+  KunlikKassaDTO,
+  KunlikOperatsiyaDTO,
+  KunlikReportDTO,
+  KutilayotganKunDTO,
+} from "@/lib/queries/kunlik";
 import type { SmenaHolatDTO } from "@/lib/queries/smena";
 import type { KunlikRuxsat } from "@/lib/services/kunlik";
-import { TushumForm } from "./TushumForm";
-import { DirektorModal } from "./DirektorModal";
+import { KunlikSarlavha } from "./KunlikSarlavha";
+import { XulosaKartalar } from "./XulosaKartalar";
 import { SmenaCard } from "./SmenaCard";
 import { YakunCard } from "./YakunCard";
-import { sanaSur, sanaUz, soatToshkent } from "./vaqt";
+import { TushumForm } from "./TushumForm";
+import { TopshirishModal } from "./TopshirishModal";
+import { DirektorModal } from "./DirektorModal";
+import { Operatsiyalar } from "./Operatsiyalar";
+import { KutilayotganKunlar } from "./KutilayotganKunlar";
+import { StickyAmal } from "./StickyAmal";
 
+export interface KunlikSahifaProps {
+  report: KunlikReportDTO;
+  ruxsat: KunlikRuxsat;
+  bugun: string;
+  direktor: KunlikDirektorDTO;
+  smena: SmenaHolatDTO;
+  kassa: KunlikKassaDTO;
+  operatsiyalar: KunlikOperatsiyaDTO[];
+  kategoriyalar: { id: string; nomi: string }[];
+  kutilayotganlar: KutilayotganKunDTO[];
+}
+
+/**
+ * KUNLIK HISOBOT — sahifa boshqaruvchisi.
+ *
+ * Tartib ataylab shunday: sarlavha va holat → kun xulosasi → smena
+ * solishtiruvi → kun yakuni (pul) → tushum kiritish → operatsiyalar lentasi.
+ * Ya'ni "kun qanday o'tdi" savolidan "endi nima qilaman" savoliga qarab
+ * yuriladi. Mobil'da asosiy amal sticky panelda takrorlanadi.
+ */
 export function KunlikClient({
   report,
   ruxsat,
   bugun,
   direktor,
   smena,
-}: {
-  report: KunlikReportDTO;
-  ruxsat: KunlikRuxsat;
-  bugun: string;
-  direktor: KunlikDirektorDTO;
-  smena: SmenaHolatDTO;
-}) {
+  kassa,
+  operatsiyalar,
+  kategoriyalar,
+  kutilayotganlar,
+}: KunlikSahifaProps) {
   const router = useRouter();
   const [direktorModal, setDirektorModal] = useState(false);
+  const [topshirishModal, setTopshirishModal] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [xato, setXato] = useState<string | null>(null);
 
   const bugungi = report.sana === bugun;
   const ochiq = report.holat === "OPEN";
 
-  async function ochir(id: string) {
-    if (!confirm("Bu tushum o'chirilsinmi?")) return;
+  /** Direktor qarori va qayta ochish — bitta yo'l, bitta xato ko'rsatkichi. */
+  async function amal(url: string, tana: Record<string, unknown>) {
+    setLoading(true);
     setXato(null);
-    const res = await fetch(`/api/kunlik/tushum/${id}`, { method: "DELETE" });
-    const data = await res.json();
-    if (!res.ok) {
-      setXato(data.error ?? "O'chirib bo'lmadi");
-      return;
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sana: report.sana, ...tana }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setXato(data.error ?? "Xatolik yuz berdi");
+        return;
+      }
+      router.refresh();
+    } catch {
+      setXato("Serverga ulanib bo'lmadi");
+    } finally {
+      setLoading(false);
     }
-    router.refresh();
   }
 
-  const kartalar: { turi: KunlikTolovTuri; summa: number }[] = [
-    { turi: "CASH", summa: report.naqdSumma },
-    { turi: "CLICK", summa: report.clickSumma },
-    { turi: "DEBT", summa: report.qarzSumma },
-  ];
+  function qaror(amali: "qabul" | "rad") {
+    if (amali === "rad") {
+      const sabab = prompt("Rad etish sababi (kassir ko'radi):");
+      if (!sabab?.trim()) return;
+      void amal("/api/kunlik/tasdiqlash", { amal: "rad", qarorIzoh: sabab.trim() });
+      return;
+    }
+    const farq = report.naqdFarq;
+    const ogoh =
+      farq && farq !== 0
+        ? `Kassada ${farq < 0 ? "KAMOMAD" : "ORTIQCHA"}: ${Math.abs(farq).toLocaleString(
+            "uz-UZ"
+          )} so'm.\nShunga qaramay qabul qilinsinmi?`
+        : "Kun yakuni qabul qilinsinmi? Pul kassirdan markaziy kassaga o'tadi.";
+    if (!confirm(ogoh)) return;
+    void amal("/api/kunlik/tasdiqlash", { amal: "qabul" });
+  }
+
+  function qaytaOch() {
+    if (!confirm("Kun qayta ochilsinmi? Pul harakati ham orqaga qaytariladi (storno).")) return;
+    void amal("/api/kunlik/qayta-ochish", {});
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          {ruxsat.tarixniKoradi && (
-            <Button
-              variant="secondary"
-              onClick={() => router.push(`/app/kunlik?sana=${sanaSur(report.sana, -1)}`)}
-            >
-              ←
-            </Button>
-          )}
-          <p className="text-lg font-semibold text-fg">
-            {sanaUz(report.sana)}
-            {bugungi && <span className="text-sm text-muted font-normal"> · bugun</span>}
-          </p>
-          {ruxsat.tarixniKoradi && !bugungi && (
-            <Button
-              variant="secondary"
-              onClick={() => router.push(`/app/kunlik?sana=${sanaSur(report.sana, 1)}`)}
-            >
-              →
-            </Button>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {ruxsat.tarixniKoradi && (
-            <Link href="/app/kunlik/tarix" className="text-sm text-brand hover:underline">
-              Tarix
-            </Link>
-          )}
-          {ruxsat.boshqaruvchimi && (
-            <Button variant="secondary" onClick={() => setDirektorModal(true)}>
-              Direktor: {direktor.direktorIsm ?? "tayinlanmagan"}
-            </Button>
-          )}
-        </div>
-      </div>
+    <div className="space-y-5">
+      <KunlikSarlavha
+        sana={report.sana}
+        holat={report.holat}
+        bugun={bugun}
+        ruxsat={ruxsat}
+        direktor={direktor}
+        onDirektor={() => setDirektorModal(true)}
+      />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {kartalar.map((k) => (
-          <Card key={k.turi}>
-            <p className="text-sm text-muted">
-              {KUNLIK_TOLOV_BELGI[k.turi]} {KUNLIK_TOLOV_NOMI[k.turi]}
-            </p>
-            <div className="mt-2">
-              <Money value={k.summa} size="xl" tone="neutral" />
-            </div>
-          </Card>
-        ))}
-        <Card>
-          <p className="text-sm text-muted">📉 Chiqim</p>
-          <div className="mt-2">
-            <Money value={report.chiqimSumma} size="xl" tone="neutral" />
-          </div>
-        </Card>
-      </div>
+      {ruxsat.tasdiqlaydi && <KutilayotganKunlar kunlar={kutilayotganlar} />}
+
+      <XulosaKartalar report={report} />
 
       <SmenaCard holat={smena} ruxsat={ruxsat} bugungi={bugungi} />
 
-      <YakunCard report={report} ruxsat={ruxsat} bugungi={bugungi} />
+      <YakunCard
+        report={report}
+        kassa={kassa}
+        ruxsat={ruxsat}
+        bugungi={bugungi}
+        loading={loading}
+        onTopshirish={() => setTopshirishModal(true)}
+        onQaror={qaror}
+        onQaytaOch={qaytaOch}
+      />
 
-      {bugungi && ochiq && <TushumForm onDone={() => router.refresh()} />}
+      {xato && (
+        <p className="text-sm text-expense" role="alert">
+          {xato}
+        </p>
+      )}
+
+      {bugungi && ochiq && (
+        <TushumForm kategoriyalar={kategoriyalar} onDone={() => router.refresh()} />
+      )}
       {bugungi && !ochiq && (
         <Card>
           <p className="text-sm text-muted">
@@ -132,45 +156,34 @@ export function KunlikClient({
         </Card>
       )}
 
-      <Card>
-        <h2 className="font-semibold text-fg mb-3">Tushumlar ({report.items.length})</h2>
-        {report.items.length === 0 ? (
-          <EmptyState
-            icon="📋"
-            title="Hali tushum kiritilmagan"
-            description="Kun davomida kiritilgan har bir tushum shu yerda ko'rinadi."
-          />
-        ) : (
-          <ul className="divide-y divide-line">
-            {report.items.map((t) => (
-              <li key={t.id} className="py-3 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm text-fg">
-                    {KUNLIK_TOLOV_BELGI[t.tolovTuri as KunlikTolovTuri] ?? ""}{" "}
-                    {KUNLIK_TOLOV_NOMI[t.tolovTuri as KunlikTolovTuri] ?? t.tolovTuri}
-                    {t.izoh ? <span className="text-muted"> · {t.izoh}</span> : null}
-                  </p>
-                  <p className="text-2xs text-faint">
-                    {t.userIsm ?? "—"} · {soatToshkent(t.createdAt)}
-                    {t.yozuvdan && <span> · Yozuvlardan</span>}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3 shrink-0">
-                  <Money value={t.summa} size="md" tone="neutral" />
-                  {ochiq && ruxsat.tahrirlaydi && !t.yozuvdan && (
-                    <button
-                      onClick={() => ochir(t.id)}
-                      className="text-2xs text-expense hover:underline"
-                    >
-                      O&apos;chirish
-                    </button>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+      <Operatsiyalar operatsiyalar={operatsiyalar} bugungi={bugungi} />
+
+      {/* Sticky panel kontentni yopib qolmasin — pastda bo'sh joy. */}
+      <div className="sm:hidden h-24" aria-hidden />
+
+      <StickyAmal
+        holat={report.holat}
+        qoldiq={kassa.qoldiq}
+        loading={loading}
+        tasdiqlaydi={ruxsat.tasdiqlaydi}
+        bugungi={bugungi}
+        onTopshirish={() => setTopshirishModal(true)}
+        onQabul={() => qaror("qabul")}
+        onRad={() => qaror("rad")}
+      />
+
+      {topshirishModal && (
+        <TopshirishModal
+          sana={report.sana}
+          kassa={kassa}
+          direktorIsm={direktor.direktorIsm}
+          onClose={() => setTopshirishModal(false)}
+          onDone={() => {
+            setTopshirishModal(false);
+            router.refresh();
+          }}
+        />
+      )}
 
       {direktorModal && (
         <DirektorModal

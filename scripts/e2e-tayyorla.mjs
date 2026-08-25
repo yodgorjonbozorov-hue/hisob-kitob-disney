@@ -20,6 +20,7 @@ export const E2E_URL = `file:./${BAZA}`;
 
 /** Registry'dagi core BO'LMAGAN modullar — yoqilishi kerak bo'lganlari. */
 const MODULLAR = [
+  "KUNLIK",
   "OMBOR",
   "MAGAZIN",
   "XARID",

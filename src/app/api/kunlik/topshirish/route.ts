@@ -22,13 +22,16 @@ export const POST = withTenant(
       );
     }
 
-    const report = await submitKunlikReport(
+    const { report, pulSababi } = await submitKunlikReport(
       businessId,
       { userId: user.userId, ism: user.ism, rol: user.rol },
       parsed.data.sana,
-      parsed.data.sanalganNaqd
+      parsed.data.sanalganNaqd,
+      parsed.data.izoh
     );
-    return NextResponse.json(report);
+    // `pulSababi` — pul KO'CHIRILMAGAN bo'lsa sababi (masalan shaxsiy kassa
+    // rejimi yoqilmagan). UI uni ogohlantirish sifatida ko'rsatadi.
+    return NextResponse.json({ ...report, pulSababi });
   },
   { module: "KUNLIK" }
 );

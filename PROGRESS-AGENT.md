@@ -4072,3 +4072,91 @@ Test: `npm run test:crm` (24 ta) — rol matritsasi (4 rol kiradi, maxfiy
 modullar yopiq), sidebar havolalari, to'liq oqim (buyurtma → Yutildi →
 Kirim → bosh sahifadagi kategoriya kesimi), idempotentlik, eski
 kategoriyasiz buyurtma va ko'p-bizneslik izolyatsiyasi.
+
+---
+
+## Kunlik hisobot / smena / kassa topshirish — to'liq qayta ishlash (2026-08-25)
+
+Kunlik hisobot sahifasi (`/app/kunlik`) auditdan o'tkazildi. Uchta jiddiy
+buxgalteriya xatosi topildi va tuzatildi; UI kassirning haqiqiy ish oqimiga
+qarab qayta qurildi.
+
+### Topilgan xatolar
+
+**1. IKKITA KIRIM DAFTARI.** "Tushum kiritish" faqat `DailyTransaction`
+yozardi — hech qanday `Transaction` yaratmasdi. Natijada o'sha pul kunlik
+hisobotda ko'rinardi, lekin Dashboard "Jami Kirim", oylik hisobot,
+kategoriya kesimi va kassa qoldig'ida UMUMAN yo'q edi. Teskari yo'nalish esa
+ishlardi (`kunlikSinxron`), ya'ni ko'prik bir tomonlama edi va ikki daftar
+birinchi uzilishdayoq ajralardi.
+
+**2. "KASSADA BO'LISHI KERAK" MANFIY CHIQARDI** (mijozda −12 679 000).
+Smena oynasida KIRIM `DailyTransaction` dan, CHIQIM esa `Transaction` dan
+olinardi. `DailyTransaction` faqat BUGUNGI sanali va kun OCHIQ bo'lgandagina
+yaratilardi, chiqim esa `createdAt` bo'yicha hech qanday sana shartisiz
+sanalardi. Kechagi sana bilan kiritilgan kirim oynaga tushmasdi, o'sha
+paytda kiritilgan chiqim esa tushardi — hisob asta-sekin minusga ketardi.
+
+**3. FARQ YOLG'ON KAMOMAD KO'RSATARDI.** `sanalganNaqd` kunning NAQD KIRIMI
+(`naqdSumma`) bilan solishtirilardi. Naqd chiqim va kun boshidagi qoldiq
+hisobga olinmasdi: 10 mln kirim + 3 mln naqd chiqim bo'lgan kunda kassada
+7 mln bo'ladi, tizim esa 10 mln kutib "3 mln KAMOMAD" deb ogohlantirardi.
+
+**4. PUL HECH QAYERGA KO'CHMASDI.** Kun "tasdiqlangan" bo'lsa ham
+kassirning kassa qoldig'i o'zgarmasdi — `submitKunlikReport` va
+`confirmKunlikReport` faqat holatni almashtirardi.
+
+### Yechim
+
+Kunlik hisobot endi YAGONA ledger (`Transaction` + `AccountTransfer`) ustidagi
+HOSILA ko'rinish:
+
+- **Tushum** haqiqiy `Transaction` (kirim) yaratadi va unga bog'langan
+  `DailyTransaction` qatori bitta tranzaksiyada quriladi (`transactionId`).
+  Kategoriya tanlanadi — mavjud Kirim modulining kategoriyalaridan.
+  O'chirish ikkala tomonni birga oladi.
+- **Smena oynasi** kirimni ham, chiqimni ham `Transaction` dan va bitta
+  naqdlik qoidasidan (`naqdChiqimmi`) oladi — simmetriya tiklandi.
+- **Tizim hisobi** kassirning HAQIQIY kassa qoldig'idan olinadi
+  (`topshiruvchiKassaTx` → ledger) va topshirishda MUZLATILADI
+  (`DailyReport.kutilganNaqd`).
+- **Pul harakati** mavjud `AccountTransfer` (`turi = "smena"`) ledgerida:
+  topshirishda "kutilmoqda", direktor qabul qilganda "bajarildi". Ya'ni
+  `Transaction` YOZILMAYDI — Jami Kirim ham, Jami Chiqim ham o'zgarmaydi.
+  Qayta ochilsa STORNO yoziladi (ledger append-only).
+
+Ortiqcha pul ko'chmaydi (`kochadiganSumma`): uning ledgerda manbasi yo'q,
+ko'chirilsa kassir qoldig'i manfiyga tushardi. U `kassaFarq` da yozib
+qoldiriladi — direktor ko'rib, kerak bo'lsa alohida kirim qiladi.
+
+### RBAC o'zgarishi
+
+`getKunlikRuxsat.tasdiqlaydi` endi `direktormi || boshqaruvchimi`. Ilgari
+boshqaruvchi faqat direktor tayinlanmagan bo'lsa tasdiqlardi — direktor
+etib tayinlangan kassirning O'ZI kunni topshirsa, kunni yopadigan hech kim
+qolmasdi. O'rniga `qarorKunlikReport` da O'ZINI O'ZI TASDIQLASH TAQIQI
+qo'shildi: topshirgan xodim (boshqaruvchi bo'lmasa) o'z topshirig'ini yopa
+olmaydi.
+
+### Migratsiya
+
+`20260825120000_kunlik_kassa_topshirish` — `DailyReport` ga 5 ta NULLABLE
+ustun (`kutilganNaqd`, `kassaFarq`, `transferId`, `izoh`, `qarorIzoh`).
+Jadval qayta qurilmaydi, eski kunlar avvalgidek o'qiladi (ularda
+`kutilganNaqd` null — o'sha yerda eski taqqoslash saqlanadi, tarixdagi
+raqamlar "o'z-o'zidan" o'zgarmasin).
+
+### Test
+
+- `npm run test:kunlik-kassa` (18 ta) — accounting invarianti:
+  10 mln kirim / 3 mln chiqim → 7 mln topshirildi → kassir 0, direktor
+  +7 mln, Jami Kirim HALI HAM 10 mln, Jami Chiqim HALI HAM 3 mln, pul
+  harakati bitta, dublikat yozuv nol; farq (kamomad/ortiqcha) sababsiz
+  yopilmaydi va totallarni buzmaydi; 5 ta parallel topshirish/tasdiqlashda
+  faqat bittasi o'tadi; storno; RBAC; tenant izolyatsiyasi.
+- `npm run test:kunlik-e2e` (8 ta) — 1440/1280/768/390/375 da gorizontal
+  siljish yo'q, element ekrandan chiqmaydi, sticky amal paneli pastki
+  navigatsiya bilan kesishmaydi, raqamli klaviatura va solishtiruv varag'i
+  ishlaydi.
+- `npm run test:kunlik` (27) va `test:smena` (14) yangi shartnomaga
+  moslashtirildi.

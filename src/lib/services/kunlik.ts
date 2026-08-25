@@ -12,9 +12,18 @@ import {
 } from "@/lib/date";
 import { isModuleOnForTenant } from "@/lib/modules/guard";
 import { logAudit } from "@/lib/services/audit";
+import { ensureCategoryTx } from "@/lib/services/inventory";
+import { createTransactionTx } from "@/lib/services/transactionService";
+import {
+  kunTopshiriqOrqagaTx,
+  kunTopshiriqQabulTx,
+  kunTopshiriqYaratTx,
+  topshiruvchiKassaTx,
+} from "@/lib/services/kunlikKassa";
 import {
   KUNLIK_TOLOV_TURLARI,
   type CreateKunlikTushumInput,
+  type KunlikQarorInput,
   type KunlikTolovTuri,
   type UpdateKunlikTushumInput,
 } from "@/lib/validation/kunlik";
@@ -63,10 +72,22 @@ export async function getKunlikRuxsat(businessId: string, aktor: KunlikAktor): P
   return {
     direktormi,
     boshqaruvchimi,
-    // Tasdiqlash — belgilangan direktorning huquqi. Direktor hali
-    // tayinlanmagan bo'lsa, ish to'xtab qolmasligi uchun boshqaruvchi
-    // vaqtincha tasdiqlay oladi (UI direktor tayinlashni taklif qiladi).
-    tasdiqlaydi: direktormi || (!sozlama?.direktorId && boshqaruvchimi),
+    /*
+     * TASDIQLASH HUQUQI — tayinlangan direktor YOKI boshqaruvchi (OWNER/ADMIN).
+     *
+     * Ilgari boshqaruvchi faqat direktor TAYINLANMAGAN bo'lsa tasdiqlay
+     * olardi. Bu kichik do'konlarda boshi berk ko'chaga olib kelardi:
+     * direktor etib tayinlangan kassirning O'ZI kunni topshirsa,
+     * "o'zini o'zi tasdiqlash" taqiqi ishga tushadi va kunni yopadigan
+     * hech kim qolmasdi. Egasi baribir direktorni bir bosishda
+     * almashtira oladi, ya'ni cheklovning xavfsizlik qiymati yo'q edi —
+     * faqat ishni to'xtatardi.
+     *
+     * Nazorat esa `qarorKunlikReport` dagi O'ZINI O'ZI TASDIQLASH taqiqida
+     * qoladi: topshirgan xodim (boshqaruvchi bo'lmasa) o'z topshirig'ini
+     * yopa olmaydi.
+     */
+    tasdiqlaydi: direktormi || boshqaruvchimi,
     tahrirlaydi: direktormi || boshqaruvchimi,
     tarixniKoradi: direktormi || boshqaruvchimi,
   };
@@ -115,15 +136,60 @@ async function reportTopYokiYaratTx(tx: BusinessTx, businessId: string, sana: Da
   });
 }
 
-/** Tushum kiritish — har doim BUGUNGI (Toshkent) hisobotga. */
+/**
+ * "Tushum kiritish" uchun zaxira kategoriya — foydalanuvchi kategoriya
+ * tanlamagan holat uchun (bot, eski chaqiruvlar). Yangi kategoriya tizimi
+ * QURILMAYDI: Kirim modulining o'z jadvalidan foydalaniladi.
+ */
+export const KUNLIK_ZAXIRA_KATEGORIYA = "Kunlik tushum";
+
+/**
+ * Tanlangan kategoriyani tekshiradi (shu biznes + KIRIM), tanlanmagan bo'lsa
+ * zaxira kategoriyani topadi/yaratadi.
+ */
+async function tushumKategoriyaTx(
+  tx: BusinessTx,
+  businessId: string,
+  categoryId?: string
+): Promise<string> {
+  if (!categoryId) return ensureCategoryTx(tx, businessId, KUNLIK_ZAXIRA_KATEGORIYA, "kirim");
+  const cat = await tx.category.findFirst({
+    where: { id: categoryId, businessId, turi: "kirim" },
+    select: { id: true },
+  });
+  if (!cat) throw new ForbiddenError("Kategoriya bu biznesga tegishli emas yoki kirim emas");
+  return cat.id;
+}
+
+/**
+ * TUSHUM KIRITISH — bugungi (Toshkent) kunga.
+ *
+ * ═══ NEGA HAQIQIY `Transaction` YOZILADI ═══
+ * Ilgari bu forma FAQAT `DailyTransaction` yaratardi. Natijada ikkita
+ * kirim daftari bor edi: kunlik hisobotdagi tushum Dashboard "Jami Kirim",
+ * oylik hisobot, kategoriya kesimi va kassa qoldig'ida UMUMAN ko'rinmasdi.
+ * Ayni paytda Yozuvlardan kiritilgan kirim kunlikka o'zi tushardi
+ * (`kunlikSinxron`) — ya'ni bir tomonlama ko'prik. Ikki daftar birinchi
+ * uzilishdayoq ajralib ketardi.
+ *
+ * Endi manba BITTA: tushum `Transaction` (kirim) yozadi va o'sha zahoti
+ * unga bog'langan `DailyTransaction` qatori quriladi (`transactionId`).
+ * Ikkalasi ham BITTA tranzaksiyada — dublikat ham, yetim yozuv ham
+ * bo'lmaydi. Kunlik hisobot shu bilan hosila ko'rinishga aylanadi.
+ *
+ * Pul kassaga `createTransactionTx` qoidasi bo'yicha tushadi: shaxsiy kassa
+ * rejimida kiritgan xodimning kassasiga, aks holda to'lov turiga mos biznes
+ * kassasiga. QARZ hech qaysi kassaga bog'lanmaydi — pul hali kelmagan.
+ */
 export async function addKunlikTushum(
   businessId: string,
   aktor: KunlikAktor,
   data: CreateKunlikTushumInput
 ) {
-  const sana = dateOnlyStringToUTCDate(kunlikBugun());
+  const bugun = kunlikBugun();
+  const sana = dateOnlyStringToUTCDate(bugun);
 
-  const yozuv = await runBusinessTx(businessId, async (tx) => {
+  const { tushum, yozuvId } = await runBusinessTx(businessId, async (tx) => {
     const report = await reportTopYokiYaratTx(tx, businessId, sana);
     if (report.holat !== "OPEN") {
       throw new BadRequestError(
@@ -134,6 +200,17 @@ export async function addKunlikTushum(
             "O'zgartirish kerak bo'lsa direktor kunni qayta ochishi mumkin."
       );
     }
+
+    const categoryId = await tushumKategoriyaTx(tx, businessId, data.categoryId);
+    const yozuv = await createTransactionTx(tx, aktor.userId, businessId, {
+      turi: "kirim",
+      categoryId,
+      summa: data.summa,
+      sana: bugun,
+      izoh: data.izoh?.trim() || null,
+      tolovTuri: ANIQ_TOLOV_TESKARI[data.tolovTuri],
+    });
+
     const tushum = await tx.dailyTransaction.create({
       data: {
         businessId,
@@ -143,20 +220,26 @@ export async function addKunlikTushum(
         izoh: data.izoh?.trim() || undefined,
         userId: aktor.userId,
         userIsm: aktor.ism,
+        transactionId: yozuv.id,
       },
     });
     await jamlashTx(tx, businessId, report.id);
-    return tushum;
+    return { tushum, yozuvId: yozuv.id };
   });
 
   await logAudit({
     businessId,
     action: "create",
     entity: "dailyTransaction",
-    entityId: yozuv.id,
-    after: { summa: data.summa, tolovTuri: data.tolovTuri, izoh: data.izoh ?? null },
+    entityId: tushum.id,
+    after: {
+      summa: data.summa,
+      tolovTuri: data.tolovTuri,
+      izoh: data.izoh ?? null,
+      transactionId: yozuvId,
+    },
   });
-  return yozuv;
+  return tushum;
 }
 
 /**
@@ -183,9 +266,14 @@ export async function updateKunlikTushum(
       throw new BadRequestError("Tasdiqlangan kun tushumini o'zgartirib bo'lmaydi — avval kunni qayta oching");
     }
     if (mavjud.transactionId) {
-      // Yozuvlardan ulangan tushum kunlikda tahrirlanmaydi — aks holda ikkala
-      // tomon ajralib ketadi. Manba — Transaction, o'sha yerda o'zgartiriladi.
-      throw new BadRequestError("Bu tushum Yozuvlardan avtomatik ulangan — uni Yozuvlar bo'limida o'zgartiring");
+      // Tushum haqiqiy kirim yozuvi bilan juft yuradi. Uni faqat kunlikda
+      // o'zgartirish ikkala tomonni ajratib yuborardi (summa, kassa, kategoriya
+      // yozuvda turadi). Shuning uchun manba — `Transaction`: u yerda
+      // tahrirlanadi yoki bu yerda o'chirilib qayta kiritiladi.
+      throw new BadRequestError(
+        "Bu tushum kirim yozuvi bilan bog'langan — uni Yozuvlar bo'limida o'zgartiring " +
+          "yoki bu yerda o'chirib, qaytadan kiriting"
+      );
     }
     if (!ruxsat.tahrirlaydi && mavjud.userId !== aktor.userId) {
       throw new ForbiddenError("Faqat o'zingiz kiritgan tushumni o'zgartira olasiz");
@@ -214,7 +302,17 @@ export async function updateKunlikTushum(
   return yangi;
 }
 
-/** Tushumni yumshoq o'chirish — jamidan chiqadi, tarixda qoladi. */
+/**
+ * TUSHUMNI O'CHIRISH — yumshoq, jamidan chiqadi, tarixda qoladi.
+ *
+ * Tushum endi HAQIQIY yozuv (`Transaction`) bilan juft yuradi, shuning uchun
+ * ikkala tomon BITTA tranzaksiyada o'chiriladi. Faqat bir tomonini o'chirish
+ * (avvalgi xatti-harakat) kunlik va Dashboard raqamlarini ajratib yuborardi.
+ *
+ * Eski, yozuvsiz tushumlar (migratsiyagacha kiritilganlar) ham shu yo'ldan
+ * o'tadi — ularda `transactionId` null bo'lgani uchun ikkinchi qadam
+ * o'tkazib yuboriladi.
+ */
 export async function deleteKunlikTushum(businessId: string, aktor: KunlikAktor, id: string) {
   const ruxsat = await getKunlikRuxsat(businessId, aktor);
 
@@ -227,16 +325,20 @@ export async function deleteKunlikTushum(businessId: string, aktor: KunlikAktor,
     if (mavjud.report.holat !== "OPEN") {
       throw new BadRequestError("Tasdiqlangan kun tushumini o'chirib bo'lmaydi — avval kunni qayta oching");
     }
-    if (mavjud.transactionId) {
-      throw new BadRequestError("Bu tushum Yozuvlardan avtomatik ulangan — uni Yozuvlar bo'limida o'chiring");
-    }
     if (!ruxsat.tahrirlaydi && mavjud.userId !== aktor.userId) {
       throw new ForbiddenError("Faqat o'zingiz kiritgan tushumni o'chira olasiz");
     }
+    const endi = new Date();
     await tx.dailyTransaction.updateMany({
       where: { id: mavjud.id, businessId },
-      data: { deletedAt: new Date() },
+      data: { deletedAt: endi },
     });
+    if (mavjud.transactionId) {
+      await tx.transaction.updateMany({
+        where: { id: mavjud.transactionId, businessId, deletedAt: null },
+        data: { deletedAt: endi },
+      });
+    }
     await jamlashTx(tx, businessId, mavjud.reportId);
     return mavjud;
   });
@@ -246,35 +348,116 @@ export async function deleteKunlikTushum(businessId: string, aktor: KunlikAktor,
     action: "delete",
     entity: "dailyTransaction",
     entityId: id,
-    before: { summa: eski.summa, tolovTuri: eski.tolovTuri, izoh: eski.izoh },
+    before: {
+      summa: eski.summa,
+      tolovTuri: eski.tolovTuri,
+      izoh: eski.izoh,
+      transactionId: eski.transactionId,
+    },
   });
+  if (eski.transactionId) {
+    await logAudit({
+      businessId,
+      action: "delete",
+      entity: "transaction",
+      entityId: eski.transactionId,
+      before: { summa: eski.summa, turi: "kirim", manba: "kunlik" },
+    });
+  }
   return { ok: true };
 }
 
+/** Kun uchun tayinlangan direktor (tayinlanmagan bo'lsa null). */
+async function direktorIdTx(tx: BusinessTx, businessId: string): Promise<string | null> {
+  const sozlama = await tx.dailyReportSetting.findFirst({
+    where: { businessId },
+    select: { direktorId: true },
+  });
+  return sozlama?.direktorId ?? null;
+}
+
+export interface KunlikTopshirishNatija {
+  report: {
+    id: string;
+    jamiSumma: number;
+    naqdSumma: number;
+    clickSumma: number;
+    qarzSumma: number;
+    sana: Date;
+    sanalganNaqd: number | null;
+    kutilganNaqd: number | null;
+    kassaFarq: number | null;
+    transferId: string | null;
+  };
+  /** Pul ko'chirilmagan bo'lsa — sababi (UI ogohlantiradi). */
+  pulSababi: string | null;
+}
+
 /**
- * KASSA TOPSHIRISH — xodim kun oxirida kunni direktorga yuboradi.
+ * KUNNI DIREKTORGA TOPSHIRISH — kassa nazoratining birinchi yarmi.
  *
- * Pul nazorati talabi: xodim kassadagi naqdni SANAB (`sanalganNaqd`) kiritadi.
- * Direktor tizim hisoblagan `naqdSumma` bilan solishtiradi — kam chiqsa pul
- * yo'qolgani (yoki kiritilmagan tushum) darhol ko'rinadi.
+ * ═══ NIMA O'ZGARDI (audit) ═══
+ * Ilgari bu amal FAQAT holatni almashtirardi va `sanalganNaqd` ni kunning
+ * NAQD KIRIMI (`naqdSumma`) bilan solishtirardi. Ikki xato bor edi:
+ *   1. naqd CHIQIM va kun boshidagi qoldiq hisobga olinmasdi — 10 mln kirim,
+ *      3 mln naqd chiqim bo'lgan kunda kassada 7 mln bo'ladi, tizim esa
+ *      10 mln kutib "3 mln KAMOMAD" degan YOLG'ON ogohlantirish berardi;
+ *   2. pul hech qayerga ko'chmasdi — kassirning kassasi kun tasdiqlangandan
+ *      keyin ham to'la turaverardi.
  *
- * Topshirilgandan keyin tushum kiritilmaydi (holat OPEN emas) — raqamlar
- * "muzlaydi". `updateMany` + `holat: "OPEN"` sharti ikki marta topshirish
- * race'ini bazada yopadi. Har qanday faol xodim topshira oladi.
+ * Endi tizim hisobi kassirning HAQIQIY kassa qoldig'idan olinadi
+ * (`topshiruvchiKassaTx` → ledger) va MUZLATILADI (`kutilganNaqd`).
+ * Ayni paytda "kutilmoqda" holatidagi `AccountTransfer` yaraladi: pul hali
+ * kassirda, lekin topshiriq rasmiylashtirilgan.
+ *
+ * ═══ KIRIM/CHIQIMGA TA'SIRI: NOL ═══
+ * Bu yerda `Transaction` YOZILMAYDI. Jami Kirim ham, Jami Chiqim ham
+ * o'zgarmaydi — faqat kassa qoldiqlari ko'chadi.
+ *
+ * ═══ IKKI MARTA TOPSHIRISHDAN HIMOYA ═══
+ * `updateMany` + `holat: "OPEN"` sharti bazada race'ni yopadi: ikkinchi
+ * so'rov `count === 0` oladi va xato qaytaradi. Holat almashishi va pul
+ * harakati BITTA tranzaksiyada, shuning uchun "holat o'zgardi, o'tkazma
+ * yaralmadi" holati bo'lishi mumkin emas.
  */
 export async function submitKunlikReport(
   businessId: string,
   aktor: KunlikAktor,
   sanaStr: string,
-  sanalganNaqd: number
-) {
+  sanalganNaqd: number,
+  izoh?: string | null
+): Promise<KunlikTopshirishNatija> {
   const bugun = kunlikBugun();
   if (sanaStr > bugun) throw new BadRequestError("Kelajak kunni topshirib bo'lmaydi");
   const sana = dateOnlyStringToUTCDate(sanaStr);
 
-  const report = await runBusinessTx(businessId, async (tx) => {
+  const { report, pulSababi } = await runBusinessTx(businessId, async (tx) => {
     const r = await reportTopYokiYaratTx(tx, businessId, sana);
+    if (r.holat !== "OPEN") {
+      throw new BadRequestError(
+        r.holat === "CONFIRMED"
+          ? "Bu kun allaqachon tasdiqlangan"
+          : "Bu kun allaqachon direktorga topshirilgan"
+      );
+    }
     await jamlashTx(tx, businessId, r.id);
+
+    // TIZIM HISOBI — kassirning kassa qoldig'i (naqd kirim − naqd chiqim
+    // + o'tkazmalar). Serverda hisoblanadi: frontend yuborgan raqamga
+    // ishonilmaydi.
+    const manba = await topshiruvchiKassaTx(tx, businessId, aktor.userId);
+    const kutilganNaqd = manba.qoldiq;
+    const farq = sanalganNaqd - kutilganNaqd;
+
+    // FARQ SABABSIZ YOPILMAYDI — kamomad ham, ortiqcha ham izoh talab qiladi.
+    if (farq !== 0 && !izoh?.trim()) {
+      throw new BadRequestError(
+        farq < 0
+          ? `Kassada ${Math.abs(farq).toLocaleString("ru-RU")} so'm KAM chiqdi — sababini yozing`
+          : `Kassada ${farq.toLocaleString("ru-RU")} so'm ORTIQCHA chiqdi — sababini yozing`
+      );
+    }
+
     const natija = await tx.dailyReport.updateMany({
       where: { id: r.id, businessId, holat: "OPEN" },
       data: {
@@ -283,20 +466,38 @@ export async function submitKunlikReport(
         submittedByIsm: aktor.ism,
         submittedAt: new Date(),
         sanalganNaqd,
+        kutilganNaqd,
+        kassaFarq: farq,
+        izoh: izoh?.trim() || null,
       },
     });
     if (natija.count === 0) {
-      const joriy = await tx.dailyReport.findFirst({
-        where: { id: r.id, businessId },
-        select: { holat: true },
-      });
-      throw new BadRequestError(
-        joriy?.holat === "CONFIRMED"
-          ? "Bu kun allaqachon tasdiqlangan"
-          : "Bu kun allaqachon direktorga topshirilgan"
-      );
+      throw new BadRequestError("Bu kun allaqachon topshirilgan — sahifani yangilang");
     }
-    return (await tx.dailyReport.findFirst({ where: { id: r.id, businessId } }))!;
+
+    // PUL HARAKATI. Ledgerda ko'chadigan summa kassir SANAGANidan farq
+    // qilishi mumkin: ortiqcha pulning ledgerda manbasi yo'q, shuning uchun
+    // u ko'chmaydi (batafsil: kunlikKassa.ts -> kochadiganSumma).
+    const pul = await kunTopshiriqYaratTx(
+      tx,
+      businessId,
+      { userId: aktor.userId, ism: aktor.ism },
+      await direktorIdTx(tx, businessId),
+      sanalganNaqd,
+      izoh ?? null,
+      kutilganNaqd
+    );
+    if (pul.transferId) {
+      await tx.dailyReport.updateMany({
+        where: { id: r.id, businessId },
+        data: { transferId: pul.transferId },
+      });
+    }
+
+    return {
+      report: (await tx.dailyReport.findFirst({ where: { id: r.id, businessId } }))!,
+      pulSababi: pul.sabab,
+    };
   });
 
   await logAudit({
@@ -310,37 +511,98 @@ export async function submitKunlikReport(
       sana: sanaStr,
       jamiSumma: report.jamiSumma,
       naqdSumma: report.naqdSumma,
+      kutilganNaqd: report.kutilganNaqd,
       sanalganNaqd,
-      farq: sanalganNaqd - report.naqdSumma,
+      farq: report.kassaFarq,
+      transferId: report.transferId,
     },
   });
 
   // Direktorga darhol xabar (best-effort — Telegram ishlamasa jarayon buzilmaydi).
   await kunlikTopshirildiYubor(businessId, report, aktor.ism);
 
-  return report;
+  return { report, pulSababi };
 }
 
 /**
- * KUN YAKUNINI TASDIQLASH.
+ * DIREKTOR QARORI — kun yakunini QABUL QILISH yoki RAD ETISH.
  *
- * Faqat tayinlangan direktor (direktor yo'q bo'lsa — boshqaruvchi).
- * OPEN (xodim topshirmagan bo'lsa ham direktor yopishi mumkin) va
- * SUBMITTED holatlardan o'tadi. `updateMany` + holat sharti — bir kunni
- * ikki marta tasdiqlash race'ini bazada yopadi (ikkinchisida count 0).
+ * ═══ QABUL: PUL KO'CHADI ═══
+ * Kun `CONFIRMED` bo'ladi VA topshiriq o'tkazmasi "bajarildi" ga o'tadi.
+ * Shu daqiqada kassirning kassa qoldig'i topshirilgan summaga kamayadi
+ * (to'liq topshirgan bo'lsa — 0 ga tushadi), direktornikiga esa qo'shiladi.
+ *
+ * Ikkalasi ham BITTA tranzaksiyada: bir qadam yiqilsa hammasi orqaga
+ * qaytadi ("kun tasdiqlandi, pul ko'chmadi" holati bo'lmaydi).
+ *
+ * ═══ RAD: PUL KASSIRDA QOLADI ═══
+ * O'tkazma "rad" bo'ladi (pul umuman ko'chmagan), kun esa `OPEN` ga
+ * qaytadi — kassir tuzatib qayta topshiradi.
+ *
+ * ═══ IKKI MARTA TASDIQLASHDAN HIMOYA ═══
+ * Ikki qavat: (1) kun holati `updateMany` + `holat IN (OPEN, SUBMITTED)`;
+ * (2) o'tkazma `updateMany` + `holat = "kutilmoqda"`. Ikkinchi bosishda
+ * birinchi qavat xato beradi va pul ikkinchi marta KO'CHMAYDI.
  */
-export async function confirmKunlikReport(businessId: string, aktor: KunlikAktor, sanaStr: string) {
+export async function qarorKunlikReport(
+  businessId: string,
+  aktor: KunlikAktor,
+  data: KunlikQarorInput
+) {
   const ruxsat = await getKunlikRuxsat(businessId, aktor);
   if (!ruxsat.tasdiqlaydi) {
     throw new ForbiddenError("Kun yakunini faqat tayinlangan direktor tasdiqlaydi");
   }
   const bugun = kunlikBugun();
-  if (sanaStr > bugun) throw new BadRequestError("Kelajak kunni tasdiqlab bo'lmaydi");
-  const sana = dateOnlyStringToUTCDate(sanaStr);
+  if (data.sana > bugun) throw new BadRequestError("Kelajak kunni tasdiqlab bo'lmaydi");
+  const sana = dateOnlyStringToUTCDate(data.sana);
 
-  const { report, oldingiHolat } = await runBusinessTx(businessId, async (tx) => {
+  const { report, oldingiHolat, pulHolati } = await runBusinessTx(businessId, async (tx) => {
     // Tushumsiz kun ham yakunlanishi mumkin (0 so'm bilan) — report ochamiz.
     const r = await reportTopYokiYaratTx(tx, businessId, sana);
+
+    // O'ZINI O'ZI TASDIQLASH TAQIQI: kassir o'z topshirig'ini yopa olmaydi.
+    // Boshqaruvchi (OWNER/ADMIN) bundan mustasno — u zanjirning oxiri.
+    if (r.submittedBy && r.submittedBy === aktor.userId && !ruxsat.boshqaruvchimi) {
+      throw new ForbiddenError("O'z topshirig'ingizni o'zingiz tasdiqlay olmaysiz");
+    }
+
+    if (data.amal === "rad") {
+      if (r.holat !== "SUBMITTED") {
+        throw new BadRequestError("Faqat topshirilgan kunni rad etish mumkin");
+      }
+      const n = await tx.dailyReport.updateMany({
+        where: { id: r.id, businessId, holat: "SUBMITTED" },
+        data: {
+          holat: "OPEN",
+          submittedBy: null,
+          submittedByIsm: null,
+          submittedAt: null,
+          sanalganNaqd: null,
+          kutilganNaqd: null,
+          kassaFarq: null,
+          transferId: null,
+          qarorIzoh: data.qarorIzoh?.trim() || null,
+        },
+      });
+      if (n.count === 0) throw new BadRequestError("Kun holati o'zgarib ketdi, sahifani yangilang");
+
+      const pulHolati = r.transferId
+        ? await kunTopshiriqOrqagaTx(
+            tx,
+            businessId,
+            { userId: aktor.userId, ism: aktor.ism },
+            r.transferId,
+            data.qarorIzoh ?? "Direktor rad etdi"
+          )
+        : "yoq";
+      return {
+        report: (await tx.dailyReport.findFirst({ where: { id: r.id, businessId } }))!,
+        oldingiHolat: r.holat,
+        pulHolati,
+      };
+    }
+
     // SUBMITTED kunda summalar "muzlagan" — baribir qayta jamlaymiz (himoya).
     await jamlashTx(tx, businessId, r.id);
     const natija = await tx.dailyReport.updateMany({
@@ -350,14 +612,28 @@ export async function confirmKunlikReport(businessId: string, aktor: KunlikAktor
         confirmedBy: aktor.userId,
         confirmedByIsm: aktor.ism,
         confirmedAt: new Date(),
+        qarorIzoh: data.qarorIzoh?.trim() || null,
       },
     });
     if (natija.count === 0) {
       throw new BadRequestError("Bu kun allaqachon tasdiqlangan");
     }
+
+    // PUL KO'CHADI — kassirdan direktorga.
+    const kochdi = r.transferId
+      ? await kunTopshiriqQabulTx(
+          tx,
+          businessId,
+          { userId: aktor.userId, ism: aktor.ism },
+          r.transferId,
+          data.qarorIzoh ?? null
+        )
+      : false;
+
     return {
       report: (await tx.dailyReport.findFirst({ where: { id: r.id, businessId } }))!,
       oldingiHolat: r.holat,
+      pulHolati: kochdi ? ("kochdi" as const) : ("yoq" as const),
     };
   });
 
@@ -368,20 +644,39 @@ export async function confirmKunlikReport(businessId: string, aktor: KunlikAktor
     entityId: report.id,
     before: { holat: oldingiHolat },
     after: {
-      holat: "CONFIRMED",
-      sana: sanaStr,
+      holat: report.holat,
+      amal: data.amal,
+      sana: data.sana,
       jamiSumma: report.jamiSumma,
+      kutilganNaqd: report.kutilganNaqd,
       sanalganNaqd: report.sanalganNaqd,
-      farq: report.sanalganNaqd === null ? null : report.sanalganNaqd - report.naqdSumma,
+      farq: report.kassaFarq,
+      pul: pulHolati,
+      qarorIzoh: data.qarorIzoh ?? null,
     },
   });
+  return { report, pulHolati };
+}
+
+/**
+ * KUN YAKUNINI TASDIQLASH — `qarorKunlikReport` ustidagi yupqa qobiq.
+ * Eski chaqiruvchilar (Telegram bot tugmasi, testlar) shu nom bilan yuradi.
+ */
+export async function confirmKunlikReport(businessId: string, aktor: KunlikAktor, sanaStr: string) {
+  const { report } = await qarorKunlikReport(businessId, aktor, { sana: sanaStr, amal: "qabul" });
   return report;
 }
 
 /**
  * Yakunlangan (topshirilgan yoki tasdiqlangan) kunni QAYTA OCHISH — tuzatish
- * uchun. Faqat direktor yoki boshqaruvchi. Topshiruv ma'lumotlari ham
- * tozalanadi: tuzatishdan keyin xodim kassani QAYTA sanab topshiradi.
+ * uchun. Faqat direktor yoki boshqaruvchi.
+ *
+ * ═══ PUL HAM ORQAGA QAYTADI ═══
+ * Kun tasdiqlanganda pul kassirdan direktorga ko'chgan edi. Kun qayta
+ * ochilsa u ko'chish HAM bekor qilinishi shart, aks holda kassirning
+ * qoldig'i 0 bo'lib qolar, tuzatilgan kunni esa qayta topshirib bo'lmasdi.
+ * Ledger append-only: yozuv o'chirilmaydi — teskari STORNO yoziladi
+ * (`kunTopshiriqOrqagaTx`), tarix to'liq qoladi.
  */
 export async function reopenKunlikReport(businessId: string, aktor: KunlikAktor, sanaStr: string) {
   const ruxsat = await getKunlikRuxsat(businessId, aktor);
@@ -390,7 +685,7 @@ export async function reopenKunlikReport(businessId: string, aktor: KunlikAktor,
   }
   const sana = dateOnlyStringToUTCDate(sanaStr);
 
-  const { report, oldingiHolat } = await runBusinessTx(businessId, async (tx) => {
+  const { report, oldingiHolat, pulHolati } = await runBusinessTx(businessId, async (tx) => {
     const r = await tx.dailyReport.findFirst({ where: { businessId, sana } });
     if (!r) throw new BadRequestError("Bu kun uchun hisobot yo'q");
     const natija = await tx.dailyReport.updateMany({
@@ -404,12 +699,27 @@ export async function reopenKunlikReport(businessId: string, aktor: KunlikAktor,
         submittedByIsm: null,
         submittedAt: null,
         sanalganNaqd: null,
+        kutilganNaqd: null,
+        kassaFarq: null,
+        transferId: null,
       },
     });
     if (natija.count === 0) throw new BadRequestError("Bu kun yakunlanmagan — ochish shart emas");
+
+    const pulHolati = r.transferId
+      ? await kunTopshiriqOrqagaTx(
+          tx,
+          businessId,
+          { userId: aktor.userId, ism: aktor.ism },
+          r.transferId,
+          "Kun yakuni qayta ochildi"
+        )
+      : "yoq";
+
     return {
       report: (await tx.dailyReport.findFirst({ where: { id: r.id, businessId } }))!,
       oldingiHolat: r.holat,
+      pulHolati,
     };
   });
 
@@ -419,7 +729,7 @@ export async function reopenKunlikReport(businessId: string, aktor: KunlikAktor,
     entity: "dailyReport",
     entityId: report.id,
     before: { holat: oldingiHolat },
-    after: { holat: "OPEN", sana: sanaStr },
+    after: { holat: "OPEN", sana: sanaStr, pul: pulHolati },
   });
   return report;
 }
@@ -491,6 +801,17 @@ const ANIQ_TOLOV_XARITASI: Record<string, KunlikTolovTuri> = {
   naqd: "CASH",
   click: "CLICK",
   qarz: "DEBT",
+};
+
+/**
+ * Teskari yo'nalish: kunlik to'lov turi -> `Transaction.tolovTuri`.
+ * "Tushum kiritish" haqiqiy yozuv yaratganda kerak — ikkala tomon bir xil
+ * lug'atdan foydalanishi shart, aks holda kunlik va Yozuvlar ajralib ketardi.
+ */
+export const ANIQ_TOLOV_TESKARI: Record<KunlikTolovTuri, string> = {
+  CASH: "naqd",
+  CLICK: "click",
+  DEBT: "qarz",
 };
 
 export interface KunlikSinxronYozuv {
@@ -656,6 +977,10 @@ interface TopshirilganReport {
   qarzSumma: number;
   jamiSumma: number;
   sanalganNaqd: number | null;
+  /** Tizim hisobi (kassa qoldig'i) — topshirish paytida muzlatilgan. */
+  kutilganNaqd: number | null;
+  /** sanalganNaqd − kutilganNaqd (muzlatilgan). */
+  kassaFarq: number | null;
 }
 
 /**
@@ -708,7 +1033,12 @@ async function kunlikTopshirildiYubor(
     if (chatlar.length === 0) return;
 
     const sanalgan = report.sanalganNaqd ?? 0;
-    const farq = sanalgan - report.naqdSumma;
+    // Farq TIZIM KASSA HISOBIGA qarab o'lchanadi (`kutilganNaqd`), kunning
+    // naqd KIRIMIGA emas: naqd chiqim va kun boshidagi qoldiq ham pulga
+    // ta'sir qiladi. Eski (migratsiyagacha) kunlarda `kutilganNaqd` null —
+    // ular uchun avvalgi taqqoslash saqlanadi.
+    const kutilgan = report.kutilganNaqd ?? report.naqdSumma;
+    const farq = report.kassaFarq ?? sanalgan - kutilgan;
     const farqQator =
       farq === 0
         ? "✅ Farq yo'q — kassa tizim bilan mos"
@@ -730,8 +1060,8 @@ async function kunlikTopshirildiYubor(
       `📤 Kassa topshirildi — tasdiqlash kerak\n\n` +
       `${biznes.nomi} — ${utcDateToDateOnlyString(report.sana).split("-").reverse().join(".")}\n` +
       `Topshirdi: ${topshirganIsm ?? "—"}\n\n` +
-      `💵 Naqd (tizim): ${formatSomLabel(report.naqdSumma)}\n` +
-      `💵 Naqd (sanaldi): ${formatSomLabel(sanalgan)}\n` +
+      `💵 Kassada bo'lishi kerak: ${formatSomLabel(kutilgan)}\n` +
+      `💵 Kassir sanadi/topshirdi: ${formatSomLabel(sanalgan)}\n` +
       `${farqQator}\n\n` +
       `📈 Kirim: ${formatSomLabel(report.jamiSumma)}\n` +
       `📉 Chiqim: ${formatSomLabel(chiqim)}\n` +
