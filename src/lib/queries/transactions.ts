@@ -4,7 +4,6 @@ import { dateOnlyStringToUTCDate, utcDateToDateOnlyString } from "@/lib/date";
 import { qarzsiz } from "@/lib/qarzFiltr";
 import {
   tolovBolimiWhere,
-  tolovGuruhi,
   tolovGuruhiWhere,
   type TolovBolimi,
   type TolovGuruhi,
@@ -116,7 +115,7 @@ export async function listTransactions(params: TransactionListParams) {
   // Ro'yxat va sanoq shu shartdan; jamilar HAR DOIM qarzsiz (pastda).
   const where = params.realPul ? qarzsiz(xomWhere) : xomWhere;
 
-  const [items, total, sums, kassaSums, guruhSums, kassalar, kunlik] = await Promise.all([
+  const [items, total, sums, kassaSums, kassalar, kunlik] = await Promise.all([
     prisma.transaction.findMany({
       where,
       include: {
@@ -146,18 +145,6 @@ export async function listTransactions(params: TransactionListParams) {
     prisma.transaction.groupBy({
       by: ["tolovTuri", "accountId"],
       where: { ...xomWhere, turi: "kirim" },
-      _sum: { summa: true },
-    }),
-    // TO'LOV GURUHLARI taqsimoti — Kirim/Chiqim sahifasidagi summary qatori.
-    //
-    // Yuqoridagi `kassaSums` dan ATAYLAB ALOHIDA so'rov: u tarixiy sabablarga
-    // ko'ra HAR DOIM faqat kirimni jamlaydi (turi filtri e'tiborga olinmaydi)
-    // va uning natijasiga boshqa ekranlar hamda testlar bog'langan. Bu so'rov
-    // esa foydalanuvchi qo'ygan BARCHA filtrlarga bo'ysunadi va kirim bilan
-    // chiqimni ALOHIDA saqlaydi — ular bir-biriga aralashmasligi shart.
-    prisma.transaction.groupBy({
-      by: ["turi", "tolovTuri", "accountId"],
-      where: xomWhere,
       _sum: { summa: true },
     }),
     prisma.account.findMany({
@@ -201,23 +188,6 @@ export async function listTransactions(params: TransactionListParams) {
     }
   }
 
-  // Guruh taqsimoti: naqd / click / karta — kirim va chiqim ALOHIDA.
-  // Qarz faqat kirimda bo'ladi (validatsiya buni majburlaydi) va u
-  // naqd/click/karta ga KIRMAYDI, shuning uchun uch guruh yig'indisi
-  // qarzsiz jami bilan teng chiqadi.
-  const bosh = () => ({ naqd: 0, click: 0, karta: 0 });
-  const taqsimot = { kirim: bosh(), chiqim: bosh(), qarz: 0 };
-  for (const g of guruhSums) {
-    const summa = g._sum.summa ?? 0;
-    const guruh = tolovGuruhi(g.tolovTuri, g.accountId ? kassaTuri.get(g.accountId) : null);
-    if (guruh === "qarz") {
-      taqsimot.qarz += summa;
-      continue;
-    }
-    const tomon = g.turi === "chiqim" ? taqsimot.chiqim : taqsimot.kirim;
-    tomon[guruh] += summa;
-  }
-
   const totals = {
     jamiKirim,
     jamiChiqim,
@@ -225,7 +195,6 @@ export async function listTransactions(params: TransactionListParams) {
     naqdKirim,
     clickKirim,
     qarzKirim,
-    taqsimot,
   };
 
   // "YYYY-MM-DD" -> { summa, soni }. Guruhlangan ro'yxat sarlavhalari uchun.
