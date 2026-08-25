@@ -5004,3 +5004,38 @@ o'nlab daqiqa. Endi hajm KLIENTDA, yuborishdan oldin tekshiriladi
 CSV sifatida saqlash / 500 qatordan bo'lish maslahat qilinadi. Modal matniga
 "10 MB gacha" qo'shildi. Test: fetch umuman chaqirilmasligi tekshiriladi
 (`test:mahsulot-import` — 24) ✅.
+
+### 2026-08-25 — Rasmli Excel importi (tugadi)
+
+**Talab (foydalanuvchi):** 180 MB lik Excel faylni aynan o'zini import
+qilish kerak — ichidagi tovar rasmlari bilan birga.
+
+**Arxitektura:** katta fayl serverga UMUMAN yuborilmaydi. XLSX brauzerning
+o'zida ochiladi (ExcelJS dinamik import — asosiy bundle'ga qo'shilmaydi):
+qatorlar yengil CSV matnga aylanib mavjud import endpointiga JSON bo'lib
+boradi; katakka joylashtirilgan rasmlar ajratiladi, canvas'da 900 px JPEG
+qilib siqiladi (~50-100 KB) va mavjud `/api/ombor/rasm` endpointiga 3 talik
+parallellikda yuklanadi; havolalar "Rasm" ustuni sifatida CSV'ga qo'shiladi.
+Import quvuri (tekshirish -> tasdiqlash -> atomik yozish) o'zgarmadi.
+
+**O'zgarishlar:**
+- `mahsulotImport.ts`: yangi `rasmUrl` ustuni (muqobil nomlari bitta
+  manbada — `lib/excel/rasmUstun.ts`; Bito "Surati" ham taniladi). Faqat
+  http(s) qiymat olinadi: fayl nomi yozilgan katak xato emas, "rasm yo'q".
+  Yangilash rejimida rasm ustunisiz fayl rasmga TEGMAYDI (narx qoidasi).
+- Eksport (`mahsulotEksport.ts`) endi rasm havolasini ham chiqaradi —
+  eksport->tahrir->import aylanmasi rasmni yo'qotmaydi.
+- Klient: `xlsxBrauzer.ts` (o'qish+rasm ankerlab olish),
+  `rasmYuklash.ts` (siqish+parallel yuklash), `useImportOqimi.ts` (oqim),
+  ImportModal yangi holatlar bilan. Saqlagich (BLOB token) sozlanmagan
+  bo'lsa foydalanuvchi IMPORTDAN OLDIN ogohlantiriladi va tovarlar
+  rasmsiz yuklanadi; ayrim rasm yuklanmasa import to'xtamaydi, yakunda
+  soni ko'rsatiladi.
+- Brauzerda ochilmagan kichik xlsx eski (server) yo'ldan o'tadi — eski
+  brauzerda ham import ishlayveradi.
+
+**Tekshiruv:** yangi e2e `npm run test:rasmli-import` (haqiqiy Chromium:
+rasmli xlsx tanlanadi, "2 tovar · rasm: 2" ko'rinadi, saqlagich
+ogohlantirishi chiqadi, import yakunlanadi, tovarlar ro'yxatda) ✅.
+`test:mahsulot-import` (26, 2 tasi yangi — rasm ustuni yozish/yangilash) ✅,
+`test:isolation` (22) ✅, `npm run build` ✅.

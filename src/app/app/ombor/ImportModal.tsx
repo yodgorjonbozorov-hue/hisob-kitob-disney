@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, type ChangeEvent } from "react";
+import { type ChangeEvent } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { formatSom } from "@/lib/format";
 import { ImportNatija } from "./ImportNatija";
-import { importYubor, type Tekshiruv, type Natija } from "./importYuborish";
+import { useImportOqimi } from "./useImportOqimi";
 
 export type { Natija } from "./importYuborish";
 
@@ -19,42 +19,15 @@ Shar 12 dyuym,SH-012,,Sharlar,dona,1500,4000,200,20,`;
  * Avval fayl tekshiriladi va natija ko'rsatiladi (nechta tovar, qaysi
  * ustunlar tanildi, nechta xato, narxsiz/qoldiqsiz nechta). Foydalanuvchi
  * ko'rgandan keyingina yozadi: yuzlab tovarni ko'r-ko'rona qo'shib yuborish
- * xavfi yo'q.
+ * xavfi yo'q. Rasmli katta Excel brauzerda ochiladi — oqim `useImportOqimi`.
  */
 export function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const [fayl, setFayl] = useState<File | null>(null);
-  const [rejim, setRejim] = useState<"qoshish" | "yangilash">("qoshish");
-  const [tekshiruv, setTekshiruv] = useState<Tekshiruv | null>(null);
-  const [natija, setNatija] = useState<Natija | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [xato, setXato] = useState<string | null>(null);
+  const oqim = useImportOqimi(onDone);
+  const { fayl, rejim, setRejim, tekshiruv, natija, loading, xato, bosqich } = oqim;
 
-  async function faylTanlandi(e: ChangeEvent<HTMLInputElement>) {
+  function faylTanlandi(e: ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
-    if (!f) return;
-    setFayl(f);
-    setNatija(null);
-    setTekshiruv(null);
-    setXato(null);
-    setLoading(true);
-    const javob = await importYubor<Tekshiruv>(f, rejim, true);
-    if (javob.ok) setTekshiruv(javob.data);
-    else setXato(javob.xabar);
-    setLoading(false);
-  }
-
-  async function tasdiqla() {
-    if (!fayl) return;
-    setLoading(true);
-    setXato(null);
-    const javob = await importYubor<Natija>(fayl, rejim, false);
-    if (javob.ok) {
-      setNatija(javob.data);
-      onDone();
-    } else {
-      setXato(javob.xabar);
-    }
-    setLoading(false);
+    if (f) void oqim.faylTanlandi(f);
   }
 
   function namunaYuklab() {
@@ -68,18 +41,20 @@ export function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: 
   }
 
   if (natija) {
-    return <ImportNatija natija={natija} onClose={onClose} />;
+    return <ImportNatija natija={natija} rasmXabar={oqim.rasmXabar} onClose={onClose} />;
   }
+
+  const rasmSoni = oqim.rasmSoni || tekshiruv?.rasmli || 0;
 
   return (
     <Modal open onClose={onClose} title="Katalogni fayldan yuklash">
       <div className="space-y-3">
         <p className="text-sm text-muted">
-          CSV yoki Excel (.xlsx) fayl, 10 MB gacha. Sarlavhada kamida{" "}
+          CSV yoki Excel (.xlsx) fayl. Sarlavhada kamida{" "}
           <code className="text-fg">Nomi</code> ustuni bo&apos;lishi shart; qolganlari ixtiyoriy:{" "}
           <code className="text-fg">SKU, Shtrix kod, Kategoriya, Birlik, Tannarx, Sotuv narxi,
-          Qoldiq, Min qoldiq, Izoh</code>. Boshqa dasturdan olingan fayl ustunlari ham tanilishi
-          mumkin.
+          Qoldiq, Min qoldiq, Izoh, Rasm</code>. Excel ichidagi tovar rasmlari ham import
+          qilinadi.
         </p>
         <button type="button" onClick={namunaYuklab} className="text-sm text-brand hover:underline">
           Namuna faylni yuklab olish
@@ -121,10 +96,17 @@ export function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: 
           <div className="space-y-2 border-t border-line pt-3">
             <p className="text-sm text-fg">
               Topildi: <span className="font-semibold">{tekshiruv.jami}</span> ta tovar
+              {rasmSoni > 0 && <span className="text-muted"> · rasm: {rasmSoni}</span>}
               {tekshiruv.xatolar.length > 0 && (
                 <span className="text-expense"> · xato: {tekshiruv.xatolar.length}</span>
               )}
             </p>
+            {oqim.rasmSoni > 0 && oqim.saqlagichBormi === false && (
+              <p className="text-2xs text-expense-fg bg-expense-soft border border-expense/40 rounded-lg px-3 py-2">
+                Rasm saqlagich sozlanmagan — tovarlar rasmSIZ yuklanadi. Rasmlarni keyin
+                tovar kartasidan havola sifatida qo&apos;shish mumkin.
+              </p>
+            )}
             {(tekshiruv.narxsiz > 0 || tekshiruv.qoldiqsiz > 0) && (
               <p className="text-2xs text-expense-fg bg-expense-soft border border-expense/40 rounded-lg px-3 py-2">
                 Kassada sotish uchun tovarning narxi ham, qoldig&apos;i ham bo&apos;lishi kerak.
@@ -176,10 +158,15 @@ export function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: 
           </div>
         )}
 
+        {bosqich && <p className="text-sm text-muted">{bosqich}</p>}
         {xato && <p className="text-sm text-expense">{xato}</p>}
 
         <div className="flex gap-2 pt-1">
-          <Button onClick={tasdiqla} loading={loading} disabled={!tekshiruv || tekshiruv.jami === 0}>
+          <Button
+            onClick={() => void oqim.tasdiqla()}
+            loading={loading}
+            disabled={!tekshiruv || tekshiruv.jami === 0}
+          >
             {tekshiruv ? `${tekshiruv.jami} ta tovarni yuklash` : "Yuklash"}
           </Button>
           <Button variant="secondary" onClick={onClose}>

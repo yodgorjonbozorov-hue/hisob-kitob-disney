@@ -30,6 +30,8 @@ export interface Tekshiruv {
   maxQator: number;
   narxsiz: number;
   qoldiqsiz: number;
+  /** Rasm havolasi bor qatorlar soni. */
+  rasmli: number;
 }
 
 export interface Natija {
@@ -58,6 +60,7 @@ export const MAKS_FAYL_HAJM = 10 * 1024 * 1024;
 
 export type YuborishJavobi<T> = { ok: true; data: T } | { ok: false; xabar: string };
 
+/** Fayl yuborish yo'li — kichik CSV/XLSX fayllar serverda tahlil qilinadi. */
 export async function importYubor<T>(
   fayl: File,
   rejim: "qoshish" | "yangilash",
@@ -79,13 +82,31 @@ export async function importYubor<T>(
   form.append("fayl", fayl);
   form.append("rejim", rejim);
   if (tekshirish) form.append("tekshirish", "true");
+  return soraldi<T>(form);
+}
 
+/**
+ * Tayyor CSV matn yo'li — katta Excel brauzerda o'qilganda ishlatiladi:
+ * serverga fayl emas, undan ajratilgan yengil matn boradi.
+ */
+export async function csvImportYubor<T>(
+  csv: string,
+  rejim: "qoshish" | "yangilash",
+  tekshirish: boolean
+): Promise<YuborishJavobi<T>> {
+  return soraldi<T>(JSON.stringify({ csv, rejim, tekshirish: tekshirish || undefined }), {
+    "content-type": "application/json",
+  });
+}
+
+async function soraldi<T>(body: BodyInit, headers?: HeadersInit): Promise<YuborishJavobi<T>> {
   const boshqaruv = new AbortController();
   const taymer = setTimeout(() => boshqaruv.abort(), MUDDAT);
   try {
     const res = await fetch("/api/products/import", {
       method: "POST",
-      body: form,
+      body,
+      headers,
       signal: boshqaruv.signal,
     });
     // Proksi/server JSON bo'lmagan javob qaytarishi mumkin — u ham xato emas,

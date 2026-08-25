@@ -2,10 +2,19 @@
 
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import type { Natija } from "./ImportModal";
+import type { Natija } from "./importYuborish";
 
 /** Import yakuni — nima qo'shildi, nima yangilandi, nimaga tegilmadi. */
-export function ImportNatija({ natija, onClose }: { natija: Natija; onClose: () => void }) {
+export function ImportNatija({
+  natija,
+  rasmXabar,
+  onClose,
+}: {
+  natija: Natija;
+  /** Rasmlar taqdiri haqidagi izoh ("3 ta rasm yuklanmadi") — bo'lsa. */
+  rasmXabar?: string | null;
+  onClose: () => void;
+}) {
   return (
     <Modal open onClose={onClose} title="Import yakunlandi">
       <div className="space-y-3">
@@ -22,6 +31,7 @@ export function ImportNatija({ natija, onClose }: { natija: Natija; onClose: () 
             {natija.otkazildi} ta tovar bazada allaqachon bor edi — tegilmadi.
           </p>
         )}
+        {rasmXabar && <p className="text-muted text-sm">{rasmXabar}</p>}
         {natija.qoldiqTogrilandi > 0 && (
           <p className="text-muted text-sm">
             {natija.qoldiqTogrilandi} ta tovarga boshlang&apos;ich qoldiq yozildi (pul harakati

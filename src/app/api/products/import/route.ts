@@ -91,6 +91,7 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
       // foydalanuvchi buni IMPORTDAN OLDIN bilsin.
       narxsiz: qatorlar.filter((q) => !q.sotuvNarx).length,
       qoldiqsiz: qatorlar.filter((q) => !q.miqdor).length,
+      rasmli: qatorlar.filter((q) => q.rasmUrl).length,
     });
   }
 

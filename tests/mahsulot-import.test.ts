@@ -432,6 +432,76 @@ test("EXCEL (.xlsx) eksporti qayta o'qilib import qilinadi", async () => {
   assert.equal(qayta.miqdor, asl.miqdor);
 });
 
+// ---------- Rasm ustuni ----------
+
+test("Rasm ustuni yangi tovarga yoziladi, havola bo'lmagani e'tiborsiz qoladi", async () => {
+  const csv = `Nomi,Sotuv narxi,Rasm
+Rasmli shar,5000,https://misol.uz/shar.jpg
+Rasmsiz shar,6000,IMG_0042.jpg`;
+  const { qatorlar, ustunlar, xatolar } = imp.mahsulotlarniOqi(csv);
+  assert.equal(xatolar.length, 0);
+  assert.ok(ustunlar.includes("rasmUrl"));
+  assert.equal(qatorlar[0].rasmUrl, "https://misol.uz/shar.jpg");
+  // Bito kabi dasturlar bu ustunga fayl NOMINI yozadi — bu xato emas,
+  // shunchaki "rasm yo'q".
+  assert.equal(qatorlar[1].rasmUrl, null);
+
+  const n = await T(() =>
+    imp.mahsulotlarniYoz({
+      businessId: t.business.id,
+      userId: t.user.id,
+      qatorlar,
+      ustunlar,
+      rejim: "qoshish",
+    })
+  );
+  assert.equal(n.qoshildi, 2);
+  const rasmli = await rawPrisma.product.findFirst({
+    where: { businessId: t.business.id, nomi: "Rasmli shar" },
+  });
+  assert.equal(rasmli.rasmUrl, "https://misol.uz/shar.jpg");
+  const rasmsiz = await rawPrisma.product.findFirst({
+    where: { businessId: t.business.id, nomi: "Rasmsiz shar" },
+  });
+  assert.equal(rasmsiz.rasmUrl, null);
+});
+
+test("'yangilash' rejimi rasmni almashtiradi, rasm ustunisiz fayl esa tegmaydi", async () => {
+  const yangilash = `Nomi,Rasm
+Rasmli shar,https://misol.uz/yangi.jpg`;
+  const b1 = imp.mahsulotlarniOqi(yangilash);
+  await T(() =>
+    imp.mahsulotlarniYoz({
+      businessId: t.business.id,
+      userId: t.user.id,
+      qatorlar: b1.qatorlar,
+      ustunlar: b1.ustunlar,
+      rejim: "yangilash",
+    })
+  );
+  let p = await rawPrisma.product.findFirst({
+    where: { businessId: t.business.id, nomi: "Rasmli shar" },
+  });
+  assert.equal(p.rasmUrl, "https://misol.uz/yangi.jpg");
+
+  // Rasm ustuni YO'Q fayl bilan yangilash rasmni o'chirmasin (narx qoidasi bilan bir xil).
+  const rasmsizFayl = imp.mahsulotlarniOqi(`Nomi,Sotuv narxi\nRasmli shar,7000`);
+  await T(() =>
+    imp.mahsulotlarniYoz({
+      businessId: t.business.id,
+      userId: t.user.id,
+      qatorlar: rasmsizFayl.qatorlar,
+      ustunlar: rasmsizFayl.ustunlar,
+      rejim: "yangilash",
+    })
+  );
+  p = await rawPrisma.product.findFirst({
+    where: { businessId: t.business.id, nomi: "Rasmli shar" },
+  });
+  assert.equal(p.rasmUrl, "https://misol.uz/yangi.jpg", "rasm o'chib ketdi");
+  assert.equal(p.sotuvNarx, 7000);
+});
+
 // ---------- Katta/buzilgan Excel serverni osiltirmasin ----------
 
 test("haddan katta Excel PARSE BOSHLANMASDAN rad etiladi", async () => {

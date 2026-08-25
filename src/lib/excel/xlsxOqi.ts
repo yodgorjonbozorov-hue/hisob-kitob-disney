@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import { csvYasa } from "@/lib/csv";
+import { katakMatn } from "@/lib/excel/katakMatn";
 
 /**
  * XLSX -> CSV.
@@ -124,18 +125,4 @@ export async function xlsxdanCsv(
   if (satrlar.length === 0) return "";
   const sarlavha = satrlar[0];
   return csvYasa(sarlavha, satrlar.slice(1));
-}
-
-/** Excel katagi formula/havola/sana bo'lishi mumkin — hammasi matnga keltiriladi. */
-function katakMatn(qiymat: unknown): string {
-  if (qiymat === null || qiymat === undefined) return "";
-  if (typeof qiymat === "object") {
-    const o = qiymat as { result?: unknown; text?: unknown; richText?: { text: string }[] };
-    if (Array.isArray(o.richText)) return o.richText.map((r) => r.text).join("");
-    if (o.text !== undefined) return String(o.text);
-    if (o.result !== undefined) return String(o.result);
-    if (qiymat instanceof Date) return qiymat.toISOString().slice(0, 10);
-    return "";
-  }
-  return String(qiymat);
 }
