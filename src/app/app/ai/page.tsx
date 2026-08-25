@@ -2,9 +2,13 @@ import { requireTenantPage } from "@/lib/auth/tenant";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { requireModulePage } from "@/lib/modules/guard";
 import { getActiveBusiness } from "@/lib/business";
-import { AiClient } from "./AiClient";
+import { aiRuxsatniHisobla } from "@/lib/ai/ruxsat";
+import { boshSavollar } from "@/lib/ai/takliflar";
+import { bugungiXulosa } from "@/lib/ai/xulosa";
+import { suhbatlarRoyxati } from "@/lib/ai/suhbatlar";
+import { AiChat } from "./AiChat";
 
-/** AI yordamchi — biznes raqamlari bo'yicha suhbat. */
+/** AI Copilot — biznes ma'lumotlari bo'yicha suhbat. */
 export default async function AiPage() {
   const ctx = await requireTenantPage();
   return runWithTenant(ctx.tenantId, async () => {
@@ -12,28 +16,31 @@ export default async function AiPage() {
     const business = await getActiveBusiness(ctx.session);
     const aiUlangan = !!process.env.ANTHROPIC_API_KEY;
 
-    return (
-      <div className="space-y-4 max-w-2xl">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-fg">AI yordamchi</h1>
-          <p className="text-sm text-muted mt-1">
-            Biznes: <span className="font-medium text-fg">{business?.nomi ?? "—"}</span> · Raqamlaringiz
-            bo'yicha savol bering
-          </p>
+    if (!business) {
+      return (
+        <div className="space-y-3">
+          <h1 className="text-xl font-bold text-fg">Balansa AI</h1>
+          <p className="text-muted text-sm">Sizga biznes biriktirilmagan. Administrator bilan bog'laning.</p>
         </div>
-        {aiUlangan ? (
-          <AiClient />
-        ) : (
-          <div className="bg-surface rounded-2xl border border-line p-6 text-center space-y-2">
-            <p className="text-3xl">🔌</p>
-            <p className="font-medium text-fg">AI hali ulanmagan</p>
-            <p className="text-sm text-muted">
-              Administrator serverga <code className="bg-surface-2 px-1.5 py-0.5 rounded">ANTHROPIC_API_KEY</code>{" "}
-              qo'shishi bilan bu bo'lim ishga tushadi.
-            </p>
-          </div>
-        )}
-      </div>
+      );
+    }
+
+    const ruxsat = await aiRuxsatniHisobla(ctx, business.id, business.omborli);
+    // Bosh ekrandagi kesim va tayyor savollar DETERMINISTIK: sahifa ochilishi
+    // birorta ham AI so'rovi (va token) sarflamaydi.
+    const [xulosa, suhbatlar] = await Promise.all([
+      bugungiXulosa(ruxsat),
+      suhbatlarRoyxati({ businessId: business.id, userId: ctx.session.userId }),
+    ]);
+
+    return (
+      <AiChat
+        biznesNomi={business.nomi}
+        aiUlangan={aiUlangan}
+        savollar={boshSavollar(ruxsat)}
+        xulosa={xulosa}
+        suhbatlar={suhbatlar}
+      />
     );
   });
 }

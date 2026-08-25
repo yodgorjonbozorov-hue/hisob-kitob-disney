@@ -55,10 +55,13 @@ export const TIZIM_MODELLAR: Record<string, string> = {
   AppSetting: "global tizim sozlamalari, tenantga tegishli emas",
   // Kalit — chatId; bot foydalanuvchi tenanti aniqlanishidan OLDIN o'qiydi.
   BotConversation: "bot holati tenant aniqlanishidan oldin o'qiladi (chatId kaliti)",
-  // tenantId/businessId bor, LEKIN faqat rawPrisma va kompozit kalit
-  // (businessId + userId) bilan o'qiladi; businessId egaligi withTenant'da
-  // yuqorida tekshiriladi. Scoped client orqali umuman ishlatilmaydi.
-  AiConversation: "faqat rawPrisma va (businessId, userId) kompozit kaliti bilan o'qiladi",
+  // tenantId/businessId bor, LEKIN faqat rawPrisma orqali va HAR so'rovda
+  // qo'lda yozilgan (businessId + userId) sharti bilan o'qiladi; businessId
+  // egaligi withTenant + resolveActiveBusinessId'da yuqorida tekshiriladi.
+  // Scoped client ATAYLAB ishlatilmaydi: har chat xabari yozuv amali bo'lgani
+  // uchun scoped klient uni audit jurnaliga yozib, jurnalni shovqinga
+  // to'ldirardi (bu vaqtinchalik suhbat holati, biznes amali emas).
+  AiSuhbat: "faqat rawPrisma va (businessId, userId) sharti bilan o'qiladi; audit shovqini bo'lmasin",
   // Superadmin 2.0: platforma bayroqlari — tenantga tegishli emas. Ayrim
   // tenantlarga ochish `tenantIdlar` JSON massivi orqali, so'rov esa har doim
   // bitta bayroq kaliti bo'yicha (lib/superadmin/bayroqlar.ts).

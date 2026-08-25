@@ -4395,6 +4395,94 @@ Regressiya: `test:kassa`, `test:kassa-transfer`, `test:kassir-kassa`,
 `test:soft-delete`, `test:backup`, `test:migratsiya`, `test:postgres`,
 `test:kunlik`, `test:smena`, `test:pro`, `test:visibility`, `test:smoke`
 — hammasi yashil. `npm run build` o'tadi.
+
+---
+
+## Kunlik hisobot / smena / kassa topshirish — to'liq qayta ishlash (2026-08-25)
+
+Kunlik hisobot sahifasi (`/app/kunlik`) auditdan o'tkazildi. Uchta jiddiy
+buxgalteriya xatosi topildi va tuzatildi; UI kassirning haqiqiy ish oqimiga
+qarab qayta qurildi.
+
+### Topilgan xatolar
+
+**1. IKKITA KIRIM DAFTARI.** "Tushum kiritish" faqat `DailyTransaction`
+yozardi — hech qanday `Transaction` yaratmasdi. Natijada o'sha pul kunlik
+hisobotda ko'rinardi, lekin Dashboard "Jami Kirim", oylik hisobot,
+kategoriya kesimi va kassa qoldig'ida UMUMAN yo'q edi. Teskari yo'nalish esa
+ishlardi (`kunlikSinxron`), ya'ni ko'prik bir tomonlama edi va ikki daftar
+birinchi uzilishdayoq ajralardi.
+
+**2. "KASSADA BO'LISHI KERAK" MANFIY CHIQARDI** (mijozda −12 679 000).
+Smena oynasida KIRIM `DailyTransaction` dan, CHIQIM esa `Transaction` dan
+olinardi. `DailyTransaction` faqat BUGUNGI sanali va kun OCHIQ bo'lgandagina
+yaratilardi, chiqim esa `createdAt` bo'yicha hech qanday sana shartisiz
+sanalardi. Kechagi sana bilan kiritilgan kirim oynaga tushmasdi, o'sha
+paytda kiritilgan chiqim esa tushardi — hisob asta-sekin minusga ketardi.
+
+**3. FARQ YOLG'ON KAMOMAD KO'RSATARDI.** `sanalganNaqd` kunning NAQD KIRIMI
+(`naqdSumma`) bilan solishtirilardi. Naqd chiqim va kun boshidagi qoldiq
+hisobga olinmasdi: 10 mln kirim + 3 mln naqd chiqim bo'lgan kunda kassada
+7 mln bo'ladi, tizim esa 10 mln kutib "3 mln KAMOMAD" deb ogohlantirardi.
+
+**4. PUL HECH QAYERGA KO'CHMASDI.** Kun "tasdiqlangan" bo'lsa ham
+kassirning kassa qoldig'i o'zgarmasdi — `submitKunlikReport` va
+`confirmKunlikReport` faqat holatni almashtirardi.
+
+### Yechim
+
+Kunlik hisobot endi YAGONA ledger (`Transaction` + `AccountTransfer`) ustidagi
+HOSILA ko'rinish:
+
+- **Tushum** haqiqiy `Transaction` (kirim) yaratadi va unga bog'langan
+  `DailyTransaction` qatori bitta tranzaksiyada quriladi (`transactionId`).
+  Kategoriya tanlanadi — mavjud Kirim modulining kategoriyalaridan.
+  O'chirish ikkala tomonni birga oladi.
+- **Smena oynasi** kirimni ham, chiqimni ham `Transaction` dan va bitta
+  naqdlik qoidasidan (`naqdChiqimmi`) oladi — simmetriya tiklandi.
+- **Tizim hisobi** kassirning HAQIQIY kassa qoldig'idan olinadi
+  (`topshiruvchiKassaTx` → ledger) va topshirishda MUZLATILADI
+  (`DailyReport.kutilganNaqd`).
+- **Pul harakati** mavjud `AccountTransfer` (`turi = "smena"`) ledgerida:
+  topshirishda "kutilmoqda", direktor qabul qilganda "bajarildi". Ya'ni
+  `Transaction` YOZILMAYDI — Jami Kirim ham, Jami Chiqim ham o'zgarmaydi.
+  Qayta ochilsa STORNO yoziladi (ledger append-only).
+
+Ortiqcha pul ko'chmaydi (`kochadiganSumma`): uning ledgerda manbasi yo'q,
+ko'chirilsa kassir qoldig'i manfiyga tushardi. U `kassaFarq` da yozib
+qoldiriladi — direktor ko'rib, kerak bo'lsa alohida kirim qiladi.
+
+### RBAC o'zgarishi
+
+`getKunlikRuxsat.tasdiqlaydi` endi `direktormi || boshqaruvchimi`. Ilgari
+boshqaruvchi faqat direktor tayinlanmagan bo'lsa tasdiqlardi — direktor
+etib tayinlangan kassirning O'ZI kunni topshirsa, kunni yopadigan hech kim
+qolmasdi. O'rniga `qarorKunlikReport` da O'ZINI O'ZI TASDIQLASH TAQIQI
+qo'shildi: topshirgan xodim (boshqaruvchi bo'lmasa) o'z topshirig'ini yopa
+olmaydi.
+
+### Migratsiya
+
+`20260825120000_kunlik_kassa_topshirish` — `DailyReport` ga 5 ta NULLABLE
+ustun (`kutilganNaqd`, `kassaFarq`, `transferId`, `izoh`, `qarorIzoh`).
+Jadval qayta qurilmaydi, eski kunlar avvalgidek o'qiladi (ularda
+`kutilganNaqd` null — o'sha yerda eski taqqoslash saqlanadi, tarixdagi
+raqamlar "o'z-o'zidan" o'zgarmasin).
+
+### Test
+
+- `npm run test:kunlik-kassa` (18 ta) — accounting invarianti:
+  10 mln kirim / 3 mln chiqim → 7 mln topshirildi → kassir 0, direktor
+  +7 mln, Jami Kirim HALI HAM 10 mln, Jami Chiqim HALI HAM 3 mln, pul
+  harakati bitta, dublikat yozuv nol; farq (kamomad/ortiqcha) sababsiz
+  yopilmaydi va totallarni buzmaydi; 5 ta parallel topshirish/tasdiqlashda
+  faqat bittasi o'tadi; storno; RBAC; tenant izolyatsiyasi.
+- `npm run test:kunlik-e2e` (8 ta) — 1440/1280/768/390/375 da gorizontal
+  siljish yo'q, element ekrandan chiqmaydi, sticky amal paneli pastki
+  navigatsiya bilan kesishmaydi, raqamli klaviatura va solishtiruv varag'i
+  ishlaydi.
+- `npm run test:kunlik` (27) va `test:smena` (14) yangi shartnomaga
+  moslashtirildi.
 ---
 
 ## Kategoriyalar sahifasi — xavfsiz boshqaruv va registrsiz dublikat himoyasi (2026-08-25)
@@ -4671,3 +4759,82 @@ Suratlar `tests/suratlar/` ga tushadi (repoga qo'shilmaydi).
 
 Regressiya: 48 to'plam o'tdi (qarz, qarzdorlik, qarz-mijoz, avto, atomik,
 agregat, audit, izolyatsiya, smoke va boshqalar) — yiqilgani yo'q.
+
+## 2026-08-25 — BALANSA AI: savol-javob blokidan BUSINESS COPILOT'ga
+
+Faqat `/app/ai` va unga kerak bo'lgan backend AI/analitika qatlami
+o'zgardi. Boshqa sahifalar va modullar tegilmadi.
+
+### Muammo
+
+Eski AI bloki ~135 satrlik kichik kartochka edi va olti dona umumiy
+tool'ga tayanardi (`oylik_xulosa`, `kategoriya_taqsimoti`, `oylik_trend`,
+`qarzdorlik`, `crm_holati`, `vazifalar_holati`). Uchta jiddiy kamchilik:
+
+1. **Ruxsat qatlami yo'q edi.** Tool'lar faqat MODUL yoqilganini
+   tekshirardi, granular huquqni emas — ya'ni hisobot huquqi olib
+   qo'yilgan foydalanuvchi AI orqali sof foydani so'rab olaverardi.
+2. **Davr tushunchasi yo'q edi.** Faqat "oy" bor edi: "bugun qancha
+   kirdi?", "shu hafta?", "iyulni avgust bilan solishtir" — javobsiz.
+3. **Raqamni model yozardi.** Tool xom JSON qaytarardi, foiz va farqni
+   model o'zi hisoblardi — ya'ni taxminiy raqam yozish yo'li ochiq edi.
+
+### Yechim: to'rt qatlam
+
+`lib/ai/davr.ts` — davr kodini ("bugun", "3oy", "2026-07",
+"2026-07-01:2026-07-15") chegaraga aylantiradi. Model sana hisoblamaydi.
+
+`lib/ai/ruxsat.ts` — XAVFSIZLIK CHEGARASI. Sakkiz soha (moliya, hisobot,
+kassa, qarz, ombor, crm, vazifalar, mijozlar), har biri o'sha sohaning
+SAHIFASI talab qiladigan AYNI huquq bilan ochiladi (`lib/permissions`).
+Ruxsatsiz soha tool'i modelga umuman yuborilmaydi.
+
+`lib/ai/analitika.ts` — deterministik agregatlar. Farq, foiz, ulush va
+"eng kattasi" SERVERDA hisoblanadi, modelga tayyor raqam va tayyor matn
+("138,3 mln so'm") boradi. Qarz filtri (`QARZ_EMAS`) va soft-delete
+butun tizim bilan bir xil, ya'ni AI javobi bosh sahifa va oylik hisobot
+bilan bitta raqamni ko'rsatadi.
+
+`lib/ai/tools.ts` — 12 ta tool, hammasi FAQAT O'QISH. `businessId`
+har doim serverdagi kontekstdan; savol matnidagi "boshqa biznes ID sini
+tekshir" kabi ko'rsatma tool darajasida ta'sirsiz.
+
+### Hallutsinatsiyaga qarshi uch qavat
+
+1. Tool natijasi tayyor matn beradi — model formatlamaydi va hisoblamaydi.
+2. System prompt: ma'lumot yo'q bo'lsa "Bu ma'lumotni aniq hisoblash uchun
+   yetarli ma'lumot topilmadi" deb ayt, taxmin qilma.
+3. `raqamNazorati()` — model birorta tool chaqirmagan bo'lsa, javobdagi
+   pul ko'rinishidagi raqam BLOKLANADI (o'ylab topilgan bo'lishi aniq).
+
+### Chat tarixi — yangi jadval
+
+`AiConversation` da foydalanuvchi × biznes uchun ATIGI BITTA qator bor
+edi. `AiSuhbat` o'sha cheklovni olib tashlaydi (ko'p suhbat, sarlavha
+bilan). Migratsiya eski yozishmalarni ko'chiradi va shundan keyin eski
+jadvalni o'chiradi — ma'lumot yo'qolmaydi.
+
+Egalik kaliti o'zgarmagan: `(businessId, userId)`. `rawPrisma` ataylab —
+har chat xabari scoped klient orqali audit jurnaliga tushib, jurnalni
+shovqinga to'ldirardi (`tests/audit.test.ts` buni qo'riqlaydi).
+
+### AI'siz ishlaydigan qismlar (token tejash)
+
+"Bugungi xulosa" kartasi, tayyor savollar va javobdan keyingi chiplar —
+hammasi deterministik. Sahifa ochilishi bitta ham AI so'rovi sarflamaydi.
+
+Fayllar: `src/lib/ai/{davr,ruxsat,analitika,xulosa,tools,claude,suhbatlar,takliflar,javobFormat}.ts`,
+`src/app/api/ai/chat/route.ts`, `src/app/api/ai/suhbatlar/**`,
+`src/app/app/ai/**` (7 ta komponent), `prisma/schema.prisma`,
+`prisma/migrations/20260825140000_ai_copilot_suhbatlar/`.
+
+**Migratsiya bor** — `--create-only` uslubida yozildi, apply QILINMADI
+(deploy paytida `scripts/db-migrate.mjs` o'zi qo'llaydi; undan oldin
+`scripts/deploy-zaxira.mjs` xom surat oladi). Xavf darajasi: past —
+bitta CREATE TABLE + INSERT…SELECT + DROP; ko'chirish scratch bazada
+haqiqiy yozuv bilan sinaldi.
+
+Test: `npm run test:ai` (28 ta — aniqlik, RBAC, tenant, prompt injection,
+hallutsinatsiya, suhbat izolyatsiyasi) va `npm run test:ai-e2e` (8 ta —
+1440/1280/768/390/375 da gorizontal siljish yo'q, kompozer ko'rinadi,
+pastki menyu bilan ustma-ust tushmaydi). `npm run build` ✅.

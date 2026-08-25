@@ -4,6 +4,7 @@ import {
   joriyChegara,
   kutilganNaqdHisobi,
   oynaJamla,
+  OYNA_SELECT,
   type SmenaOynaSummasi,
 } from "@/lib/services/smena";
 
@@ -103,19 +104,21 @@ export async function getJoriySmena(businessId: string, bugunStr: string): Promi
   const chegara = joriyChegara(oxirgi, bugungiSoni, bugunStr);
   const oynaFiltri = { gt: chegara.boshlanishAt };
 
-  const [tushumlar, chiqimlar] = await Promise.all([
-    prisma.dailyTransaction.groupBy({
-      by: ["tolovTuri"],
-      where: { businessId, deletedAt: null, createdAt: oynaFiltri },
-      _sum: { summa: true },
+  // Kirim ham, chiqim ham BITTA manbadan (`Transaction`) va bitta naqdlik
+  // qoidasidan o'tadi — nosimmetrik hisob "Kassada bo'lishi kerak" ni
+  // manfiyga tushirib yuborardi (batafsil: services/smena.ts → oynaJamla).
+  const [kirimlar, chiqimlar] = await Promise.all([
+    prisma.transaction.findMany({
+      where: { businessId, turi: "kirim", deletedAt: null, createdAt: oynaFiltri },
+      select: OYNA_SELECT,
     }),
     prisma.transaction.findMany({
       where: { businessId, turi: "chiqim", deletedAt: null, createdAt: oynaFiltri },
-      select: { summa: true, tolovTuri: true, account: { select: { turi: true } } },
+      select: OYNA_SELECT,
     }),
   ]);
 
-  const oyna = oynaJamla(tushumlar, chiqimlar);
+  const oyna = oynaJamla(kirimlar, chiqimlar);
   return {
     raqam: chegara.raqam,
     boshlanishAt: chegara.boshlanishAt.toISOString(),

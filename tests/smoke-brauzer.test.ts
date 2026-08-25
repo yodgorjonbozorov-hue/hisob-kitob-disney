@@ -349,7 +349,10 @@ test("yangi modul sahifalari to'g'ri sarlavha bilan ochiladi", { skip: sabab }, 
   const SAHIFALAR: Array<[string, string]> = [
     ["/app", "Boshqaruv paneli"],
     ["/app/tranzaksiyalar", "Kirim va chiqimlar"],
+    // Sarlavha "Hisobotlar": sahifada endi Kunlik/Haftalik/Oylik/Yillik
+    // tablari bor (app/hisobot/DavrTablari.tsx).
     ["/app/hisobot", "Hisobotlar"],
+    ["/app/kunlik", "Kunlik hisobot"],
     // "/app/ombor" bu ro'yxatda EMAS: E2E'da aktiv biznes ("Demo Xizmatlar")
     // ATAYLAB omborsiz (scripts/e2e-tayyorla.mjs) va sahifa /app ga
     // qaytaradi. U keyingi testda — ombor yuritadigan biznesga o'tib —
@@ -359,6 +362,17 @@ test("yangi modul sahifalari to'g'ri sarlavha bilan ochiladi", { skip: sabab }, 
     ["/app/hr", "Xodimlar"],
     ["/app/hujjatlar", "Shartnomalar"],
   ];
+
+  /*
+   * `/app/ombor` bu ro'yxatdan CHIQARILDI — u endi sarlavha tekshiruvi
+   * emas, REDIREKT tekshiruvi (pastda).
+   *
+   * Sabab: Ombor/Ta'minot birlashtirilgandan keyin sahifa `business.omborli`
+   * bo'lmasa `/app` ga qaytaradi. Seed'dagi faol biznes ("Demo Xizmatlar")
+   * xizmat ko'rsatuvchi, ya'ni omborsiz — sahifa TO'G'RI qaytaradi, lekin
+   * ro'yxat undan "Ombor" sarlavhasini kutib turgani uchun to'plam qizil
+   * bo'lib qolgan edi.
+   */
 
   const page = await yangiSahifa();
   await kir(page);
@@ -373,6 +387,13 @@ test("yangi modul sahifalari to'g'ri sarlavha bilan ochiladi", { skip: sabab }, 
     } catch (e) {
       xatolar.push(`${yol}: ${(e as Error).message.split("\n")[0]}`);
     }
+  }
+
+  // OMBOR: omborsiz bizneste sahifa ochilmasligi KERAK.
+  await och(page, "/app/ombor");
+  const omborSarlavha = (await page.locator("h1").first().innerText()).trim();
+  if (omborSarlavha !== "Boshqaruv paneli") {
+    xatolar.push(`/app/ombor: omborsiz bizneste "${omborSarlavha}" ochildi (redirekt kutilgan)`);
   }
 
   await page.context().close();

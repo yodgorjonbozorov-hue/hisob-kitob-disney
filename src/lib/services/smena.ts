@@ -45,28 +45,63 @@ export function naqdChiqimmi(tolovTuri: string | null, kassaTuri: string | null)
   return (kassaTuri ?? "naqd") === "naqd";
 }
 
+/** Oyna hisobiga tushadigan bitta yozuv (kirim yoki chiqim). */
+export interface OynaYozuvi {
+  summa: number;
+  tolovTuri: string | null;
+  account: { turi: string } | null;
+}
+
 /**
  * Xom so'rov natijalaridan oyna summalarini yig'adi.
+ *
+ * ═══ NEGA MANBA `Transaction` (audit tuzatishi) ═══
+ * Ilgari KIRIM `DailyTransaction` dan, CHIQIM esa `Transaction` dan
+ * olinardi. Ikki manba nosimmetrik edi:
+ *   - `DailyTransaction` faqat BUGUNGI sanali va kun OCHIQ bo'lgandagina
+ *     yaratilardi (`kunlikSinxron`), chiqim esa `createdAt` bo'yicha
+ *     hech qanday sana shartisiz sanalardi;
+ *   - demak kechagi sana bilan kiritilgan kirim oynaga TUSHMASDI, xuddi
+ *     shu paytda kiritilgan chiqim esa TUSHARDI.
+ * Natijada "Kassada bo'lishi kerak" katta MANFIY songa aylanib qolardi
+ * (masalan −12 679 000) — hisob xatosi, real pul emas.
+ *
+ * Endi ikkala tomon ham BITTA manbadan (`Transaction`) va BITTA qoidadan
+ * (`naqdChiqimmi`) o'tadi: oyna ichida kiritilgan naqd kirim minus oyna
+ * ichida kiritilgan naqd chiqim. Simmetriya tiklanadi.
  *
  * Ataylab SO'ROVSIZ (sof funksiya): bir xil hisob ikki joyda kerak —
  * tranzaksiya ichida (yopish paytida, xom `tx` bilan) va sahifada jonli
  * ko'rsatish uchun (tenant-scoped `prisma` bilan). Formula esa bitta.
  */
 export function oynaJamla(
-  tushumlar: { tolovTuri: string; _sum: { summa: number | null } }[],
-  chiqimlar: { summa: number; tolovTuri: string | null; account: { turi: string } | null }[]
+  kirimlar: OynaYozuvi[],
+  chiqimlar: OynaYozuvi[]
 ): SmenaOynaSummasi {
-  const summa = (turi: string) =>
-    Number(tushumlar.find((g) => g.tolovTuri === turi)?._sum.summa ?? 0);
+  let naqd = 0;
+  let click = 0;
+  let qarz = 0;
+  for (const k of kirimlar) {
+    if (k.tolovTuri === "qarz") qarz += k.summa;
+    else if (naqdChiqimmi(k.tolovTuri, k.account?.turi ?? null)) naqd += k.summa;
+    else click += k.summa;
+  }
   return {
-    naqd: summa("CASH"),
-    click: summa("CLICK"),
-    qarz: summa("DEBT"),
+    naqd,
+    click,
+    qarz,
     naqdChiqim: chiqimlar
       .filter((c) => naqdChiqimmi(c.tolovTuri, c.account?.turi ?? null))
       .reduce((a, c) => a + c.summa, 0),
   };
 }
+
+/** Oyna yozuvlarini o'qish uchun yagona `select` — ikki joyda bir xil. */
+export const OYNA_SELECT = {
+  summa: true,
+  tolovTuri: true,
+  account: { select: { turi: true } },
+} as const;
 
 /** Kutilgan naqd — kassada SHU PAYT bo'lishi kerak bo'lgan pul. */
 export function kutilganNaqdHisobi(boshlangichQoldiq: number, oyna: SmenaOynaSummasi): number {
@@ -130,19 +165,18 @@ export async function smenaYop(businessId: string, aktor: KunlikAktor, data: Sme
     const tugashAt = new Date();
     const oynaFiltri = { gt: chegara.boshlanishAt, lte: tugashAt };
 
-    const [tushumlar, chiqimlar] = await Promise.all([
-      tx.dailyTransaction.groupBy({
-        by: ["tolovTuri"],
-        where: { businessId, deletedAt: null, createdAt: oynaFiltri },
-        _sum: { summa: true },
+    const [kirimlar, chiqimlar] = await Promise.all([
+      tx.transaction.findMany({
+        where: { businessId, turi: "kirim", deletedAt: null, createdAt: oynaFiltri },
+        select: OYNA_SELECT,
       }),
       tx.transaction.findMany({
         where: { businessId, turi: "chiqim", deletedAt: null, createdAt: oynaFiltri },
-        select: { summa: true, tolovTuri: true, account: { select: { turi: true } } },
+        select: OYNA_SELECT,
       }),
     ]);
 
-    const oyna = oynaJamla(tushumlar, chiqimlar);
+    const oyna = oynaJamla(kirimlar, chiqimlar);
     const kutilganNaqd = kutilganNaqdHisobi(chegara.boshlangichQoldiq, oyna);
 
     return tx.smena.create({
