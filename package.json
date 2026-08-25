@@ -102,6 +102,7 @@
     "test:smoke": "node -r ts-node/register tests/smoke-brauzer.test.ts",
     "test:pos-e2e": "node -r ts-node/register tests/pos-brauzer.test.ts",
     "test:kunlik-e2e": "node -r ts-node/register tests/kunlik-brauzer.test.ts",
+    "test:ai-e2e": "node -r ts-node/register tests/ai-brauzer.test.ts",
     "test:kassa-brauzer": "node -r ts-node/register tests/kassa-brauzer.test.ts",
     "test:qarzlar-brauzer": "node -r ts-node/register tests/qarzlar-brauzer.test.ts",
     "test:kelishilgan-narx": "node -r ts-node/register tests/kelishilgan-narx.test.ts",
