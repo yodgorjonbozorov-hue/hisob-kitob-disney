@@ -6,10 +6,17 @@ import { formatSom, formatSomLabel, formatDateUZ } from "@/lib/format";
 import { telKorinish } from "@/lib/validation/qarz";
 import type { QarzDTO } from "@/lib/queries/qarz";
 import { QarzHolatBadge } from "./QarzHolatBadge";
+import { QarzMuddatBadge } from "./QarzMuddatBadge";
+import { muddatHolati } from "@/lib/qarzMuddat";
+import { todayDateOnlyString } from "@/lib/date";
 
 /**
- * QARZLAR JADVALI. Ustunlar spetsifikatsiya bo'yicha: mijoz, telefon, qarz,
- * to'langan, qolgan, berilgan sana, oxirgi to'lov, status, mas'ul, amallar.
+ * QARZLAR JADVALI — QARZ YOZUVI kesimi (qarzdorlar kesimidan farqli).
+ * Ustunlar: mijoz, muddat holati, kategoriya, telefon, qarz, to'langan,
+ * qolgan, berilgan sana, oxirgi to'lov, status, mas'ul, amallar.
+ *
+ * Muddat ustuni RANG bilan cheklanmaydi — "7 kun kechikdi" matni ham
+ * yoziladi (12-talab).
  *
  * Mobil ekranda 10 ta ustun sig'maydi — jadval o'rniga har qarz KARTOChKA
  * bo'ladi (Jadval komponenti). "Qolgan" va "oxirgi to'lov" ikkalasi ham
@@ -24,6 +31,7 @@ export function QarzJadval({
   onOch: (d: QarzDTO) => void;
   onEslatma: (d: QarzDTO) => void;
 }) {
+  const bugun = todayDateOnlyString();
   const ustunlar: Ustun<QarzDTO>[] = [
     {
       kalit: "mijoz",
@@ -38,9 +46,22 @@ export function QarzJadval({
           >
             {d.mijozNomi}
           </button>
-          {d.muddatOtdi && <span className="ml-2 text-2xs text-expense">muddat o&apos;tdi</span>}
         </span>
       ),
+    },
+    {
+      kalit: "muddat",
+      sarlavha: "Muddat",
+      katak: (d) => {
+        const { holat, kun } = muddatHolati(d.muddat, d.isYopilgan, bugun);
+        return <QarzMuddatBadge holat={holat} kun={kun} kichik />;
+      },
+    },
+    {
+      kalit: "kategoriya",
+      sarlavha: "Kategoriya",
+      className: "text-muted whitespace-nowrap",
+      katak: (d) => d.kategoriyaNomi ?? "—",
     },
     {
       kalit: "tel",
@@ -90,7 +111,7 @@ export function QarzJadval({
         ustunlar={ustunlar}
         qatorlar={qarzlar}
         kalit={(d) => d.id}
-        minKenglik="min-w-[60rem]"
+        minKenglik="min-w-[72rem]"
         amallar={(d) => [
           ...(!d.isYopilgan && d.turi === "olinadigan"
             ? [{ label: "Eslatma", onClick: () => onEslatma(d), tur: "oddiy" as const }]
