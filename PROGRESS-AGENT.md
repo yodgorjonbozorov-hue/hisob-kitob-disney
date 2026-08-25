@@ -4965,3 +4965,34 @@ xato boshqa joyda takrorlanmaydi.
 kassir bilan `/app`, tranzaksiyalar, kunlik, pos, sotuv, qarzlar, crm,
 vazifalar — hammasi ochiladi; admin paneli o'zgarmagan. `npm run build` ✅,
 `test:isolation` (22) ✅, `test:panel` (22) ✅, `test:visibility` (10) ✅.
+
+### 2026-08-25 — Ombor importi: Excel fayl "yuklanmoqda"da abadiy osilishi (tugadi)
+
+**Muammo (foydalanuvchi xabari):** omborga Excel fayl import qilinganda
+"yuklanmoqda" holati 15 daqiqa turib ham tugamagan.
+
+**Ildiz sabab (empirik takrorlandi):** 10 MB gacha siqilgan xlsx ichida
+100 MB dan ortiq XML (200 ming qator) bo'lishi mumkin. `ExcelJS.load`
+faylni to'liq xotira modeliga yozadi — sinovda 10.8 MB fayl ~800 MB heap
+yedi; 256 MB heap'da jarayon OOM bilan o'ldi. Kichik serverda bu GC
+tiqilishi — so'rov hech qachon javob qaytarmaydi, klientda esa muddat
+(timeout) yo'q edi, shuning uchun UI abadiy "yuklanmoqda"da qolardi.
+
+**Tuzatish (uch qatlam):**
+1. `xlsxOqi.ts` — zip markaziy katalogidan ichki XML hajmi parse'dan OLDIN
+   o'qiladi (arxiv ochilmaydi, ~6 ms). 10 MB dan katta XML `XlsxXato`
+   bilan rad etiladi (import baribir 500 qator bilan cheklangan; 10 MB XML
+   ~20 ming qator — katta zaxira). Satrlar 5001 bilan cheklanadi — ortiqcha
+   qatorlar importda baribir ochiq "500 tadan ko'p" xatosi bo'ladi, jimgina
+   kesilmaydi. Streaming o'quvchi ATAYLAB ishlatilmadi: sharedStrings zip
+   ichida varaqdan keyin kelsa (haqiqiy Excel odati) matnlar buziladi —
+   sinovda tasdiqlandi.
+2. `api/products/import` — buzilgan/katta Excel 500 emas, aniq xabarli 400.
+3. `ImportModal` — so'rovga 60 s muddat (AbortController): server javobsiz
+   qolsa ham UI osilib qolmaydi. Tarmoq qatlami `importYuborish.ts` ga
+   ajratildi (komponent 250 satr chegarasida).
+
+**Tekshiruv:** 200 ming qatorli haqiqiy fayl 6 ms da tushunarli xato bilan
+rad etiladi; oddiy 300 qatorli fayl avvalgidek o'qiladi. `npm run build` ✅,
+`test:mahsulot-import` (23, 3 tasi yangi) ✅, `test:isolation` (22) ✅,
+`test:csv-import` (13) ✅.
