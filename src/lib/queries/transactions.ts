@@ -212,6 +212,66 @@ export async function listTransactions(params: TransactionListParams) {
 export type TransactionListResult = Awaited<ReturnType<typeof listTransactions>>;
 export type TransactionDTO = TransactionListResult["items"][number];
 
+export interface KategoriyaJami {
+  categoryId: string;
+  nomi: string;
+  /** "kirim" | "chiqim" — kirim va chiqim kategoriyalari ATAYLAB aralashmaydi. */
+  turi: string;
+  summa: number;
+  soni: number;
+}
+
+/**
+ * FILTRLANGAN TO'PLAMNING KATEGORIYA KESIMI — Kirim/Chiqim sahifasining
+ * asosiy ro'yxati (Kategoriya → yozuvlar).
+ *
+ * Shart `buildTransactionWhere` dan, ya'ni ro'yxat, eksport va bu kesim
+ * AYNI filtrdan yuradi. Bu eng muhim invariant: kategoriya kartasidagi
+ * summa ochilganda ko'rinadigan yozuvlar yig'indisiga TENG bo'lishi kerak,
+ * aks holda bir ekranda ikki xil haqiqat paydo bo'ladi.
+ *
+ * QARZ CHIQARIB TASHLANMAYDI: bu sahifadagi ro'yxat qarzga yozilgan
+ * yozuvlarni ham ko'rsatadi (`realPul` bayrog'i yoqilmagan), demak
+ * kategoriya jamisi ham ularni o'z ichiga oladi. Yuqoridagi "Sof" esa
+ * ataylab REAL pul (lib/qarzFiltr.ts) — u boshqa savolga javob beradi.
+ *
+ * Sahifalash YO'Q: kategoriya soni cheklangan (biznesda odatda 10-40 ta)
+ * va u `groupBy` natijasi — yozuvlar soni qancha bo'lishidan qat'i nazar
+ * qatorlar soni kategoriyalar soniga teng.
+ */
+export async function listKategoriyaJamlari(
+  params: TransactionListParams
+): Promise<KategoriyaJami[]> {
+  const guruhlar = await prisma.transaction.groupBy({
+    by: ["categoryId"],
+    where: buildTransactionWhere(params),
+    _sum: { summa: true },
+    _count: { _all: true },
+  });
+  if (guruhlar.length === 0) return [];
+
+  const kategoriyalar = await prisma.category.findMany({
+    where: { id: { in: guruhlar.map((g) => g.categoryId) } },
+    select: { id: true, nomi: true, turi: true },
+  });
+  const xarita = new Map(kategoriyalar.map((c) => [c.id, c]));
+
+  return guruhlar
+    .map((g) => {
+      const c = xarita.get(g.categoryId);
+      return {
+        categoryId: g.categoryId,
+        // O'chirilgan/nomsiz kategoriya yozuvni YO'QOTMASLIGI kerak —
+        // qator baribir ko'rinadi, faqat nomi noma'lum bo'ladi.
+        nomi: c?.nomi ?? "Noma'lum kategoriya",
+        turi: c?.turi ?? "kirim",
+        summa: g._sum.summa ?? 0,
+        soni: g._count._all,
+      };
+    })
+    .sort((a, b) => b.summa - a.summa);
+}
+
 /** Filtrga mos BARCHA tranzaksiyalar (eksport uchun, pagination'siz, 5000 gacha). */
 export async function listAllTransactions(params: TransactionListParams) {
   return prisma.transaction.findMany({

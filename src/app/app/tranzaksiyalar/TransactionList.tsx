@@ -1,28 +1,23 @@
 "use client";
 
-import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/Button";
-import { EditModal } from "./EditModal";
-import { DetailSheet } from "./DetailSheet";
-import { OchirishTasdiq } from "./OchirishTasdiq";
 import { TransactionTable } from "./TransactionTable";
 import { TransactionCards } from "./TransactionCards";
 import type { TransactionDTO } from "@/lib/queries/transactions";
-import type { CategoryOption } from "./turlar";
+import type { YozuvAmallari } from "./YozuvOynalari";
 
 interface Props {
   items: TransactionDTO[];
   total: number;
   page: number;
   pageSize: number;
-  categories: CategoryOption[];
   /** Yozuvni o'zgartirish huquqi (RBAC oynasi; server qaytadan tekshiradi). */
   ozgartirsaBoladi: (t: TransactionDTO) => boolean;
   filtrFaol: boolean;
-  onUpdated: (t: TransactionDTO) => void;
-  onDelete: (t: TransactionDTO) => void;
+  /** Tafsilot/tahrirlash/o'chirish oynalari sahifa darajasida (YozuvOynalari). */
+  amallar: YozuvAmallari;
   onYangi: () => void;
   onFiltrTozalash: () => void;
   selected: Set<string>;
@@ -44,20 +39,15 @@ export function TransactionList({
   total,
   page,
   pageSize,
-  categories,
   ozgartirsaBoladi,
   filtrFaol,
-  onUpdated,
-  onDelete,
+  amallar,
   onYangi,
   onFiltrTozalash,
   selected,
   onToggleSelect,
   onToggleAll,
 }: Props) {
-  const [editing, setEditing] = useState<TransactionDTO | null>(null);
-  const [batafsil, setBatafsil] = useState<TransactionDTO | null>(null);
-  const [ochiriladigan, setOchiriladigan] = useState<TransactionDTO | null>(null);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   if (items.length === 0) {
@@ -93,19 +83,22 @@ export function TransactionList({
         selected={selected}
         onToggleSelect={onToggleSelect}
         onToggleAll={onToggleAll}
-        onBatafsil={setBatafsil}
-        onTahrirlash={setEditing}
-        onOchirish={setOchiriladigan}
+        onBatafsil={amallar.onBatafsil}
+        onTahrirlash={amallar.onTahrirlash}
+        onOchirish={amallar.onOchirish}
         ozgartirsaBoladi={ozgartirsaBoladi}
       />
 
-      <TransactionCards
-        items={items}
-        onBatafsil={setBatafsil}
-        onTahrirlash={setEditing}
-        onOchirish={setOchiriladigan}
-        ozgartirsaBoladi={ozgartirsaBoladi}
-      />
+      {/* Telefonda jadval o'rniga kartalar (kenglik chegarasi shu yerda). */}
+      <div className="lg:hidden">
+        <TransactionCards
+          items={items}
+          onBatafsil={amallar.onBatafsil}
+          onTahrirlash={amallar.onTahrirlash}
+          onOchirish={amallar.onOchirish}
+          ozgartirsaBoladi={ozgartirsaBoladi}
+        />
+      </div>
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-line text-sm text-muted">
@@ -123,51 +116,6 @@ export function TransactionList({
         </div>
       )}
 
-      {batafsil && (
-        <DetailSheet
-          transaction={batafsil}
-          canModify={ozgartirsaBoladi(batafsil)}
-          onClose={() => setBatafsil(null)}
-          onEdit={() => {
-            setEditing(batafsil);
-            setBatafsil(null);
-          }}
-          onDelete={() => {
-            setOchiriladigan(batafsil);
-            setBatafsil(null);
-          }}
-        />
-      )}
-
-      {ochiriladigan && (
-        <OchirishTasdiq
-          transaction={ochiriladigan}
-          onClose={() => setOchiriladigan(null)}
-          onConfirm={() => {
-            const t = ochiriladigan;
-            setOchiriladigan(null);
-            onDelete(t);
-          }}
-        />
-      )}
-
-      {editing && (
-        <EditModal
-          transaction={editing}
-          categories={categories}
-          canDelete={ozgartirsaBoladi(editing)}
-          onClose={() => setEditing(null)}
-          onSaved={(t) => {
-            onUpdated(t);
-            setEditing(null);
-          }}
-          onDelete={() => {
-            const t = editing;
-            setEditing(null);
-            setOchiriladigan(t);
-          }}
-        />
-      )}
     </div>
   );
 }

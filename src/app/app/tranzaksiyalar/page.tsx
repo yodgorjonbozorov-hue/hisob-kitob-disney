@@ -4,7 +4,8 @@ import { runWithTenant } from "@/lib/db/tenantContext";
 import { resolveActiveBusinessId, getAccessibleBusinesses, getActiveBusiness } from "@/lib/business";
 import { isManager } from "@/lib/auth/roles";
 import { transactionScopeUserId } from "@/lib/auth/visibility";
-import { listTransactions } from "@/lib/queries/transactions";
+import { listTransactions, listKategoriyaJamlari } from "@/lib/queries/transactions";
+import { hasPermission } from "@/lib/permissions/tekshir";
 import { getTezKategoriyalar } from "@/lib/queries/tezKategoriyalar";
 import { isTolovGuruhi, type TolovGuruhi } from "@/lib/tolovBolimi";
 import { formatSom } from "@/lib/format";
@@ -59,23 +60,39 @@ export default async function TranzaksiyalarPage({
   }
 
   const scopeUserId = transactionScopeUserId(session);
-  const [result, categories, accounts, masullar, meningKassam, tezKategoriyalar] = await Promise.all([
+
+  // FILTR BITTA JOYDA quriladi: ro'yxat ham, kategoriya kesimi ham AYNI
+  // shartdan yuradi. Aks holda kategoriya kartasidagi summa bir davrni,
+  // ichkaridagi yozuvlar boshqa davrni ko'rsatib qolishi mumkin edi.
+  const filtr = {
+    businessId,
+    // Xodim faqat o'zi kiritgan yozuvlarni ko'radi, direktor — barchasini.
+    userId: scopeUserId,
+    from: searchParams.from,
+    to: searchParams.to,
+    turi: searchParams.turi,
+    tolov: isTolovGuruhi(searchParams.tolov) ? (searchParams.tolov as TolovGuruhi) : null,
+    categoryId: searchParams.categoryId,
+    xodimId: searchParams.xodimId,
+    q: searchParams.q,
+    minSumma: searchParams.minSumma ? parseInt(searchParams.minSumma, 10) : null,
+    maxSumma: searchParams.maxSumma ? parseInt(searchParams.maxSumma, 10) : null,
+  };
+
+  const [result, kategoriyaJamlari, jamiKorish, categories, accounts, masullar, meningKassam, tezKategoriyalar] =
+    await Promise.all([
     listTransactions({
-      businessId,
-      // Xodim faqat o'zi kiritgan yozuvlarni ko'radi, direktor — barchasini.
-      userId: scopeUserId,
-      from: searchParams.from,
-      to: searchParams.to,
-      turi: searchParams.turi,
-      tolov: isTolovGuruhi(searchParams.tolov) ? (searchParams.tolov as TolovGuruhi) : null,
-      categoryId: searchParams.categoryId,
-      xodimId: searchParams.xodimId,
-      q: searchParams.q,
-      minSumma: searchParams.minSumma ? parseInt(searchParams.minSumma, 10) : null,
-      maxSumma: searchParams.maxSumma ? parseInt(searchParams.maxSumma, 10) : null,
+      ...filtr,
       page: searchParams.page ? parseInt(searchParams.page, 10) : 1,
       pageSize: SAHIFA_HAJMI,
     }),
+    // Sahifaning ASOSIY ro'yxati: kategoriya → yozuvlar.
+    listKategoriyaJamlari(filtr),
+    // DAVR YAKUNI HUQUQI. Mavjud granular huquq ishlatiladi
+    // (`lib/permissions`): OWNER/ADMIN da bor, kassir va sotuvchida yo'q,
+    // maxsus rolga esa biznes egasi o'zi bera oladi. Yangi, parallel
+    // ruxsat tizimi kiritilmaydi.
+    hasPermission(session.userId, "hisobot.korish"),
     prisma.category.findMany({
       where: { businessId, isActive: true },
       orderBy: [{ tartib: "asc" }, { nomi: "asc" }],
@@ -144,7 +161,10 @@ export default async function TranzaksiyalarPage({
         currentUserId={session.userId}
         currentUserRol={session.rol}
         moveTargets={moveTargets}
-        totals={result.totals}
+        // Huquq bo'lmasa raqamlar UMUMAN yuborilmaydi — CSS bilan
+        // yashirish emas, HTMLda ham yo'q.
+        totals={jamiKorish ? result.totals : null}
+        kategoriyaJamlari={kategoriyaJamlari}
         filters={{
           from: searchParams.from ?? "",
           to: searchParams.to ?? "",
