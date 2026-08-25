@@ -153,11 +153,16 @@ async function tushumKategoriyaTx(
   categoryId?: string
 ): Promise<string> {
   if (!categoryId) return ensureCategoryTx(tx, businessId, KUNLIK_ZAXIRA_KATEGORIYA, "kirim");
+  // `isActive` ham tekshiriladi: forma faqat FAOL kategoriyalarni ko'rsatadi,
+  // lekin sahifa ochiq turganda kategoriya arxivlanishi mumkin. Bunda jimgina
+  // arxivga yozib qo'yish o'rniga aniq xato beramiz.
   const cat = await tx.category.findFirst({
-    where: { id: categoryId, businessId, turi: "kirim" },
+    where: { id: categoryId, businessId, turi: "kirim", isActive: true },
     select: { id: true },
   });
-  if (!cat) throw new ForbiddenError("Kategoriya bu biznesga tegishli emas yoki kirim emas");
+  if (!cat) {
+    throw new ForbiddenError("Kategoriya topilmadi, nofaol yoki kirim kategoriyasi emas");
+  }
   return cat.id;
 }
 
