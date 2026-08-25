@@ -4269,3 +4269,85 @@ o'chirish huquqi) va `npm run test:bizneslar-brauzer` (10 ta — 1440/1280/
 wizard). Regressiya: isolation, kop-biznes, modules, tozalash, kassa,
 magazin, crm, audit, signup, billing, visibility, backup, pro,
 soft-delete, atomik va smoke — hammasi yashil.
+---
+
+## Kategoriyalar sahifasi — xavfsiz boshqaruv va registrsiz dublikat himoyasi (2026-08-25)
+
+Eski sahifada faqat ikkita narsa bor edi: Kirim/Chiqim tablari va
+"Nofaollashtirish" tugmasi. Qidiruv yo'q, holat filtri yo'q, kategoriya
+ishlatilganini bilishning imkoni yo'q, nomni O'ZGARTIRIB BO'LMASDI —
+ya'ni "shar bezaklar" ni "Shar bezaklari" ga tuzatish uchun yangi
+kategoriya yaratishdan boshqa yo'l qolmasdi va eski yozuvlar boshqa
+kategoriyada osilib qolardi.
+
+### 1. Dublikat: registrga sezgir yagonalik
+
+`@@unique([nomi, turi, businessId])` registrga SEZGIR edi. Bitta biznesda
+"Bantik", "bantik" va "BANTIK" uchta alohida kategoriya bo'lib yashardi:
+bitta xarajat turi hisobotda uch qatorga bo'linardi, byudjet faqat
+bittasini ko'rardi.
+
+Yechim — IFODALI UNIQUE INDEKS `lower(trim("nomi"))` bo'yicha (migratsiya
+`20260825120000_kategoriya_registrsiz_unique`). Ilova darajasidagi
+tekshiruv YETARLI EMAS: ikki so'rov bir vaqtda kelsa ikkalasi ham
+"bunday nom yo'q" deb ko'radi. Prisma sxemasi ifodali indeksni ifodalay
+olmaydi, shuning uchun Postgres yo'li `scripts/pg-migratsiya.mjs` dagi
+QO'LDA blokiga qo'shildi.
+
+Migratsiya mavjud registr-dublikatlarini O'CHIRMAYDI va BIRLASHTIRMAYDI
+(har biriga tranzaksiya/byudjet/qarz FK bilan bog'langan bo'lishi
+mumkin): birinchisi nomini saqlaydi, qolganlariga id qo'shimchasi
+yopishtiriladi.
+
+Yon ta'sir: servislar (`ensureCategoryTx`, CSV import, biznesga
+ko'chirish) kategoriyani `upsert` bilan NOMI bo'yicha izlardi. Endi ular
+`kategoriyaIdTop()` orqali registrsiz izlaydi — aks holda foydalanuvchi
+qo'lda "sotuv" yaratib qo'ygan biznesda keyingi POS savdosi indeksga
+urilib YIQILARDI.
+
+### 2. Tizim kategoriyalari
+
+POS, qarz, ombor, xarid va HR servislari kategoriyani NOMI bo'yicha
+topadi ("Sotuv", "Qarz to'lovi", "Qarz to'lash", "Tovar xaridi",
+"Mashina xaridi", "Mashina xarajati", "Oylik", "Avans"). Ularni qayta
+nomlash keyingi avtomatik yozuvda kategoriyani QAYTA yaratardi —
+bitta oqim ikkiga bo'linardi. Nofaollashtirilsa esa formalardan
+yo'qolardi, lekin servis unga yozishda davom etardi.
+
+Ro'yxat `src/lib/kategoriyaNom.ts` da; UI "Tizim" nishonini ko'rsatadi va
+tugmalarni yashiradi, backend esa 403 qaytaradi (tugmani yashirish
+himoya emas). Test manba fayllardagi qotirilgan nomlarni ro'yxat bilan
+solishtiradi — ro'yxat eskirsa qizil bo'ladi.
+
+### 3. Tarix buzilmasligi
+
+`DELETE` route ATAYLAB YO'Q va test uning paydo bo'lishini qo'riqlaydi.
+Qayta nomlash mavjud qatorni `update` qiladi — ID o'zgarmaydi, ya'ni
+tranzaksiya, byudjet, qarz va CRM bitimlari joyida qoladi. Turni
+o'zgartirish esa faqat kategoriya HECH QAYERDA ishlatilmagan bo'lsa
+mumkin (yettita bog'lanish tekshiriladi).
+
+`QuickAddSheet` `/api/categories` ni `active` filtrisiz o'qirdi — butun
+ilovada nofaol kategoriya hamon tanlanadigan YAGONA joy shu edi. Tuzatildi.
+
+### 4. Sahifa
+
+Qidiruv + `Faol | Nofaol | Barchasi` filtri, har kategoriyaga yozuvlar
+soni (tranzaksiyalar ro'yxatiga havola) va joriy oy summasi. Raqamlar
+ikkita `groupBy` bilan olinadi — kategoriya soni qanday bo'lsa ham
+uchta so'rov (N+1 yo'q). Davr summasi bosh sahifadagi kategoriya
+taqsimoti bilan AYNI real-pul qoidasidan o'tadi, aks holda ikki ekran
+ikki xil raqam ko'rsatardi.
+
+Fayllar: `src/lib/kategoriyaNom.ts` (yangi),
+`src/lib/services/kategoriya.ts` (yangi),
+`src/app/app/admin/kategoriyalar/` (page + 4 komponent + turlar),
+`src/app/api/categories/**`, `src/lib/validation/category.ts`,
+`src/lib/services/inventory.ts`, `csvImport.ts`,
+`src/app/api/transactions/bulk-move/route.ts`,
+`src/components/nav/QuickAddSheet.tsx`, `prisma/schema.prisma` (izoh),
+migratsiya + Postgres init.
+
+Test: `npm run test:kategoriya-boshqaruv` (19 ta) — dublikat (registr,
+bo'shliq, poyga), rename tarixi, nofaollashtirish/faollashtirish, tur
+o'zgarishi, tizim himoyasi, IDOR va RBAC, statistika.

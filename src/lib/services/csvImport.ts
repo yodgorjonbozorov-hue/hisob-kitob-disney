@@ -3,6 +3,7 @@ import { csvQatorniBol, csvSatrlar } from "@/lib/csv";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { logAudit } from "@/lib/services/audit";
 import { z } from "zod";
+import { kategoriyaIdTop } from "@/lib/kategoriyaNom";
 
 /**
  * CSV IMPORT — tranzaksiyalarni ommaviy kiritish.
@@ -145,14 +146,25 @@ export async function csvniYoz(params: {
       const kalit = `${nomi}::${turi}`;
       const bor = kesh.get(kalit);
       if (bor) return bor;
-      const cat = await tx.category.upsert({
-        where: { nomi_turi_businessId: { nomi, turi, businessId: params.businessId } },
-        update: {},
-        create: { businessId: params.businessId, nomi, turi },
-        select: { id: true },
-      });
-      kesh.set(kalit, cat.id);
-      return cat.id;
+      // Registrga BEFARQ moslash: CSV'da "bantik" bo'lsa ham mavjud "Bantik"
+      // ga tushadi. Busiz baza indeksiga urilib butun import to'xtardi.
+      const id = await kategoriyaIdTop(
+        () =>
+          tx.category.findMany({
+            where: { businessId: params.businessId, turi },
+            select: { id: true, nomi: true },
+          }),
+        () =>
+          tx.category.upsert({
+            where: { nomi_turi_businessId: { nomi, turi, businessId: params.businessId } },
+            update: {},
+            create: { businessId: params.businessId, nomi, turi },
+            select: { id: true },
+          }),
+        nomi
+      );
+      kesh.set(kalit, id);
+      return id;
     }
 
     let n = 0;

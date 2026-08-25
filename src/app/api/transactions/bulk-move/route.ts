@@ -8,6 +8,7 @@ import { logAudit, getClientIp } from "@/lib/services/audit";
 import { z } from "zod";
 import { dashboardYangilandi } from "@/lib/cache";
 import { kunlikBulkUz } from "@/lib/services/kunlik";
+import { kategoriyaIdTop } from "@/lib/kategoriyaNom";
 
 const schema = z.object({
   ids: z.array(z.string()).min(1).max(500),
@@ -55,15 +56,26 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
     const key = `${nomi}::${turi}`;
     const cached = catCache.get(key);
     if (cached) return cached;
-    // upsert — parallel ko'chirishda dublikat kategoriya yaratilmasin.
-    const cat = await prisma.category.upsert({
-      where: { nomi_turi_businessId: { nomi, turi, businessId: targetBusinessId } },
-      update: {},
-      create: { businessId: targetBusinessId, nomi, turi },
-      select: { id: true },
-    });
-    catCache.set(key, cat.id);
-    return cat.id;
+    // Registrga BEFARQ moslash: maqsad biznesda "bantik" bo'lsa, "Bantik"
+    // qayta yaratilmaydi (baza indeksi bunga yo'l ham bermasdi).
+    // Yaratish `upsert` — parallel ko'chirishda dublikat kategoriya yaratilmasin.
+    const id = await kategoriyaIdTop(
+      () =>
+        prisma.category.findMany({
+          where: { businessId: targetBusinessId, turi },
+          select: { id: true, nomi: true },
+        }),
+      () =>
+        prisma.category.upsert({
+          where: { nomi_turi_businessId: { nomi, turi, businessId: targetBusinessId } },
+          update: {},
+          create: { businessId: targetBusinessId, nomi, turi },
+          select: { id: true },
+        }),
+      nomi
+    );
+    catCache.set(key, id);
+    return id;
   }
 
   // N+1 tuzatildi: ilgari har yozuvga alohida `update` ketardi (500 tagacha
