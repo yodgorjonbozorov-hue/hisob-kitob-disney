@@ -5,37 +5,9 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { formatSom } from "@/lib/format";
 import { ImportNatija } from "./ImportNatija";
+import { importYubor, type Tekshiruv, type Natija } from "./importYuborish";
 
-interface XatoQator {
-  qator: number;
-  xato: string;
-  matn: string;
-}
-interface NamunaQator {
-  qator: number;
-  nomi: string;
-  sku: string | null;
-  barcode: string | null;
-  kategoriya: string | null;
-  sotuvNarx?: number | null;
-  miqdor?: number | null;
-}
-interface Tekshiruv {
-  jami: number;
-  ustunlar: string[];
-  xatolar: XatoQator[];
-  namuna: NamunaQator[];
-  maxQator: number;
-  narxsiz: number;
-  qoldiqsiz: number;
-}
-export interface Natija {
-  qoshildi: number;
-  yangilandi: number;
-  otkazildi: number;
-  qoldiqTogrilandi: number;
-  xatolar: XatoQator[];
-}
+export type { Natija } from "./importYuborish";
 
 const NAMUNA_CSV = `Nomi,SKU,Shtrix kod,Kategoriya,Birlik,Tannarx,Sotuv narxi,Qoldiq,Min qoldiq,Izoh
 Coca-Cola 1L,,4601234567890,Ichimlik,dona,9000,12000,48,10,
@@ -57,49 +29,32 @@ export function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: 
   const [loading, setLoading] = useState(false);
   const [xato, setXato] = useState<string | null>(null);
 
-  async function yubor(f: File, tekshirish: boolean) {
-    const form = new FormData();
-    form.append("fayl", f);
-    form.append("rejim", rejim);
-    if (tekshirish) form.append("tekshirish", "true");
-    const res = await fetch("/api/products/import", { method: "POST", body: form });
-    return { res, data: await res.json() };
-  }
-
   async function faylTanlandi(e: ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
     setFayl(f);
     setNatija(null);
+    setTekshiruv(null);
     setXato(null);
     setLoading(true);
-    try {
-      const { res, data } = await yubor(f, true);
-      if (!res.ok) setXato(data.error ?? "Faylni o'qib bo'lmadi");
-      else setTekshiruv(data);
-    } catch {
-      setXato("Serverga ulanib bo'lmadi");
-    } finally {
-      setLoading(false);
-    }
+    const javob = await importYubor<Tekshiruv>(f, rejim, true);
+    if (javob.ok) setTekshiruv(javob.data);
+    else setXato(javob.xabar);
+    setLoading(false);
   }
 
   async function tasdiqla() {
     if (!fayl) return;
     setLoading(true);
     setXato(null);
-    try {
-      const { res, data } = await yubor(fayl, false);
-      if (!res.ok) setXato(data.error ?? "Import qilib bo'lmadi");
-      else {
-        setNatija(data);
-        onDone();
-      }
-    } catch {
-      setXato("Serverga ulanib bo'lmadi");
-    } finally {
-      setLoading(false);
+    const javob = await importYubor<Natija>(fayl, rejim, false);
+    if (javob.ok) {
+      setNatija(javob.data);
+      onDone();
+    } else {
+      setXato(javob.xabar);
     }
+    setLoading(false);
   }
 
   function namunaYuklab() {

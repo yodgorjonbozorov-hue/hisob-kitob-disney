@@ -9,7 +9,7 @@ import {
   MAKS_MAHSULOT,
 } from "@/lib/services/mahsulotImport";
 import { dashboardYangilandi } from "@/lib/cache";
-import { xlsxdanCsv } from "@/lib/excel/xlsxOqi";
+import { xlsxdanCsv, XlsxXato } from "@/lib/excel/xlsxOqi";
 
 /** Yuklanadigan faylning chegarasi — 500 qatorli katalog bundan ancha kichik. */
 const MAKS_FAYL = 10 * 1024 * 1024;
@@ -52,7 +52,15 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
       return NextResponse.json({ error: "Fayl juda katta (10 MB dan oshmasin)" }, { status: 400 });
     }
     const xlsx = /\.xlsx$/i.test(fayl.name);
-    const csv = xlsx ? await xlsxdanCsv(await fayl.arrayBuffer()) : await fayl.text();
+    // Buzilgan yoki haddan katta Excel 500 emas, tushunarli 400 bilan qaytadi.
+    let csv: string;
+    try {
+      csv = xlsx ? await xlsxdanCsv(await fayl.arrayBuffer()) : await fayl.text();
+    } catch (e) {
+      const xabar =
+        e instanceof XlsxXato ? e.message : "Faylni o'qib bo'lmadi — buzilgan bo'lishi mumkin";
+      return NextResponse.json({ error: xabar }, { status: 400 });
+    }
     kirish = {
       csv,
       tekshirish: form.get("tekshirish") === "true",

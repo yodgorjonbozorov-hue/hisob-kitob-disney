@@ -431,3 +431,47 @@ test("EXCEL (.xlsx) eksporti qayta o'qilib import qilinadi", async () => {
   assert.equal(qayta.sotuvNarx, asl.sotuvNarx);
   assert.equal(qayta.miqdor, asl.miqdor);
 });
+
+// ---------- Katta/buzilgan Excel serverni osiltirmasin ----------
+
+test("haddan katta Excel PARSE BOSHLANMASDAN rad etiladi", async () => {
+  const { buildMahsulotlarWorkbook } = await import("@/lib/excel/mahsulotlarWorkbook");
+  const { xlsxdanCsv, XlsxXato, zipXmlHajmi } = await import("@/lib/excel/xlsxOqi");
+
+  const qatorlar = await T(() => eksport.listMahsulotEksport(t.business.id));
+  const buffer = await buildMahsulotlarWorkbook(qatorlar);
+
+  // Hajm o'lchagich sog'lom faylning ichki XML hajmini ko'radi.
+  const hajm = zipXmlHajmi(buffer);
+  assert.ok(hajm !== null && hajm > 0, `zipXmlHajmi qaytardi: ${hajm}`);
+
+  // Chegara sun'iy pasaytiriladi — 200 ming qatorli faylni testda yasash shart
+  // emas, muhimi rad etish yo'li: XlsxXato, ExcelJS ishga tushmasdan.
+  await assert.rejects(
+    () => xlsxdanCsv(buffer, { maksXmlHajm: 100 }),
+    (e: unknown) => e instanceof XlsxXato && /juda katta/.test((e as Error).message)
+  );
+});
+
+test("satr chegarasi ulkan CSV matn yasashning oldini oladi", async () => {
+  const ExcelJS = (await import("exceljs")).default;
+  const { xlsxdanCsv } = await import("@/lib/excel/xlsxOqi");
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Katalog");
+  ws.addRow(["Nomi", "Sotuv narxi"]);
+  for (let i = 0; i < 20; i++) ws.addRow([`Tovar ${i}`, 1000 + i]);
+  const buffer = (await wb.xlsx.writeBuffer()) as unknown as ArrayBuffer;
+
+  const csv = await xlsxdanCsv(buffer, { maksSatr: 5 });
+  assert.equal(csv.trim().split("\n").length, 5);
+});
+
+test("zip bo'lmagan 'xlsx' tushunarli xato bilan rad etiladi", async () => {
+  const { xlsxdanCsv, XlsxXato } = await import("@/lib/excel/xlsxOqi");
+  const soxta = new TextEncoder().encode("bu excel emas, oddiy matn").buffer;
+  await assert.rejects(
+    () => xlsxdanCsv(soxta as ArrayBuffer),
+    (e: unknown) => e instanceof XlsxXato
+  );
+});
