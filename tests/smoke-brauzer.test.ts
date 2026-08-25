@@ -350,7 +350,10 @@ test("yangi modul sahifalari to'g'ri sarlavha bilan ochiladi", { skip: sabab }, 
     ["/app", "Boshqaruv paneli"],
     ["/app/tranzaksiyalar", "Kirim va chiqimlar"],
     ["/app/hisobot", "Hisobotlar"],
-    ["/app/ombor", "Ombor"],
+    // "/app/ombor" bu ro'yxatda EMAS: E2E'da aktiv biznes ("Demo Xizmatlar")
+    // ATAYLAB omborsiz (scripts/e2e-tayyorla.mjs) va sahifa /app ga
+    // qaytaradi. U keyingi testda — ombor yuritadigan biznesga o'tib —
+    // tekshiriladi.
     ["/app/tasdiqlash", "Tasdiqlash"],
     ["/app/mijozlar", "Mijozlar"],
     ["/app/hr", "Xodimlar"],
@@ -374,6 +377,33 @@ test("yangi modul sahifalari to'g'ri sarlavha bilan ochiladi", { skip: sabab }, 
 
   await page.context().close();
   assert.deepEqual(xatolar, [], `sarlavhalar mos kelmadi:\n  ${xatolar.join("\n  ")}`);
+});
+
+test("Ombor sahifasi ombor yuritadigan bizneste ochiladi", { skip: sabab }, async () => {
+  /*
+   * Ombor sahifasi ikki shartga bog'liq: OMBOR moduli yoqiq VA aktiv
+   * biznesning `omborli` bayrog'i. E2E'da ular ataylab ikki xil biznesga
+   * bo'lingan (scripts/e2e-tayyorla.mjs): "Demo Xizmatlar" — omborsiz,
+   * "Salyut" — omborli. Shu bois sahifani tekshirishdan oldin aktiv
+   * biznes almashtiriladi.
+   */
+  const page = await yangiSahifa();
+  await kir(page);
+
+  const bizneslar = await sorov(page, "/api/businesses");
+  assert.ok(bizneslar.ok, `bizneslar olinmadi: HTTP ${bizneslar.status}`);
+  const royxat = JSON.parse(bizneslar.matn) as Array<{ id: string; nomi: string; omborli?: boolean }>;
+  const omborli = royxat.find((b) => b.omborli);
+  assert.ok(omborli, `omborli biznes topilmadi: ${royxat.map((b) => b.nomi).join(", ")}`);
+
+  const almashtir = await sorov(page, "/api/me/active-business", { businessId: omborli.id });
+  assert.ok(almashtir.ok, `biznes almashtirilmadi: HTTP ${almashtir.status} — ${almashtir.matn.slice(0, 200)}`);
+
+  await och(page, "/app/ombor");
+  await page.waitForSelector("h1", { timeout: 15_000 });
+  assert.equal((await page.locator("h1").first().innerText()).trim(), "Ombor");
+  await xatosiz(page);
+  await page.context().close();
 });
 
 // ---------- Yozish oqimi ----------
