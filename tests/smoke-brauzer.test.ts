@@ -470,57 +470,85 @@ test("kirim qo'shiladi va ro'yxatda ko'rinadi", { skip: sabab }, async () => {
 
 /**
  * Sahifa ichidan API so'rovi (sessiya cookie'si bilan).
- * `tana` berilsa POST, aks holda GET.
+ * `tana` berilsa POST/PATCH, aks holda GET.
  */
 async function sorov(
   page: Page,
   yol: string,
-  tana?: unknown
+  tana?: unknown,
+  metod: "POST" | "PATCH" = "POST"
 ): Promise<{ ok: boolean; status: number; matn: string }> {
   return page.evaluate(
-    async ([u, b]) => {
+    async ([u, b, m]) => {
       const res = await fetch(u as string, {
-        method: b === null ? "GET" : "POST",
+        method: b === null ? "GET" : (m as string),
         headers: b === null ? {} : { "Content-Type": "application/json" },
         body: b === null ? undefined : JSON.stringify(b),
       });
       return { ok: res.ok, status: res.status, matn: await res.text() };
     },
-    [yol, tana === undefined ? null : tana] as [string, unknown]
+    [yol, tana === undefined ? null : tana, metod] as [string, unknown, string]
   );
 }
 
-/** "N ta faol kassa" qatoridan sonni oladi (Kassadagi pul kartasi). */
-async function faolKassaSoni(page: Page): Promise<number> {
-  const matn = await page.locator("text=/\\d+ ta faol kassa/").first().innerText();
-  const son = Number(matn.match(/(\d+)\s+ta faol kassa/)?.[1]);
-  assert.ok(Number.isFinite(son), `"faol kassa" qatori topilmadi: "${matn}"`);
-  return son;
+/** "Kassada" KPI kartasidagi TO'LIQ summa (title atributidan — ixcham emas). */
+async function kassadaSummasi(page: Page): Promise<string> {
+  // StatCard ildizi — `bg-surface rounded-2xl` (components/ui/StatCard.tsx).
+  // Aynan shu sinf bo'yicha filtrlaymiz: aks holda ota-div'lar ham mos
+  // kelib, boshqa kartaning summasi o'qilib qolardi.
+  const karta = page
+    .locator("div.bg-surface.rounded-2xl")
+    .filter({ has: page.locator("p", { hasText: /^Kassada/ }) })
+    .first();
+  const title = await karta.locator("p.tnum[title]").first().getAttribute("title");
+  assert.ok(title, "\"Kassada\" kartasidagi summa topilmadi");
+  return title;
 }
 
-test("kassa ochilganda dashboard keshi darhol bekor qilinadi", { skip: sabab }, async () => {
+/** "Bugungi holat" blokidagi ko'rsatkich qiymati (dt -> dd). */
+async function bugungiKorsatkich(page: Page, nomi: string): Promise<string> {
+  const qiymat = page.locator("dl div").filter({ has: page.locator("dt", { hasText: nomi }) }).first();
+  const matn = (await qiymat.locator("dd").first().innerText()).trim();
+  assert.ok(matn.length > 0, `"${nomi}" ko'rsatkichi topilmadi`);
+  return matn;
+}
+
+test("kassa nofaol qilinganda dashboard keshi darhol bekor qilinadi", { skip: sabab }, async () => {
   const page = await yangiSahifa();
   await kir(page);
   await och(page, "/app");
 
-  const oldin = await faolKassaSoni(page);
+  const oldin = await kassadaSummasi(page);
 
-  // So'rov SAHIFA ICHIDAN yuboriladi — brauzer sessiya cookie'sini o'zi
-  // qo'shadi (Playwright'ning `page.request` i alohida cookie jar ishlatadi
-  // va 401 qaytarardi).
-  const javob = await sorov(page, "/api/accounts", {
-    nomi: `E2E kassa ${Date.now()}`,
-    turi: "naqd",
+  // Zaxira kassa: biznesda OXIRGI faol kassani nofaol qilib bo'lmaydi
+  // (lib/services/accounts.ts), shuning uchun avval ikkinchisini ochamiz.
+  const yangi = await sorov(page, "/api/accounts", {
+    nomi: `E2E zaxira ${Date.now()}`,
+    turi: "bank",
   });
-  assert.ok(javob.ok, `kassa ochilmadi: HTTP ${javob.status} — ${javob.matn.slice(0, 200)}`);
+  assert.ok(yangi.ok, `zaxira kassa ochilmadi: HTTP ${yangi.status} — ${yangi.matn.slice(0, 200)}`);
+
+  // Puli bor FAOL kassani topamiz — uni nofaol qilsak "Kassada" kamayadi.
+  const royxat = await sorov(page, "/api/accounts?qoldiq=1");
+  assert.ok(royxat.ok, `kassalar olinmadi: HTTP ${royxat.status}`);
+  const kassalar = JSON.parse(royxat.matn) as Array<{ id: string; isActive: boolean; qoldiq: number }>;
+  const nishon = kassalar.find((k) => k.isActive && k.qoldiq !== 0);
+  assert.ok(nishon, "puli bor faol kassa topilmadi — E2E ma'lumoti yetarli emas");
+
+  const ochir = await sorov(page, `/api/accounts/${nishon.id}`, { isActive: false }, "PATCH");
+  assert.ok(ochir.ok, `kassa nofaol qilinmadi: HTTP ${ochir.status} — ${ochir.matn.slice(0, 200)}`);
 
   await och(page, "/app");
-  const keyin = await faolKassaSoni(page);
-  assert.equal(
-    keyin,
-    oldin + 1,
-    "kassa ochilgandan keyin dashboard eski (keshlangan) sonni ko'rsatdi"
-  );
+  const keyin = await kassadaSummasi(page);
+  assert.notEqual(keyin, oldin, "kassa nofaol qilingach dashboard eski (keshlangan) summani ko'rsatdi");
+
+  // Qaytarib faollashtiramiz — summa avvalgi holatga qaytishi kerak
+  // (ikkinchi marta ham kesh bekor qilinadi).
+  const qaytar = await sorov(page, `/api/accounts/${nishon.id}`, { isActive: true }, "PATCH");
+  assert.ok(qaytar.ok, `kassa qaytarilmadi: HTTP ${qaytar.status}`);
+  await och(page, "/app");
+  assert.equal(await kassadaSummasi(page), oldin, "kassa qaytarilgach summa tiklanmadi");
+
   await xatosiz(page);
   await page.context().close();
 });
@@ -530,16 +558,9 @@ test("CRM buyurtmasi 'Bugungi holat' blokini darhol yangilaydi", { skip: sabab }
   await kir(page);
   await och(page, "/app");
 
-  /** "Yangi buyurtmalar" katagi ostidagi "N ta" qatori. */
-  const buyurtmaSoni = async (): Promise<number> => {
-    const katak = page.locator("a", { has: page.locator("text=Yangi buyurtmalar") }).first();
-    const matn = await katak.innerText();
-    const son = Number(matn.match(/(\d+)\s*ta/)?.[1]);
-    assert.ok(Number.isFinite(son), `"Yangi buyurtmalar" katagi o'qilmadi: "${matn}"`);
-    return son;
-  };
-
-  const oldin = await buyurtmaSoni();
+  const oqi = async () => Number((await bugungiKorsatkich(page, "Yangi buyurtma")).match(/(\d+)/)?.[1]);
+  const oldin = await oqi();
+  assert.ok(Number.isFinite(oldin), "\"Yangi buyurtma\" ko'rsatkichi o'qilmadi");
 
   // Buyurtma KIRIM kategoriyasini talab qiladi.
   const katJavob = await sorov(page, "/api/categories?turi=kirim");
@@ -558,7 +579,7 @@ test("CRM buyurtmasi 'Bugungi holat' blokini darhol yangilaydi", { skip: sabab }
 
   await och(page, "/app");
   assert.equal(
-    await buyurtmaSoni(),
+    await oqi(),
     oldin + 1,
     "buyurtmadan keyin 'Bugungi holat' eski (keshlangan) sonni ko'rsatdi"
   );

@@ -26,7 +26,7 @@ let runWithTenant: any;
 let accountsSvc: any;
 let accountsQ: any;
 let dashboard: any;
-let bugunQ: any;
+let panelQ: any;
 let createTenantWithOwner: any;
 let createTransaction: any;
 let createQarz: any;
@@ -65,7 +65,7 @@ before(async () => {
   accountsSvc = await import("@/lib/services/accounts");
   accountsQ = await import("@/lib/queries/accounts");
   dashboard = await import("@/lib/queries/dashboard");
-  bugunQ = await import("@/lib/queries/bugun");
+  panelQ = await import("@/lib/queries/dashboardPanel");
   crm = await import("@/lib/crm/service");
   ({ createTenantWithOwner } = await import("@/lib/services/signup"));
   ({ createTransaction } = await import("@/lib/services/transactionService"));
@@ -103,7 +103,7 @@ after(async () => {
 
 // ---------- 1-2. "Kassadagi pul" ----------
 
-test("getKassaHolati: faol kassalar qoldig'i (kirim jami emas)", async () => {
+test("getKassaXulosa: faol kassalar qoldig'i (kirim jami emas)", async () => {
   await A(async () =>
     createTransaction(tA.user.id, tA.business.id, {
       turi: "kirim", categoryId: kirimCat.id, summa: 1_000_000, sana: BUGUN, accountId: naqd.id,
@@ -120,24 +120,28 @@ test("getKassaHolati: faol kassalar qoldig'i (kirim jami emas)", async () => {
     })
   );
 
-  const holat = await A(async () => accountsQ.getKassaHolati(tA.business.id));
+  const holat = await A(async () => panelQ.getKassaXulosa(tA.business.id));
   // 1 000 000 − 400 000 + 250 000 = 850 000. Kirim jami (1 250 000) EMAS.
-  assert.equal(holat.faolJami, 850_000);
-  assert.equal(holat.faolSoni, 2);
-  assert.equal(holat.nofaolJami, 0);
+  assert.equal(holat.jami, 850_000);
+  assert.equal(holat.kassaSoni, 2);
+  // Turlar kesimi jami bilan mos bo'lishi shart (karta ichidagi qatorlar).
+  assert.equal(
+    holat.bolimlar.reduce((a: number, b: any) => a + b.qoldiq, 0),
+    holat.jami
+  );
 });
 
-test("getKassaHolati: transfer jami qoldiqni o'zgartirmaydi", async () => {
+test("getKassaXulosa: transfer jami qoldiqni o'zgartirmaydi", async () => {
   await A(async () =>
     accountsSvc.createTransfer(tA.business.id, tA.user.id, {
       fromAccountId: naqd.id, toAccountId: plastik.id, summa: 100_000, sana: BUGUN,
     })
   );
-  const holat = await A(async () => accountsQ.getKassaHolati(tA.business.id));
-  assert.equal(holat.faolJami, 850_000, "pul biznes ichida ko'chdi — jami o'zgarmaydi");
+  const holat = await A(async () => panelQ.getKassaXulosa(tA.business.id));
+  assert.equal(holat.jami, 850_000, "pul biznes ichida ko'chdi — jami o'zgarmaydi");
 });
 
-test("getKassaHolati: nofaol kassa asosiy raqamdan chiqadi, lekin yo'qolmaydi", async () => {
+test("getKassaXulosa: NOFAOL kassa qoldig'i jamiga qo'shilmaydi", async () => {
   const eski = await A(async () =>
     accountsSvc.createAccount(tA.business.id, { nomi: "Eski kassa", turi: "bank" })
   );
@@ -148,18 +152,18 @@ test("getKassaHolati: nofaol kassa asosiy raqamdan chiqadi, lekin yo'qolmaydi", 
   );
   await A(async () => accountsSvc.updateAccount(tA.business.id, eski.id, { isActive: false }));
 
-  const holat = await A(async () => accountsQ.getKassaHolati(tA.business.id));
-  assert.equal(holat.faolJami, 850_000, "nofaol kassa 'joriy kassa' raqamiga qo'shilmaydi");
-  assert.equal(holat.faolSoni, 2);
-  assert.equal(holat.nofaolJami, 70_000, "pul yashirilmaydi — alohida qatorda");
-  // Eski `getJamiKassaQoldiq` xatti-harakati O'ZGARMAGAN (proBugun bloki unga tayanadi).
+  const holat = await A(async () => panelQ.getKassaXulosa(tA.business.id));
+  assert.equal(holat.jami, 850_000, "nofaol kassa 'joriy kassa' raqamiga qo'shilmaydi");
+  assert.equal(holat.kassaSoni, 2, "nofaol kassa sanalmaydi");
+  // Eski `getJamiKassaQoldiq` (BARCHA kassalar) xatti-harakati O'ZGARMAGAN —
+  // `proBugun` bloki unga tayanadi, ya'ni 70 000 yo'qolmagan.
   assert.equal(await A(async () => accountsQ.getJamiKassaQoldiq(tA.business.id)), 920_000);
 });
 
-test("getKassaHolati: boshqa tenant raqamlari ko'rinmaydi", async () => {
-  const bHolat = await B(async () => accountsQ.getKassaHolati(tB.business.id));
-  assert.equal(bHolat.faolJami, 0);
-  assert.equal(bHolat.nofaolJami, 0);
+test("getKassaXulosa: boshqa tenant raqamlari ko'rinmaydi", async () => {
+  const bHolat = await B(async () => panelQ.getKassaXulosa(tB.business.id));
+  assert.equal(bHolat.jami, 0);
+  assert.equal(bHolat.kassaSoni, 1, "B faqat O'Z kassasini ko'radi");
 });
 
 // ---------- 3-5. "Bugungi holat" ----------
@@ -173,17 +177,18 @@ test("getBugungiHolat: faqat bugungi kirim/chiqim sanaladi", async () => {
     })
   );
 
-  const holat = await A(async () => bugunQ.getBugungiHolat(tA.business.id, BUGUN, false));
+  const holat = await A(async () => panelQ.getBugungiHolat(tA.business.id, BUGUN, { crm: false, qarz: true }));
   assert.equal(holat.kirim, 1_320_000, "1 000 000 + 250 000 + 70 000");
   assert.equal(holat.chiqim, 400_000);
   assert.equal(holat.sof, 920_000);
-  // Kassa — JORIY holat (bugungi emas): kechagi kirim ham qoldiqda.
-  assert.equal(holat.kassaJami, 9_850_000);
-  assert.equal(holat.kassaSoni, 2);
+  // Kassa qoldig'i bu blokda EMAS — u alohida "Kassada" kartasida
+  // (getKassaXulosa) va JORIY holatni beradi: kechagi kirim ham unda.
+  const kassa = await A(async () => panelQ.getKassaXulosa(tA.business.id));
+  assert.equal(kassa.jami, 9_850_000);
 });
 
 test("getBugungiHolat: qarzga yozilgan savdo alohida, kirimga qo'shilmaydi", async () => {
-  const oldin = await A(async () => bugunQ.getBugungiHolat(tA.business.id, BUGUN, false));
+  const oldin = await A(async () => panelQ.getBugungiHolat(tA.business.id, BUGUN, { crm: false, qarz: true }));
   await A(async () =>
     createQarz({
       businessId: tA.business.id,
@@ -194,11 +199,13 @@ test("getBugungiHolat: qarzga yozilgan savdo alohida, kirimga qo'shilmaydi", asy
       sana: BUGUN,
     })
   );
-  const keyin = await A(async () => bugunQ.getBugungiHolat(tA.business.id, BUGUN, false));
-  assert.equal(keyin.qarzgaYozilgan, 500_000);
-  assert.equal(keyin.qarzSoni, 1);
+  const keyin = await A(async () => panelQ.getBugungiHolat(tA.business.id, BUGUN, { crm: false, qarz: true }));
+  assert.equal(keyin.qarzBugun.summa, 500_000);
+  assert.equal(keyin.qarzBugun.soni, 1);
   assert.equal(keyin.kirim, oldin.kirim, "qarz kirim yozmaydi");
-  assert.equal(keyin.kassaJami, oldin.kassaJami, "qarz kassaga pul qo'ymaydi");
+  // Qarz kassaga pul qo'ymaydi — "Kassada" kartasi o'zgarmaydi.
+  const kassa = await A(async () => panelQ.getKassaXulosa(tA.business.id));
+  assert.equal(kassa.jami, 9_850_000, "qarz kassaga pul qo'ymasligi kerak");
 });
 
 test("getBugungiHolat: CRM o'chiq bo'lsa CRM ko'rsatkichlari qaytarilmaydi", async () => {
@@ -211,15 +218,14 @@ test("getBugungiHolat: CRM o'chiq bo'lsa CRM ko'rsatkichlari qaytarilmaydi", asy
       sana: BUGUN,
     })
   );
-  const ochiq = await A(async () => bugunQ.getBugungiHolat(tA.business.id, BUGUN, false));
+  const ochiq = await A(async () => panelQ.getBugungiHolat(tA.business.id, BUGUN, { crm: false, qarz: true }));
   assert.equal(ochiq.crm, null, "modul yoqilmagan biznesda CRM bloki umuman yo'q");
 });
 
 test("getBugungiHolat: CRM yoqilganda yangi va yutilgan buyurtmalar sanaladi", async () => {
-  const holat = await A(async () => bugunQ.getBugungiHolat(tA.business.id, BUGUN, true));
-  assert.equal(holat.crm.yangiSoni, 1);
-  assert.equal(holat.crm.yangiSumma, 300_000);
-  assert.equal(holat.crm.yutilganSoni, 0, "hali hech biri yutilmagan");
+  const holat = await A(async () => panelQ.getBugungiHolat(tA.business.id, BUGUN, { crm: true, qarz: true }));
+  assert.equal(holat.crm.yangi, 1);
+  assert.equal(holat.crm.yutilgan, 0, "hali hech biri yutilmagan");
 
   // Buyurtmani "Yutildi" (WON) bosqichiga ko'chiramiz.
   const won = await A(async () =>
@@ -232,18 +238,19 @@ test("getBugungiHolat: CRM yoqilganda yangi va yutilgan buyurtmalar sanaladi", a
     crm.moveDeal({ businessId: tA.business.id, dealId: deal.id, stageId: won.id, userId: tA.user.id })
   );
 
-  const keyin = await A(async () => bugunQ.getBugungiHolat(tA.business.id, BUGUN, true));
-  assert.equal(keyin.crm.yutilganSoni, 1);
+  const keyin = await A(async () => panelQ.getBugungiHolat(tA.business.id, BUGUN, { crm: true, qarz: true }));
+  assert.equal(keyin.crm.yutilgan, 1);
   assert.equal(keyin.crm.yutilganSumma, 300_000);
 });
 
 test("getBugungiHolat: boshqa tenantda hammasi nol", async () => {
-  const holat = await B(async () => bugunQ.getBugungiHolat(tB.business.id, BUGUN, true));
+  const holat = await B(async () => panelQ.getBugungiHolat(tB.business.id, BUGUN, { crm: true, qarz: true }));
   assert.equal(holat.kirim, 0);
   assert.equal(holat.chiqim, 0);
-  assert.equal(holat.kassaJami, 0);
-  assert.equal(holat.qarzgaYozilgan, 0);
-  assert.equal(holat.crm.yangiSoni, 0);
+  assert.equal(holat.qarzBugun.summa, 0);
+  assert.equal(holat.crm.yangi, 0);
+  const bKassa = await B(async () => panelQ.getKassaXulosa(tB.business.id));
+  assert.equal(bKassa.jami, 0);
 });
 
 // ---------- 6. TOP 5 kategoriya ----------
@@ -341,14 +348,14 @@ test("davriy hisobot: boshqa tenantda nol", async () => {
 test("kesh: o'ralgan funksiyalar o'ralmagani bilan bir xil natija beradi", async () => {
   const kesh = await import("@/lib/queries/dashboardCached");
   const [xomKassa, keshKassa] = await A(async () => [
-    await accountsQ.getKassaHolati(tA.business.id),
-    await kesh.getKassaHolatiKesh(tA.business.id),
+    await panelQ.getKassaXulosa(tA.business.id),
+    await kesh.getKassaXulosaKesh(tA.business.id),
   ]);
   assert.deepEqual(keshKassa, xomKassa);
 
   const [xomBugun, keshBugun] = await A(async () => [
-    await bugunQ.getBugungiHolat(tA.business.id, BUGUN, true),
-    await kesh.getBugungiHolatKesh(tA.business.id, BUGUN, true),
+    await panelQ.getBugungiHolat(tA.business.id, BUGUN, { crm: true, qarz: true }),
+    await kesh.getBugungiHolatKesh(tA.business.id, BUGUN, { crm: true, qarz: true }),
   ]);
   assert.deepEqual(keshBugun, xomBugun);
 });
@@ -356,20 +363,20 @@ test("kesh: o'ralgan funksiyalar o'ralmagani bilan bir xil natija beradi", async
 test("kesh: BOSHQA TENANT ma'lumotini hech qachon qaytarmaydi", async () => {
   const kesh = await import("@/lib/queries/dashboardCached");
   // A'da pul bor (yuqoridagi testlar yozgan), B — bo'sh.
-  const a = await A(async () => kesh.getKassaHolatiKesh(tA.business.id));
-  const b = await B(async () => kesh.getKassaHolatiKesh(tB.business.id));
+  const a = await A(async () => kesh.getKassaXulosaKesh(tA.business.id));
+  const b = await B(async () => kesh.getKassaXulosaKesh(tB.business.id));
   // A'da harakat bo'lgan (qoldiq manfiy ham bo'lishi mumkin — yuqoridagi
   // testlar chiqim yozgan), B esa butunlay toza.
-  assert.notEqual(a.faolJami, 0, "A tenantda kassa harakati bo'lishi kerak");
-  assert.equal(b.faolJami, 0, "B tenantga A'ning qoldig'i sizib o'tdi");
-  assert.equal(b.faolSoni, 1, "B faqat O'Z kassasini ko'rishi kerak");
+  assert.notEqual(a.jami, 0, "A tenantda kassa harakati bo'lishi kerak");
+  assert.equal(b.jami, 0, "B tenantga A'ning qoldig'i sizib o'tdi");
+  assert.equal(b.kassaSoni, 1, "B faqat O'Z kassasini ko'rishi kerak");
 
-  const aBugun = await A(async () => kesh.getBugungiHolatKesh(tA.business.id, BUGUN, true));
-  const bBugun = await B(async () => kesh.getBugungiHolatKesh(tB.business.id, BUGUN, true));
+  const aBugun = await A(async () => kesh.getBugungiHolatKesh(tA.business.id, BUGUN, { crm: true, qarz: true }));
+  const bBugun = await B(async () => kesh.getBugungiHolatKesh(tB.business.id, BUGUN, { crm: true, qarz: true }));
   assert.ok(aBugun.kirim > 0);
   assert.equal(bBugun.kirim, 0, "B tenantga A'ning kirimi sizib o'tdi");
-  assert.equal(bBugun.qarzgaYozilgan, 0);
-  assert.equal(bBugun.crm.yangiSoni, 0);
+  assert.equal(bBugun.qarzBugun.summa, 0);
+  assert.equal(bBugun.crm.yangi, 0);
 });
 
 test("kesh: BITTA tenant ichidagi ikki biznes aralashmaydi", async () => {
@@ -383,23 +390,23 @@ test("kesh: BITTA tenant ichidagi ikki biznes aralashmaydi", async () => {
     prisma.account.create({ data: { businessId: ikkinchi.id, nomi: "Naqd", turi: "naqd" } })
   );
 
-  const birinchi = await A(async () => kesh.getKassaHolatiKesh(tA.business.id));
-  const boshqa = await A(async () => kesh.getKassaHolatiKesh(ikkinchi.id));
-  assert.notEqual(birinchi.faolJami, 0);
-  assert.equal(boshqa.faolJami, 0, "ikkinchi biznes birinchisining qoldig'ini ko'rdi");
-  assert.equal(boshqa.faolSoni, 1);
+  const birinchi = await A(async () => kesh.getKassaXulosaKesh(tA.business.id));
+  const boshqa = await A(async () => kesh.getKassaXulosaKesh(ikkinchi.id));
+  assert.notEqual(birinchi.jami, 0);
+  assert.equal(boshqa.jami, 0, "ikkinchi biznes birinchisining qoldig'ini ko'rdi");
+  assert.equal(boshqa.kassaSoni, 1);
 
-  const bugun = await A(async () => kesh.getBugungiHolatKesh(ikkinchi.id, BUGUN, true));
+  const bugun = await A(async () => kesh.getBugungiHolatKesh(ikkinchi.id, BUGUN, { crm: true, qarz: true }));
   assert.equal(bugun.kirim, 0);
-  assert.equal(bugun.kassaJami, 0);
+  assert.equal(bugun.qarzBugun.summa, 0);
 });
 
 test("kesh: tenant konteksti bo'lmasa XATO beradi (jimgina qaytarmaydi)", async () => {
   // Fail-closed: kalitni tenantId'siz qurishdan ko'ra yiqilgan ma'qul.
   const kesh = await import("@/lib/queries/dashboardCached");
-  await assert.rejects(() => kesh.getKassaHolatiKesh(tA.business.id), /Tenant konteksti/);
+  await assert.rejects(() => kesh.getKassaXulosaKesh(tA.business.id), /Tenant konteksti/);
   await assert.rejects(
-    () => kesh.getBugungiHolatKesh(tA.business.id, BUGUN, true),
+    () => kesh.getBugungiHolatKesh(tA.business.id, BUGUN, { crm: true, qarz: true }),
     /Tenant konteksti/
   );
 });
@@ -408,14 +415,14 @@ test("kesh: yangi yozuvdan keyin qayta hisoblangan qiymat o'zgaradi", async () =
   // Keshning O'ZI Next runtime'ida bekor qilinadi; bu yerda esa bekor
   // qilingandan KEYIN qaytadigan qiymat to'g'ri ekani tekshiriladi.
   const kesh = await import("@/lib/queries/dashboardCached");
-  const oldin = await A(async () => kesh.getKassaHolatiKesh(tA.business.id));
+  const oldin = await A(async () => kesh.getKassaXulosaKesh(tA.business.id));
   await A(async () =>
     createTransaction(tA.user.id, tA.business.id, {
       turi: "kirim", categoryId: kirimCat.id, summa: 33_000, sana: BUGUN, accountId: naqd.id,
     })
   );
-  const keyin = await A(async () => kesh.getKassaHolatiKesh(tA.business.id));
-  assert.equal(keyin.faolJami, oldin.faolJami + 33_000);
+  const keyin = await A(async () => kesh.getKassaXulosaKesh(tA.business.id));
+  assert.equal(keyin.jami, oldin.jami + 33_000);
 });
 
 // ---------- 9. Kesh bekor qilinishi: statik qo'riqchi ----------

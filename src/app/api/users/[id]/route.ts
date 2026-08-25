@@ -7,6 +7,8 @@ import { updateUserSchema } from "@/lib/validation/user";
 import { hashPassword } from "@/lib/auth/password";
 import { requirePro } from "@/lib/billing/pro";
 import { biznesIdlariniHalQil, biriktiruvlarniYangila, birlamchiBiznes } from "@/lib/services/userBiznes";
+import { xodimHimoyasi } from "@/lib/services/userGuard";
+import { xodimniOqi } from "@/lib/queries/xodimlar";
 
 const USER_SELECT = {
   id: true,
@@ -37,7 +39,14 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
 
   const existing = await prisma.user.findUnique({
     where: { id: params.id },
-    select: { rol: true, businessId: true, login: true, bizneslar: { select: { businessId: true } } },
+    select: {
+      id: true,
+      rol: true,
+      isActive: true,
+      businessId: true,
+      login: true,
+      bizneslar: { select: { businessId: true } },
+    },
   });
   if (!existing) {
     return NextResponse.json({ error: "Foydalanuvchi topilmadi" }, { status: 404 });
@@ -50,10 +59,14 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
   // null — maxsus roldan chiqarish (joriy/berilgan tizim roli qoladi).
   let roleData: { roleId?: string | null } = {};
   if (roleId !== undefined) {
-    requirePro(tenant);
     if (roleId === null) {
+      // MAXSUS ROLDAN CHIQARISH uchun PRO TALAB QILINMAYDI: bu imtiyoz
+      // bermaydi, aksincha olib tashlaydi. Ilgari bu yerda ham `requirePro`
+      // turardi va tarifi tushgan mijoz xodimini umuman tahrirlay olmasdi
+      // (har saqlashda `roleId: null` yuboriladi) — 403 bilan qulflanardi.
       roleData = { roleId: null };
     } else {
+      requirePro(tenant);
       const role = await prisma.role.findFirst({
         where: { id: roleId, deletedAt: null, isActive: true },
         select: { id: true, bazaRol: true },
@@ -83,6 +96,16 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
   }
   const effectiveRol = rol ?? existing.rol;
 
+  // QULFLANIB QOLISHDAN HIMOYA (lib/services/userGuard.ts):
+  //  · o'zini nofaollashtirish / o'zidan boshqaruv rolini olib tashlash;
+  //  · kompaniyadagi OXIRGI faol direktorni boshqaruvdan chiqarish.
+  // Rol maxsus roldan (`roleId`) kelib chiqqan bo'lsa ham shu yerda — yuqorida
+  // `rol` allaqachon `role.bazaRol` bilan almashtirilgan.
+  await xodimHimoyasi(user.userId, existing, {
+    yangiRol: rol,
+    yangiFaol: rest.isActive,
+  });
+
   // Bizneslarni rol asosida hal qilamiz (ko'p-bizneslik — lib/services/userBiznes.ts):
   //  - CASHIER → kamida bitta biznes majburiy.
   //  - SELLER → ixtiyoriy (biriktirilsa yozuvlari faqat o'sha bizneslarga tushadi).
@@ -100,7 +123,7 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
         : [],
   });
 
-  const updated = await prisma.user.update({
+  await prisma.user.update({
     where: { id: params.id },
     data: {
       ...rest,
@@ -109,14 +132,26 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
       businessId: birlamchiBiznes(biznesIdlar),
       ...roleData,
       ...overrideData,
-      ...(parol ? { parolHash: await hashPassword(parol) } : {}),
+      // PAROLNI DIREKTOR QO'YSA — u VAQTINCHALIK. Xodim birinchi kirishida
+      // o'zining parolini qo'yishi majburiy bo'ladi (src/app/app/layout.tsx
+      // `mustChangePassword` bilan /parol-ozgartirish ga yo'naltiradi), ya'ni
+      // boshqa odam bilgan parol uzoq yashamaydi. O'z parolini shu yo'l bilan
+      // o'zgartirgan boshqaruvchiga bu talab qo'yilmaydi — u parolni allaqachon
+      // o'zi tanladi.
+      ...(parol
+        ? {
+            parolHash: await hashPassword(parol),
+            mustChangePassword: params.id !== user.userId,
+          }
+        : {}),
     },
     select: USER_SELECT,
   });
 
   await biriktiruvlarniYangila(params.id, biznesIdlar);
 
-  return NextResponse.json({ ...updated, bizneslar: biznesIdlar.map((b) => ({ businessId: b })) });
+  // Biriktiruvlar yozilgandan KEYIN o'qiladi (biznes nomlari bilan).
+  return NextResponse.json(await xodimniOqi(params.id));
 });
 
 /**
@@ -132,8 +167,14 @@ export const DELETE = withTenant<{ params: { id: string } }>(async (request, { p
     return NextResponse.json({ error: "O'zingizni o'chira olmaysiz" }, { status: 400 });
   }
 
-  const target = await prisma.user.findUnique({ where: { id }, select: { id: true, ism: true, login: true } });
+  const target = await prisma.user.findUnique({
+    where: { id },
+    select: { id: true, ism: true, login: true, rol: true, isActive: true },
+  });
   if (!target) return NextResponse.json({ error: "Foydalanuvchi topilmadi" }, { status: 404 });
+
+  // Oxirgi direktorni o'chirish kompaniyani boshqaruvsiz qoldiradi.
+  await xodimHimoyasi(user.userId, target, { ochirish: true });
 
   const txCount = await prisma.transaction.count({ where: { userId: id } });
   if (txCount > 0) {
