@@ -1694,3 +1694,13 @@ ALTER TABLE "SupportMessage" ADD CONSTRAINT "SupportMessage_muallifId_fkey" FORE
 -- (scripts/pg-migratsiya.mjs har generatsiyada qo'shib qo'yadi.)
 -- ---------------------------------------------------------------------------
 CREATE INDEX "User_login_lower_idx" ON "User" (LOWER("login"));
+
+-- ---------------------------------------------------------------------------
+-- QO'LDA QO'SHILGAN: kategoriya nomining registrga BEFARQ yagonaligi.
+-- Sxemadagi @@unique([nomi, turi, businessId]) registrga sezgir, ya'ni
+-- "Bantik" va "bantik" ikki alohida kategoriya bo'lib qolardi. Ifodali
+-- indeksni Prisma sxemasi ifodalay olmaydi — SQLite yo'li migratsiya
+-- 20260825130000_kategoriya_registrsiz_unique da, Postgres yo'li shu yerda.
+-- ---------------------------------------------------------------------------
+CREATE UNIQUE INDEX "Category_businessId_turi_nomi_registrsiz_key"
+  ON "Category" ("businessId", "turi", LOWER(TRIM("nomi")));
