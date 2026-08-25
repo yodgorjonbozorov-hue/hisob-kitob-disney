@@ -3782,3 +3782,86 @@ ustiga olib borish bilan aynan yashirilgan summa ko'rinib qolardi.
 Test: `tests/smoke-brauzer.test.ts` — qayta yuklashda `domcontentloaded`
 holatida ham summa yashirin qolishi tekshiriladi (ya'ni serverdan kelgan
 HTML'da yo'q).
+
+## CRM — kunlik buyurtmalar va Kirim bilan bitta hisob-kitob (2026-08-25)
+
+CRM "bitimlar doskasi" edi: bitimning kategoriyasi yo'q, sanasi yo'q, kirim
+esa QOTIRILGAN "Sotuv" kategoriyasiga yozilardi. Ya'ni Disney Navoiy uchun
+buyurtma "Onajon" bo'lsa ham, Kirimdagi kategoriya kesimida u "Sotuv"
+ichida ko'rinardi — CRM bir haqiqatni, Kirim boshqasini ko'rsatardi.
+Dublikat kirimga qarshi himoya ham faqat KODDA edi (`if (!deal.transactionId)`),
+bazada hech qanday cheklov yo'q edi.
+
+### Kategoriya manbai BITTA
+
+CRM o'zining kategoriya tizimini qurmaydi — `Deal.categoryId` to'g'ridan-to'g'ri
+Kirim modulining `Category` jadvaliga FK bilan bog'landi (faqat `turi="kirim"`,
+xizmat qatlamida ham, API'da ham tekshiriladi). Buyurtma kirimga
+o'tkazilganda tranzaksiya AYNAN o'sha kategoriya bilan yoziladi, shuning
+uchun Kirimdagi kategoriya filtri CRM yozuvlarini alohida ish qilmasdan
+qamrab oladi (`tests/crm.test.ts` da tekshiriladi).
+
+### Dublikat kirim: himoya BAZADA
+
+`Deal.transactionId` endi `@unique` va `Transaction` ga FK (`SET NULL`).
+Uch qatlam:
+
+1. **Baza** — UNIQUE indeks + tranzaksiya ichida
+   `updateMany({ where: { transactionId: null } })`. Shart bajarilmasa 0 qator
+   yangilanadi va butun `runBusinessTx` bekor qilinadi, ya'ni yuqorida
+   yaratilgan kirim ham bazaga TUSHMAYDI. Ikki so'rov bir vaqtda kelsa
+   ikkinchisi shu yerda to'xtaydi.
+2. **Xizmat qatlami** — boshida ochiq tekshiruv (tushunarli xato matni).
+3. **Frontend** — tugma o'chadi, "🟢 Kirim yozilgan" va yozuvga havola.
+
+Uchinchisi faqat qulaylik: test ilova kodini chetlab o'tib to'g'ridan-to'g'ri
+`rawPrisma.deal.update` bilan ikkinchi buyurtmani o'sha kirimga bog'lashga
+urinadi va UNIQUE cheklovga urilishini tekshiradi.
+
+Migratsiya `Deal` jadvalini qayta quradi (SQLite'da mavjud ustunga FK
+qo'shishning boshqa yo'li yo'q). UNIQUE indeksdan OLDIN ehtimoliy
+dublikatlar tozalanadi — eski kodda ular paydo bo'lmasligi kerak edi, lekin
+bazada cheklov bo'lmagani uchun buni kafolatlab bo'lmasdi; migratsiya
+"UNIQUE constraint failed" bilan yarim yo'lda to'xtamasin.
+
+### Pul faqat bitta yo'ldan yoziladi
+
+`moveDeal` ichidagi kirim yozish kodi olib tashlandi — u endi
+`lib/crm/kirim.ts` dagi `kirimgaKochirish` ni chaqiradi. Dublikat himoyasi,
+kategoriya tanlash va kunlik hisobot sinxroni YAGONA joyda tursin. Kanbanda
+"Yutildi" ga sudrab o'tkazish ham endi kirimni jimgina yozmaydi: tasdiq
+oynasi ochiladi (summa va kategoriya ko'rinib turadi). Pul yozadigan amal
+sudrab tashlash bilan bo'lmasin.
+
+`kunlikSinxron` ATAYLAB tranzaksiyadan TASHQARIDA chaqiriladi — u o'zi
+`runBusinessTx` ochadi, ichkarida chaqirilsa SQLite yozuv qulfida deadlock
+bo'lardi (`transactionService.createTransaction` dagi bilan bir xil sabab).
+
+### Statistika: summa yozuvning O'ZIDAN
+
+`lib/crm/statistika.ts` — "Bugungi buyurtmalar" va kategoriya kesimi.
+"Kirimga o'tgan" summa buyurtmaning `summa` sidan EMAS, bog'langan
+tranzaksiyadan olinadi (va `deletedAt` bo'lsa hisobga kirmaydi). Aks holda
+buyurtma summasi kirim yozilgandan keyin tahrirlansa ikki raqam ajralib
+ketardi. Shu sababdan API kirim yozilgan buyurtmaning summasi va
+kategoriyasini o'zgartirishni ham rad etadi.
+
+### Kirim ro'yxatida "CRM" belgisi
+
+`listTransactions` ga `crmBuyurtma` bog'lanishi qo'shildi — yozuv CRM
+buyurtmasidan kelgan bo'lsa ro'yxatda `CRM` belgisi ko'rinadi. Boshqa hech
+nima o'zgarmaydi: yozuv oddiy kirim kabi tahrirlanadi, o'chiriladi,
+hisobotlarga va kunlik hisobotga kiradi.
+
+### Fayllar
+
+Yangi: `lib/crm/kirim.ts`, `lib/crm/statistika.ts`, `lib/validation/crm.ts`,
+`api/crm/deals/[id]/kirim/route.ts`, `app/crm/{turlar,BuyurtmaKarta,
+BuyurtmaModal,BuyurtmaSheet,KirimTasdiq,BugungiPanel}.tsx`.
+Har komponent 250 satrdan qisqa (eng kattasi — 199).
+
+Testlar: `npm run test:crm` (19 ta). Qo'shimcha tekshirildi —
+`test:isolation`, `test:izolyatsiya-royxati`, `test:backup`, `test:postgres`,
+`test:migratsiya`, `test:apply-oqimi`, `test:agregat`, `test:kunlik`,
+`test:kategoriya`, `test:atomik`, `test:soft-delete`, `test:visibility`,
+`test:tasks`, `test:mijozlar` — hammasi yashil, `npm run build` o'tdi.
