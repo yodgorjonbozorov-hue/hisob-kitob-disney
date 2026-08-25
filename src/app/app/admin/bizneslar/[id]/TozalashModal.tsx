@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import type { BusinessDTO } from "./turlar";
+
 
 /**
  * BOSHLANG'ICH HOLATGA QAYTARISH — tasdiqlash oynasi.
@@ -17,7 +17,7 @@ export function TozalashModal({
   onClose,
   onDone,
 }: {
-  biznes: BusinessDTO;
+  biznes: { id: string; nomi: string };
   onClose: () => void;
   onDone: (xabar: string) => void;
 }) {
