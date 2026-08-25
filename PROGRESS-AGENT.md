@@ -4478,6 +4478,66 @@ Test: `npm run test:kategoriya-boshqaruv` (19 ta) — dublikat (registr,
 bo'shliq, poyga), rename tarixi, nofaollashtirish/faollashtirish, tur
 o'zgarishi, tizim himoyasi, IDOR va RBAC, statistika.
 
+## Davr yakuni faqat direktorga; to'lov taqsimoti olib tashlandi (2026-08-25)
+
+Loyiha egasi ikki narsani so'radi: (1) Kirim/Chiqim sahifasidagi to'lov
+taqsimoti qatorlari (Naqd / Click / Karta / Qarz — kirim va chiqim bo'yicha)
+kerak emas; (2) Jami kirim, Jami chiqim va Sof foyda FAQAT direktorga
+ko'rinsin.
+
+### Nima o'zgardi
+
+`SummaryBar` endi faqat uchta kartadan iborat: Kirim, Chiqim, Sof.
+Taqsimot qatorlari (`Qator` komponenti) butunlay olib tashlandi.
+
+Blok `isManager(currentUserRol)` sharti bilan render qilinadi. Kassir va
+sotuvchi uni umuman ko'rmaydi. Bu shunchaki oyna emas: server ham ularga
+faqat O'Z yozuvlarini beradi (`transactionScopeUserId`), ya'ni bu raqamlar
+ularga baribir biznesning to'liq manzarasini bermasdi — endi esa yarim
+haqiqatni ko'rsatadigan blok umuman chiqmaydi.
+
+### O'lik kod olib tashlandi
+
+Taqsimot ko'rsatilmagach, uni tayyorlaydigan hisob-kitob ham keraksiz
+qoldi. Har sahifa yuklanishida bekorga ketadigan uchta so'rov o'chirildi:
+
+1. `listTransactions` dagi `guruhSums` (`groupBy` by turi+tolovTuri+accountId)
+   va undan chiqadigan `totals.taqsimot`. `naqdKirim/clickKirim/qarzKirim`
+   avvalgidek joyida — ularga boshqa ekranlar bog'langan.
+2. `page.tsx` dagi `prisma.debt.aggregate` (qarz yozuvlari jami).
+3. `page.tsx` dagi `prisma.dailyTransaction.aggregate` (kunlik hisobotdagi
+   qarz tushumlari) va uni o'rab turgan `isModuleOnForTenant(KUNLIK)` tekshiruvi.
+
+`hideProfit` bayrog'i ham o'chdi: u faqat sotuvchidan "Sof" ni yashirish
+uchun edi, endi butun blok direktorga qulflangan.
+
+`lib/tolovBolimi.ts` dagi `tolovGuruhi` / `tolovGuruhiWhere` QOLDI — ular
+"To'lov" filtrida va ro'yxatdagi belgida ishlatiladi.
+
+`loading.tsx` skeletidan "Davr yakuni" bloki olib tashlandi: skelet rolni
+bilmaydi, uni har kimga ko'rsatib keyin yo'qotish kassirda maket sakrashiga
+olib kelardi.
+
+Fayllar: `SummaryBar.tsx`, `TransactionsClient.tsx`, `page.tsx`,
+`loading.tsx`, `src/lib/queries/transactions.ts`.
+
+**Sxema o'zgarmadi, migratsiya yo'q.**
+
+### Test
+
+`test:kirim-chiqim` taqsimot testlari o'rniga davr yakuni testlariga
+almashtirildi (jami qarzsiz to'plamdan, filtrga bo'ysunadi) — 12 ta.
+`test:visibility` `totals` shakli asl holiga qaytdi.
+
+Brauzerda ikki rol bilan tekshirildi (1440 va 375px): direktorda Kirim /
+Chiqim / Sof kartalari bor, taqsimot qatorlari yo'q; kassirda blok umuman
+ko'rinmaydi, sahifa filtrlardan boshlanadi. Gorizontal siljish va JS
+xatosi yo'q.
+
+O'tdi: kirim-chiqim, visibility, isolation, qarz, tolov-taqsimoti,
+kategoriya, soft-delete, csv-import, kunlik, agregat, modules, crm,
+tasdiqlash, kop-biznes, selos-kg, smoke — hammasi yashil, build ham.
+
 ---
 
 ## QARZLAR MODULI — to'lov taqsimoti, kategoriya atributsiyasi va mobil UX (2026-08-25)

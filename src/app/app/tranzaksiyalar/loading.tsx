@@ -2,8 +2,11 @@ import { Skeleton, SkeletonFilters, SkeletonRows } from "@/components/ui/Skeleto
 
 /**
  * Kirim/Chiqim skeleti — sahifaning HAQIQIY tuzilishini takrorlaydi:
- * sarlavha + amal tugmalari, davr yakuni, filtr paneli, ro'yxat.
- * Shu tufayli ma'lumot kelganda maket "sakramaydi".
+ * sarlavha + amal tugmalari, filtr paneli, ro'yxat.
+ *
+ * "Davr yakuni" bloki ATAYLAB yo'q: u faqat direktorga ko'rinadi, skelet
+ * esa rolni bilmaydi. Uni har kimga ko'rsatib keyin yo'qotish — kassirda
+ * maket sakrashi va bir lahzalik "nimadir bor edi" taassuroti demak.
  */
 export default function Loading() {
   return (
@@ -14,16 +17,6 @@ export default function Loading() {
           <Skeleton className="h-11 w-24 rounded-lg" />
           <Skeleton className="h-11 w-24 rounded-lg" />
         </div>
-      </div>
-      {/* Davr yakuni: uchta karta + taqsimot qatorlari */}
-      <div className="bg-surface border border-line rounded-2xl p-4 space-y-3">
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          <Skeleton className="h-14 rounded-xl" />
-          <Skeleton className="h-14 rounded-xl" />
-          <Skeleton className="h-14 rounded-xl" />
-        </div>
-        <Skeleton className="h-4 w-3/4" />
-        <Skeleton className="h-4 w-2/3" />
       </div>
       <SkeletonFilters soni={4} />
       <div className="bg-surface border border-line rounded-2xl p-5">

@@ -1,14 +1,15 @@
 /**
- * KIRIM / CHIQIM SAHIFASI — yangi filtrlar va davr yakuni taqsimoti.
+ * KIRIM / CHIQIM SAHIFASI — yangi filtrlar va davr yakuni.
  *
- * Sahifa qayta ishlanganda uchta yangi narsa qo'shildi va ularning har biri
- * xato bo'lsa raqamlar yolg'on chiqadi:
+ * Sahifa qayta ishlanganda qo'shilgan narsalar, ularning har biri xato
+ * bo'lsa raqamlar yolg'on chiqadi:
  *
  *   1. TO'LOV GURUHI filtri (naqd | click | karta | qarz) — guruhlar
  *      KESISHMASLIGI va butun to'plamni QOPLASHI shart, aks holda
  *      "Naqd" ni bosgan odam yozuvning bir qismini umuman ko'rmay qoladi.
- *   2. `totals.taqsimot` — kirim va chiqim taqsimoti ALOHIDA. Ular
- *      aralashsa, ekranda "Naqd 12 mln" degan ma'nosiz raqam paydo bo'ladi.
+ *   2. Davr yakuni (Jami kirim / chiqim / Sof) — qarzsiz to'plamdan va
+ *      joriy FILTRGA bo'ysunadi. Bu raqamlar sahifada FAQAT direktorga
+ *      ko'rsatiladi, lekin ular baribir to'g'ri hisoblanishi kerak.
  *   3. "Kim kiritdi" filtri — u KO'RINUVCHANLIK chegarasini KENGAYTIRMASLIGI
  *      shart: xodim `xodimId` yuborib boshqa xodimning yozuvlarini ko'ra
  *      olmasligi kerak (bu xavfsizlik talabi, qulaylik emas).
@@ -179,30 +180,26 @@ test("tolovGuruhi: plastik va bank 'karta' guruhida, qarz alohida", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. Davr yakuni taqsimoti
+// 2. Davr yakuni (faqat direktorga ko'rsatiladi, lekin to'g'ri bo'lishi shart)
 // ---------------------------------------------------------------------------
 
-test("taqsimot: kirim va chiqim ARALASHMAYDI", async () => {
+test("jami kirim/chiqim QARZSIZ to'plamdan hisoblanadi", async () => {
   const r = await royxat();
-  assert.deepEqual(r.totals.taqsimot.kirim, { naqd: 170, click: 200, karta: 50 });
-  assert.deepEqual(r.totals.taqsimot.chiqim, { naqd: 40, click: 60, karta: 10 });
-  assert.equal(r.totals.taqsimot.qarz, 500, "qarz alohida — sofga kirmaydi");
-});
-
-test("taqsimot yig'indisi qarzsiz jami bilan AYNAN teng", async () => {
-  const r = await royxat();
-  const k = r.totals.taqsimot.kirim;
-  const c = r.totals.taqsimot.chiqim;
-  assert.equal(k.naqd + k.click + k.karta, r.totals.jamiKirim, "kirim yig'indisi");
-  assert.equal(c.naqd + c.click + c.karta, r.totals.jamiChiqim, "chiqim yig'indisi");
+  // Kirim: 100 + 200 + 30 + 20 + 70 = 420. Qarzga yozilgan 500 KIRMAYDI.
+  assert.equal(r.totals.jamiKirim, 420, "qarz (500) jamiga kirmaydi");
+  assert.equal(r.totals.jamiChiqim, 110);
+  assert.equal(r.totals.sof, 310);
   assert.equal(r.totals.sof, r.totals.jamiKirim - r.totals.jamiChiqim);
-  assert.equal(r.totals.jamiKirim, 420, "qarz (500) jamiga KIRMAYDI");
 });
 
-test("turi filtri qo'yilsa qarama-qarshi tomon taqsimoti bo'sh bo'ladi", async () => {
+test("davr yakuni FILTRGA bo'ysunadi", async () => {
   const faqatChiqim = await royxat({ turi: "chiqim" });
-  assert.deepEqual(faqatChiqim.totals.taqsimot.kirim, { naqd: 0, click: 0, karta: 0 });
-  assert.deepEqual(faqatChiqim.totals.taqsimot.chiqim, { naqd: 40, click: 60, karta: 10 });
+  assert.equal(faqatChiqim.totals.jamiKirim, 0);
+  assert.equal(faqatChiqim.totals.jamiChiqim, 110);
+
+  const faqatNaqd = await royxat({ tolov: "naqd" });
+  assert.equal(faqatNaqd.totals.jamiKirim, 170, "naqd kirim: 100 + 70");
+  assert.equal(faqatNaqd.totals.jamiChiqim, 40);
 });
 
 // ---------------------------------------------------------------------------
@@ -297,10 +294,11 @@ test("tez kategoriyalar xodim uchun faqat O'Z tarixidan", async () => {
 // 7. Sahifalash — filtr butun to'plam bo'yicha ishlaydi
 // ---------------------------------------------------------------------------
 
-test("sahifalash: jami va taqsimot sahifaga bog'liq EMAS", async () => {
+test("sahifalash: jami sahifaga bog'liq EMAS", async () => {
   const birinchi = await royxat({ page: 1, pageSize: 2 });
   const ikkinchi = await royxat({ page: 2, pageSize: 2 });
   assert.equal(birinchi.items.length, 2);
   assert.equal(birinchi.total, ikkinchi.total);
-  assert.deepEqual(birinchi.totals.taqsimot, ikkinchi.totals.taqsimot);
+  assert.equal(birinchi.totals.jamiKirim, ikkinchi.totals.jamiKirim);
+  assert.equal(birinchi.totals.sof, ikkinchi.totals.sof);
 });
