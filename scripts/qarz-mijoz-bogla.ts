@@ -33,6 +33,11 @@
  *
  * IDEMPOTENT: faqat `contactId = null` yozuvlar o'qiladi, shuning uchun
  * qayta ishga tushirish xavfsiz.
+ *
+ * LOG MAXFIYLIGI. Repozitoriya OMMAVIY va GitHub Actions loglari ham ochiq,
+ * shuning uchun chiqishda MIJOZ ISMI ham, BIZNES NOMI ham YOZILMAYDI —
+ * faqat sonlar va opaque IDlar. Ikkilanishlarni hal qilish uchun `debtId`
+ * yetarli: egasi uni ilovada ochib ko'radi.
  */
 import "dotenv/config";
 import { rawPrisma } from "@/lib/db/rawPrisma";
@@ -45,7 +50,8 @@ function ismKalit(ism: string): string {
 
 interface Hisobot {
   boglandi: number;
-  ikkilanish: Array<{ debtId: string; ism: string; nechta: number }>;
+  /** Ism ATAYLAB saqlanmaydi — ommaviy logga tushmasin. */
+  ikkilanish: Array<{ debtId: string; nechta: number }>;
   topilmadi: number;
 }
 
@@ -85,11 +91,7 @@ async function biznesniIshla(businessId: string, yoz: boolean): Promise<Hisobot>
       if (nomzodlar.length === 1) {
         contactId = nomzodlar[0];
       } else if (nomzodlar.length > 1) {
-        hisobot.ikkilanish.push({
-          debtId: d.id,
-          ism: d.mijozNomi,
-          nechta: nomzodlar.length,
-        });
+        hisobot.ikkilanish.push({ debtId: d.id, nechta: nomzodlar.length });
         continue;
       }
     }
@@ -119,21 +121,22 @@ async function main() {
   }
   const yoz = process.argv.includes("--yoz");
 
-  const bizneslar = await rawPrisma.business.findMany({ select: { id: true, nomi: true } });
+  // Biznes NOMI o'qilmaydi ham, chiqarilmaydi ham — log ommaviy.
+  const bizneslar = await rawPrisma.business.findMany({ select: { id: true } });
   let jamiBoglandi = 0;
   let jamiTopilmadi = 0;
-  const jamiIkkilanish: Array<{ debtId: string; ism: string; nechta: number }> = [];
+  let tegishliBiznes = 0;
+  const jamiIkkilanish: Array<{ debtId: string; nechta: number }> = [];
 
   for (const b of bizneslar) {
     const h = await biznesniIshla(b.id, yoz);
     if (h.boglandi === 0 && h.topilmadi === 0 && h.ikkilanish.length === 0) continue;
-    console.log(
-      `${b.nomi}: bog'lanadi ${h.boglandi}, kartochkasi yo'q ${h.topilmadi}, ikkilanish ${h.ikkilanish.length}`
-    );
+    tegishliBiznes += 1;
     jamiBoglandi += h.boglandi;
     jamiTopilmadi += h.topilmadi;
     jamiIkkilanish.push(...h.ikkilanish);
   }
+  console.log(`Bizneslar: ${bizneslar.length} ta, shundan tegishlisi ${tegishliBiznes} ta.`);
 
   console.log("");
   console.log(yoz ? "YOZILDI" : "KO'RISH REJIMI (bazaga yozilmadi)");
@@ -143,9 +146,10 @@ async function main() {
 
   if (jamiIkkilanish.length > 0) {
     console.log("");
-    console.log("Bir xil ismli bir nechta kartochka — qarz kimga tegishli ekani noaniq:");
+    console.log("Bir xil ismli bir nechta kartochka — qarz kimga tegishli ekani noaniq.");
+    console.log("Bu qarzlar O'ZGARTIRILMADI; egasi ilovada ochib qo'lda tanlaydi:");
     for (const i of jamiIkkilanish.slice(0, 50)) {
-      console.log(`  ${i.debtId}  "${i.ism}"  — ${i.nechta} ta kartochka`);
+      console.log(`  debtId=${i.debtId} — ${i.nechta} ta mos kartochka`);
     }
     if (jamiIkkilanish.length > 50) {
       console.log(`  ... yana ${jamiIkkilanish.length - 50} ta`);
