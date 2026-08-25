@@ -28,6 +28,7 @@ let qarzSvc: any;
 let qarzQ: any;
 let mijozSvc: any;
 let posSvc: any;
+let omborSvc: any;
 
 let T: any;
 let naqdKassa: any;
@@ -79,6 +80,7 @@ before(async () => {
   qarzQ = await import("@/lib/queries/qarz");
   mijozSvc = await import("@/lib/services/mijozAniqla");
   posSvc = await import("@/lib/services/pos");
+  omborSvc = await import("@/lib/services/inventory");
 
   T = await createTenantWithOwner({
     kompaniyaNomi: "Ali do'koni",
@@ -415,4 +417,73 @@ test("14b. Naqd POS sotuvi qarz yaratmaydi va mijoz kartochkasi ochmaydi", async
     qarzOldin.reduce((a: number, r: any) => a + r.qarz, 0),
     "naqd sotuv qarz jamiga tegmasligi kerak"
   );
+});
+
+// ---------------------------------------------------------------------------
+// 15. SOTUV oynasidan qarzga sotuv (POS'dan alohida yo'l)
+// ---------------------------------------------------------------------------
+
+test("15. Sotuv oynasidan qarzga sotuv ham mavjud kartochkaga tushadi", async () => {
+  // `services/inventory.ts` — POS'dan MUSTAQIL ikkinchi yozish yo'li.
+  // U ham `mijozniAniqlaTx` dan o'tishi shart, aks holda Sotuv oynasidan
+  // yozilgan qarz yana alohida qarzdor bo'lib ko'rinardi.
+  const mahsulot = await A(async () =>
+    rawPrisma.product.create({
+      data: {
+        businessId: T.business.id,
+        nomi: "Guruch 25kg",
+        miqdor: 20,
+        kelganNarx: 200_000,
+        sotuvNarx: 250_000,
+      },
+    })
+  );
+
+  const oldin = await qarzdorlar();
+  const aliOldin = oldin.find((r: any) => r.contactId === aliContactId).qarz;
+
+  await A(async () =>
+    omborSvc.createSale({
+      businessId: T.business.id,
+      productId: mahsulot.id,
+      miqdor: 2,
+      tolovTuri: "qarz",
+      // Ism qo'lda yozildi, kartochka tanlanmadi — server o'zi topishi kerak.
+      mijozNomi: "Ali Valiyev",
+      mijozTel: "+998901112233",
+      mijozSaqla: true,
+      sana: "2026-08-26",
+      userId: T.user.id,
+    })
+  );
+
+  const keyin = await qarzdorlar();
+  assert.equal(keyin.length, oldin.length, "Sotuv qarzi YANGI qarzdor qatori ochmasligi kerak");
+
+  const ali = keyin.find((r: any) => r.contactId === aliContactId);
+  assert.ok(ali, "Sotuv qarzi mavjud kartochkaga bog'lanishi kerak");
+  assert.equal(ali.qarz, aliOldin + 500_000, "2 x 250 000 qarzga qo'shilishi kerak");
+
+  // Ombor qoldig'i ham kamayishi kerak — sotuv haqiqatda bo'lib o'tdi.
+  const p = await A(async () =>
+    rawPrisma.product.findUnique({ where: { id: mahsulot.id }, select: { miqdor: true } })
+  );
+  assert.equal(p.miqdor, 18);
+});
+
+test("15b. Sotuv qarzi ham qarzdor tarixida ko'rinadi va qoldiq mos keladi", async () => {
+  const royxat = await qarzdorlar();
+  const ali = royxat.find((r: any) => r.contactId === aliContactId);
+  const t = await A(async () =>
+    qarzQ.getQarzdorTafsilot(T.business.id, "olinadigan", ali.kalit)
+  );
+
+  // Tarixdan hisoblangan qoldiq ro'yxatdagi jami bilan MOS kelishi shart —
+  // ikkalasi ham serverda, bir manbadan hisoblanadi.
+  const hisob = t.hodisalar.reduce(
+    (acc: number, h: any) => acc + (h.turi === "qarz" ? h.summa : -h.summa),
+    0
+  );
+  assert.equal(hisob, t.jamiQarz, "tarix va jami bir-biriga mos bo'lishi kerak");
+  assert.equal(t.jamiQarz, ali.qarz, "tafsilotdagi jami ro'yxatdagi bilan bir xil bo'lishi kerak");
 });
