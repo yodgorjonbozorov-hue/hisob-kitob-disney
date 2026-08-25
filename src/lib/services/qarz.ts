@@ -8,6 +8,7 @@ import { ensureCategoryTx } from "@/lib/services/inventory";
 import { ensureUserKassaTx } from "@/lib/services/userKassa";
 import { shaxsiyKassaId } from "@/lib/services/kassaTanlash";
 import { qarzLimitTekshirTx } from "@/lib/services/mijoz";
+import { mijozniAniqlaTx } from "@/lib/services/mijozAniqla";
 import { logAudit } from "@/lib/services/audit";
 import { todayDateOnlyString, dateOnlyStringToUTCDate } from "@/lib/date";
 import {
@@ -143,61 +144,6 @@ export async function createQarz(params: CreateQarzParams) {
     },
   });
   return qarz;
-}
-
-/**
- * Mijozni aniqlaydi: mavjud kartochka, yangi kartochka yoki faqat ism+telefon.
- *
- * `mijozSaqla` bayrog'ini API qatlami MIJOZLAR moduli holatiga qarab beradi —
- * o'chirilgan modul uchun kartochka yaratilmasin.
- */
-async function mijozniAniqlaTx(
-  tx: BusinessTx,
-  params: CreateQarzParams
-): Promise<{ contactId: string | null; ism: string; tel: string | null }> {
-  if (params.contactId) {
-    const contact = await tx.contact.findFirst({
-      where: { id: params.contactId, businessId: params.businessId, deletedAt: null },
-      select: { id: true, ism: true, tel: true },
-    });
-    if (!contact) throw new ForbiddenError("Mijoz topilmadi");
-    // Formada telefon to'ldirilgan va kartochkada yo'q bo'lsa — kartochka
-    // to'ldiriladi (mijoz ma'lumoti saqlansin degan talab).
-    if (params.mijozTel && !contact.tel) {
-      await tx.contact.updateMany({
-        where: { id: contact.id, businessId: params.businessId },
-        data: { tel: params.mijozTel },
-      });
-    }
-    return { contactId: contact.id, ism: contact.ism, tel: contact.tel ?? params.mijozTel ?? null };
-  }
-
-  const ism = params.mijozNomi?.trim();
-  if (!ism) throw new BadRequestError("Mijoz ismi kiritilishi shart");
-  const tel = params.mijozTel ?? null;
-
-  if (!params.mijozSaqla) return { contactId: null, ism, tel };
-
-  // Telefon bo'yicha mavjud kartochka qidiriladi — bir mijozning ikkita
-  // kartochkasi paydo bo'lmasin (raqam allaqachon normallashtirilgan).
-  const mavjud = tel
-    ? await tx.contact.findFirst({
-        where: { businessId: params.businessId, tel, deletedAt: null },
-        select: { id: true, ism: true, tel: true },
-      })
-    : null;
-  if (mavjud) return { contactId: mavjud.id, ism: mavjud.ism, tel: mavjud.tel };
-
-  const yangi = await tx.contact.create({
-    data: {
-      businessId: params.businessId,
-      ism,
-      tel: tel ?? undefined,
-      createdBy: params.userId,
-    },
-    select: { id: true },
-  });
-  return { contactId: yangi.id, ism, tel };
 }
 
 // ---------------------------------------------------------------------------

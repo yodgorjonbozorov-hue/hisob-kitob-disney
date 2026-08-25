@@ -111,7 +111,12 @@ export function QarzYangiModal({
         </div>
         <p className="text-xs text-faint">{QARZ_MATN[turi].tavsif}</p>
 
-        <MijozTanlash qiymat={mijoz} onChange={setMijoz} disabled={loading} />
+        <MijozTanlash
+          qiymat={mijoz}
+          onChange={setMijoz}
+          disabled={loading}
+          yangiSumma={parseSomInput(summa)}
+        />
 
         <div className="grid grid-cols-2 gap-2">
           <div>

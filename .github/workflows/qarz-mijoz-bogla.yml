@@ -1,0 +1,151 @@
+# ESKI QARZLARNI MIJOZ KARTOCHKASIGA BOG'LASH.
+#
+# Nima uchun: kassa va Sotuv oynasi ilgari qarzga sotganda mijoz kartochkasi
+# yaratmasdi — `Debt.contactId` bo'sh qolardi va bir mijozning bir necha qarzi
+# ro'yxatda alohida qarzdor bo'lib ko'rinardi. Yozish yo'li tuzatildi
+# (`src/lib/services/mijozAniqla.ts`); bu workflow ESKI yozuvlarni bog'laydi.
+#
+# IKKI REJIM:
+#   korish (standart) — bazaga YOZMAYDI, faqat nechta qarz bog'lanishini
+#                       va nechtasi noaniqligini hisoblab beradi;
+#   yozish            — `tasdiq = HA` va MAJBURIY zaxira bilan.
+#
+# ATAYLAB QILINMAYDIGAN ISHLAR:
+#   · yangi mijoz kartochkasi yaratilmaydi;
+#   · mavjud kartochkalar birlashtirilmaydi;
+#   · bir xil ismli bir nechta kartochka bo'lsa TAXMIN qilinmaydi — bunday
+#     qarz tegilmay qoladi va debtId bilan ro'yxatga chiqadi;
+#   · pul summalariga UMUMAN tegilmaydi (faqat `Debt.contactId` yoziladi).
+#
+# ⚠️ REPOZITORIYA OMMAVIY: artefakt yuklanmaydi, log'ga mijoz ismi ham,
+# biznes nomi ham, pul summasi ham chiqmaydi — faqat sonlar va opaque IDlar.
+#
+# MOLIYA IZI: yozishdan oldin va keyin `production-holat.mjs` ishlaydi.
+# Bu skript faqat bog'lanish yozgani uchun IKKALA izi AYNAN BIR XIL bo'lishi
+# shart — farq chiqsa demak kutilmagan narsa o'zgargan.
+#
+# Ishga tushirish: Actions -> "Qarzlarni mijozga bog'lash" -> Run
+name: Qarzlarni mijozga bog'lash
+
+on:
+  workflow_dispatch:
+    inputs:
+      rejim:
+        description: "Rejim"
+        type: choice
+        options:
+          - korish
+          - yozish
+        default: korish
+      tasdiq:
+        description: 'Faqat "yozish" uchun: bazaga yoziladi, "HA" deb yozing'
+        required: false
+        default: ""
+
+# Migratsiya va ko'chirish bilan bir vaqtda ishlamasin — bitta bazaga tegadi.
+concurrency:
+  group: migratsiya
+  cancel-in-progress: false
+
+jobs:
+  bogla:
+    name: Ko'rish / zaxira + bog'lash
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Tasdiqni tekshirish
+        if: inputs.rejim == 'yozish' && inputs.tasdiq != 'HA'
+        run: |
+          echo "::error::Yozish rejimi tanlandi, lekin tasdiq berilmadi."
+          echo "::error::Bazaga yozadigan amal tasodifan ishga tushmasligi uchun 'HA' shart."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Bog'liqliklar
+        run: npm ci
+
+      # Sirlar yo'q bo'lsa shu yerda to'xtaydi — bazaga ulanish bo'lmaydi.
+      # Qiymatlar chiqarilmaydi, faqat "bor/yo'q".
+      - name: Sirlarni tekshirish
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_CHAT_ID: ${{ secrets.BACKUP_CHAT_ID }}
+          BACKUP_BOT_TOKEN: ${{ secrets.BACKUP_BOT_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          REJIM: ${{ inputs.rejim }}
+        run: |
+          xato=0
+          if [ -z "$DATABASE_URL" ]; then echo "::error::DATABASE_URL sozlanmagan"; xato=1; fi
+          if [ "$REJIM" = "yozish" ]; then
+            if [ -z "$BACKUP_CHAT_ID" ]; then echo "::error::BACKUP_CHAT_ID sozlanmagan"; xato=1; fi
+            if [ -z "$BACKUP_BOT_TOKEN" ] && [ -z "$TELEGRAM_BOT_TOKEN" ]; then
+              echo "::error::BACKUP_BOT_TOKEN yoki TELEGRAM_BOT_TOKEN sozlanmagan"; xato=1
+            fi
+            if [ "$xato" = "1" ]; then
+              echo "::error::Zaxirasiz yozilmaydi — baza O'ZGARTIRILMADI."
+            fi
+          fi
+          [ "$xato" = "0" ] || exit 1
+          echo "Kerakli sirlar sozlangan."
+
+      - name: OLDINGI holat (faqat o'qish)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: node scripts/production-holat.mjs
+
+      # KO'RISH — ikkala rejimda ham ishlaydi: yozishdan oldin ham nima
+      # o'zgarishi log'da qolsin.
+      - name: Ko'rish (bazaga yozmaydi)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: node -r ts-node/register scripts/qarz-mijoz-bogla.ts
+
+      # Migratsiya kutmayotgani uchun `deploy-zaxira.mjs` zaxira OLMAYDI —
+      # shuning uchun shartsiz zaxira skripti ishlatiladi. Yuborilmasa exit 1.
+      - name: ZAXIRA -> Telegram (majburiy)
+        if: inputs.rejim == 'yozish'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          BACKUP_CHAT_ID: ${{ secrets.BACKUP_CHAT_ID }}
+          BACKUP_BOT_TOKEN: ${{ secrets.BACKUP_BOT_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: node scripts/zaxira-majburiy.mjs "qarz-mijoz-bogla oldidan"
+
+      - name: Bog'lash (bazaga yoziladi)
+        if: inputs.rejim == 'yozish'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: node -r ts-node/register scripts/qarz-mijoz-bogla.ts --yoz
+
+      - name: KEYINGI holat (moliya izi o'zgarmagani tekshiriladi)
+        if: always()
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: node scripts/production-holat.mjs
+
+      - name: Yakun
+        if: success()
+        run: |
+          if [ "${{ inputs.rejim }}" = "yozish" ]; then
+            echo "### ✅ Qarzlar mijoz kartochkasiga bog'landi" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Zaxira Telegram kanalida (artefakt yuklanmadi — repo ommaviy)." >> $GITHUB_STEP_SUMMARY
+            echo "Log'dagi OLDINGI va KEYINGI \`UMUMIY MOLIYA IZI\` **bir xil** bo'lishi shart:" >> $GITHUB_STEP_SUMMARY
+            echo "bu amal faqat bog'lanish yozadi, pulga tegmaydi." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### 👀 Ko'rish rejimi — baza o'zgartirilmadi" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Yozish uchun: rejim = \`yozish\`, tasdiq = \`HA\`." >> $GITHUB_STEP_SUMMARY
+          fi

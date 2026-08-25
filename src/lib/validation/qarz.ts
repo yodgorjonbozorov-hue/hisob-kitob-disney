@@ -117,6 +117,20 @@ const telMaydoni = z
   })
   .transform((v) => (v && v.trim() ? telNormalize(v) : null));
 
+/**
+ * "+ Yangi mijoz" formasi (qarz/sotuv oynasidan kartochka ochish).
+ *
+ * Telefon ATAYLAB majburiy emas: bozorda kassir raqamni har doim ham
+ * so'ramaydi, lekin qarz baribir kartochkaga bog'lanishi kerak.
+ */
+export const yangiMijozSchema = z.object({
+  ism: z.string().trim().min(1, "Ism kiritilishi shart").max(100),
+  tel: telMaydoni,
+  izoh: z.string().trim().max(500).optional().nullable(),
+});
+
+export type YangiMijozInput = z.infer<typeof yangiMijozSchema>;
+
 const sanaSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Sana YYYY-MM-DD ko'rinishida bo'lishi kerak");

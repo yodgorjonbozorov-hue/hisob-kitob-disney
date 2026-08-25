@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireTenantPage } from "@/lib/auth/tenant";
 import { runWithTenant } from "@/lib/db/tenantContext";
-import { requireModulePage, getEnabledModules } from "@/lib/modules/guard";
+import { requireModulePage } from "@/lib/modules/guard";
 import { getActiveBusiness } from "@/lib/business";
 import { listPosMahsulotlar, listMahsulotKategoriyalar } from "@/lib/queries/pos";
 import { listAccounts } from "@/lib/queries/accounts";
@@ -27,23 +27,22 @@ export default async function PosPage() {
       redirect("/app");
     }
 
-    const [, business, yoqilgan] = await Promise.all([
+    const [, business] = await Promise.all([
       requireModulePage(ctx, "MAGAZIN"),
       getActiveBusiness(session),
-      getEnabledModules(ctx),
     ]);
     if (!business || !business.magazin || !business.omborli) {
       redirect("/app");
     }
 
-    const [mahsulotlar, kategoriyalar, kassalar, mijozlar] = await Promise.all([
+    // Mijozlar ro'yxati BU YERDA YUKLANMAYDI: qarzga sotuvda mijoz
+    // `/api/debts/mijozlar` orqali qidiriladi (ism va telefon bo'yicha,
+    // joriy qarzi bilan). Butun ro'yxatni har kassa ochilishida yuklash
+    // mijozlar soni o'sgan sari sahifani sekinlashtirardi.
+    const [mahsulotlar, kategoriyalar, kassalar] = await Promise.all([
       listPosMahsulotlar(business.id),
       listMahsulotKategoriyalar(business.id),
       listAccounts(business.id, true),
-      // MIJOZLAR moduli yoqiq bo'lsa — qarzga sotuvda limit ishlaydi.
-      yoqilgan.has("MIJOZLAR")
-        ? (await import("@/lib/queries/mijoz")).listMijozlar(business.id)
-        : Promise.resolve([]),
     ]);
 
     return (
@@ -59,7 +58,6 @@ export default async function PosPage() {
           mahsulotlar={mahsulotlar}
           kategoriyalar={kategoriyalar}
           kassalar={kassalar}
-          mijozlar={mijozlar}
         />
       </div>
     );

@@ -3783,6 +3783,92 @@ Test: `tests/smoke-brauzer.test.ts` — qayta yuklashda `domcontentloaded`
 holatida ham summa yashirin qolishi tekshiriladi (ya'ni serverdan kelgan
 HTML'da yo'q).
 
+## Qarzdorlik mijoz kesimiga o'tkazildi — "1 mijoz = 1 qarzdor" (2026-08-25)
+
+### Muammo
+
+Bir mijoz besh marta qarzga olsa, qarzdorlar ro'yxatida BESH qarzdor bo'lib
+ko'rinardi. Sabab schema'da EMAS edi — `Contact 1 → N Debt` bog'lanishi
+allaqachon to'g'ri va qarzdorlar ro'yxati (`listQarzdorlar`,
+`getQarzdorTafsilot`) `qarzdorKalit()` bo'yicha jamlab beradi.
+
+Muammo YOZISH yo'lida edi: qarz uch joydan yoziladi, lekin faqat bittasi
+mijoz kartochkasi yaratardi.
+
+  - `services/pos.ts`       — kassadagi qarzga sotuv: `contactId` bo'sh qolardi;
+  - `services/inventory.ts` — Sotuv oynasi: xuddi shunday;
+  - `services/qarz.ts`      — kartochka faqat TELEFON bo'yicha qidirilardi,
+    ya'ni telefonsiz "Ali" ikki marta yozilsa IKKITA kartochka ochilardi.
+
+`contactId` bo'sh qolganda jamlash faqat ism matniga tayanadi, shuning uchun
+"Ali", "Ali " va "Ali Valiyev" uch qarzdor bo'lib chiqardi.
+
+### Yechim
+
+Yangi model YO'Q, migratsiya ham YO'Q — mavjud `Contact → Debt` yetarli.
+
+`src/lib/services/mijozAniqla.ts` — mijozni aniqlashning YAGONA joyi.
+Uchala yozish yo'li ham shundan o'tadi. Tartib (yuqoridagi qadam aniqroq):
+
+  1. `contactId` berilgan  → o'sha kartochka (biznesga tegishliligi tekshiriladi);
+  2. telefon aynan mos     → o'sha kartochka;
+  3. ism bo'yicha AYNAN BITTA nomzod → o'sha (telefoni bo'sh bo'lsa to'ldiriladi);
+  4. mos nomzod yo'q       → yangi kartochka.
+
+Bir xil ismli BIR NECHTA kartochka bo'lsa (telefon esa berilmagan) — hech
+biri tanlanmaydi, `contactId = null` qaytadi. Bu ATAYLAB: qarzni noto'g'ri
+odamning kartochkasiga yozib qo'yish ro'yxatda ikki qator ko'rinishidan
+ancha qimmat xato. Bunday holda operator qidiruv ro'yxatidan o'zi tanlaydi.
+
+Telefon ikki qiymatga ajratiladi (`telAjrat`): SOLISHTIRISH uchun
+normallashgan ko'rinish, SAQLASH uchun operator kiritgan matn. Kassa xom
+matn yuborishi mumkin — normallashmagan raqam bo'yicha kartochka
+qidirilmaydi, lekin matn baribir yo'qolmaydi.
+
+### Qarzga sotish oynasi
+
+POS (`TolovModal`) va Sotuv (`SotuvForm`) dagi oddiy `<select>` olib
+tashlandi — u qidiruvsiz edi va mijozlar soni o'sgan sari yaroqsizlanardi.
+O'rniga qarzlar sahifasi bilan AYNI `MijozTanlash`:
+
+  - qidiruv ism VA telefon bo'yicha, har natijada joriy qarz ko'rinadi;
+  - topilmasa "Mijoz topilmadi" va "+ Yangi mijoz" (ism / telefon / izoh),
+    saqlangach mijoz darhol tanlangan holatga o'tadi (`POST /api/debts/mijozlar`);
+  - tanlangach "Hozirgi qarz → Yangi qarz → Yangi jami" paneli
+    (`QarzOldinKorish`).
+
+Mijozlar ro'yxati endi sahifa yuklanishida OLINMAYDI (`pos/page.tsx`,
+`sotuv/page.tsx`) — qidiruv `/api/debts/mijozlar` orqali ketadi.
+
+### Ochiq qarz hisobi tuzatildi
+
+`qarzMijozlariTakror()` ochiq qarzni oxirgi 300 ta yozuvdan hisoblardi —
+ko'p savdoli biznesda ko'rsatilgan qarz KAM chiqardi. Endi `groupBy` bilan,
+chegarasiz. Kassir aynan shu raqamga qarab qarzga sotadi, u taxminiy
+bo'lishi mumkin emas.
+
+### Mavjud ma'lumot
+
+Hech narsa o'chirilmadi va birlashtirilmadi. Eski, kartochkasiz qarzlar
+avvalgidek ism bo'yicha jamlanib ko'rinaveradi.
+
+`scripts/qarz-mijoz-bogla.ts` — eski `contactId = null` qarzlarni mavjud
+kartochkalarga bog'laydi (telefon, yoki ism bo'yicha AYNAN BITTA moslik).
+Standart holatda faqat HISOBOT chiqaradi; yozish uchun `--yoz` kerak.
+Yangi kartochka yaratmaydi, kartochkalarni birlashtirmaydi, ikkilanishlarni
+ro'yxatga chiqarib odamga qoldiradi. Build zanjiriga ATAYLAB qo'shilmagan.
+
+### Test
+
+`tests/qarz-mijoz.test.ts` (`npm run test:qarz-mijoz`) — 16 ta test:
+yangi mijoz, unga uch marta qarz, ro'yxatda bitta qator, jami 1 500 000,
+tarixda uchala operatsiya, qisman to'lovdan keyin qoldiq 1 000 000,
+qidiruvda topish, dublikat kartochka ochilmasligi (telefon bilan, registr
+farqi bilan), ikkilanishda taxmin qilmaslik, POS qarzga sotuvining mavjud
+kartochkaga tushishi va naqd sotuv qarz yaratmasligi.
+
+`tests/pos-brauzer.test.ts` yangi qidiruv maydoniga moslandi.
+
 ## CRM — kunlik buyurtmalar va Kirim bilan bitta hisob-kitob (2026-08-25)
 
 CRM "bitimlar doskasi" edi: bitimning kategoriyasi yo'q, sanasi yo'q, kirim

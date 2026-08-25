@@ -8,6 +8,7 @@ import { todayDateOnlyString, dateOnlyStringToUTCDate } from "@/lib/date";
 import { isAvto } from "@/lib/biznesTuri";
 import { logAudit } from "@/lib/services/audit";
 import { qarzLimitTekshirTx } from "@/lib/services/mijoz";
+import { mijozniAniqlaTx } from "@/lib/services/mijozAniqla";
 import { qarzHolatHisobla } from "@/lib/validation/qarz";
 
 // Sotuv va qarz to'lovi uchun avtomatik ishlatiladigan kategoriyalar.
@@ -128,6 +129,8 @@ export async function createSale(params: {
   contactId?: string | null;
   mijozNomi?: string | null;
   mijozTel?: string | null;
+  /** Mijoz kartochkasi yaratilsinmi (MIJOZLAR moduli yoqiq bo'lgandagina). */
+  mijozSaqla?: boolean;
   /**
    * Haqiqiy kelishilgan narx (birlik uchun). Avto rejimida narx deyarli har doim
    * savdolashib belgilanadi — berilsa shu narx ishlatiladi va mahsulot kartochkasi
@@ -155,13 +158,32 @@ export async function createSale(params: {
       throw new BadRequestError("Qarzga sotishda mijoz nomi kiritilishi shart");
     }
 
+    // MIJOZ — qarzga sotuvda kartochka MAJBURAN aniqlanadi (yoki yaratiladi),
+    // aks holda bir mijozning har bir qarzi alohida qarzdor bo'lib ko'rinardi
+    // (lib/services/mijozAniqla.ts). Naqd sotuvda kartochka yaratilmaydi.
+    const mijoz =
+      params.tolovTuri === "qarz"
+        ? await mijozniAniqlaTx(tx, {
+            businessId: params.businessId,
+            userId: params.userId,
+            contactId: params.contactId,
+            mijozNomi: params.mijozNomi,
+            mijozTel: params.mijozTel,
+            mijozSaqla: params.mijozSaqla,
+          })
+        : {
+            contactId: params.contactId ?? null,
+            ism: params.mijozNomi?.trim() || null,
+            tel: params.mijozTel?.trim() || null,
+          };
+
     // Qarz limiti — qoldiq kamaytirilishidan OLDIN tekshiriladi, shu bilan
     // limitdan oshgan sotuv omborga umuman tegmaydi (tranzaksiya orqaga
     // qaytadi, lekin tartib baribir aniq bo'lgani ma'qul).
-    if (params.tolovTuri === "qarz" && params.contactId) {
+    if (params.tolovTuri === "qarz" && mijoz.contactId) {
       const narx =
         kelishilganNarx && kelishilganNarx > 0 ? kelishilganNarx : product.sotuvNarx;
-      await qarzLimitTekshirTx(tx, params.businessId, params.contactId, narx * params.miqdor);
+      await qarzLimitTekshirTx(tx, params.businessId, mijoz.contactId, narx * params.miqdor);
     }
 
     // Atomik shartli kamaytirish — yetarli qoldiq bo'lsagina bajariladi.
@@ -203,9 +225,9 @@ export async function createSale(params: {
         tannarx,
         jamiSumma,
         tolovTuri: params.tolovTuri,
-        contactId: params.contactId ?? undefined,
-        mijozNomi: params.mijozNomi?.trim() || undefined,
-        mijozTel: params.mijozTel?.trim() || undefined,
+        contactId: mijoz.contactId ?? undefined,
+        mijozNomi: mijoz.ism ?? undefined,
+        mijozTel: mijoz.tel ?? undefined,
         sana: dateOnlyStringToUTCDate(sana),
         userId: params.userId,
       },
@@ -233,9 +255,9 @@ export async function createSale(params: {
           turi: "olinadigan",
           saleId: sale.id,
           productId: product.id,
-          contactId: params.contactId ?? undefined,
-          mijozNomi: params.mijozNomi!.trim(),
-          mijozTel: params.mijozTel?.trim() || undefined,
+          contactId: mijoz.contactId ?? undefined,
+          mijozNomi: mijoz.ism!,
+          mijozTel: mijoz.tel ?? undefined,
           jamiSumma,
           status: "OPEN",
           sana: dateOnlyStringToUTCDate(sana),

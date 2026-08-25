@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { formatSom, formatSomLabel, parseSomInput } from "@/lib/format";
 import { isAvto, omborMatn } from "@/lib/biznesTuri";
 import type { ProductKassirDTO, SaleDTO } from "@/lib/queries/inventory";
-import type { MijozDTO } from "@/lib/queries/mijoz";
+import { MijozTanlash, type MijozTanlov } from "@/components/qarz/MijozTanlash";
 import type { AccountDTO } from "@/lib/queries/accounts";
 import { todayDateOnlyString } from "@/lib/date";
 
@@ -23,13 +23,11 @@ import { todayDateOnlyString } from "@/lib/date";
 export function SotuvForm({
   products,
   biznesTuri,
-  mijozlar,
   kassalar,
   onSold,
 }: {
   products: ProductKassirDTO[];
   biznesTuri: string;
-  mijozlar: MijozDTO[];
   /** Faol kassalar — naqd sotuvda pul qaysi kassaga tushishini tanlash uchun. */
   kassalar: AccountDTO[];
   onSold: (sale: SaleDTO) => void;
@@ -42,11 +40,9 @@ export function SotuvForm({
   const [tolovTuri, setTolovTuri] = useState<"naqd" | "qarz">("naqd");
   // Kelishilgan narx (birlik). Tanlanganda standart narx bilan to'ldiriladi.
   const [narx, setNarx] = useState("");
-  const [contactId, setContactId] = useState("");
   // Naqd sotuvda pul tushadigan kassa. Bo'sh = standart (birinchi) kassa.
   const [accountId, setAccountId] = useState("");
-  const [mijozNomi, setMijozNomi] = useState("");
-  const [mijozTel, setMijozTel] = useState("");
+  const [mijoz, setMijoz] = useState<MijozTanlov>({ contactId: null, ism: "", tel: "" });
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -91,7 +87,7 @@ export function SotuvForm({
       );
       return;
     }
-    if (tolovTuri === "qarz" && !mijozNomi.trim()) {
+    if (tolovTuri === "qarz" && !mijoz.ism.trim()) {
       setError("Qarzga sotishda mijoz nomini kiriting");
       return;
     }
@@ -104,9 +100,9 @@ export function SotuvForm({
           productId: selected.id,
           miqdor: qty,
           tolovTuri,
-          contactId: tolovTuri === "qarz" && contactId ? contactId : undefined,
-          mijozNomi: tolovTuri === "qarz" ? mijozNomi : undefined,
-          mijozTel: tolovTuri === "qarz" ? mijozTel : undefined,
+          contactId: tolovTuri === "qarz" ? (mijoz.contactId ?? undefined) : undefined,
+          mijozNomi: tolovTuri === "qarz" ? mijoz.ism.trim() : undefined,
+          mijozTel: tolovTuri === "qarz" ? mijoz.tel.trim() || undefined : undefined,
           narx: kelishilgan > 0 ? kelishilgan : undefined,
           accountId: tolovTuri === "naqd" && accountId ? accountId : undefined,
           sana,
@@ -120,7 +116,7 @@ export function SotuvForm({
       setOk(
         tolovTuri === "naqd"
           ? `Sotildi: ${selected.nomi}${avto ? "" : ` × ${qty}`} = ${formatSomLabel(jami)}`
-          : `Qarzga sotildi: ${mijozNomi} — ${formatSomLabel(jami)}`
+          : `Qarzga sotildi: ${mijoz.ism} — ${formatSomLabel(jami)}`
       );
       onSold({
         id: data.id ?? Math.random().toString(),
@@ -128,16 +124,14 @@ export function SotuvForm({
         miqdor: qty,
         jamiSumma: jami,
         tolovTuri,
-        mijozNomi: tolovTuri === "qarz" ? mijozNomi : null,
+        mijozNomi: tolovTuri === "qarz" ? mijoz.ism : null,
         sana: new Date(`${sana}T00:00:00.000Z`).toISOString(),
         bekorQilingan: false,
         bekorSabab: null,
       });
       setMiqdor("1");
       setNarx("");
-      setContactId("");
-      setMijozNomi("");
-      setMijozTel("");
+      setMijoz({ contactId: null, ism: "", tel: "" });
       setProductId("");
     } finally {
       setLoading(false);
@@ -290,56 +284,17 @@ export function SotuvForm({
         </div>
 
         {tolovTuri === "qarz" && (
-          <div className="space-y-2">
-            {mijozlar.length > 0 && (
-              <div>
-                <select
-                  value={contactId}
-                  onChange={(e) => {
-                    const id = e.target.value;
-                    setContactId(id);
-                    // Kartochka tanlansa ism/telefon undan olinadi — qo'lda
-                    // yozilgan nom bilan kartochka bir-biriga qarama-qarshi
-                    // bo'lib qolmasligi kerak.
-                    const m = mijozlar.find((x) => x.id === id);
-                    if (m) {
-                      setMijozNomi(m.ism);
-                      setMijozTel(m.tel ?? "");
-                    }
-                  }}
-                  className="w-full rounded-lg border border-line px-3 py-2 text-sm"
-                  aria-label="Mijoz kartochkasi"
-                >
-                  <option value="">Kartochkasiz (faqat ism yozish)</option>
-                  {mijozlar.map((m) => (
-                    <option key={m.id} value={m.id} disabled={m.limitToldi}>
-                      {m.ism}
-                      {m.qarzLimit !== null &&
-                        ` — qarz ${m.ochiqQarz.toLocaleString("uz-UZ")} / ${m.qarzLimit.toLocaleString("uz-UZ")}`}
-                      {m.limitToldi ? " (limit to'ldi)" : ""}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-2xs text-faint mt-1">
-                  Kartochka tanlansa sotuv mijoz tarixiga tushadi va qarz limiti tekshiriladi.
-                </p>
-              </div>
-            )}
-            <input
-              type="text"
-              value={mijozNomi}
-              onChange={(e) => setMijozNomi(e.target.value)}
-              placeholder={avto ? "Xaridor ismi" : "Mijoz ismi"}
-              className="w-full rounded-lg border border-line px-3 py-2 text-sm"
-            />
-            <input
-              type="text"
-              value={mijozTel}
-              onChange={(e) => setMijozTel(e.target.value)}
-              placeholder="Telefon (ixtiyoriy)"
-              className="w-full rounded-lg border border-line px-3 py-2 text-sm"
-            />
-          </div>
+          /* Mijoz tanlash — qarzlar sahifasi va kassa bilan AYNI komponent.
+             Mavjud mijoz qidirib topiladi (joriy qarzi ko'rinadi) yoki
+             "+ Yangi mijoz" bilan kartochka ochiladi. Ism qo'lda yozilsa ham
+             server kartochkani o'zi topadi/yaratadi — bir mijoz bitta qarzdor
+             (lib/services/mijozAniqla.ts). */
+          <MijozTanlash
+            qiymat={mijoz}
+            onChange={setMijoz}
+            disabled={loading}
+            yangiSumma={jami}
+          />
         )}
 
         {error && <p className="text-expense text-sm">{error}</p>}

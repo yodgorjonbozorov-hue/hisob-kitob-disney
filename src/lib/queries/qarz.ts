@@ -701,14 +701,35 @@ export interface QarzMijozDTO {
  * yozish mumkin bo'lishi kerak. Shuning uchun manba ikkita — mijoz
  * kartochkalari va oldingi qarzlardagi ism/telefon juftliklari.
  */
+/**
+ * BITTA MIJOZNING JORIY OCHIQ QARZI (so'm).
+ *
+ * Qarzga sotish oynasidagi "Hozirgi qarz → Yangi jami" paneli shu raqamdan
+ * boshlanadi. Ataylab alohida so'rov: forma ochilganda mijoz oldindan
+ * tanlangan bo'lishi mumkin (qarzdor kartochkasidan yoki yangi yaratilgandan
+ * keyin) va u holda qidiruv ro'yxati umuman yuklanmaydi.
+ */
+export async function mijozOchiqQarzi(
+  businessId: string,
+  contactId: string
+): Promise<number> {
+  const jam = await prisma.debt.aggregate({
+    where: { businessId, contactId, turi: "olinadigan", isYopilgan: false },
+    _sum: { jamiSumma: true, tolangan: true },
+  });
+  const qoldiq = (jam._sum.jamiSumma ?? 0) - (jam._sum.tolangan ?? 0);
+  return qoldiq > 0 ? qoldiq : 0;
+}
+
 export async function qarzMijozlariTakror(
   businessId: string,
   q: string | null
 ): Promise<QarzMijozDTO[]> {
   const rejim = qidiruvRejimi();
   const qidiruv = q?.trim();
+  const izla = (xonalar: Prisma.DebtWhereInput[]) => (qidiruv ? { OR: xonalar } : {});
 
-  const [contacts, debts] = await Promise.all([
+  const [contacts, ochiqlar, kartochkasizYozuvlar] = await Promise.all([
     prisma.contact.findMany({
       where: {
         businessId,
@@ -721,50 +742,73 @@ export async function qarzMijozlariTakror(
       orderBy: { ism: "asc" },
       take: 20,
     }),
+    // OCHIQ QARZ — `groupBy` bilan, TO'LIQ. Ilgari bu yerda oxirgi 300 ta
+    // yozuv o'qilardi va ko'p savdoli biznesda ko'rsatilgan qarz KAM chiqardi.
+    // Kassir aynan shu raqamga qarab qarzga sotadi, shuning uchun u taxminiy
+    // bo'lishi mumkin emas.
+    prisma.debt.groupBy({
+      by: ["contactId", "mijozNomi"],
+      where: { businessId, turi: "olinadigan", isYopilgan: false },
+      _sum: { jamiSumma: true, tolangan: true },
+    }),
+    // Kartochkasiz, qarzi YOPILGAN mijozlar ham qidiruvda chiqsin — kassir
+    // eski xaridorni ism bilan topa olsin. Chegara bor: bu faqat qulaylik.
     prisma.debt.findMany({
       where: {
         businessId,
         turi: "olinadigan",
-        ...(qidiruv
-          ? {
-              OR: [
-                { mijozNomi: { contains: qidiruv, ...rejim } },
-                { mijozTel: { contains: qidiruv, ...rejim } },
-              ],
-            }
-          : {}),
+        contactId: null,
+        ...izla([
+          { mijozNomi: { contains: qidiruv as string, ...rejim } },
+          { mijozTel: { contains: qidiruv as string, ...rejim } },
+        ]),
       },
-      select: { contactId: true, mijozNomi: true, mijozTel: true, jamiSumma: true, tolangan: true, isYopilgan: true },
+      select: { mijozNomi: true, mijozTel: true },
       orderBy: { createdAt: "desc" },
-      take: 300,
+      take: 100,
     }),
   ]);
 
-  const ochiqQarz = new Map<string, number>();
-  const kartochkasizlar = new Map<string, QarzMijozDTO>();
-  for (const d of debts) {
-    const kalit = d.contactId ?? `ism:${d.mijozNomi.toLowerCase()}`;
-    if (!d.isYopilgan) {
-      ochiqQarz.set(kalit, (ochiqQarz.get(kalit) ?? 0) + (d.jamiSumma - d.tolangan));
-    }
-    if (!d.contactId && !kartochkasizlar.has(kalit)) {
-      kartochkasizlar.set(kalit, {
-        contactId: null,
-        ism: d.mijozNomi,
-        tel: d.mijozTel,
-        ochiqQarz: 0,
-      });
+  // Kartochkali mijozlarning ochiq qarzi — `contactId` bo'yicha.
+  const kartochkaQarzi = new Map<string, number>();
+  // Kartochkasiz qarzdorlar — `qarzdorKalit()` bilan AYNI ism kaliti bo'yicha,
+  // aks holda qidiruvdagi summa qarzdorlar ro'yxatidagidan farq qilardi.
+  const ismQarzi = new Map<string, number>();
+  const ismKorinishi = new Map<string, { ism: string; tel: string | null }>();
+
+  for (const r of ochiqlar) {
+    const qoldiq = (r._sum.jamiSumma ?? 0) - (r._sum.tolangan ?? 0);
+    if (qoldiq <= 0) continue;
+    if (r.contactId) {
+      kartochkaQarzi.set(r.contactId, (kartochkaQarzi.get(r.contactId) ?? 0) + qoldiq);
+    } else {
+      const kalit = qarzdorKalit(null, r.mijozNomi);
+      ismQarzi.set(kalit, (ismQarzi.get(kalit) ?? 0) + qoldiq);
+      if (!ismKorinishi.has(kalit)) ismKorinishi.set(kalit, { ism: r.mijozNomi, tel: null });
     }
   }
 
+  for (const d of kartochkasizYozuvlar) {
+    const kalit = qarzdorKalit(null, d.mijozNomi);
+    const bor = ismKorinishi.get(kalit);
+    if (!bor) ismKorinishi.set(kalit, { ism: d.mijozNomi, tel: d.mijozTel });
+    else if (!bor.tel && d.mijozTel) bor.tel = d.mijozTel;
+  }
+
+  const matn = qidiruv?.toLowerCase() ?? null;
   const natija: QarzMijozDTO[] = contacts.map((c) => ({
     contactId: c.id,
     ism: c.ism,
     tel: c.tel,
-    ochiqQarz: ochiqQarz.get(c.id) ?? 0,
+    ochiqQarz: kartochkaQarzi.get(c.id) ?? 0,
   }));
-  for (const [kalit, m] of kartochkasizlar) {
-    natija.push({ ...m, ochiqQarz: ochiqQarz.get(kalit) ?? 0 });
+
+  for (const [kalit, m] of ismKorinishi) {
+    // Qidiruv kartochkasizlarga JS tomonda qo'llanadi: ochiq qarz `groupBy`
+    // filtrsiz o'qiladi (jami to'g'ri chiqishi uchun), shuning uchun mos
+    // kelmaydiganlari shu yerda chiqarib tashlanadi.
+    if (matn && !m.ism.toLowerCase().includes(matn) && !(m.tel ?? "").includes(matn)) continue;
+    natija.push({ contactId: null, ism: m.ism, tel: m.tel, ochiqQarz: ismQarzi.get(kalit) ?? 0 });
   }
 
   // Ochiq qarzi borlar yuqorida — ular bilan ish ko'proq bo'ladi.
