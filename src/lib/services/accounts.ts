@@ -17,7 +17,7 @@ export async function createAccount(businessId: string, data: CreateAccountInput
   });
   if (mavjud) throw new BadRequestError("Bu nomdagi kassa allaqachon bor");
 
-  return prisma.account.create({
+  const account = await prisma.account.create({
     data: {
       businessId,
       nomi: data.nomi,
@@ -25,6 +25,17 @@ export async function createAccount(businessId: string, data: CreateAccountInput
       tartib: data.tartib ?? 0,
     },
   });
+
+  // Kassa ochish — pul turadigan joyning paydo bo'lishi. Kim ochgani
+  // auditda qoladi (o'tkazma va topshirish bilan bir xil jurnal).
+  await logAudit({
+    businessId,
+    action: "create",
+    entity: "account",
+    entityId: account.id,
+    after: { nomi: account.nomi, turi: account.turi, isActive: account.isActive },
+  });
+  return account;
 }
 
 export async function updateAccount(businessId: string, id: string, data: UpdateAccountInput) {
@@ -46,7 +57,17 @@ export async function updateAccount(businessId: string, id: string, data: Update
     if (faollar <= 1) throw new BadRequestError("Oxirgi faol kassani o'chirib bo'lmaydi");
   }
 
-  return prisma.account.update({ where: { id }, data });
+  const yangi = await prisma.account.update({ where: { id }, data });
+
+  await logAudit({
+    businessId,
+    action: "update",
+    entity: "account",
+    entityId: id,
+    before: { nomi: mavjud.nomi, turi: mavjud.turi, isActive: mavjud.isActive },
+    after: { nomi: yangi.nomi, turi: yangi.turi, isActive: yangi.isActive },
+  });
+  return yangi;
 }
 
 /**
@@ -71,6 +92,14 @@ export async function deleteAccount(businessId: string, id: string) {
   }
 
   await prisma.account.delete({ where: { id } });
+
+  await logAudit({
+    businessId,
+    action: "delete",
+    entity: "account",
+    entityId: id,
+    before: { nomi: mavjud.nomi, turi: mavjud.turi, isActive: mavjud.isActive },
+  });
   return { ok: true };
 }
 

@@ -10,6 +10,7 @@ import { logAudit } from "@/lib/services/audit";
 import { qarzLimitTekshirTx } from "@/lib/services/mijoz";
 import { mijozniAniqlaTx } from "@/lib/services/mijozAniqla";
 import { qarzHolatHisobla } from "@/lib/validation/qarz";
+import { kategoriyaIdTop } from "@/lib/kategoriyaNom";
 
 // Sotuv va qarz to'lovi uchun avtomatik ishlatiladigan kategoriyalar.
 const SOTUV_KATEGORIYA = "Sotuv";
@@ -36,8 +37,13 @@ export type XarajatTuri = keyof typeof XARAJAT_TURLARI;
 /**
  * Biznes uchun kategoriyani topadi yoki yaratadi (sotuv/qarz avtomatik yozuvlari uchun).
  *
- * `upsert` ishlatiladi: eski `findFirst → create` ketma-ketligi ikkita parallel
- * sotuvda `@@unique([nomi, turi, businessId])` ni buzib 500 xato berardi.
+ * REGISTRGA BEFARQ IZLASH (`kategoriyaIdTop`): foydalanuvchi qo'lda "sotuv"
+ * yaratib qo'ygan bo'lsa, bu yerda "Sotuv" QAYTA yaratilmaydi — aks holda
+ * bazaning registrsiz unique indeksiga urilib savdoning O'ZI yiqilardi.
+ *
+ * Yaratish `upsert` bo'lib qoladi: eski `findFirst → create` ketma-ketligi
+ * ikkita parallel sotuvda `@@unique([nomi, turi, businessId])` ni buzib
+ * 500 xato berardi.
  */
 export async function ensureCategoryTx(
   tx: BusinessTx,
@@ -45,13 +51,17 @@ export async function ensureCategoryTx(
   nomi: string,
   turi: "kirim" | "chiqim" = "kirim"
 ): Promise<string> {
-  const cat = await tx.category.upsert({
-    where: { nomi_turi_businessId: { nomi, turi, businessId } },
-    update: {},
-    create: { businessId, nomi, turi },
-    select: { id: true },
-  });
-  return cat.id;
+  return kategoriyaIdTop(
+    () => tx.category.findMany({ where: { businessId, turi }, select: { id: true, nomi: true } }),
+    () =>
+      tx.category.upsert({
+        where: { nomi_turi_businessId: { nomi, turi, businessId } },
+        update: {},
+        create: { businessId, nomi, turi },
+        select: { id: true },
+      }),
+    nomi
+  );
 }
 
 /** Tranzaksiyadan tashqarida chaqirish uchun (bot, eski chaqiruvchilar). */
@@ -60,10 +70,12 @@ export async function ensureCategory(
   nomi: string,
   turi: "kirim" | "chiqim" = "kirim"
 ): Promise<string> {
-  const existing = await prisma.category.findFirst({ where: { businessId, nomi, turi } });
-  if (existing) return existing.id;
-  const created = await prisma.category.create({ data: { businessId, nomi, turi } });
-  return created.id;
+  return kategoriyaIdTop(
+    () =>
+      prisma.category.findMany({ where: { businessId, turi }, select: { id: true, nomi: true } }),
+    () => prisma.category.create({ data: { businessId, nomi, turi }, select: { id: true } }),
+    nomi
+  );
 }
 
 interface StockEntryParams {

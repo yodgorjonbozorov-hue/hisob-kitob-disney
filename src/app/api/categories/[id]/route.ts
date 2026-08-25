@@ -1,25 +1,24 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { requireManager, ForbiddenError } from "@/lib/auth/guard";
+import { requireManager } from "@/lib/auth/guard";
 import { withTenant } from "@/lib/auth/tenant";
 import { updateCategorySchema } from "@/lib/validation/category";
 import { resolveActiveBusinessId } from "@/lib/business";
+import { kategoriyaYangila } from "@/lib/services/kategoriya";
 
+/**
+ * Kategoriyani yangilash: nomi, turi, holati, kg bayrog'i.
+ *
+ * DELETE ATAYLAB YO'Q. Kategoriyaga tranzaksiya, budjet, qarz va CRM
+ * bitimlari FK bilan bog'langan — o'chirish yo so'rovni yiqitardi
+ * (`onDelete: Restrict`), yo tarixiy hisobotni buzardi. "Olib tashlash"ning
+ * yagona yo'li — `isActive = false` (nofaollashtirish): eski yozuvlar
+ * joyida qoladi, yangi formalarda esa kategoriya ko'rinmaydi.
+ */
 export const PATCH = withTenant<{ params: { id: string } }>(async (request, { params }, { session: user }) => {
   requireManager(user.rol);
 
   const businessId = await resolveActiveBusinessId(user);
-  const existing = await prisma.category.findUnique({
-    where: { id: params.id },
-    select: { businessId: true, turi: true },
-  });
-  if (!existing) {
-    return NextResponse.json({ error: "Kategoriya topilmadi" }, { status: 404 });
-  }
-  // Faqat aktiv biznes kategoriyasi o'zgartiriladi.
-  if (existing.businessId !== businessId) {
-    throw new ForbiddenError("Bu kategoriya boshqa biznesga tegishli");
-  }
+  if (!businessId) return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });
 
   const body = await request.json();
   const parsed = updateCategorySchema.safeParse(body);
@@ -27,19 +26,9 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
     return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
   }
 
-  // Kg savdosi bayrog'i faqat kirim kategoriyasida ma'noga ega (chiqimda
-  // "sotilgan kg" degan tushuncha yo'q).
-  if (parsed.data.kgAsosli && existing.turi !== "kirim") {
-    return NextResponse.json(
-      { error: "Kg savdosi faqat kirim kategoriyasida bo'ladi" },
-      { status: 400 }
-    );
-  }
-
-  const category = await prisma.category.update({
-    where: { id: params.id },
-    data: parsed.data,
-  });
-
+  // Egalik tekshiruvi, tizim kategoriyasi himoyasi va dublikat qoidalari —
+  // hammasi servisda (lib/services/kategoriya.ts), chunki ular API'dan
+  // tashqarida (testlar, kelajakdagi bot buyrug'i) ham bir xil bo'lishi kerak.
+  const category = await kategoriyaYangila(businessId, params.id, parsed.data);
   return NextResponse.json(category);
 });

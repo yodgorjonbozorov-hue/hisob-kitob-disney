@@ -5,6 +5,8 @@ import { resolveActiveBusinessId, getAccessibleBusinesses, getActiveBusiness } f
 import { isManager } from "@/lib/auth/roles";
 import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { listTransactions } from "@/lib/queries/transactions";
+import { getTezKategoriyalar } from "@/lib/queries/tezKategoriyalar";
+import { isTolovGuruhi, type TolovGuruhi } from "@/lib/tolovBolimi";
 import { formatSom } from "@/lib/format";
 import { dateOnlyStringToUTCDate, todayTashkentDateOnlyString } from "@/lib/date";
 import { isModuleOnForTenant } from "@/lib/modules/guard";
@@ -20,12 +22,24 @@ interface SearchParams {
   from?: string;
   to?: string;
   turi?: string;
+  /** To'lov guruhi: naqd | click | karta | qarz. */
+  tolov?: string;
   categoryId?: string;
+  /** "Kim kiritdi" filtri — xodim uchun so'rovda kelsa ham e'tiborga olinmaydi. */
+  xodimId?: string;
   q?: string;
   minSumma?: string;
   maxSumma?: string;
   page?: string;
 }
+
+/**
+ * Bir sahifada 50 ta yozuv. Ilgari 20 edi — telefonda "Keyingi" ni juda
+ * tez-tez bosishga to'g'ri kelardi; 999 ta yozuvni birdan yuklash esa
+ * brauzerni qotirardi. Filtr, qidiruv va JAMILAR baribir SERVERDA, butun
+ * to'plam bo'yicha hisoblanadi — sahifadagi 50 ta yozuv bo'yicha emas.
+ */
+const SAHIFA_HAJMI = 50;
 
 export default async function TranzaksiyalarPage({
   searchParams,
@@ -42,25 +56,29 @@ export default async function TranzaksiyalarPage({
   if (!businessId) {
     return (
       <div className="space-y-6">
-        <h1 className="text-xl sm:text-2xl font-bold text-fg">Kirim / Chiqim</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-fg">Kirim va chiqimlar</h1>
         <p className="text-muted">Sizga biznes biriktirilmagan. Admin bilan bog'laning.</p>
       </div>
     );
   }
 
-  const [result, categories, accounts, masullar, meningKassam] = await Promise.all([
+  const scopeUserId = transactionScopeUserId(session);
+  const [result, categories, accounts, masullar, meningKassam, tezKategoriyalar] = await Promise.all([
     listTransactions({
       businessId,
       // Xodim faqat o'zi kiritgan yozuvlarni ko'radi, direktor — barchasini.
-      userId: transactionScopeUserId(session),
+      userId: scopeUserId,
       from: searchParams.from,
       to: searchParams.to,
       turi: searchParams.turi,
+      tolov: isTolovGuruhi(searchParams.tolov) ? (searchParams.tolov as TolovGuruhi) : null,
       categoryId: searchParams.categoryId,
+      xodimId: searchParams.xodimId,
       q: searchParams.q,
       minSumma: searchParams.minSumma ? parseInt(searchParams.minSumma, 10) : null,
       maxSumma: searchParams.maxSumma ? parseInt(searchParams.maxSumma, 10) : null,
       page: searchParams.page ? parseInt(searchParams.page, 10) : 1,
+      pageSize: SAHIFA_HAJMI,
     }),
     prisma.category.findMany({
       where: { businessId, isActive: true },
@@ -78,6 +96,8 @@ export default async function TranzaksiyalarPage({
     // MENING KASSAM: foydalanuvchining shaxsiy kassasi (ledgerdan). Yuqoridagi
     // Naqd/Click/Qarz/Sof raqamlariga hech qanday ta'siri yo'q.
     getMeningKassam(businessId, session.userId, toshkentBugunBoshi()),
+    // Ko'p ishlatiladigan kategoriyalar — FAQAT formadagi tartib uchun.
+    getTezKategoriyalar(businessId, scopeUserId),
   ]);
 
   // QARZ bo'limi jami — uchta manba qo'shiladi:
@@ -95,7 +115,6 @@ export default async function TranzaksiyalarPage({
     manbaTransactionId: null,
   };
   {
-    const scopeUserId = transactionScopeUserId(session);
     if (scopeUserId) qarzWhereDebt.userId = scopeUserId;
     if (searchParams.from || searchParams.to) {
       const sana: Prisma.DateTimeFilter = {};
@@ -117,7 +136,6 @@ export default async function TranzaksiyalarPage({
       transactionId: null,
       deletedAt: null,
     };
-    const scopeUserId = transactionScopeUserId(session);
     if (scopeUserId) qarzWhere.userId = scopeUserId;
     if (searchParams.from || searchParams.to) {
       const sana: Prisma.DateTimeFilter = {};
@@ -161,7 +179,9 @@ export default async function TranzaksiyalarPage({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl sm:text-2xl font-bold text-fg">Kirim / Chiqim</h1>
+      {/* Sarlavha va birlamchi amallar (+ Kirim / − Chiqim) bitta qatorda —
+          ular TransactionsClient ichida, chunki tugmalar forma holatini
+          boshqaradi. */}
       <TransactionsClient
         initialItems={result.items}
         initialTotal={result.total}
@@ -170,6 +190,10 @@ export default async function TranzaksiyalarPage({
         categories={categories}
         accounts={accounts}
         masullar={masullar}
+        // "Kim kiritdi" filtri faqat direktorga: xodim baribir o'z
+        // yozuvlarinigina ko'radi, ro'yxat unga faqat yolg'on tanlov berardi.
+        xodimlar={canMove ? masullar : []}
+        tezKategoriyalar={tezKategoriyalar}
         currentUserId={session.userId}
         currentUserRol={session.rol}
         hideProfit={hideProfit}
@@ -184,7 +208,9 @@ export default async function TranzaksiyalarPage({
           from: searchParams.from ?? "",
           to: searchParams.to ?? "",
           turi: searchParams.turi ?? "",
+          tolov: searchParams.tolov ?? "",
           categoryId: searchParams.categoryId ?? "",
+          xodimId: searchParams.xodimId ?? "",
           q: searchParams.q ?? "",
           minSumma: searchParams.minSumma ? formatSom(parseInt(searchParams.minSumma, 10)) : "",
           maxSumma: searchParams.maxSumma ? formatSom(parseInt(searchParams.maxSumma, 10)) : "",

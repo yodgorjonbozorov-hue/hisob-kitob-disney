@@ -191,7 +191,8 @@ test("yorliqlar: Kirim / Chiqim va Hisobotlar", () => {
   assert.equal(yorliq("/app/tranzaksiyalar"), "Kirim / Chiqim");
   assert.equal(yorliq("/app/hisobot"), "Hisobotlar");
   const tabs = registry.computeMobileTabs({ rol: "SELLER", yoqilgan: new Set(["MOLIYA"]), omborli: false });
-  assert.equal(tabs.find((t: any) => t.href === "/app/tranzaksiyalar")?.label, "Kirim / Chiqim");
+  // Pastki panel yorlig'i ataylab qisqaroq (375px da uch tab sig'ishi kerak).
+  assert.equal(tabs.find((t: any) => t.href === "/app/tranzaksiyalar")?.label, "Kirim/Chiqim");
 });
 
 test("computeNav: OMBORSIZ biznesda ham Qarzlar ko'rinadi", () => {

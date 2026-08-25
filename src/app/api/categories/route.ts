@@ -5,6 +5,7 @@ import { withTenant } from "@/lib/auth/tenant";
 import { createCategorySchema } from "@/lib/validation/category";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { oxirgiKgNarxlari } from "@/lib/queries/selos";
+import { kategoriyaYarat } from "@/lib/services/kategoriya";
 
 export const GET = withTenant(async (request, _ctx, { session: user }) => {
 
@@ -48,7 +49,9 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
     return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
   }
 
-  // Kategoriya aktiv biznes ostida yaratiladi.
-  const category = await prisma.category.create({ data: { ...parsed.data, businessId } });
+  // Kategoriya aktiv biznes ostida yaratiladi. Nomni tozalash, registrga
+  // befarq dublikat tekshiruvi va bazaning unique cheklovini tushunarli
+  // xabarga aylantirish — servisda (lib/services/kategoriya.ts).
+  const category = await kategoriyaYarat(businessId, parsed.data);
   return NextResponse.json(category, { status: 201 });
 });

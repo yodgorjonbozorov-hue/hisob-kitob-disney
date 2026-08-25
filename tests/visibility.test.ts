@@ -151,6 +151,12 @@ test("jami kirim/chiqim ham xodim ko'rgan yozuvlar bo'yicha hisoblanadi", async 
     naqdKirim: 200,
     clickKirim: 0,
     qarzKirim: 0,
+    // To'lov guruhlari taqsimoti ham AYNI chegarada — kirim va chiqim alohida.
+    taqsimot: {
+      kirim: { naqd: 200, click: 0, karta: 0 },
+      chiqim: { naqd: 50, click: 0, karta: 0 },
+      qarz: 0,
+    },
   });
 
   const owner = await runWithTenant(TENANT, () =>
@@ -163,6 +169,11 @@ test("jami kirim/chiqim ham xodim ko'rgan yozuvlar bo'yicha hisoblanadi", async 
     naqdKirim: 1500,
     clickKirim: 0,
     qarzKirim: 0,
+    taqsimot: {
+      kirim: { naqd: 1500, click: 0, karta: 0 },
+      chiqim: { naqd: 50, click: 0, karta: 0 },
+      qarz: 0,
+    },
   });
 });
 

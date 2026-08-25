@@ -2,17 +2,20 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 
 /**
- * SHAXSIY KASSA REJIMI TUGMASI (faqat boshqaruvchi).
+ * SHAXSIY KASSA REJIMI (faqat boshqaruvchi).
  *
  * Yoqilganda naqd yozuv uni KIRITGAN xodimning kassasiga tushadi va har faol
  * xodimga kassa ochiladi (api/businesses/[id]). O'chirilganda mavjud kassalar
  * va ularning tarixi TEGILMAYDI — faqat yangi yozuvlar yana umumiy kassaga
  * tusha boshlaydi.
+ *
+ * Panel endi sahifaning o'rtasida emas, "Kassa sozlamalari" ichida: bu
+ * kuniga bir marta ham bosilmaydigan sozlama, pul nazorati esa har kuni
+ * ochiladi — ekranning asosiy joyi o'shanga tegishli.
  */
 export function RejimPaneli({
   businessId,
@@ -26,7 +29,12 @@ export function RejimPaneli({
   const [band, setBand] = useState(false);
 
   async function almashtir() {
-    if (!yoqilgan && !confirm("Har faol xodimga shaxsiy kassa ochiladi va naqd yozuvlar o'sha kassalarga tusha boshlaydi. Davom etamizmi?")) {
+    if (
+      !yoqilgan &&
+      !confirm(
+        "Har faol xodimga shaxsiy kassa ochiladi va naqd yozuvlar o'sha kassalarga tusha boshlaydi. Davom etamizmi?"
+      )
+    ) {
       return;
     }
     setBand(true);
@@ -51,20 +59,23 @@ export function RejimPaneli({
   }
 
   return (
-    <Card>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-medium text-fg">Shaxsiy kassa rejimi</p>
-          <p className="text-2xs text-muted mt-1 max-w-xl">
-            Yoqilganda naqd pul yozuvni kiritgan xodimning o&apos;z kassasiga tushadi — &quot;kimning
-            qo&apos;lida qancha bor&quot; savoliga kassalar ro&apos;yxati javob beradi. O&apos;chiq
-            bo&apos;lsa hamma naqd umumiy kassaga tushadi.
-          </p>
-        </div>
-        <Button variant="secondary" onClick={almashtir} loading={band}>
-          {yoqilgan ? "O'chirish" : "Yoqish"}
-        </Button>
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-fg">
+          Shaxsiy kassa rejimi ·{" "}
+          <span className={yoqilgan ? "text-income" : "text-faint"}>
+            {yoqilgan ? "yoqilgan" : "o'chiq"}
+          </span>
+        </p>
+        <p className="text-2xs text-muted mt-1 max-w-xl">
+          Yoqilganda naqd pul yozuvni kiritgan xodimning o&apos;z kassasiga tushadi — &quot;kimning
+          qo&apos;lida qancha bor&quot; savoliga kassalar ro&apos;yxati javob beradi. O&apos;chiq
+          bo&apos;lsa hamma naqd umumiy kassaga tushadi.
+        </p>
       </div>
-    </Card>
+      <Button variant="secondary" onClick={almashtir} loading={band}>
+        {yoqilgan ? "O'chirish" : "Yoqish"}
+      </Button>
+    </div>
   );
 }
