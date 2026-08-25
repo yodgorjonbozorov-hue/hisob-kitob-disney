@@ -7,6 +7,7 @@ import { createUserSchema } from "@/lib/validation/user";
 import { hashPassword } from "@/lib/auth/password";
 import { requirePro } from "@/lib/billing/pro";
 import { biznesIdlariniHalQil, biriktiruvlarniYangila, birlamchiBiznes } from "@/lib/services/userBiznes";
+import { listXodimlar, xodimSanoqlari, xodimniOqi, type XodimHolat } from "@/lib/queries/xodimlar";
 
 const USER_SELECT = {
   id: true,
@@ -25,15 +26,36 @@ const USER_SELECT = {
   huquqMinus: true,
 } as const;
 
-export const GET = withTenant(async (_request, _ctx, { session: user }) => {
+/**
+ * XODIMLAR RO'YXATI — qidiruv/filtr/sahifalash SERVERDA.
+ *
+ * Ilgari bu route BARCHA xodimlarni bir massivda qaytarardi va filtrlash
+ * brauzerda bo'lardi. 500+ xodimda bu qabul qilib bo'lmas: butun ro'yxat
+ * har qidiruvda tarmoqdan o'tardi. Endi shartlar bazaga tushadi.
+ *
+ * Javob shakli: `{ items, total, page, pageSize, sanoq }`.
+ */
+export const GET = withTenant(async (request, _ctx, { session: user }) => {
   requireManager(user.rol);
 
-  const users = await prisma.user.findMany({
-    select: USER_SELECT,
-    orderBy: { createdAt: "asc" },
-  });
+  const p = new URL(request.url).searchParams;
+  const holatRaw = p.get("holat");
+  const holat: XodimHolat =
+    holatRaw === "faol" || holatRaw === "nofaol" ? holatRaw : "hammasi";
 
-  return NextResponse.json(users);
+  const [royxat, sanoq] = await Promise.all([
+    listXodimlar({
+      q: p.get("q") ?? undefined,
+      holat,
+      rol: p.get("rol"),
+      biznes: p.get("biznes"),
+      page: Number(p.get("page")) || 1,
+      pageSize: Number(p.get("pageSize")) || 50,
+    }),
+    xodimSanoqlari(),
+  ]);
+
+  return NextResponse.json({ ...royxat, sanoq });
 });
 
 export const POST = withTenant(async (request, _ctx, tenant) => {
@@ -87,6 +109,9 @@ export const POST = withTenant(async (request, _ctx, tenant) => {
       login: parsed.data.login,
       parolHash,
       rol: effectiveRol,
+      // Direktor qo'ygan parol VAQTINCHALIK — xodim birinchi kirishda o'zinikini
+      // qo'yadi (src/app/app/layout.tsx `mustChangePassword` ni ushlaydi).
+      mustChangePassword: true,
       businessId: birlamchiBiznes(biznesIdlar),
       roleId,
       huquqPlus: parsed.data.huquqPlus?.length ? JSON.stringify(parsed.data.huquqPlus) : undefined,
@@ -97,8 +122,7 @@ export const POST = withTenant(async (request, _ctx, tenant) => {
 
   await biriktiruvlarniYangila(created.id, biznesIdlar);
 
-  return NextResponse.json(
-    { ...created, bizneslar: biznesIdlar.map((businessId) => ({ businessId })) },
-    { status: 201 }
-  );
+  // Biriktiruvlar YOZILGANDAN keyin o'qiladi — aks holda javobdagi biznes
+  // nomlari bo'sh bo'lib, UI yangi xodimni "Barcha bizneslar" deb ko'rsatardi.
+  return NextResponse.json(await xodimniOqi(created.id), { status: 201 });
 });
