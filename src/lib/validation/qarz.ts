@@ -219,10 +219,40 @@ export const qarzTolovSchema = z.object({
   idempotencyKey: z.string().min(8).max(64).optional().nullable(),
 });
 
+/**
+ * MIJOZ BO'YICHA TO'LOV — bitta summa, mijozning barcha ochiq qarzlariga.
+ *
+ * `taqsimot` berilmasa server ENG ESKI OCHIQ QARZDAN boshlab taqsimlaydi
+ * (lib/services/qarz.ts dagi hujjatlangan qoida). Berilsa — aynan
+ * ko'rsatilganidek, lekin yig'indisi `summa` ga teng bo'lishi shart.
+ */
+export const qarzdorTolovSchema = z.object({
+  turi: z.enum(["olinadigan", "beriladigan"]),
+  /** `qarzdorKalit()` natijasi: "contact:<id>" yoki "ism:<kichik harf>". */
+  kalit: z.string().min(1, "Qarzdor kaliti berilmadi").max(200),
+  summa: z.number().int().positive("To'lov summasi 0 dan katta bo'lishi kerak"),
+  sana: sanaSchema.optional().nullable(),
+  tolovTuri: z.enum(QARZ_TOLOV_USULLARI).optional().nullable(),
+  accountId: z.string().min(1).optional().nullable(),
+  izoh: z.string().max(500).optional().nullable(),
+  idempotencyKey: z.string().min(8).max(64).optional().nullable(),
+  taqsimot: z
+    .array(
+      z.object({
+        debtId: z.string().min(1),
+        summa: z.number().int().positive(),
+      })
+    )
+    .max(50, "Bir to'lovda 50 tadan ko'p qarz yopilmaydi")
+    .optional()
+    .nullable(),
+});
+
 export const qarzBekorSchema = z.object({
   sabab: z.string().trim().min(3, "Bekor qilish sababini yozing").max(300),
 });
 
 export type CreateQarzInput = z.infer<typeof createQarzSchema>;
 export type QarzTolovInput = z.infer<typeof qarzTolovSchema>;
+export type QarzdorTolovInput = z.infer<typeof qarzdorTolovSchema>;
 export type QarzBekorInput = z.infer<typeof qarzBekorSchema>;

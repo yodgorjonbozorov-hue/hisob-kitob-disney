@@ -5,21 +5,25 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { formatSom, formatSomLabel, formatDateUz } from "@/lib/format";
 import { telKorinish } from "@/lib/validation/qarz";
+import { muddatHolati } from "@/lib/qarzMuddat";
+import { todayDateOnlyString } from "@/lib/date";
 import type { QarzdorTafsilotDTO } from "@/lib/queries/qarz";
 import { QarzdorTarix } from "./QarzdorTarix";
-import { QarzTolovForm, type KassaOption } from "./QarzTolovForm";
+import { QarzMuddatBadge } from "./QarzMuddatBadge";
+import { QarzdorTolovSheet } from "./QarzdorTolovSheet";
+import type { KassaOption } from "./QarzTolovForm";
 
 /**
- * QARZDOR TAFSILOTI — bitta shaxsning butun hisob-kitobi.
+ * QARZDOR TAFSILOTI — bitta shaxsning butun hisob-kitobi (5-talab).
  *
  * Ma'lumot ochilganda serverdan QAYTA o'qiladi (ro'yxatdagi nusxadan emas):
  * boshqa xodim shu orada to'lov kiritgan bo'lishi mumkin.
  *
- * TO'LOV QAYSI QARZGA YOZILADI: to'lov har doim ANIQ bitta `Debt` yozuviga
- * biriktiriladi — shu bois qarzdorda bir nechta ochiq qarz bo'lsa, forma
- * ustida tanlov chiqadi (birinchi bo'lib eng eskisi taklif qilinadi).
- * Avtomatik taqsimlash ataylab yo'q: qaysi qarz yopilgani buxgalteriya
- * qarori, dastur uni o'zi hal qilib qo'ymasligi kerak.
+ * Uch qavat: (1) jami/to'langan/qolgan; (2) ochiq qarzlarning ro'yxati —
+ * har biri o'z muddati va qoldig'i bilan; (3) butun harakat tarixi.
+ *
+ * TO'LOV alohida varaqda ochiladi (`QarzdorTolovSheet`): u yerda qaysi
+ * qarzga qancha tushishi tasdiqlashdan OLDIN ko'rinadi.
  */
 export function QarzdorTafsilot({
   kalit,
@@ -40,7 +44,6 @@ export function QarzdorTafsilot({
   const [qarzdor, setQarzdor] = useState<QarzdorTafsilotDTO | null>(null);
   const [xato, setXato] = useState<string | null>(null);
   const [tolovOchiq, setTolovOchiq] = useState(false);
-  const [tanlanganQarz, setTanlanganQarz] = useState<string>("");
 
   const yukla = useCallback(async () => {
     setXato(null);
@@ -53,8 +56,6 @@ export function QarzdorTafsilot({
         return;
       }
       setQarzdor(data);
-      // Eng eski ochiq qarz — odatda birinchi yopiladigan qarz.
-      setTanlanganQarz(data.ochiqQarzlar[0]?.id ?? "");
     } catch {
       setXato("Serverga ulanib bo'lmadi");
     }
@@ -65,31 +66,107 @@ export function QarzdorTafsilot({
   }, [yukla]);
 
   const beriladigan = turi === "beriladigan";
-  const joriy = qarzdor?.ochiqQarzlar.find((q) => q.id === tanlanganQarz) ?? null;
+  const bugun = todayDateOnlyString();
+
+  if (tolovOchiq && qarzdor) {
+    return (
+      <QarzdorTolovSheet
+        ism={qarzdor.ism}
+        tel={qarzdor.tel}
+        turi={qarzdor.turi}
+        kalit={qarzdor.kalit}
+        jamiQarz={qarzdor.jamiQarz}
+        ochiqQarzlar={qarzdor.ochiqQarzlar}
+        kassalar={kassalar}
+        onClose={() => setTolovOchiq(false)}
+        onDone={async () => {
+          setTolovOchiq(false);
+          await yukla();
+          onChanged();
+        }}
+      />
+    );
+  }
 
   return (
     <Modal open onClose={onClose} title={qarzdor ? qarzdor.ism : "Qarzdor"}>
-      {xato && <p className="text-expense text-sm">{xato}</p>}
+      {xato && (
+        <p className="text-expense text-sm" role="alert">
+          {xato}
+        </p>
+      )}
       {!qarzdor && !xato && <p className="text-faint text-sm">Yuklanmoqda...</p>}
 
       {qarzdor && (
         <div className="space-y-4">
-          <p className="text-sm text-muted">
-            {qarzdor.tel ? telKorinish(qarzdor.tel) : "telefon kiritilmagan"}
-          </p>
+          {qarzdor.tel ? (
+            <a
+              href={`tel:${qarzdor.tel}`}
+              className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-brand min-h-[44px]"
+            >
+              <span aria-hidden>📞</span>
+              {telKorinish(qarzdor.tel)}
+            </a>
+          ) : (
+            <p className="text-sm text-faint">telefon kiritilmagan</p>
+          )}
 
           <div className="rounded-xl bg-surface-2 px-4 py-3">
-            <p className="text-xs text-muted">
-              {beriladigan ? "Joriy qarzim" : "Joriy qarz"}
-            </p>
-            <p className="text-2xl font-bold tnum text-debt">
+            <p className="text-xs text-muted">{beriladigan ? "Joriy qarzim" : "Joriy qarz"}</p>
+            <p className="text-2xl font-bold tnum text-debt break-words">
               {formatSomLabel(qarzdor.jamiQarz)}
             </p>
-            <p className="text-2xs text-faint mt-0.5 tnum">
-              Jami olingan {formatSom(qarzdor.jamiBerilgan)} · to&apos;langan{" "}
-              {formatSom(qarzdor.jamiTolangan)}
-            </p>
+            <dl className="mt-2 grid grid-cols-2 gap-2 text-2xs">
+              <div>
+                <dt className="text-faint">Jami olingan</dt>
+                <dd className="text-fg tnum">{formatSom(qarzdor.jamiBerilgan)} so&apos;m</dd>
+              </div>
+              <div>
+                <dt className="text-faint">To&apos;langan</dt>
+                <dd className="text-income tnum">{formatSom(qarzdor.jamiTolangan)} so&apos;m</dd>
+              </div>
+            </dl>
           </div>
+
+          {/* OCHIQ QARZLAR — har biri alohida yozuv, o'z muddati bilan. */}
+          {qarzdor.ochiqQarzlar.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-muted mb-2">
+                Ochiq qarzlar ({qarzdor.ochiqQarzlar.length} ta)
+              </p>
+              <ul className="border border-line rounded-lg divide-y divide-line overflow-hidden">
+                {qarzdor.ochiqQarzlar.map((q) => {
+                  const { holat, kun } = muddatHolati(q.muddat, false, bugun);
+                  return (
+                    <li key={q.id} className="px-3 py-2.5 space-y-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm text-fg">
+                            {formatDateUz(new Date(q.sana))}
+                            <span className="text-muted tnum"> · {formatSom(q.jamiSumma)}</span>
+                          </p>
+                          {q.izoh && (
+                            <p className="text-2xs text-faint truncate">{q.izoh}</p>
+                          )}
+                        </div>
+                        <p className="text-sm font-semibold tnum text-debt whitespace-nowrap">
+                          {formatSom(q.qolgan)}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <QarzMuddatBadge holat={holat} kun={kun} kichik />
+                        {q.tolangan > 0 && (
+                          <span className="text-2xs text-muted tnum">
+                            {formatSom(q.tolangan)} to&apos;langan
+                          </span>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
 
           <div>
             <p className="text-xs font-medium text-muted mb-2">
@@ -98,55 +175,20 @@ export function QarzdorTafsilot({
             <QarzdorTarix hodisalar={qarzdor.hodisalar} />
           </div>
 
-          {!tolovOchiq && (
-            <div className="flex flex-wrap gap-2 justify-end">
-              <Button variant="secondary" onClick={() => onQarzQosh(qarzdor)}>
-                + Qarz qo&apos;shish
+          <div className="flex flex-wrap gap-2 justify-end">
+            <Button
+              variant="secondary"
+              className="min-h-[44px]"
+              onClick={() => onQarzQosh(qarzdor)}
+            >
+              + Qarz qo&apos;shish
+            </Button>
+            {qarzdor.ochiqQarzlar.length > 0 && (
+              <Button className="min-h-[44px]" onClick={() => setTolovOchiq(true)}>
+                {beriladigan ? "To'lov qilish" : "To'lov qabul qilish"}
               </Button>
-              {qarzdor.ochiqQarzlar.length > 0 && (
-                <Button onClick={() => setTolovOchiq(true)}>
-                  {beriladigan ? "+ To'lov qilish" : "+ To'lov qabul qilish"}
-                </Button>
-              )}
-            </div>
-          )}
-
-          {tolovOchiq && qarzdor.ochiqQarzlar.length > 1 && (
-            <div className="border-t border-line pt-3">
-              <label className="block text-xs text-muted mb-1" htmlFor="qarzdor-qaysi-qarz">
-                Qaysi qarzga yoziladi
-              </label>
-              <select
-                id="qarzdor-qaysi-qarz"
-                value={tanlanganQarz}
-                onChange={(e) => setTanlanganQarz(e.target.value)}
-                className="w-full rounded-lg border border-line px-3 py-2 text-sm bg-surface"
-              >
-                {qarzdor.ochiqQarzlar.map((q) => (
-                  <option key={q.id} value={q.id}>
-                    {formatDateUz(new Date(q.sana))} · qolgan {formatSom(q.qolgan)}
-                    {q.izoh ? ` · ${q.izoh}` : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {tolovOchiq && joriy && (
-            <QarzTolovForm
-              key={joriy.id}
-              debtId={joriy.id}
-              qolgan={joriy.qolgan}
-              beriladigan={beriladigan}
-              kassalar={kassalar}
-              onCancel={() => setTolovOchiq(false)}
-              onDone={async () => {
-                setTolovOchiq(false);
-                await yukla();
-                onChanged();
-              }}
-            />
-          )}
+            )}
+          </div>
         </div>
       )}
     </Modal>

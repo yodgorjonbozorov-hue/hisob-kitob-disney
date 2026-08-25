@@ -4477,3 +4477,111 @@ migratsiya + Postgres init.
 Test: `npm run test:kategoriya-boshqaruv` (19 ta) — dublikat (registr,
 bo'shliq, poyga), rename tarixi, nofaollashtirish/faollashtirish, tur
 o'zgarishi, tizim himoyasi, IDOR va RBAC, statistika.
+
+---
+
+## QARZLAR MODULI — to'lov taqsimoti, kategoriya atributsiyasi va mobil UX (2026-08-25)
+
+Modul allaqachon mustahkam edi: qarz kirim yozmasligi, to'lov sanasi bilan
+kirim, idempotentlik va tenant izolyatsiyasi ishlab turardi. Quyidagi uchta
+teshik yopildi va sahifa telefon uchun qayta terildi.
+
+### 1. Kategoriya atributsiyasi (eng muhim tuzatish)
+
+Ilgari HAR QANDAY qarz to'lovi zaxira "Qarz to'lovi" kategoriyasiga
+yozilardi. "Bantik" savdosidan chiqqan 500 ming qarz to'langanda hisobotdagi
+"Kirim — kategoriya bo'yicha" kesimida "Bantik" emas, "Qarz to'lovi"
+ko'rinardi: qarzga sotilgan tovarlarning butun tahlili yo'q edi.
+
+Endi `tolovKategoriyaTx` qarzning O'Z kategoriyasini ishlatadi. Ikki shart
+bilan: kategoriya ayni biznesniki va yo'nalishi mos (kirimga kirim
+kategoriyasi). Mos kelmasa — avvalgi zaxira nom.
+
+### 2. Ko'p qarzli to'lov taqsimoti — `qarzdorTolov`
+
+Bir mijozda uchta ochiq qarz bo'lsa, to'lov qaysi biriga tushishi degan
+savolga javob YO'Q edi: xodim qo'lda tanlardi. Yangi xizmat bitta summani
+mijozning barcha ochiq qarzlari bo'ylab ENG ESKISIDAN boshlab taqsimlaydi
+(FIFO). Qoida kodda ham, testda ham hujjatlangan.
+
+Har qarz uchun ALOHIDA `DebtPayment` va ALOHIDA kirim yoziladi — 1,2 mln
+to'lov uchta turli kategoriyadagi qarzni yopsa, kirim ham uchga bo'linib
+har biri o'z kategoriyasiga tushadi. Hammasi bitta `runBusinessTx` ichida.
+
+Qo'lda taqsimlash saqlanib qoldi: `taqsimot` berilsa aynan shunday yoziladi
+(yig'indisi summaga teng bo'lishi majburiy).
+
+Overpayment JIM qabul qilinmaydi — mijozning jami qoldig'idan ortiq summa
+aniq xato bilan rad etiladi. Yashirin avans/kredit balansi ATAYLAB
+yaratilmadi: tizimda bunday konsepsiya yo'q.
+
+Takror bosishdan himoya: kalit taqsimotdan OLDIN tekshiriladi. Bu shart —
+birinchi so'rov qarz qoldiqlarini o'zgartirgani uchun ikkinchi so'rov
+BOSHQA taqsimot hisoblab, uni yangi to'lov deb yozib yuborardi.
+
+### 3. Qarzdor agregatsiyasi va muddat tili
+
+`QarzdorDTO` boyidi: muddati o'tgan summa, eng yaqin muddat, eng eski qarz
+yoshi (kun), oxirgi to'lov summasi, kritiklik holati. Hammasi BITTA
+`findMany` dan quriladi — N+1 yo'q.
+
+`src/lib/qarzMuddat.ts` — muddat holatining YAGONA manbai (server ham,
+brauzer ham). Beshta holat: kechikdi / bugun / yaqin / keyin / muddatsiz.
+Faqat rangga tayanilmaydi: "7 kun kechikdi" matni har doim yonida.
+
+Dashboard: "Yaqin muddatli (7 kun)" qo'shildi; "Bugun to'langan" endi
+`debt.turi` bo'yicha ajratiladi — biz ta'minotchiga to'lagan pul mijozdan
+kelgan pul kartasiga qo'shilmaydi.
+
+### 4. UI
+
+KPI kartalar BOSILADI va tegishli filtrga o'tadi; telefonda ular
+gorizontal suriladigan lenta (beshta kartani 2 ustunga tersak ro'yxat
+ekrandan tushib ketardi). "Barcha" yo'nalishi olib tashlandi — aktiv va
+majburiyat aralashmasin.
+
+Tez filtr chiplari: Barchasi / Muddati o'tgan / Bugun / 7 kun ichida /
+Ochiq / Qisman to'langan / Yopilgan. Standart tartib — eng kritigi tepada.
+
+Qarzdor kartasi: jami qarz, ochiq qarzlar soni, muddati o'tgan summa, eng
+eski qarz yoshi, eng yaqin muddat, oxirgi to'lov, `tel:` qo'ng'iroq va
+to'g'ridan-to'g'ri "To'lov qabul qilish".
+
+`QarzdorTolovSheet` — yangi to'lov varag'i. Pul QAYSI qarzlarga tushishi
+tasdiqlashdan OLDIN ko'rinadi: avtomatik qoida jimgina ishlab ketmaydi.
+
+Dublikat mijoz ogohlantirishi: server mavjud kartochkani qaytarsa
+(`mavjud: true`), forma buni AYTADI — operator kiritgan telefon boshqa
+odamning kartochkasiga tegishli bo'lishi mumkin.
+
+### Fayllar
+
+Xizmat/so'rov: `src/lib/services/qarz.ts`, `src/lib/queries/qarz.ts`,
+`src/lib/services/mijozAniqla.ts`, `src/lib/validation/qarz.ts`,
+`src/lib/qarzMuddat.ts` (yangi).
+
+API: `src/app/api/debts/qarzdor/tolov/route.ts` (yangi),
+`src/app/api/debts/mijozlar/route.ts`.
+
+UI: `QarzlarClient.tsx`, `QarzKPI.tsx`, `QarzFiltrPanel.tsx`,
+`QarzdorRoyxat.tsx`, `QarzdorTafsilot.tsx`, `QarzJadval.tsx`,
+`QarzMuddatBadge.tsx` (yangi), `QarzdorTolovSheet.tsx` (yangi),
+`src/components/qarz/YangiMijozForm.tsx`.
+
+**Sxema o'zgarmadi, migratsiya yo'q.**
+
+### Test
+
+`npm run test:qarz-taqsimot` (13 ta, yangi) — FIFO taqsimoti, kategoriya
+atributsiyasi, faqat to'langan summaning kirimga tushishi, takror bosish
+(shu jumladan qarz to'liq yopilgandan keyingi holat), overpayment rad
+etilishi, qo'lda taqsimlash, ta'minotchi oqimi (chiqim, kirimga
+tushmaydi), tenant izolyatsiyasi va yopilgach tarixning saqlanishi.
+
+`npm run test:qarzlar-brauzer` (8 ta, yangi) — 1440/1280/768/390/375px da
+gorizontal skroll yo'qligi, sticky FAB pastki navigatsiya bilan
+to'qnashmasligi, raqamli klaviatura va to'lov varag'ining qatlam tartibi.
+Suratlar `tests/suratlar/` ga tushadi (repoga qo'shilmaydi).
+
+Regressiya: 48 to'plam o'tdi (qarz, qarzdorlik, qarz-mijoz, avto, atomik,
+agregat, audit, izolyatsiya, smoke va boshqalar) — yiqilgani yo'q.

@@ -67,6 +67,7 @@ export const POST = withTenant(async (request, _ctx, tenantCtx) => {
       ism: parsed.data.ism,
       tel: parsed.data.tel,
       ochiqQarz: 0,
+      mavjud: false,
     });
   }
 
