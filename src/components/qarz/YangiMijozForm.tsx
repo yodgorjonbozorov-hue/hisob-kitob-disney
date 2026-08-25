@@ -29,12 +29,15 @@ export function YangiMijozForm({
   const [tel, setTel] = useState("");
   const [izoh, setIzoh] = useState("");
   const [xato, setXato] = useState<string | null>(null);
+  // Server dublikatni topib mavjud kartochkani qaytarsa — shu matn.
+  const [ogoh, setOgoh] = useState<string | null>(null);
   const [saqlanmoqda, setSaqlanmoqda] = useState(false);
 
   async function saqla(e: FormEvent) {
     e.preventDefault();
     e.stopPropagation();
     setXato(null);
+    setOgoh(null);
     if (!ism.trim()) {
       setXato("Ism kiritilishi shart");
       return;
@@ -55,12 +58,29 @@ export function YangiMijozForm({
         setXato(javob.error ?? "Mijozni saqlab bo'lmadi");
         return;
       }
-      onYaratildi({
+      const tanlov = {
         contactId: javob.contactId ?? null,
         ism: javob.ism ?? ism.trim(),
         tel: javob.tel ?? tel.trim(),
         ochiqQarz: javob.ochiqQarz ?? 0,
-      });
+      };
+
+      // DUBLIKAT OGOHLANTIRISHI (18-talab): server shu ism/telefon bilan
+      // kartochka allaqachon borligini aniqlab, yangisini yaratmagan.
+      // Buni jim o'tkazib yuborish mumkin emas — operator kiritgan telefon
+      // BOSHQA odamning kartochkasiga tegishli bo'lishi mumkin.
+      if (javob.mavjud) {
+        setOgoh(
+          `Bu ma'lumot bilan mijoz allaqachon bor: ${tanlov.ism}` +
+            (tanlov.tel ? ` (${tanlov.tel})` : "") +
+            ". Yangi kartochka yaratilmadi — qarz mavjud mijozga yoziladi."
+        );
+        // Ogohlantirish o'qilishi uchun forma darhol yopilmaydi.
+        setSaqlanmoqda(false);
+        setTimeout(() => onYaratildi(tanlov), 1800);
+        return;
+      }
+      onYaratildi(tanlov);
     } catch {
       setXato("Serverga ulanib bo'lmadi");
     } finally {
@@ -117,6 +137,11 @@ export function YangiMijozForm({
       </div>
 
       {xato && <p className="text-2xs text-expense-fg">{xato}</p>}
+      {ogoh && (
+        <p className="text-2xs text-warning bg-warning/10 rounded-lg px-2 py-1.5" role="status">
+          {ogoh}
+        </p>
+      )}
 
       <div className="flex gap-2 justify-end">
         <Button type="button" variant="secondary" onClick={onBekor} disabled={saqlanmoqda}>
