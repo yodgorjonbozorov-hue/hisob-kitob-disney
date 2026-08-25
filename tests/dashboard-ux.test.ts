@@ -324,3 +324,169 @@ test("davriy hisobot: boshqa tenantda nol", async () => {
   assert.equal(h.jamiKirim, 0);
   assert.equal(h.qatorlar.length, 0);
 });
+
+// ---------- 8. Dashboard keshi (dashboardCached.ts integratsiyasi) ----------
+//
+// `keshlangan()` kesh kalitiga [nomi, tenantId, businessId, ...argumentlar]
+// ni kiritadi va callback ichida `runWithTenant` ni QAYTA o'rnatadi
+// (lib/cache.ts). Shu ikki qoida buzilsa bir mijozning raqami boshqasiga
+// ko'rinib ketardi — quyidagi testlar aynan shuni qo'riqlaydi.
+//
+// DIQQAT: node:test muhitida Next kesh infratuzilmasi yo'q, shuning uchun
+// `keshlangan()` to'g'ridan-to'g'ri chaqiruvga tushadi (lib/cache.ts dagi
+// "incremental cache" fallback'i). Ya'ni bu yerda KALIT/SCOPE mantiqi
+// tekshiriladi; keshning O'ZI va bekor qilinishi haqiqiy Next runtime'ida
+// (tests/smoke-brauzer.test.ts) sinaladi.
+
+test("kesh: o'ralgan funksiyalar o'ralmagani bilan bir xil natija beradi", async () => {
+  const kesh = await import("@/lib/queries/dashboardCached");
+  const [xomKassa, keshKassa] = await A(async () => [
+    await accountsQ.getKassaHolati(tA.business.id),
+    await kesh.getKassaHolatiKesh(tA.business.id),
+  ]);
+  assert.deepEqual(keshKassa, xomKassa);
+
+  const [xomBugun, keshBugun] = await A(async () => [
+    await bugunQ.getBugungiHolat(tA.business.id, BUGUN, true),
+    await kesh.getBugungiHolatKesh(tA.business.id, BUGUN, true),
+  ]);
+  assert.deepEqual(keshBugun, xomBugun);
+});
+
+test("kesh: BOSHQA TENANT ma'lumotini hech qachon qaytarmaydi", async () => {
+  const kesh = await import("@/lib/queries/dashboardCached");
+  // A'da pul bor (yuqoridagi testlar yozgan), B — bo'sh.
+  const a = await A(async () => kesh.getKassaHolatiKesh(tA.business.id));
+  const b = await B(async () => kesh.getKassaHolatiKesh(tB.business.id));
+  // A'da harakat bo'lgan (qoldiq manfiy ham bo'lishi mumkin — yuqoridagi
+  // testlar chiqim yozgan), B esa butunlay toza.
+  assert.notEqual(a.faolJami, 0, "A tenantda kassa harakati bo'lishi kerak");
+  assert.equal(b.faolJami, 0, "B tenantga A'ning qoldig'i sizib o'tdi");
+  assert.equal(b.faolSoni, 1, "B faqat O'Z kassasini ko'rishi kerak");
+
+  const aBugun = await A(async () => kesh.getBugungiHolatKesh(tA.business.id, BUGUN, true));
+  const bBugun = await B(async () => kesh.getBugungiHolatKesh(tB.business.id, BUGUN, true));
+  assert.ok(aBugun.kirim > 0);
+  assert.equal(bBugun.kirim, 0, "B tenantga A'ning kirimi sizib o'tdi");
+  assert.equal(bBugun.qarzgaYozilgan, 0);
+  assert.equal(bBugun.crm.yangiSoni, 0);
+});
+
+test("kesh: BITTA tenant ichidagi ikki biznes aralashmaydi", async () => {
+  // Kesh kaliti businessId'ni ham o'z ichiga oladi. Agar olmaganda, bir
+  // kompaniyaning ikkinchi biznesi birinchisining raqamlarini ko'rardi.
+  const kesh = await import("@/lib/queries/dashboardCached");
+  const ikkinchi = await A(async () =>
+    prisma.business.create({ data: { nomi: "Ikkinchi biznes" } })
+  );
+  await A(async () =>
+    prisma.account.create({ data: { businessId: ikkinchi.id, nomi: "Naqd", turi: "naqd" } })
+  );
+
+  const birinchi = await A(async () => kesh.getKassaHolatiKesh(tA.business.id));
+  const boshqa = await A(async () => kesh.getKassaHolatiKesh(ikkinchi.id));
+  assert.notEqual(birinchi.faolJami, 0);
+  assert.equal(boshqa.faolJami, 0, "ikkinchi biznes birinchisining qoldig'ini ko'rdi");
+  assert.equal(boshqa.faolSoni, 1);
+
+  const bugun = await A(async () => kesh.getBugungiHolatKesh(ikkinchi.id, BUGUN, true));
+  assert.equal(bugun.kirim, 0);
+  assert.equal(bugun.kassaJami, 0);
+});
+
+test("kesh: tenant konteksti bo'lmasa XATO beradi (jimgina qaytarmaydi)", async () => {
+  // Fail-closed: kalitni tenantId'siz qurishdan ko'ra yiqilgan ma'qul.
+  const kesh = await import("@/lib/queries/dashboardCached");
+  await assert.rejects(() => kesh.getKassaHolatiKesh(tA.business.id), /Tenant konteksti/);
+  await assert.rejects(
+    () => kesh.getBugungiHolatKesh(tA.business.id, BUGUN, true),
+    /Tenant konteksti/
+  );
+});
+
+test("kesh: yangi yozuvdan keyin qayta hisoblangan qiymat o'zgaradi", async () => {
+  // Keshning O'ZI Next runtime'ida bekor qilinadi; bu yerda esa bekor
+  // qilingandan KEYIN qaytadigan qiymat to'g'ri ekani tekshiriladi.
+  const kesh = await import("@/lib/queries/dashboardCached");
+  const oldin = await A(async () => kesh.getKassaHolatiKesh(tA.business.id));
+  await A(async () =>
+    createTransaction(tA.user.id, tA.business.id, {
+      turi: "kirim", categoryId: kirimCat.id, summa: 33_000, sana: BUGUN, accountId: naqd.id,
+    })
+  );
+  const keyin = await A(async () => kesh.getKassaHolatiKesh(tA.business.id));
+  assert.equal(keyin.faolJami, oldin.faolJami + 33_000);
+});
+
+// ---------- 9. Kesh bekor qilinishi: statik qo'riqchi ----------
+
+test("dashboardga ta'sir qiladigan HAR bir API route keshni bekor qiladi", async () => {
+  /*
+   * Bu test kodni EMAS, QOIDANI qo'riqlaydi: dashboard raqamiga ta'sir
+   * qiladigan yozuv route'i `dashboardYangilandi(businessId)` chaqirmasa,
+   * foydalanuvchi 60 soniyagacha eski raqamni ko'rib turadi. Bunday
+   * xatoni ko'z bilan topib bo'lmaydi — shuning uchun avtomatik.
+   *
+   * Yangi route qo'shilib bu test qizarsa: yo `dashboardYangilandi` ni
+   * qo'shing, yo (haqiqatan ta'sir qilmasa) quyidagi ISTISNO ro'yxatiga
+   * SABABI bilan yozing.
+   */
+  const { readFileSync, readdirSync, statSync } = await import("node:fs");
+  const { join } = await import("node:path");
+
+  /** Dashboard so'rovlari o'qiydigan modellar. */
+  const MODELLAR = [
+    "transaction", "account", "accountTransfer", "debt", "debtPayment",
+    "deal", "sale", "stockEntry", "receipt",
+  ];
+  /** Shu modellarga yozadigan xizmat qatlami funksiyalari. */
+  const XIZMATLAR = [
+    "createTransaction", "updateTransaction", "createQarz", "qarzTolov", "qarzBekor",
+    "createAccount", "updateAccount", "deleteAccount", "createTransfer", "transferQaror",
+    "createDeal", "moveDeal", "kirimgaKochirish", "createSale", "sotuvBekor",
+  ];
+  /**
+   * ISTISNOLAR — sababi bilan.
+   *
+   * `businesses/route.ts`: YANGI biznes va uning birinchi kassasini
+   * yaratadi. Kesh kaliti `businessId` ni o'z ichiga oladi, ya'ni hali
+   * mavjud bo'lmagan biznes uchun keshda yozuv ham bo'lishi mumkin emas.
+   */
+  const ISTISNO = new Set(["src/app/api/businesses/route.ts"]);
+
+  /*
+   * CHAQIRUV izlanadi, import EMAS: `import { dashboardYangilandi } ...`
+   * qatori faylda qolib, chaqiruvning o'zi o'chirilgan holat eng xavflisi —
+   * ko'z bilan qaraganda "hammasi joyida" ko'rinadi.
+   */
+  const chaqiruv = /\bdashboardYangilandi\s*\(/;
+
+  const yozish = new RegExp(
+    `\\b(?:prisma|tx|rawPrisma)\\.(?:${MODELLAR.join("|")})\\.` +
+      `(?:create|createMany|update|updateMany|delete|deleteMany|upsert)\\b`
+  );
+  const xizmat = new RegExp(`\\b(?:${XIZMATLAR.join("|")})\\s*\\(`);
+
+  const fayllar: string[] = [];
+  (function yur(dir: string) {
+    for (const nom of readdirSync(dir)) {
+      const yol = join(dir, nom);
+      if (statSync(yol).isDirectory()) yur(yol);
+      else if (nom === "route.ts") fayllar.push(yol.split("\\").join("/"));
+    }
+  })("src/app/api");
+  assert.ok(fayllar.length > 40, `route fayllari topilmadi (${fayllar.length} ta)`);
+
+  const buzilgan: string[] = [];
+  for (const yol of fayllar) {
+    if (ISTISNO.has(yol)) continue;
+    const matn = readFileSync(yol, "utf8");
+    if (!yozish.test(matn) && !xizmat.test(matn)) continue;
+    if (!chaqiruv.test(matn)) buzilgan.push(yol);
+  }
+  assert.deepEqual(
+    buzilgan,
+    [],
+    "quyidagi route'lar dashboard keshini bekor qilmaydi:\n  " + buzilgan.join("\n  ")
+  );
+});

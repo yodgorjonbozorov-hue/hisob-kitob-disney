@@ -4,6 +4,7 @@ import { requireManager } from "@/lib/auth/guard";
 import { withTenant } from "@/lib/auth/tenant";
 import { updateBusinessSchema } from "@/lib/validation/business";
 import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
+import { dashboardYangilandi } from "@/lib/cache";
 
 export const PATCH = withTenant<{ params: { id: string } }>(async (request, { params }, { session: user }) => {
   requireManager(user.rol);
@@ -28,6 +29,9 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
   // kassaga tushib ketardi va rejim jimgina ishlamay turardi.
   if (parsed.data.shaxsiyKassa === true) {
     await shaxsiyKassalarniOch(business.id);
+    // Yangi kassalar ochildi — "Kassadagi pul" kartasidagi faol kassa soni
+    // o'zgardi.
+    dashboardYangilandi(business.id);
   }
 
   return NextResponse.json(business);

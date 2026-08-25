@@ -5,6 +5,7 @@ import { ForbiddenError, BadRequestError } from "@/lib/auth/guard";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { moveDeal, biznesXodimi } from "@/lib/crm/service";
 import { buyurtmaPatchSchema } from "@/lib/validation/crm";
+import { dashboardYangilandi } from "@/lib/cache";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import type { Prisma } from "@prisma/client";
 
@@ -102,6 +103,11 @@ export const PATCH = withTenant<{ params: { id: string } }>(
         userId: user.userId,
       });
     }
+
+    // Dashboardga uch yo'l bilan ta'sir qiladi: summa/sana tahriri
+    // "yangi buyurtmalar" ni, WON bosqichiga ko'chirish "yutilgan" ni,
+    // `kirimYoz` esa KIRIM tranzaksiyasini o'zgartiradi.
+    dashboardYangilandi(businessId);
 
     const deal = await prisma.deal.findFirst({
       where: { id: params.id, businessId },

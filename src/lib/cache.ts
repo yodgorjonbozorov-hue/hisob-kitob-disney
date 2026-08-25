@@ -58,8 +58,20 @@ export function keshlangan<A extends unknown[], R>(
     try {
       return await oralik(tenantId, businessId, ...args);
     } catch (error) {
-      // Next kesh infratuzilmasi yo'q muhitda (test, skript) — to'g'ridan-to'g'ri.
-      if (error instanceof Error && /incremental cache|static generation store/i.test(error.message)) {
+      /*
+       * Next kesh infratuzilmasi yo'q muhitda (test, skript, bot, cron) —
+       * to'g'ridan-to'g'ri chaqiramiz.
+       *
+       * NAMUNA MUHIM: Next 14 xabari `Invariant: incrementalCache missing in
+       * unstable_cache ...` — BITTA so'z, bo'shliqsiz. Ilgari bu yerda faqat
+       * bo'shliqli "incremental cache" qidirilardi va fallback hech qachon
+       * ishlamasdi: Next'siz muhitda `keshlangan()` fallback o'rniga
+       * yiqilardi. `\s?` ikkala yozuvni ham qamrab oladi.
+       */
+      if (
+        error instanceof Error &&
+        /incremental\s?cache|static generation store/i.test(error.message)
+      ) {
         return fn(businessId, ...args);
       }
       throw error;

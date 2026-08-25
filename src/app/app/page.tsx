@@ -30,10 +30,10 @@ import {
   getQarzJamlariKesh,
   getTolovTaqsimotiKesh,
   getOmborKartasiKesh,
+  getKassaHolatiKesh,
+  getBugungiHolatKesh,
 } from "@/lib/queries/dashboardCached";
 import { getTodayTotals } from "@/lib/queries/shift";
-import { getKassaHolati } from "@/lib/queries/accounts";
-import { getBugungiHolat } from "@/lib/queries/bugun";
 import { listTransactions } from "@/lib/queries/transactions";
 import { getProBugun } from "@/lib/queries/proDashboard";
 import { getKgSavdo } from "@/lib/queries/selos";
@@ -146,8 +146,8 @@ export default async function DashboardPage({
     kgPanel ? getKgSavdo(businessId, todayTashkentDateOnlyString()) : Promise.resolve(null),
     // "Kassadagi pul" kartasi — FAOL kassalardagi joriy qoldiq. Bu oy
     // ko'rsatkichi EMAS: butun davr bo'yicha kirim − chiqim ± o'tkazmalar.
-    getKassaHolati(businessId),
-    getBugungiHolat(businessId, bugunStr, crmKorinadi),
+    getKassaHolatiKesh(businessId),
+    getBugungiHolatKesh(businessId, bugunStr, crmKorinadi),
   ]);
 
   // Kategoriya tafsiloti uchun oy oralig'i, "YYYY-MM-DD" (ikkala chet kiradi).

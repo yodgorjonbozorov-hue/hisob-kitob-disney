@@ -416,6 +416,120 @@ test("kirim qo'shiladi va ro'yxatda ko'rinadi", { skip: sabab }, async () => {
   await page.context().close();
 });
 
+// ---------- Dashboard keshi (haqiqiy Next runtime) ----------
+
+/*
+ * NEGA AYNAN BRAUZERDA.
+ *
+ * `unstable_cache` faqat Next server ichida ishlaydi — node:test muhitida
+ * `keshlangan()` fallback bilan to'g'ridan-to'g'ri chaqiruvga tushadi
+ * (lib/cache.ts). Ya'ni "kesh bekor qilinmayapti" xatosini FAQAT shu yerda,
+ * haqiqiy `next start` ostida ushlash mumkin.
+ *
+ * Sinov mantiqi: dashboard raqamini o'qiymiz -> API orqali ma'lumot
+ * o'zgartiramiz -> sahifani QAYTA ochamiz. Kesh 60 soniya yashaydi, test esa
+ * bir necha soniyada tugaydi; demak raqam o'zgargan bo'lsa — uni faqat
+ * `dashboardYangilandi()` yangilagan bo'ladi, TTL emas.
+ */
+
+/**
+ * Sahifa ichidan API so'rovi (sessiya cookie'si bilan).
+ * `tana` berilsa POST, aks holda GET.
+ */
+async function sorov(
+  page: Page,
+  yol: string,
+  tana?: unknown
+): Promise<{ ok: boolean; status: number; matn: string }> {
+  return page.evaluate(
+    async ([u, b]) => {
+      const res = await fetch(u as string, {
+        method: b === null ? "GET" : "POST",
+        headers: b === null ? {} : { "Content-Type": "application/json" },
+        body: b === null ? undefined : JSON.stringify(b),
+      });
+      return { ok: res.ok, status: res.status, matn: await res.text() };
+    },
+    [yol, tana === undefined ? null : tana] as [string, unknown]
+  );
+}
+
+/** "N ta faol kassa" qatoridan sonni oladi (Kassadagi pul kartasi). */
+async function faolKassaSoni(page: Page): Promise<number> {
+  const matn = await page.locator("text=/\\d+ ta faol kassa/").first().innerText();
+  const son = Number(matn.match(/(\d+)\s+ta faol kassa/)?.[1]);
+  assert.ok(Number.isFinite(son), `"faol kassa" qatori topilmadi: "${matn}"`);
+  return son;
+}
+
+test("kassa ochilganda dashboard keshi darhol bekor qilinadi", { skip: sabab }, async () => {
+  const page = await yangiSahifa();
+  await kir(page);
+  await och(page, "/app");
+
+  const oldin = await faolKassaSoni(page);
+
+  // So'rov SAHIFA ICHIDAN yuboriladi — brauzer sessiya cookie'sini o'zi
+  // qo'shadi (Playwright'ning `page.request` i alohida cookie jar ishlatadi
+  // va 401 qaytarardi).
+  const javob = await sorov(page, "/api/accounts", {
+    nomi: `E2E kassa ${Date.now()}`,
+    turi: "naqd",
+  });
+  assert.ok(javob.ok, `kassa ochilmadi: HTTP ${javob.status} — ${javob.matn.slice(0, 200)}`);
+
+  await och(page, "/app");
+  const keyin = await faolKassaSoni(page);
+  assert.equal(
+    keyin,
+    oldin + 1,
+    "kassa ochilgandan keyin dashboard eski (keshlangan) sonni ko'rsatdi"
+  );
+  await xatosiz(page);
+  await page.context().close();
+});
+
+test("CRM buyurtmasi 'Bugungi holat' blokini darhol yangilaydi", { skip: sabab }, async () => {
+  const page = await yangiSahifa();
+  await kir(page);
+  await och(page, "/app");
+
+  /** "Yangi buyurtmalar" katagi ostidagi "N ta" qatori. */
+  const buyurtmaSoni = async (): Promise<number> => {
+    const katak = page.locator("a", { has: page.locator("text=Yangi buyurtmalar") }).first();
+    const matn = await katak.innerText();
+    const son = Number(matn.match(/(\d+)\s*ta/)?.[1]);
+    assert.ok(Number.isFinite(son), `"Yangi buyurtmalar" katagi o'qilmadi: "${matn}"`);
+    return son;
+  };
+
+  const oldin = await buyurtmaSoni();
+
+  // Buyurtma KIRIM kategoriyasini talab qiladi.
+  const katJavob = await sorov(page, "/api/categories?turi=kirim");
+  assert.ok(katJavob.ok, `kategoriyalar olinmadi: HTTP ${katJavob.status}`);
+  const kategoriyalar = JSON.parse(katJavob.matn) as Array<{ id: string }>;
+  assert.ok(kategoriyalar.length > 0, "kirim kategoriyasi yo'q — seed ishlamagan");
+
+  const bugun = new Date().toISOString().slice(0, 10);
+  const javob = await sorov(page, "/api/crm/deals", {
+    nomi: `E2E buyurtma ${Date.now()}`,
+    categoryId: kategoriyalar[0].id,
+    summa: 250000,
+    sana: bugun,
+  });
+  assert.ok(javob.ok, `buyurtma yaratilmadi: HTTP ${javob.status} — ${javob.matn.slice(0, 200)}`);
+
+  await och(page, "/app");
+  assert.equal(
+    await buyurtmaSoni(),
+    oldin + 1,
+    "buyurtmadan keyin 'Bugungi holat' eski (keshlangan) sonni ko'rsatdi"
+  );
+  await xatosiz(page);
+  await page.context().close();
+});
+
 // ---------- Sozlamalar ----------
 
 test("modullar sozlamalarda ko'rinadi", { skip: sabab }, async () => {

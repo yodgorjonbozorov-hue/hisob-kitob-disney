@@ -8,6 +8,8 @@ import {
 import { getQarzJamlari } from "@/lib/queries/qarz";
 import { getTolovTaqsimoti } from "@/lib/queries/tolovTaqsimoti";
 import { getOmborKartasi } from "@/lib/queries/inventory";
+import { getKassaHolati } from "@/lib/queries/accounts";
+import { getBugungiHolat } from "@/lib/queries/bugun";
 
 /**
  * Dashboard so'rovlarining KESHLANGAN variantlari (60 s).
@@ -43,3 +45,26 @@ export const getTolovTaqsimotiKesh = keshlangan("dashboard:tolov-taqsimoti", get
  * o'zgarishi kartada darhol ko'rinadi.
  */
 export const getOmborKartasiKesh = keshlangan("dashboard:ombor-kartasi", getOmborKartasi);
+/**
+ * "Kassadagi pul" kartasi — faol kassalar joriy qoldig'i.
+ *
+ * Qoldiqqa TA'SIR QILADIGAN har bir amal `dashboardYangilandi(businessId)`
+ * chaqiradi: tranzaksiya (yozish/tahrir/o'chirish/tiklash/import/ko'chirish),
+ * kassalararo o'tkazma va uning qarori, hamda kassaning O'ZI o'zgarganda
+ * (ochish, nomlash, faol/nofaol qilish, o'chirish) — oxirgisi `faolSoni` va
+ * `nofaolJami` ni o'zgartiradi.
+ */
+export const getKassaHolatiKesh = keshlangan("dashboard:kassa-holati", getKassaHolati);
+/**
+ * "Bugungi holat" bloki.
+ *
+ * Kesh kalitiga `sana` ham kiradi (keshlangan() barcha argumentlarni kalitga
+ * qo'shadi) — shuning uchun yarim tundan keyin eski kunning bloki qaytmaydi:
+ * yangi kun = yangi kalit. `crmYoqilgan` ham kalitda: modul yoqib/o'chirilsa
+ * blok tarkibi darhol mos keladi.
+ *
+ * Bekor qilinishi: tranzaksiya va kassa amallaridan tashqari QARZ (yozish,
+ * to'lov, bekor) va CRM buyurtmasi (yaratish, tahrir, bosqichga ko'chirish,
+ * kirimga o'tkazish) ham `dashboardYangilandi(businessId)` chaqiradi.
+ */
+export const getBugungiHolatKesh = keshlangan("dashboard:bugungi-holat", getBugungiHolat);
