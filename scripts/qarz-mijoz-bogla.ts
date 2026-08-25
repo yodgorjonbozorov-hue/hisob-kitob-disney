@@ -49,6 +49,8 @@ function ismKalit(ism: string): string {
 }
 
 interface Hisobot {
+  /** Shu biznesdagi `contactId = null` qarzlarning JAMI soni. */
+  jami: number;
   boglandi: number;
   /** Ism ATAYLAB saqlanmaydi — ommaviy logga tushmasin. */
   ikkilanish: Array<{ debtId: string; nechta: number }>;
@@ -56,7 +58,7 @@ interface Hisobot {
 }
 
 async function biznesniIshla(businessId: string, yoz: boolean): Promise<Hisobot> {
-  const hisobot: Hisobot = { boglandi: 0, ikkilanish: [], topilmadi: 0 };
+  const hisobot: Hisobot = { jami: 0, boglandi: 0, ikkilanish: [], topilmadi: 0 };
 
   const [contacts, debts] = await Promise.all([
     rawPrisma.contact.findMany({
@@ -69,7 +71,15 @@ async function biznesniIshla(businessId: string, yoz: boolean): Promise<Hisobot>
     }),
   ]);
 
-  if (contacts.length === 0 || debts.length === 0) return hisobot;
+  hisobot.jami = debts.length;
+  if (debts.length === 0) return hisobot;
+
+  // Kartochkasi UMUMAN yo'q biznes: bog'lanadigan joy yo'q, lekin qarzlar
+  // baribir hisobga olinadi — aks holda "jami" son kam ko'rsatilardi.
+  if (contacts.length === 0) {
+    hisobot.topilmadi = debts.length;
+    return hisobot;
+  }
 
   const telBoyicha = new Map<string, string>();
   const ismBoyicha = new Map<string, string[]>();
@@ -123,6 +133,7 @@ async function main() {
 
   // Biznes NOMI o'qilmaydi ham, chiqarilmaydi ham — log ommaviy.
   const bizneslar = await rawPrisma.business.findMany({ select: { id: true } });
+  let jamiQarz = 0;
   let jamiBoglandi = 0;
   let jamiTopilmadi = 0;
   let tegishliBiznes = 0;
@@ -130,8 +141,9 @@ async function main() {
 
   for (const b of bizneslar) {
     const h = await biznesniIshla(b.id, yoz);
-    if (h.boglandi === 0 && h.topilmadi === 0 && h.ikkilanish.length === 0) continue;
+    if (h.jami === 0) continue;
     tegishliBiznes += 1;
+    jamiQarz += h.jami;
     jamiBoglandi += h.boglandi;
     jamiTopilmadi += h.topilmadi;
     jamiIkkilanish.push(...h.ikkilanish);
@@ -140,9 +152,16 @@ async function main() {
 
   console.log("");
   console.log(yoz ? "YOZILDI" : "KO'RISH REJIMI (bazaga yozilmadi)");
+  console.log(`  contactId=null qarz   : ${jamiQarz}  (JAMI)`);
   console.log(`  Kartochkaga bog'landi : ${jamiBoglandi}`);
   console.log(`  Mos kartochka yo'q    : ${jamiTopilmadi}`);
   console.log(`  Ikkilanish (qo'lda)   : ${jamiIkkilanish.length}`);
+
+  const yigindi = jamiBoglandi + jamiTopilmadi + jamiIkkilanish.length;
+  if (yigindi !== jamiQarz) {
+    console.log("");
+    console.log(`OGOHLANTIRISH: bo'laklar yig'indisi ${yigindi} != jami ${jamiQarz}`);
+  }
 
   if (jamiIkkilanish.length > 0) {
     console.log("");

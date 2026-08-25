@@ -221,3 +221,42 @@ test("Qarzdorlar ro'yxati bog'langandan keyin ham to'g'ri jamlaydi", async () =>
   assert.ok(ali, "bog'langan qarz kartochka kaliti bilan chiqishi kerak");
   assert.equal(ali.qarz, 500_000);
 });
+
+test("Kartochkasi UMUMAN yo'q biznesdagi qarzlar ham hisobga olinadi", async () => {
+  // REGRESSIYA HIMOYASI: ilgari `contacts.length === 0` bo'lsa funksiya
+  // darhol nol qaytarardi va bunday biznesdagi qarzlar hisobotda UMUMAN
+  // ko'rinmasdi — ya'ni "jami" son kam ko'rsatilardi. Endi ular
+  // "mos kartochka yo'q" bo'lib sanaladi.
+  const T2 = await createTenantWithOwner({
+    kompaniyaNomi: "Kartochkasiz biznes",
+    ism: "Egasi",
+    login: "+998900000402",
+    parol: "parol12345",
+  });
+
+  await rawPrisma.debt.create({
+    data: {
+      businessId: T2.business.id,
+      turi: "olinadigan",
+      mijozNomi: "Kimdir",
+      mijozTel: null,
+      jamiSumma: 90_000,
+      status: "OPEN",
+      sana: new Date("2026-08-01T00:00:00.000Z"),
+      userId: T2.user.id,
+    },
+  });
+
+  const kartochka = await rawPrisma.contact.count({
+    where: { businessId: T2.business.id, deletedAt: null },
+  });
+  assert.equal(kartochka, 0, "bu biznesda kartochka bo'lmasligi kerak");
+
+  const chiqish = skript(false);
+  // Jami songa shu qarz ham kirishi kerak.
+  const jami = Number(chiqish.match(/contactId=null qarz\s*:\s*(\d+)/)?.[1]);
+  const topilmadi = Number(chiqish.match(/Mos kartochka yo'q\s*:\s*(\d+)/)?.[1]);
+  assert.ok(jami >= 1, `jami songa kartochkasiz biznes qarzi kirishi kerak (jami=${jami})`);
+  assert.ok(topilmadi >= 1, `u "mos kartochka yo'q" bo'lib sanalishi kerak (${topilmadi})`);
+  assert.equal(chiqish.includes("OGOHLANTIRISH"), false, "bo'laklar yig'indisi jamiga teng bo'lishi kerak");
+});
