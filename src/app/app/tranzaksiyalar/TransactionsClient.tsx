@@ -17,12 +17,6 @@ import type { Rol } from "@/lib/auth/session";
 import type { CategoryOption, FiltrQiymati, XodimOption } from "./turlar";
 import { faolFiltrSoni, ozgartirsaBoladi as ozgartirishMumkinmi } from "./turlar";
 
-interface Taqsimot {
-  naqd: number;
-  click: number;
-  karta: number;
-}
-
 export function TransactionsClient({
   initialItems,
   initialTotal,
@@ -35,10 +29,8 @@ export function TransactionsClient({
   tezKategoriyalar,
   currentUserId,
   currentUserRol,
-  hideProfit = false,
   moveTargets = [],
   totals,
-  qarzSumma = null,
   filters,
 }: {
   initialItems: TransactionDTO[];
@@ -54,19 +46,8 @@ export function TransactionsClient({
   tezKategoriyalar?: TezKategoriyalar;
   currentUserId: string;
   currentUserRol: Rol;
-  hideProfit?: boolean;
   moveTargets?: { id: string; nomi: string }[];
-  totals: {
-    jamiKirim: number;
-    jamiChiqim: number;
-    sof: number;
-    taqsimot: { kirim: Taqsimot; chiqim: Taqsimot; qarz: number };
-  };
-  /**
-   * "Qarzga berilgan" ko'rsatkichi: qarz yozuvlari + kunlik hisobotdagi qarz
-   * tushumlari. Sof balansga KIRMAYDI — u alohida ko'rsatiladi.
-   */
-  qarzSumma?: number | null;
+  totals: { jamiKirim: number; jamiChiqim: number; sof: number };
   filters: FiltrQiymati;
 }) {
   const router = useRouter();
@@ -187,16 +168,14 @@ export function TransactionsClient({
         </div>
       </div>
 
-      <SummaryBar
-        jamiKirim={totals.jamiKirim}
-        jamiChiqim={totals.jamiChiqim}
-        sof={totals.sof}
-        kirimTaqsimot={totals.taqsimot.kirim}
-        chiqimTaqsimot={totals.taqsimot.chiqim}
-        qarzSumma={qarzSumma}
-        hideProfit={hideProfit}
-        turiFiltri={filters.turi}
-      />
+      {/* Davr yakuni FAQAT direktor/administratorga: kassir va sotuvchi
+          biznesning umumiy aylanmasi va sof foydasini ko'rmaydi. Bu oyna
+          emas — serverda ham ular faqat O'Z yozuvlarini ko'radi
+          (`transactionScopeUserId`), ya'ni bu raqamlar ularga baribir
+          biznesning to'liq manzarasini bermasdi. */}
+      {manager && (
+        <SummaryBar jamiKirim={totals.jamiKirim} jamiChiqim={totals.jamiChiqim} sof={totals.sof} />
+      )}
 
       <TransactionFilters categories={categories} xodimlar={xodimlar} initial={filters} />
 
