@@ -174,3 +174,24 @@ export const narxToldirishSchema = z.object({
 });
 
 export type NarxToldirishInput = z.infer<typeof narxToldirishSchema>;
+
+/**
+ * SOTILGAN MAHSULOTLAR STATISTIKASI — sana oralig'i (Kirim bo'limidagi blok).
+ *
+ * Faqat o'qish so'rovi, lekin sana baribir tekshiriladi: formatsiz qiymat
+ * `new Date(...)` ni Invalid Date qilib, so'rovni jimgina BO'SH natijaga
+ * aylantirardi.
+ */
+const SANA_FORMATI = /^\d{4}-\d{2}-\d{2}$/;
+
+export const sotuvStatistikaSchema = z
+  .object({
+    from: z.string().regex(SANA_FORMATI, "Sana formati noto'g'ri (YYYY-MM-DD)"),
+    to: z.string().regex(SANA_FORMATI, "Sana formati noto'g'ri (YYYY-MM-DD)"),
+  })
+  .refine((d) => d.from <= d.to, {
+    message: "Boshlanish sanasi tugash sanasidan keyin bo'lmasligi kerak",
+    path: ["from"],
+  });
+
+export type SotuvStatistikaInput = z.infer<typeof sotuvStatistikaSchema>;

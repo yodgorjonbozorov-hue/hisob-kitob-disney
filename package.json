@@ -46,6 +46,7 @@
     "test:kunlik": "node -r ts-node/register tests/kunlik.test.ts",
     "test:smena": "node -r ts-node/register tests/smena.test.ts",
     "test:sotuv-bekor": "node -r ts-node/register tests/sotuv-bekor.test.ts",
+    "test:sotuv-statistika": "node -r ts-node/register tests/sotuv-statistika.test.ts",
     "test:inventarizatsiya": "node -r ts-node/register tests/inventarizatsiya.test.ts",
     "test:csv-import": "node -r ts-node/register tests/csv-import.test.ts",
     "test:mahsulot-import": "node -r ts-node/register tests/mahsulot-import.test.ts",
