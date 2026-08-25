@@ -4965,3 +4965,32 @@ xato boshqa joyda takrorlanmaydi.
 kassir bilan `/app`, tranzaksiyalar, kunlik, pos, sotuv, qarzlar, crm,
 vazifalar — hammasi ochiladi; admin paneli o'zgarmagan. `npm run build` ✅,
 `test:isolation` (22) ✅, `test:panel` (22) ✅, `test:visibility` (10) ✅.
+
+### 2026-08-25 — Legacy kunlik tushumlar Kirim/Chiqimda ko'rinmasligi (tugadi)
+
+**Muammo (production, foydalanuvchi skrinshoti):** kassir "Tushum kiritish"
+orqali kunlik tushum kiritgan, lekin u Kirim/Chiqim ro'yxatida tranzaksiya
+sifatida ko'rinmagan.
+
+**Ildiz sabab:** 2026-08-25 dagi kunlik qayta ishlashgacha (d7eed33)
+"Tushum kiritish" faqat `DailyTransaction` yozardi — `Transaction`
+yaratmasdi. Yangi kod endi ikkalasini bitta tranzaksiyada yozadi, lekin
+o'zgarishgacha kiritilgan tushumlar `transactionId = null` bilan yetim
+qolgan: ular kunlik hisobotda turadi, Kirim/Chiqim, Jami Kirim, kategoriya
+kesimi va oylik hisobotda esa hech qachon ko'rinmaydi.
+
+**Tuzatish:** `scripts/kunlik-tushum-migratsiya.ts` — har yetim tushumga
+bog'langan haqiqiy KIRIM yozuvi yaratadi (zaxira "Kunlik tushum"
+kategoriyasi, hisobot sanasi, mos to'lov turi). `accountId` ATAYLAB null:
+legacy pul ledgerga tushmagan, kassa biriktirilsa bugungi qoldiq sun'iy
+oshib ketardi — barcha qoldiq formulalari account bo'yicha jamlagani uchun
+kassasiz yozuv qoldiqqa NOL ta'sir qiladi. Idempotent (`transactionId:
+null` sharti bilan bog'lash), kassa-kassa balans sverkasi bilan; build
+zanjiriga qo'shildi (handover-migratsiya uslubi), deploy'da avtomatik
+ishlaydi. O'chirilgan foydalanuvchining tushumi ogohlantirish bilan
+o'tkazib yuboriladi (buildni yiqitmaydi).
+
+**Tekshiruv:** `npm run test:kunlik-tushum-migratsiya` (7 ta — dry-run,
+bog'lash, kassa qoldig'i o'zgarmasligi, jamlar, CONFIRMED kun buzilmasligi,
+idempotentlik) ✅, `test:kunlik` (27) ✅, `test:kunlik-kassa` (18) ✅,
+`npm run build` ✅.
