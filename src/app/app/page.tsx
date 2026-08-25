@@ -70,8 +70,11 @@ export default async function DashboardPage({
   return runWithTenant(tenantId, async () => {
 
   // Kassir/sotuvchi — dashboard EMAS, kassa bosh ekrani (REDESIGN.md 5.1).
+  // JSX (`<XodimEkrani/>`) EMAS, to'g'ridan-to'g'ri chaqiruv: JSX qilinsa React
+  // uni `runWithTenant` tugagach render qiladi va ichidagi prisma so'rovlari
+  // tenant kontekstsiz qolib "Tenant konteksti yo'q" bilan yiqiladi.
   if (!isManager(session.rol)) {
-    return <XodimEkrani session={session} />;
+    return await XodimEkrani({ session });
   }
 
   const businessId = await resolveActiveBusinessId(session);
