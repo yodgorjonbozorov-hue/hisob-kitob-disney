@@ -20,7 +20,7 @@
 import "dotenv/config";
 import { gzipSync } from "node:zlib";
 import { klient, suratOl, jamiYozuv } from "./lib/xom-surat.mjs";
-import { hujjatYubor } from "./lib/telegram.mjs";
+import { hujjatYubor, apiManzili } from "./lib/telegram.mjs";
 
 function yiqit(sarlavha, satrlar) {
   console.error(`\n❌ ${sarlavha}`);
@@ -36,14 +36,33 @@ async function main() {
     yiqit("DATABASE_URL sozlanmagan", ["Zaxirasiz davom etilmaydi."]);
   }
 
-  const chatId = process.env.BACKUP_CHAT_ID;
+  // TRIM SHART: sekret panellariga nusxa ko'chirilganda oxiriga bo'sh joy
+  // yoki yangi qator ilashib qoladi. Telegram esa "-100123 " ni boshqa chat
+  // deb biladi va "chat not found" qaytaradi — sababi topilishi qiyin xato.
+  const chatId = process.env.BACKUP_CHAT_ID?.trim();
   // `||`, `??` emas: panellarda o'zgaruvchi ko'pincha BO'SH QATOR bo'lib
   // qoladi (deploy-zaxira.mjs dagi bilan bir xil sabab).
-  const token = process.env.BACKUP_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+  const token = (process.env.BACKUP_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN)?.trim();
   if (!chatId || !token) {
     yiqit("Zaxirani saqlaydigan joy yo'q", [
       "Kerak: BACKUP_CHAT_ID va BACKUP_BOT_TOKEN (yoki TELEGRAM_BOT_TOKEN).",
     ]);
+  }
+
+  // TOKEN YAROQLIMI — suratni bekorga olmaslik uchun oldindan tekshiriladi.
+  // `getMe` hech qanday yon ta'sir bermaydi. Bot NOMI ATAYLAB chiqarilmaydi:
+  // repozitoriya ommaviy.
+  try {
+    const me = await fetch(`${apiManzili()}/bot${token}/getMe`);
+    if (!me.ok) {
+      yiqit("Telegram bot tokeni yaroqsiz", [
+        `getMe javobi: HTTP ${me.status}`,
+        "BACKUP_BOT_TOKEN noto'g'ri yoki bekor qilingan.",
+      ]);
+    }
+    console.log("Bot tokeni: yaroqli");
+  } catch (e) {
+    yiqit("Telegramga ulanib bo'lmadi", [String(e?.message ?? e)]);
   }
 
   console.log("Surat olinmoqda...");
@@ -67,10 +86,23 @@ async function main() {
       izoh: `Majburiy zaxira · ${izoh} · ${jadvallar} jadval, ${yozuvlar} yozuv`,
     });
   } catch (e) {
-    yiqit("Zaxira kanalga yuborilmadi", [
-      String(e?.message ?? e),
-      "Surat runner konteynerida qoladi va ish tugashi bilan yo'qoladi.",
-    ]);
+    const matn = String(e?.message ?? e);
+    const satrlar = [matn, "Surat runner konteynerida qoladi va ish tugashi bilan yo'qoladi."];
+    // Eng ko'p uchraydigan sabab — bot kanalga qo'shilmagan yoki chat ID
+    // boshqa botniki. Token yaroqli ekani yuqorida tekshirilgan.
+    if (/chat not found/i.test(matn)) {
+      satrlar.push(
+        "",
+        "SABAB: token yaroqli, lekin bu BOT o'sha KANALNI ko'rmayapti.",
+        "Tekshiring:",
+        "  1. BACKUP_BOT_TOKEN dagi bot zaxira kanaliga ADMIN qilib qo'shilganmi;",
+        "  2. BACKUP_CHAT_ID aynan o'sha kanalniki va -100 bilan boshlanadimi;",
+        "  3. Vercel'dagi ishlaydigan bot bilan bir xil botmi.",
+        "DIQQAT: BotFather'da /revoke QILMANG — u Vercel'dagi tokenni ham",
+        "bekor qiladi va kunlik production zaxirasi ishlamay qoladi."
+      );
+    }
+    yiqit("Zaxira kanalga yuborilmadi", satrlar);
   }
 
   console.log("\n✅ Zaxira Telegram kanalida — davom etish xavfsiz.");
