@@ -58,7 +58,14 @@ export function QuickAddSheet({
     setKecha(false);
     setTuri(defaultTuri);
     if (categories === null) {
-      fetch("/api/categories").then((r) => (r.ok ? r.json() : [])).then(setCategories).catch(() => setCategories([]));
+      // `active=true` SHART: nofaollashtirilgan kategoriya yangi yozuv
+      // formasida chiqmasligi kerak (eski yozuvlari esa joyida qoladi).
+      // Busiz tez qo'shish oynasi butun ilovada YAGONA joy edi, u yerda
+      // nofaol kategoriya hamon tanlanardi.
+      fetch("/api/categories?active=true")
+        .then((r) => (r.ok ? r.json() : []))
+        .then(setCategories)
+        .catch(() => setCategories([]));
     }
     return () => { document.body.style.overflow = ""; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
