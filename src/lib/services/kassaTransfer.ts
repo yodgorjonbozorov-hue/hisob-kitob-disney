@@ -26,6 +26,14 @@ import type { KassaTransferInput, TransferQarorInput } from "@/lib/validation/ac
  * Buning evaziga bir pulni ikki marta jo'natish xavfi paydo bo'ladi, shuning
  * uchun MAVJUD qoldiq = qoldiq − kutilayotgan chiqim (`mavjudQoldiqTx`).
  *
+ * ═══ KASSA FARQI ═══
+ * `turi = "smena"` (kassani topshirish) da qatorga ikkita raqam muzlatiladi:
+ * `hisoblangan` — topshirish paytida TIZIM hisoblagan mavjud qoldiq, va
+ * `farq = summa − hisoblangan`. Farq manfiy bo'ladi (kamomad) yoki nol;
+ * musbat bo'lishi mumkin emas, chunki mavjud qoldiqdan ko'p pul o'tkazishga
+ * yo'l qo'yilmaydi. Kamomad kassirning kassasida OCHIQ qoladi — u yerdan
+ * pul o'z-o'zidan yo'qolmaydi, direktor uni ko'radi va sababini o'qiydi.
+ *
  * ═══ NEGA "bekor" EMAS, "rad" ═══
  * `holat = "bekor"` yakunlangan o'tkazmani STORNO bilan qaytarish uchun va u
  * qoldiqda QOLADI (storno qatori uni nolga chiqaradi). Tasdiqlanmagan
@@ -106,6 +114,20 @@ export async function kassaTransferYarat(
       );
     }
 
+    // ═══ KASSA FARQI (faqat topshirishda) ═══
+    // "Tizim bo'yicha qoldiq" — aynan SHU paytdagi mavjud pul (kutilayotgan
+    // chiqim ayrilgan). U qatorga muzlatiladi: qaror kutayotganda kassaga
+    // yangi yozuv tushsa ham direktor tasdiqlaydigan farq o'zgarmaydi.
+    // Farq hech qachon musbat bo'lmaydi — yuqoridagi tekshiruv mavjuddan
+    // ko'p pul o'tkazishga yo'l qo'ymaydi (manfiy qoldiq taqiqlangan).
+    const hisoblangan = turi === "smena" ? mavjud : null;
+    const farq = hisoblangan === null ? null : data.summa - hisoblangan;
+    if (farq !== null && farq !== 0 && !data.izoh?.trim()) {
+      throw new BadRequestError(
+        "Kassa farqi bor — sababini yozing (masalan: mijozga qaytim ortiqcha berildi)"
+      );
+    }
+
     const tasdiqKerak = !!to.userId && to.userId !== aktor.userId;
 
     // IKKI MARTA YUBORISHDAN HIMOYA: aynan shu yo'nalish va summa bilan
@@ -165,6 +187,8 @@ export async function kassaTransferYarat(
         fromUserIsm: ism(from.userId),
         toUserId: to.userId,
         toUserIsm: ism(to.userId),
+        hisoblangan,
+        farq,
         holat: tasdiqKerak ? "kutilmoqda" : "bajarildi",
         ...(tasdiqKerak
           ? {}
@@ -185,6 +209,11 @@ export async function kassaTransferYarat(
       fromUserIsm: transfer.fromUserIsm,
       toUserIsm: transfer.toUserIsm,
       summa: transfer.summa,
+      // Kassa farqi auditga TUSHADI — "kim qancha kam topshirdi" savoliga
+      // javob tarixda qoladi (izoh = kamomad sababi).
+      hisoblangan: transfer.hisoblangan,
+      farq: transfer.farq,
+      izoh: transfer.izoh,
       holat: transfer.holat,
     },
   });
@@ -285,6 +314,8 @@ export async function kassaTransferQaror(
       amal: qaror.amal,
       qaror: aktor.ism,
       summa: natija.eski.summa,
+      hisoblangan: natija.eski.hisoblangan,
+      farq: natija.eski.farq,
       fromUserIsm: natija.eski.fromUserIsm,
       toUserIsm: natija.eski.toUserIsm,
     },

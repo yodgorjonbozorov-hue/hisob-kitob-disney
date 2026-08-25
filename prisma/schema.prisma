@@ -446,6 +446,18 @@ model AccountTransfer {
   radAt                DateTime?
   /// Rad etish yoki bekor qilish sababi (qabul qiluvchi yozadi).
   qarorIzoh            String?
+  /// KASSA TOPSHIRISH SNAPSHOTI (`turi = "smena"` da to'ldiriladi; boshqa
+  /// o'tkazmalarda null). Topshirish PAYTIDA server hisoblagan kassa
+  /// qoldig'i — kutilayotgan chiqim ayrilgan holda. MUZLATILADI: qaror
+  /// kutayotgan paytda kassaga yangi yozuv tushsa ham topshirish farqi
+  /// o'zgarmaydi, aks holda direktor tasdiqlayotgan raqam u ko'rgan
+  /// raqamdan boshqa bo'lib qolardi.
+  hisoblangan          Int?
+  /// `summa − hisoblangan` — KASSA FARQI. Manfiy = kamomad (kassir tizim
+  /// hisobidan kam topshirdi; qolgani uning kassasida ochiq turadi).
+  /// Manfiy qoldiq taqiqlangani uchun bu qiymat hech qachon musbat
+  /// bo'lmaydi — mavjud qoldiqdan ko'p pul o'tkazib bo'lmaydi.
+  farq                 Int?
   /// Bog'liq hujjat: "purchaseOrder" | "debt" | "storno" (+ relatedId).
   relatedType          String?
   relatedId            String?

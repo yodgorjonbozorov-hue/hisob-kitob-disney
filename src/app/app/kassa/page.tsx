@@ -5,26 +5,35 @@ import { runWithTenant } from "@/lib/db/tenantContext";
 import { isManager } from "@/lib/auth/roles";
 import { hasPermission } from "@/lib/permissions/tekshir";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
-import {
-  getAccountBalances,
-  getKassaKunlik,
-  listKutilayotganTransferlar,
-  listTransfers,
-  type KassaKunlik,
-} from "@/lib/queries/accounts";
-import { toshkentBugunBoshi } from "@/lib/services/kassirKassa";
-import { KutilayotganTransferlar } from "@/components/kassa/KutilayotganTransferlar";
+import { listKassaHarakatlari } from "@/lib/queries/accounts";
+import { getKassaNazorat } from "@/lib/queries/kassaNazorat";
+import { davrBoshi, davrOqi } from "@/lib/kassaDavr";
 import { KassaClient } from "./KassaClient";
-import { RejimPaneli } from "./RejimPaneli";
 
 /**
- * KASSALAR — har pul manbai bo'yicha joriy qoldiq.
+ * KASSALAR — PUL NAZORATI MARKAZI.
  *
- * BARCHA xodimlar (kassir ham) barcha kassalarni ko'radi: "boshqa kassada
- * qancha pul bor" — bu sir emas, ish uchun kerak. Boshqaruv amallari
- * (kassa ochish/tahrirlash, rejim) esa huquq bilan qulflangan.
+ * Sahifa oltita savolga javob beradi: hozir jami qancha pul bor, u qaysi
+ * kassada, bugun qancha kirdi va chiqdi, kim hali kassani topshirmadi,
+ * topshirishda kamomad bormi, pul kimdan kimga o'tdi.
+ *
+ * ═══ TENANT / BIZNES IZOLYATSIYASI ═══
+ * Butun sahifa `runWithTenant` ichida ishlaydi (tenant-scoped `prisma`), har
+ * so'rov esa AYNI shu sessiyaning aktiv `businessId` si bilan cheklanadi.
+ * Boshqa biznesning kassasi, o'tkazmasi yoki topshirig'i bu yerga hech
+ * qanday yo'l bilan tushmaydi.
+ *
+ * ═══ HUQUQ ═══
+ * Ko'rish — "kassa.korish" (yo'q bo'lsa tranzaksiyalarga qaytariladi).
+ * Amal huquqlari (`pul.berish`, `pul.qabul`, boshqaruvchilik) client'ga
+ * BAYROQ sifatida uzatiladi — tugmani yashirish uchun. Amalning o'zini esa
+ * har API route mustaqil tekshiradi.
  */
-export default async function KassaPage() {
+export default async function KassaPage({
+  searchParams,
+}: {
+  searchParams?: { davr?: string };
+}) {
   const { session, tenantId } = await requireTenantPage();
   return runWithTenant(tenantId, async () => {
     if (!(await hasPermission(session.userId, "kassa.korish"))) {
@@ -42,66 +51,45 @@ export default async function KassaPage() {
       );
     }
 
-    const boshqaruvchi = isManager(session.rol);
-    const [
-      qoldiqlar,
-      kunlikMap,
-      transferlar,
-      kutilayotganTransferlar,
-      transferQila,
-    ] = await Promise.all([
-      getAccountBalances(businessId),
-      getKassaKunlik(businessId, toshkentBugunBoshi()),
-      listTransfers(businessId, 30),
-      listKutilayotganTransferlar(businessId),
+    const davr = davrOqi(searchParams?.davr);
+    const [nazorat, harakatlar, transferQila, qabulQila] = await Promise.all([
+      getKassaNazorat(businessId),
+      listKassaHarakatlari(businessId, davrBoshi(davr), 40),
       hasPermission(session.userId, "pul.berish"),
+      hasPermission(session.userId, "pul.qabul"),
     ]);
 
-    const kunlik: Record<string, KassaKunlik> = Object.fromEntries(kunlikMap);
-    const meniKassam = qoldiqlar.find((q) => q.userId === session.userId && q.isActive)?.id ?? null;
-
     return (
-      <div className="space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
+      <div className="space-y-4 sm:space-y-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
             <h1 className="text-xl sm:text-2xl font-bold text-fg">Kassalar</h1>
-            <p className="text-sm text-muted mt-1">
-              Biznes: <span className="font-medium text-fg">{business?.nomi ?? "—"}</span> · Har
-              kassaning joriy qoldig&apos;i va bugungi harakati
+            {/* Telefonda faqat biznes nomi — uzun izoh o'sha yerda kesilib
+                "...ni..." bo'lib qolardi va hech qanday ma'no bermasdi. */}
+            <p className="text-2xs sm:text-sm text-muted mt-0.5 truncate">
+              {business?.nomi ?? "—"}
+              <span className="hidden sm:inline"> · pul qayerda va bugun nima bo&apos;ldi</span>
             </p>
           </div>
           <Link
             href="/app/kassa/hisobot"
-            className="rounded-lg bg-surface-2 px-3 py-1.5 text-sm font-medium text-muted hover:text-fg"
+            className="shrink-0 inline-flex items-center rounded-lg bg-surface-2 px-3 min-h-[44px] text-sm font-medium text-muted hover:text-fg"
           >
             Hisobot
           </Link>
         </div>
 
-        <KutilayotganTransferlar
-          transferlar={kutilayotganTransferlar}
-          meniUserId={session.userId}
-          boshqaruvchi={boshqaruvchi}
-        />
-
         <KassaClient
-          qoldiqlar={qoldiqlar}
-          kunlik={kunlik}
-          transferlar={transferlar}
+          nazorat={nazorat}
+          harakatlar={harakatlar}
+          davr={davr}
           meniUserId={session.userId}
-          meniKassam={meniKassam}
-          boshqaruvchi={boshqaruvchi}
+          boshqaruvchi={isManager(session.rol)}
           transferQila={transferQila}
+          qabulQila={qabulQila}
+          businessId={businessId}
+          shaxsiyKassa={business?.shaxsiyKassa ?? false}
         />
-
-        {/* Eski "Kassa topshiriqlari" / "Kassirlar" bloklari OLIB TASHLANDI:
-            ular ikkinchi moliyaviy oqim edi va Kassa harakatlari ro'yxati
-            bilan bir xil savolga boshqa javob berardi. Tarix `AccountTransfer`
-            ga "arxiv" holati bilan ko'chirildi va yuqoridagi yagona
-            ro'yxatda ko'rinadi. */}
-        {boshqaruvchi && (
-          <RejimPaneli businessId={businessId} yoqilgan={business?.shaxsiyKassa ?? false} />
-        )}
       </div>
     );
   });

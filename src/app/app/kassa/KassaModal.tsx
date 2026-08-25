@@ -6,7 +6,18 @@ import { Button } from "@/components/ui/Button";
 import { ACCOUNT_TURLARI, ACCOUNT_TURI_NOMI } from "@/lib/validation/account";
 import type { AccountQoldiq } from "@/lib/queries/accounts";
 
-/** Yangi kassa ochish yoki mavjudini tahrirlash. */
+const input =
+  "w-full px-3 py-2.5 min-h-[44px] rounded-lg bg-surface-2 border border-line text-fg " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand";
+
+/**
+ * YANGI KASSA / KASSANI TAHRIRLASH — faqat boshqaruvchi (server ham tekshiradi).
+ *
+ * Maydonlar mavjud sxema ruxsat berganicha: nomi, turi, tartib va faollik.
+ * MAS'UL XODIM bu yerda tanlanmaydi — shaxsiy kassa xodimga "Kassa
+ * sozlamalari → Shaxsiy kassa rejimi" orqali biriktiriladi, aks holda bitta
+ * xodimga ikki xil yo'l bilan ikkita kassa ochilib qolardi.
+ */
 export function KassaModal({
   kassa,
   onClose,
@@ -19,6 +30,7 @@ export function KassaModal({
   const tahrir = kassa !== null;
   const [nomi, setNomi] = useState(kassa?.nomi ?? "");
   const [turi, setTuri] = useState(kassa?.turi ?? "naqd");
+  const [tartib, setTartib] = useState(String(kassa?.tartib ?? 0));
   const [isActive, setIsActive] = useState(kassa?.isActive ?? true);
   const [loading, setLoading] = useState(false);
   const [xato, setXato] = useState<string | null>(null);
@@ -27,11 +39,17 @@ export function KassaModal({
     e.preventDefault();
     setLoading(true);
     setXato(null);
+    const raqam = parseInt(tartib, 10);
+    const tartibQiymat = Number.isFinite(raqam) ? Math.min(Math.max(raqam, 0), 999) : 0;
     try {
       const res = await fetch(tahrir ? `/api/accounts/${kassa!.id}` : "/api/accounts", {
         method: tahrir ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(tahrir ? { nomi, turi, isActive } : { nomi, turi }),
+        body: JSON.stringify(
+          tahrir
+            ? { nomi, turi, isActive, tartib: tartibQiymat }
+            : { nomi, turi, tartib: tartibQiymat }
+        ),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -47,6 +65,7 @@ export function KassaModal({
   }
 
   async function ochirish() {
+    if (!confirm("Kassa butunlay o'chirilsinmi?")) return;
     setLoading(true);
     setXato(null);
     try {
@@ -69,7 +88,7 @@ export function KassaModal({
       <form onSubmit={submit} className="space-y-3">
         <div>
           <label className="block text-sm text-muted mb-1" htmlFor="kassa-nomi">
-            Nomi
+            Kassa nomi
           </label>
           <input
             id="kassa-nomi"
@@ -78,7 +97,7 @@ export function KassaModal({
             required
             maxLength={60}
             placeholder="Masalan: Asosiy kassa"
-            className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-line text-fg"
+            className={input}
           />
         </div>
 
@@ -90,7 +109,7 @@ export function KassaModal({
             id="kassa-turi"
             value={turi}
             onChange={(e) => setTuri(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-line text-fg"
+            className={input}
           >
             {ACCOUNT_TURLARI.map((t) => (
               <option key={t} value={t}>
@@ -98,31 +117,55 @@ export function KassaModal({
               </option>
             ))}
           </select>
+          <p className="text-2xs text-faint mt-1">
+            Naqd — qo&apos;ldagi pul, Plastik — terminal, Bank — hisob-raqam. Yangi yozuv
+            to&apos;lov turiga mos kassaga tushadi.
+          </p>
         </div>
 
+        <div>
+          <label className="block text-sm text-muted mb-1" htmlFor="kassa-tartib">
+            Ro&apos;yxatdagi tartibi
+          </label>
+          <input
+            id="kassa-tartib"
+            inputMode="numeric"
+            value={tartib}
+            onChange={(e) => setTartib(e.target.value)}
+            className={input}
+          />
+        </div>
+
+        {tahrir && kassa?.userId && (
+          <p className="text-2xs text-muted">
+            Mas&apos;ul xodim: <span className="text-fg font-medium">{kassa.egaIsm ?? "—"}</span> —
+            shaxsiy kassa rejimi orqali biriktirilgan.
+          </p>
+        )}
+
         {tahrir && (
-          <label className="flex items-center gap-2 text-sm text-fg">
+          <label className="flex items-center gap-2 text-sm text-fg min-h-[44px]">
             <input
               type="checkbox"
               checked={isActive}
               onChange={(e) => setIsActive(e.target.checked)}
-              className="w-4 h-4"
+              className="w-5 h-5"
             />
-            Faol (yangi yozuvlarda ko&apos;rinadi)
+            Faol (yangi yozuv va o&apos;tkazmalarda ko&apos;rinadi)
           </label>
         )}
 
         {xato && <p className="text-sm text-expense">{xato}</p>}
 
-        <div className="flex gap-2 pt-1">
+        <div className="flex flex-wrap gap-2 pt-1">
           <Button type="submit" loading={loading}>
             {tahrir ? "Saqlash" : "Ochish"}
           </Button>
-          <Button type="button" variant="secondary" onClick={onClose}>
+          <Button variant="secondary" onClick={onClose}>
             Bekor qilish
           </Button>
           {tahrir && (
-            <Button type="button" variant="ghost" onClick={ochirish} disabled={loading}>
+            <Button variant="ghost" onClick={ochirish} disabled={loading}>
               O&apos;chirish
             </Button>
           )}
