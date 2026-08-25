@@ -8,6 +8,7 @@ import { getEnabledModules } from "@/lib/modules/guard";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { dashboardYangilandi } from "@/lib/cache";
+import { hasPermission } from "@/lib/permissions/tekshir";
 
 export const GET = withTenant(async (request, _ctx, { session: user }) => {
 
@@ -45,6 +46,16 @@ export const GET = withTenant(async (request, _ctx, { session: user }) => {
     page: parseInt(searchParams.get("page") ?? "1", 10),
     pageSize: parseInt(searchParams.get("pageSize") ?? "20", 10),
   });
+
+  // DAVR YAKUNI (jamiKirim / jamiChiqim / sof) — nozik ko'rsatkich.
+  // UI uni faqat `hisobot.korish` huquqi bilan ko'rsatadi; API ham AYNI
+  // qoidaga bo'ysunadi, aks holda tugmani yashirish himoya bo'lib qolardi.
+  // Ro'yxat, sahifalash va kunlik jamlar hammaga avvalgidek qaytadi —
+  // xodimning kundalik ishi to'xtamaydi.
+  if (!(await hasPermission(user.userId, "hisobot.korish"))) {
+    const { totals: _yashirin, ...qolgani } = result;
+    return NextResponse.json(qolgani);
+  }
 
   return NextResponse.json(result);
 });

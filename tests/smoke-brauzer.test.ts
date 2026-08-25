@@ -435,7 +435,19 @@ test("kirim qo'shiladi va ro'yxatda ko'rinadi", { skip: sabab }, async () => {
     `kirim saqlanmadi: HTTP ${javob.status()} — ${(await javob.text()).slice(0, 300)}`
   );
 
+  // REDESIGN: sahifaning asosiy ro'yxati KATEGORIYA kesimi, ya'ni yangi
+  // yozuv o'z kategoriyasi ochilgandagina ko'rinadi. Shu bois oqim oxirigacha
+  // tekshiriladi: kategoriya qatori bosiladi va yozuv ichidan topiladi.
+  const kategoriyaQator = page.locator("section li button[aria-expanded]").first();
+  await kategoriyaQator.waitFor({ timeout: 30_000 });
+  await kategoriyaQator.click();
   await page.waitForSelector(`text=${izoh}`, { timeout: 30_000 });
+
+  // "Ro'yxat" ko'rinishi ham saqlangan — tekis lentada ham o'sha yozuv.
+  await page.getByRole("tab", { name: "Ro'yxat" }).click();
+  await page.waitForURL(/korinish=royxat/, { timeout: 15_000 });
+  await page.waitForSelector(`text=${izoh}`, { timeout: 30_000 });
+
   await xatosiz(page);
   await page.context().close();
 });
