@@ -45,6 +45,7 @@
     "test:qarz-mijoz": "node -r ts-node/register tests/qarz-mijoz.test.ts",
     "test:qarz-mijoz-bogla": "node -r ts-node/register tests/qarz-mijoz-bogla.test.ts",
     "test:kategoriya": "node -r ts-node/register tests/kategoriya-tafsilot.test.ts",
+    "test:kirim-chiqim": "node -r ts-node/register tests/kirim-chiqim.test.ts",
     "test:tolov-taqsimoti": "node -r ts-node/register tests/tolov-taqsimoti.test.ts",
     "test:ombor-kartasi": "node -r ts-node/register tests/ombor-kartasi.test.ts",
     "test:kunlik": "node -r ts-node/register tests/kunlik.test.ts",

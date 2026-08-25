@@ -63,7 +63,7 @@ export const MODULLAR: ModulTarifi[] = [
     rollar: HAMMA,
     nav: [
       { href: "/app", label: "Asosiy", icon: "dashboard", tartib: 10, rollar: BOSHQARUVCHILAR },
-      { href: "/app/tranzaksiyalar", label: "Yozuvlar", icon: "receipt", tartib: 11, rollar: HAMMA },
+      { href: "/app/tranzaksiyalar", label: "Kirim / Chiqim", icon: "receipt", tartib: 11, rollar: HAMMA },
       { href: "/app/hisobot", label: "Oylik hisobot", icon: "report", tartib: 12, rollar: BOSHQARUVCHILAR },
       { href: "/app/byudjet", label: "Budjet", icon: "budget", tartib: 13, rollar: BOSHQARUVCHILAR },
       // KASSALAR — kassirga ham ochiq: u boshqa kassalarda qancha pul borligini
@@ -371,7 +371,8 @@ export function computeMobileTabs(holat: NavHolati): MobileTab[] {
   // shuning uchun modul yoqilgan bo'lsa u pastki panelda tab bo'ladi.
   const kunlikBor = holat.yoqilgan.has("KUNLIK") && modulByCode("KUNLIK")!.rollar.includes(holat.rol);
   if (manager) tabs.push({ href: "/app", label: "Asosiy", icon: "home" });
-  tabs.push({ href: "/app/tranzaksiyalar", label: "Yozuvlar", icon: "list" });
+  // Pastki tab yorlig'i qisqaroq: 375px da uch tab yonma-yon sig'ishi kerak.
+  tabs.push({ href: "/app/tranzaksiyalar", label: "Kirim/Chiqim", icon: "list" });
   if (holat.rol === "SELLER") {
     if (kunlikBor) tabs.push({ href: "/app/kunlik", label: "Kunlik", icon: "daily" });
     // Sotuvchi uchun CRM — asosiy ish quroli.
