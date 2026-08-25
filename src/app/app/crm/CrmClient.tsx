@@ -48,7 +48,9 @@ export function CrmClient({
    */
   async function kochirish(id: string, stage: StageDTO) {
     setXato(null);
-    const b = buyurtmalar.find((x) => x.id === id);
+    // Ochiq oynadagi snapshot ustunroq: kategoriya/narx endigina tahrirlangan
+    // bo'lsa, serverdan kelgan ro'yxat hali eski qiymatni saqlab turadi.
+    const b = tanlangan?.id === id ? tanlangan : buyurtmalar.find((x) => x.id === id);
     const res = await fetch(`/api/crm/deals/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -129,7 +131,15 @@ export function CrmClient({
         <BuyurtmaSheet
           b={tanlangan}
           stages={stages}
+          kategoriyalar={kategoriyalar}
           onKochirish={(s) => kochirish(tanlangan.id, s)}
+          onTahrirlandi={(yangi) => {
+            // Ochiq oyna serverdan kelgan snapshot ustida ishlaydi — yangi
+            // qiymatlar darhol ko'rinsin (doskaning o'zini `router.refresh()`
+            // yangilaydi).
+            setTanlangan({ ...tanlangan, ...yangi });
+            router.refresh();
+          }}
           onClose={() => setTanlangan(null)}
         />
       )}

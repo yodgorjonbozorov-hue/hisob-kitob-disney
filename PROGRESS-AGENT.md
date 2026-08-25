@@ -4014,3 +4014,61 @@ Fayllar: `src/lib/queries/sotuvStatistika.ts`,
 
 Test: `npm run test:sotuv-statistika` (13 ta) — jamlash, guruhlash, sana
 filtri, qaytarish, POS cheki, ombor qoldig'i bilan moslik, izolyatsiya.
+
+## CRM sotuvchilarga ko'rinmasdi — rol matritsasi va kategoriya tuzatildi (2026-08-25)
+
+Uch shikoyat bitta joydan chiqdi: CRM "ayrim sotuvchilarga" umuman
+ko'rinmasdi, eski buyurtmalardan yozilgan kirim kategoriyasiz tushardi.
+
+### 1. Rol matritsasi — asosiy sabab
+
+`lib/modules/registry.ts` dagi CRM moduli `rollar: ["OWNER", "ADMIN",
+"SELLER"]` edi. Sidebar, BottomNav, CommandPalette, sahifa guard'i
+(`requireModulePage`) va API guard'i (`withTenant({ module: "CRM" })`) —
+BESHALASI ham shu bitta ro'yxatdan o'qiladi. Ya'ni savdo maydonida
+"sotuvchi" bo'lib ishlaydigan, lekin hisobi KASSIR (CASHIER) rolida
+ochilgan xodim uchun menyuda CRM yo'q edi va to'g'ridan-to'g'ri
+`/app/crm` ga kirsa ham `/app` ga qaytarilardi.
+
+Endi CRM `HAMMA` (OWNER, ADMIN, CASHIER, SELLER) uchun ochiq. Bu FAQAT
+CRM: BOSHQARUV (bizneslar, foydalanuvchilar, rollar, audit, obuna), HR,
+XARID va oylik hisobot o'z ro'yxatlari bilan boshqaruvchilarda qoldi —
+test buni alohida majburlaydi.
+
+### 2. Kategoriya — "Kategoriyasiz" ning sababi
+
+Yangi buyurtmada kategoriya allaqachon Kirim modulining
+`Category` jadvalidan (`turi: "kirim"`, `businessId` bo'yicha) kelardi.
+Muammo ESKI buyurtmalarda edi: kategoriya maydoni qo'shilgunga qadar
+yaratilganlarda `categoryId` NULL, va uni interfeysdan TANLASH imkoni
+yo'q edi — bunday buyurtma kirimga o'tkazilganda zaxira kategoriyaga
+tushardi.
+
+`BuyurtmaTahrir.tsx` — buyurtma oynasida kategoriya va narxni tuzatish
+bloki. Faqat kirim YOZILMAGAN buyurtmada ko'rinadi: yozilgandan keyin
+server (`api/crm/deals/[id]`) ikkalasini qulflaydi, aks holda CRM bir
+raqamni, Kirim boshqasini ko'rsatardi.
+
+Kirimga o'tkazish yo'li o'zgarmadi — kategoriya avvalgidek buyurtmadan
+tranzaksiyaga ko'chadi va `Deal.transactionId` UNIQUE cheklovi bitta
+buyurtmadan ikkinchi kirim yozilishiga baza darajasida yo'l qo'ymaydi.
+
+### 3. Ko'p-bizneslik teshigi
+
+"Mas'ul xodim" ro'yxati `prisma.user.findMany({ isActive: true })` edi —
+tenant bo'yicha filtrlangan, lekin BIZNES bo'yicha emas. Bir kompaniyada
+ikki biznes bo'lsa, A biznesining sotuvchisi B biznesining xodimlarini
+ko'rar va buyurtmani ularga yozib qo'yishi mumkin edi. Endi ro'yxat ham,
+server tekshiruvi ham (`biznesXodimi`, `createDeal` va PATCH) mavjud
+`biznesXodimlariWhere` filtridan yuradi.
+
+Fayllar: `src/lib/modules/registry.ts`, `src/lib/crm/service.ts`,
+`src/app/api/crm/deals/[id]/route.ts`, `src/app/app/crm/page.tsx`,
+`CrmClient.tsx`, `BuyurtmaSheet.tsx`, `BuyurtmaTahrir.tsx` (yangi).
+
+**Sxema o'zgarmadi, migratsiya yo'q.**
+
+Test: `npm run test:crm` (24 ta) — rol matritsasi (4 rol kiradi, maxfiy
+modullar yopiq), sidebar havolalari, to'liq oqim (buyurtma → Yutildi →
+Kirim → bosh sahifadagi kategoriya kesimi), idempotentlik, eski
+kategoriyasiz buyurtma va ko'p-bizneslik izolyatsiyasi.
