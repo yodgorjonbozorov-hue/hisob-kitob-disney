@@ -63,13 +63,11 @@ export default async function ProtectedLayout({
   return (
     <ToastProvider>
       {/* `w-full` + `overflow-x-clip`: keng kontent (jadval) sahifani
-          gorizontal siljitmaydi — siljish faqat jadval konteynerida.
-
-          Qator maketi `lg` da boshlanadi, `md` da EMAS: yon panel (Sidebar)
-          ham `lg:flex`. Ilgari bu ikkisi mos kelmasdi va 768–1023px oraligida
-          maket qator bo'lib qolar, lekin yon panel o'rniga MobileNav va
-          BottomNav yonma-yon turib butun enni yeb qo'yardi — `main` bor-yo'g'i
-          64px ga siqilardi (barcha sahifalarda). */}
+          gorizontal siljitmaydi — siljish faqat jadval konteynerida. */}
+      {/* `lg:flex-row` (ilgari `md:flex-row`): yon menyu (Sidebar) faqat `lg`
+          dan boshlab ko'rinadi, MobileNav esa `lg:hidden`. Qator maketi `md`
+          da yoqilganda MobileNav yon ustun bo'lib qolar va planshet (768px)
+          kengligida kontentni o'ngga surib yuborardi. */}
       <div className="min-h-screen w-full overflow-x-clip flex flex-col lg:flex-row">
         <Sidebar
           ism={session.ism}

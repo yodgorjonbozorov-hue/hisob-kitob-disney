@@ -4073,6 +4073,139 @@ modullar yopiq), sidebar havolalari, to'liq oqim (buyurtma → Yutildi →
 Kirim → bosh sahifadagi kategoriya kesimi), idempotentlik, eski
 kategoriyasiz buyurtma va ko'p-bizneslik izolyatsiyasi.
 
+## Kirim/Chiqim sahifasi — to'liq redesign (2026-08-25)
+
+`/app/tranzaksiyalar` mijoz kunda eng ko'p ochadigan sahifa edi, lekin u
+"baza jadvali" bo'lib qolgandi: forma doim ochiq turib ekranning yarmini
+egallardi, telefonda esa 9 ustunli jadval yon tomonga siljitilardi va
+summani ko'rish uchun har qatorni surish kerak bo'lardi.
+
+### 1. Nom
+
+UI'dagi noaniq "Yozuvlar" — **"Kirim / Chiqim"** (yon menyu),
+telefon tabida "Kirim/Chiqim" (uch tab 375px da sig'ishi kerak),
+sahifa sarlavhasi esa **"Kirim va chiqimlar"**. Route o'zgarmadi.
+
+### 2. Yozuv kiritish — forma varaqqa ko'chdi
+
+Sarlavha yonida `+ Kirim` / `− Chiqim`; telefonda pastki o'ng burchakda
+yozuvli FAB (`+ Yangi`) → tur tanlash varag'i → forma. FAB ATAYLAB
+dumaloq emas: pastki panelning markazidagi umumiy "tez qo'shish" tugmasi
+ham dumaloq va teal — ikkitasi bir xil ko'rinsa qaysi biri nima
+qilishini bilib bo'lmasdi. Balandligi ham markaziy tugmadan yuqorida.
+
+Formada summa eng tepada va eng katta (`SummaMaydoni`): `inputMode=numeric`,
+kiritilgani guruhlanadi (`1 000 000`) va ostida `1 000 000 so'm` deb
+takrorlanadi — "70000/700000" adashuvi eng qimmat xatolardan biri.
+Serverga baribir xom butun son ketadi.
+
+Kategoriya dropdown emas, katakchalar (`KategoriyaTanlov`): tepada
+"Ko'p ishlatiladigan" (oxirgi 90 kun tarixidan — `getTezKategoriyalar`),
+20+ kategoriyada qidiruv maydoni. Bu FAQAT tartib: kategoriya qoidalari
+o'zgarmadi va tarix bo'sh bo'lsa ro'yxat avvalgi (alifbo) tartibida qoladi.
+
+**Ikki marta yuborish** `useRef` bilan bloklanadi — React state asinxron
+bo'lgani uchun ikki tez bosishda `loading` hali `true` bo'lib ulgurmasdi.
+Brauzerda tekshirildi: `click({clickCount: 2})` → BITTA POST.
+
+TASDIQLASH moduli 202 qaytarganda (chegaradan oshgan chiqim) yozuv
+ro'yxatga QO'SHILMAYDI — ilgari so'rov obyekti tranzaksiya sifatida
+ro'yxatga tushib qolardi.
+
+### 3. Davr yakuni (`SummaryBar`)
+
+Ro'yxat tepasida Kirim / Chiqim / Sof + to'lov taqsimoti. **Kirim va
+chiqim taqsimotlari ikki ALOHIDA qatorda** — aralashsa "Naqd 12 mln"
+degan ma'nosiz raqam chiqardi.
+
+Buning uchun `listTransactions` ga additiv `totals.taqsimot` qo'shildi:
+`{ kirim: {naqd, click, karta}, chiqim: {...}, qarz }`. Guruhga
+biriktirish `lib/tolovBolimi.ts` dagi mavjud `amaldagiBolim` ustiga
+qurildi (`tolovGuruhi`) — ro'yxatdagi belgi bilan yuqoridagi taqsimot
+hech qachon zid bo'lmaydi. Eski `naqdKirim/clickKirim/qarzKirim`
+maydonlari BIT-BITGA o'zgarmadi: ularga boshqa ekranlar va testlar
+bog'langan.
+
+### 4. Filtrlar
+
+Presetlar saqlandi; ustiga **Turi, To'lov (naqd/click/karta/qarz),
+Kategoriya, Kim kiritdi, Sana oralig'i, Summa oralig'i** qo'shildi.
+Hammasi URL parametrlarida — havola nusxalansa boshqa odam ayni
+ro'yxatni ko'radi va eksport ham shu parametrlarni oladi.
+
+Telefonda `[Bugun][Bu hafta][Bu oy] [Filter (3)]` — qolgani varaqda,
+tanlovlar DARHOL qo'llanmaydi ("Natijalarni ko'rsatish" bosilguncha).
+
+Qidiruv endi izoh BILAN BIRGA kategoriya nomi bo'yicha ham ishlaydi.
+
+**Xavfsizlik:** `xodimId` — filtr, `userId` — ko'rinuvchanlik CHEGARASI.
+Chegara ustun turadi, ya'ni xodim `xodimId` yuborib boshqa xodimning
+yozuvlarini KO'RA OLMAYDI (test bilan qulflandi).
+
+### 5. Ro'yxat
+
+Desktopda jadval qoldi, lekin ierarxiya tozalandi va har qatordagi
+ikkita matn tugmasi `⋯` menyusiga yig'ildi (Batafsil / Tahrirlash /
+O'chirish). Summa faqat RANGGA tayanmaydi: `+`/`−` belgisi va
+Kirim/Chiqim nishoni ham bor.
+
+Telefonda jadval umuman ishlatilmaydi — `TransactionCards` (kun bo'yicha
+guruhlangan kartalar, yopishqoq kun sarlavhasi). Qatorga bosilganda
+tafsilot varag'i ochiladi (ilgari to'g'ridan-to'g'ri TAHRIRLASH oynasi
+ochilardi — "ko'rmoqchi" bo'lgan odam "o'zgartirmoqchi" oynaga tushardi).
+
+O'chirish `confirm()` emas, summa/kategoriya/sanani takrorlaydigan
+tasdiq oynasi. Soft-delete va 5s "Qaytarish" o'zgarmadi.
+
+### 6. Unumdorlik
+
+Sahifalash allaqachon SERVERDA edi; sahifa hajmi 20 → **50**. Filtr,
+qidiruv va jamilar butun to'plam bo'yicha serverda hisoblanadi, brauzerga
+yuklangan 50 ta yozuv bo'yicha emas. Taqsimot uchun bitta `groupBy`
+qo'shildi — N+1 yo'q.
+
+### 7. Ilova qobig'idagi yon ta'sir (sahifadan tashqarida)
+
+`src/app/app/layout.tsx` da `md:flex-row` → `lg:flex-row`. Sidebar
+`hidden lg:flex`, MobileNav esa `lg:hidden` — qator maketi `md` da
+yoqilgani uchun MobileNav 768px da YON USTUN bo'lib qolar va kontentni
+o'ngga surib yuborardi. Bu barcha sahifalarga tegishli eski xato edi;
+planshet tekshiruvi shusiz o'tmaydi.
+
+### Fayllar
+
+Yangi: `YangiYozuv.tsx`, `TurVaTolov.tsx`, `SummaMaydoni.tsx`,
+`KategoriyaTanlov.tsx`, `SummaryBar.tsx`, `FiltrSheet.tsx`,
+`TransactionTable.tsx`, `TransactionCards.tsx`, `AmalMenu.tsx`,
+`DetailSheet.tsx`, `OchirishTasdiq.tsx`, `ImportExportMenu.tsx`,
+`BulkAmallar.tsx`, `src/lib/queries/tezKategoriyalar.ts`.
+
+O'zgargan: `page.tsx`, `TransactionsClient.tsx`, `TransactionForm.tsx`,
+`TransactionFilters.tsx`, `TransactionList.tsx`, `turlar.ts`,
+`loading.tsx`, `src/lib/queries/transactions.ts`, `src/lib/tolovBolimi.ts`,
+`src/lib/modules/registry.ts`, `src/app/api/transactions/route.ts`,
+`.../export/route.ts`, `src/app/app/layout.tsx`.
+
+**Sxema o'zgarmadi, migratsiya yo'q.**
+
+### Test
+
+Yangi: `npm run test:kirim-chiqim` (13 ta) — guruhlar kesishmasligi va
+to'plamni qoplashi, kirim/chiqim taqsimotining aralashmasligi, taqsimot
+yig'indisi = qarzsiz jami, `xodimId` ning chegarani kengaytira olmasligi,
+kategoriya nomi bo'yicha qidiruv, tez kategoriyalar.
+
+Yangilangan: `test:visibility` (taqsimot ham chegarada), `test:smoke`
+(forma endi varaqda ochiladi).
+
+O'tdi: kirim-chiqim, visibility, isolation, qarz, tolov-taqsimoti,
+kategoriya, soft-delete, csv-import, kunlik, agregat, modules, selos-kg,
+tasdiqlash, kop-biznes, smoke (brauzer) — hammasi yashil, `npm run build` ham.
+
+Brauzerda 1440/1280/768/390/375 px da tekshirildi: gorizontal siljish
+YO'Q, JS xatosi yo'q, oqimlar (kirim/chiqim qo'shish, filtr varag'i,
+tafsilot, `⋯` menyu, o'chirish tasdig'i, Import/Export menyusi) ishlaydi.
+
 ---
 
 ## Bizneslar sahifasi — zamonaviy business management (2026-08-25)
@@ -4123,7 +4256,9 @@ qoida faqat UI'da edi).
 768–1023px oraligida maket qator bo'lib qolar, lekin yon panel o'rniga
 MobileNav va BottomNav yonma-yon turib butun enni yeb qo'yardi — `main`
 bor-yo'g'i **64px** ga siqilardi va bu BARCHA sahifalarga tegishli edi.
-Konteyner `lg:flex-row` ga o'tkazildi.
+Konteyner `lg:flex-row` ga o'tkazildi. (Xuddi shu xatoni Kirim/Chiqim
+redesign sessiyasi ham topgan — merge paytida ikkalasi bir xil o'zgarish
+bo'lib chiqdi, faqat izoh matni farq qildi.)
 
 ### Test
 

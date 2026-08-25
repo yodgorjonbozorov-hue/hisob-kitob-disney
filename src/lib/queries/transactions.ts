@@ -2,7 +2,13 @@ import { prisma } from "@/lib/prisma";
 import { qidiruvRejimi } from "@/lib/db/dialect";
 import { dateOnlyStringToUTCDate, utcDateToDateOnlyString } from "@/lib/date";
 import { qarzsiz } from "@/lib/qarzFiltr";
-import { tolovBolimiWhere, type TolovBolimi } from "@/lib/tolovBolimi";
+import {
+  tolovBolimiWhere,
+  tolovGuruhi,
+  tolovGuruhiWhere,
+  type TolovBolimi,
+  type TolovGuruhi,
+} from "@/lib/tolovBolimi";
 import type { Prisma } from "@prisma/client";
 
 export interface TransactionListParams {
@@ -41,6 +47,19 @@ export interface TransactionListParams {
    * qoida bilan ro'yxat filtri AYNI joydan chiqsin.
    */
   tolovBolimi?: TolovBolimi | null;
+  /**
+   * TO'LOV GURUHI — "naqd" | "click" | "karta" | "qarz". Kirim/Chiqim
+   * sahifasidagi "To'lov" filtri. `tolovBolimi` dan farqi: plastik va bank
+   * bitta "karta" guruhida, qarz esa alohida tanlanadi (lib/tolovBolimi.ts).
+   */
+  tolov?: TolovGuruhi | null;
+  /**
+   * "Kim kiritdi" FILTRI (direktor uchun). `userId` — KO'RINUVCHANLIK
+   * chegarasi, bu esa foydalanuvchi tanlagan filtr. Chegara qo'yilgan bo'lsa
+   * (xodim o'z yozuvlarini ko'radi) bu e'tiborga OLINMAYDI — aks holda xodim
+   * boshqa xodimning yozuvlarini so'rab ko'ra olardi.
+   */
+  xodimId?: string | null;
   page?: number;
   pageSize?: number;
 }
@@ -48,7 +67,10 @@ export interface TransactionListParams {
 /** Ro'yxat va eksport bir xil filtrlardan foydalanadi — shart bitta joyda quriladi. */
 function buildTransactionWhere(params: TransactionListParams): Prisma.TransactionWhereInput {
   const where: Prisma.TransactionWhereInput = { businessId: params.businessId, deletedAt: null };
+  // Ko'rinuvchanlik chegarasi USTUN: xodim uchun "kim kiritdi" filtri o'zining
+  // yozuvlaridan tashqariga chiqa olmaydi.
   if (params.userId) where.userId = params.userId;
+  else if (params.xodimId) where.userId = params.xodimId;
   if (params.from || params.to) {
     where.sana = {};
     if (params.from) where.sana.gte = dateOnlyStringToUTCDate(params.from);
@@ -56,12 +78,27 @@ function buildTransactionWhere(params: TransactionListParams): Prisma.Transactio
   }
   if (params.turi === "kirim" || params.turi === "chiqim") where.turi = params.turi;
   if (params.categoryId) where.categoryId = params.categoryId;
-  if (params.q) where.izoh = { contains: params.q, ...qidiruvRejimi() };
+  if (params.q) {
+    // Qidiruv izoh BILAN BIRGA kategoriya nomi bo'yicha ham ishlaydi: odam
+    // "Reklama" deb yozganda ko'pincha kategoriyani nazarda tutadi, izohni emas.
+    // `AND` bilan qo'shiladi — pastdagi boshqa `OR` shartlarni bosib olmasin.
+    where.AND = [...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+      {
+        OR: [
+          { izoh: { contains: params.q, ...qidiruvRejimi() } },
+          { category: { is: { nomi: { contains: params.q, ...qidiruvRejimi() } } } },
+        ],
+      }];
+  }
   if (params.tolovBolimi) {
     // `AND` bilan: bo'lim sharti o'zining `OR` iga ega (naqd) va yuqoridagi
     // shartlarni ustidan yozib yubormasligi kerak.
     where.AND = [...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
       tolovBolimiWhere(params.tolovBolimi)];
+  }
+  if (params.tolov) {
+    where.AND = [...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+      tolovGuruhiWhere(params.tolov)];
   }
   if (params.minSumma != null || params.maxSumma != null) {
     where.summa = {};
@@ -79,7 +116,7 @@ export async function listTransactions(params: TransactionListParams) {
   // Ro'yxat va sanoq shu shartdan; jamilar HAR DOIM qarzsiz (pastda).
   const where = params.realPul ? qarzsiz(xomWhere) : xomWhere;
 
-  const [items, total, sums, kassaSums, kassalar, kunlik] = await Promise.all([
+  const [items, total, sums, kassaSums, guruhSums, kassalar, kunlik] = await Promise.all([
     prisma.transaction.findMany({
       where,
       include: {
@@ -109,6 +146,18 @@ export async function listTransactions(params: TransactionListParams) {
     prisma.transaction.groupBy({
       by: ["tolovTuri", "accountId"],
       where: { ...xomWhere, turi: "kirim" },
+      _sum: { summa: true },
+    }),
+    // TO'LOV GURUHLARI taqsimoti — Kirim/Chiqim sahifasidagi summary qatori.
+    //
+    // Yuqoridagi `kassaSums` dan ATAYLAB ALOHIDA so'rov: u tarixiy sabablarga
+    // ko'ra HAR DOIM faqat kirimni jamlaydi (turi filtri e'tiborga olinmaydi)
+    // va uning natijasiga boshqa ekranlar hamda testlar bog'langan. Bu so'rov
+    // esa foydalanuvchi qo'ygan BARCHA filtrlarga bo'ysunadi va kirim bilan
+    // chiqimni ALOHIDA saqlaydi — ular bir-biriga aralashmasligi shart.
+    prisma.transaction.groupBy({
+      by: ["turi", "tolovTuri", "accountId"],
+      where: xomWhere,
       _sum: { summa: true },
     }),
     prisma.account.findMany({
@@ -152,6 +201,23 @@ export async function listTransactions(params: TransactionListParams) {
     }
   }
 
+  // Guruh taqsimoti: naqd / click / karta — kirim va chiqim ALOHIDA.
+  // Qarz faqat kirimda bo'ladi (validatsiya buni majburlaydi) va u
+  // naqd/click/karta ga KIRMAYDI, shuning uchun uch guruh yig'indisi
+  // qarzsiz jami bilan teng chiqadi.
+  const bosh = () => ({ naqd: 0, click: 0, karta: 0 });
+  const taqsimot = { kirim: bosh(), chiqim: bosh(), qarz: 0 };
+  for (const g of guruhSums) {
+    const summa = g._sum.summa ?? 0;
+    const guruh = tolovGuruhi(g.tolovTuri, g.accountId ? kassaTuri.get(g.accountId) : null);
+    if (guruh === "qarz") {
+      taqsimot.qarz += summa;
+      continue;
+    }
+    const tomon = g.turi === "chiqim" ? taqsimot.chiqim : taqsimot.kirim;
+    tomon[guruh] += summa;
+  }
+
   const totals = {
     jamiKirim,
     jamiChiqim,
@@ -159,6 +225,7 @@ export async function listTransactions(params: TransactionListParams) {
     naqdKirim,
     clickKirim,
     qarzKirim,
+    taqsimot,
   };
 
   // "YYYY-MM-DD" -> { summa, soni }. Guruhlangan ro'yxat sarlavhalari uchun.
