@@ -17,7 +17,6 @@
     },
     "android": {
       "package": "uz.balansa.mobile",
-      "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
         "backgroundColor": "#0B1220",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
