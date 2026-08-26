@@ -1,5 +1,11 @@
-import { cookies } from "next/headers";
-import { getIronSession, type IronSession, type SessionOptions } from "iron-session";
+import { cookies, headers } from "next/headers";
+import {
+  getIronSession,
+  sealData,
+  unsealData,
+  type IronSession,
+  type SessionOptions,
+} from "iron-session";
 import { redirect } from "next/navigation";
 import { normalizeRol, type Rol } from "./roles";
 
@@ -46,7 +52,66 @@ export const sessionOptions: SessionOptions = {
   },
 };
 
+/**
+ * MOBIL SESSIYA (Bearer token). Native ilova cookie yuritmaydi — login javobida
+ * xuddi shu iron-seal qiymati `token` sifatida qaytariladi va keyingi so'rovlarda
+ * `Authorization: Bearer <token>` bilan keladi. Muhri, TTL'i va ichidagi
+ * ma'lumot cookie sessiya bilan BIR XIL, shu sabab pastdagi barcha guard'lar
+ * (sessionEpoch, isActive, tenant tekshiruvi) o'zgarishsiz ishlayveradi.
+ * Token stateless — bekor qilish yo'li ham o'sha: `User.sessionEpoch` oshiriladi.
+ */
+const MOBIL_SESSIYA_TTL = 60 * 60 * 24 * 7; // 7 kun, cookie maxAge bilan teng
+
+export async function sealMobileSession(data: SessionData): Promise<string> {
+  return sealData(data, {
+    password: process.env.SESSION_SECRET as string,
+    ttl: MOBIL_SESSIYA_TTL,
+  });
+}
+
+async function bearerSessionData(): Promise<SessionData | null> {
+  let token: string | null = null;
+  try {
+    const h = await headers();
+    const auth = h.get("authorization");
+    if (auth?.startsWith("Bearer ")) token = auth.slice(7).trim() || null;
+  } catch {
+    // headers() faqat request kontekstida mavjud (masalan bot/cron skriptlarida emas)
+    return null;
+  }
+  if (!token) return null;
+  try {
+    const data = await unsealData<SessionData>(token, {
+      password: process.env.SESSION_SECRET as string,
+      ttl: MOBIL_SESSIYA_TTL,
+    });
+    if (data && typeof data === "object" && data.userId) return data;
+  } catch {
+    // Yaroqsiz/muddati o'tgan token (yoki CRON_SECRET kabi boshqa Bearer) —
+    // cookie yo'liga tushamiz; cookie ham bo'lmasa oddiy 401 bo'ladi.
+  }
+  return null;
+}
+
+/**
+ * Bearer sessiya o'zgarmas (immutable): save/destroy hech narsa qilmaydi —
+ * token klient qo'lida, server uni o'zgartira olmaydi. Sessiyani yangilash
+ * talab qilinadigan amallar (parol almashtirish) mobil klientda qayta login
+ * bilan yakunlanadi.
+ */
+function bearerSessionShim(data: SessionData): IronSession<SessionData> {
+  const shim = {
+    ...data,
+    save: async () => {},
+    destroy: () => {},
+    updateConfig: () => {},
+  };
+  return shim as unknown as IronSession<SessionData>;
+}
+
 export async function getSession(): Promise<IronSession<SessionData>> {
+  const bearer = await bearerSessionData();
+  if (bearer) return bearerSessionShim(bearer);
   return getIronSession<SessionData>(await cookies(), sessionOptions);
 }
 
