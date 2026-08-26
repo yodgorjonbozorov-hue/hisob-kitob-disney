@@ -4,7 +4,8 @@ import { ALOQA, BRAND } from "@/lib/brand";
 
 const HAVOLALAR = [
   { href: "#imkoniyatlar", matn: "Imkoniyatlar" },
-  { href: "#narx", matn: "Narx" },
+  { href: "#kimlar", matn: "Kimlar uchun" },
+  { href: "/tariflar", matn: "Tariflar" },
   { href: "/login", matn: "Kirish" },
   { href: "/maxfiylik", matn: "Maxfiylik siyosati" },
 ];

@@ -5,6 +5,7 @@ import { Boshlash } from "@/components/landing/Boshlash";
 import { Hero } from "@/components/landing/Hero";
 import { Hisobotlar } from "@/components/landing/Hisobotlar";
 import { Imkoniyatlar } from "@/components/landing/Imkoniyatlar";
+import { KimlarUchun } from "@/components/landing/KimlarUchun";
 import { KunYakuni } from "@/components/landing/KunYakuni";
 import { LandingFooter } from "@/components/landing/LandingFooter";
 import { LandingMotion } from "@/components/landing/LandingMotion";
@@ -53,6 +54,7 @@ export default async function LandingPage() {
       <KunYakuni />
       <Telegram />
       <Imkoniyatlar />
+      <KimlarUchun />
       <Rollar />
       <Hisobotlar />
       <Boshlash />

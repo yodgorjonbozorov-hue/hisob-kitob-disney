@@ -147,6 +147,12 @@ model Business {
   // Biznes turi: "umumiy" | "avto". Avto — olib-sotarlar uchun (ombor → avtopark).
   // Faqat UI matnlari va sotuv qoidalariga ta'sir qiladi (lib/biznesTuri.ts).
   turi               String                 @default("umumiy")
+  /// BIZNES YO'NALISHI (sanoat) — tariflar sahifasida tanlangan soha
+  /// (lib/pricing/profil.ts: "food" | "service" | "agro" ...). FAQAT
+  /// shaxsiylashtirish uchun: onboarding qadamlari va tavsiyalar shu
+  /// yo'nalishga moslashadi. NARXGA va hisob mantiqiga TA'SIR QILMAYDI.
+  /// null — eski bizneslar va yo'nalishsiz ro'yxatdan o'tganlar.
+  yonalish           String?
   /// SHAXSIY KASSA REJIMI. Yoqilganda har xodimning naqd yozuvi UMUMIY kassaga
   /// emas, O'ZINING shaxsiy kassasiga (Account.userId) tushadi — "kimning
   /// qo'lida qancha pul bor" savoliga ledger javob beradi.

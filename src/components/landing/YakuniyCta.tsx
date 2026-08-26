@@ -25,7 +25,7 @@ export function YakuniyCta() {
           href="/signup"
           className="mt-9 inline-block rounded-[14px] bg-[#5EEAD4] px-10 py-[19px] text-[18px] font-semibold text-[#061413] hover:bg-[#99F6E4]"
         >
-          Bepul boshlash
+          14 kun bepul boshlash
         </Link>
       </div>
     </section>

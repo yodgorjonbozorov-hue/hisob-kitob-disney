@@ -71,6 +71,7 @@
     "test:foydalanuvchilar": "node -r ts-node/register tests/foydalanuvchilar.test.ts",
     "test:foydalanuvchilar-e2e": "node -r ts-node/register tests/foydalanuvchilar-brauzer.test.ts",
     "test:signup": "node -r ts-node/register tests/signup.test.ts",
+    "test:tariflar": "node -r ts-node/register tests/tariflar.test.ts",
     "test:billing": "node -r ts-node/register tests/billing.test.ts",
     "test:superadmin": "node -r ts-node/register tests/superadmin.test.ts",
     "test:superadmin2": "node -r ts-node/register tests/superadmin2.test.ts",

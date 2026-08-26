@@ -45,6 +45,8 @@ import { DiqqatBloki } from "./DiqqatBloki";
 import { YangiTugma, type YangiAmal } from "./YangiTugma";
 import { YASHIRIN_COOKIE, yashirinniOqi } from "@/lib/pulYashirish";
 import { SelosBugunKartasi } from "./SelosBugunKartasi";
+import { biznesProfil, onboardingQadamlar } from "@/lib/pricing/profil";
+import { OnboardingKarta, type OnboardingQadamKorinish } from "./OnboardingKarta";
 
 /**
  * KPI tarmog'i — kartalar soniga qarab (huquqlar hammada bir xil emas).
@@ -193,6 +195,61 @@ export default async function DashboardPage({
   // aks holda summa avval ko'rinib, keyin yashirilardi.
   const yashirin = yashirinniOqi((await cookies()).get(YASHIRIN_COOKIE)?.value);
 
+  // ---------------------------------------------------------------------
+  // ONBOARDING (faqat sinov davri) — yo'nalishga moslashgan 3 qadam.
+  // Bajarilganlik HAQIQIY ma'lumotdan (mahsulot/sotuv/mijoz soni) aniqlanadi;
+  // hammasi bajarilgach karta yo'qoladi. Doimiy (ACTIVE) mijozlar uchun bu
+  // blok umuman so'ralmaydi — dashboardga qo'shimcha yuk tushmaydi.
+  // ---------------------------------------------------------------------
+  let onboardingKorinish: OnboardingQadamKorinish[] = [];
+  const onboardingQadamRoyxati =
+    tenant.status === "TRIAL" && business
+      ? onboardingQadamlar(business.yonalish, business.omborli)
+      : [];
+  if (onboardingQadamRoyxati.length > 0) {
+    const kerak = new Set(onboardingQadamRoyxati.map((q) => q.kalit));
+    const [mahsulotSoni, sotuvSoni, mijozSoni, buyurtmaSoni, tranzaksiyaSoni, xaridSoni] =
+      await Promise.all([
+        kerak.has("mahsulot") || kerak.has("import")
+          ? prisma.product.count({ where: { businessId } })
+          : Promise.resolve(0),
+        kerak.has("sotuv") ? prisma.sale.count({ where: { businessId } }) : Promise.resolve(0),
+        kerak.has("mijoz") ? prisma.contact.count({ where: { businessId } }) : Promise.resolve(0),
+        kerak.has("buyurtma") ? prisma.deal.count({ where: { businessId } }) : Promise.resolve(0),
+        kerak.has("tranzaksiya")
+          ? prisma.transaction.count({ where: { businessId, deletedAt: null } })
+          : Promise.resolve(0),
+        kerak.has("xarid") ? prisma.stockEntry.count({ where: { businessId } }) : Promise.resolve(0),
+      ]);
+    const bajarildiMi = (kalit: (typeof onboardingQadamRoyxati)[number]["kalit"]): boolean => {
+      switch (kalit) {
+        case "mahsulot":
+          return mahsulotSoni > 0;
+        // Import — ko'p mahsulot birdan kirgani; qo'lda 10 tagacha kiritish
+        // ham qadamning maqsadini (katalog to'ldirish) bajaradi.
+        case "import":
+          return mahsulotSoni >= 10;
+        case "sotuv":
+          return sotuvSoni > 0;
+        case "mijoz":
+          return mijozSoni > 0;
+        case "buyurtma":
+          return buyurtmaSoni > 0;
+        case "tranzaksiya":
+          return tranzaksiyaSoni > 0;
+        case "xarid":
+          return xaridSoni > 0;
+      }
+    };
+    onboardingKorinish = onboardingQadamRoyxati.map((q) => ({
+      label: q.label,
+      href: q.href,
+      bajarildi: bajarildiMi(q.kalit),
+    }));
+    // Hamma qadam bajarilgan — biznes yurib ketdi, karta endi kerak emas.
+    if (onboardingKorinish.every((q) => q.bajarildi)) onboardingKorinish = [];
+  }
+
   // "+ Yangi" menyusi — faqat foydalanuvchiga ochiq amallar.
   const yangiAmallar: YangiAmal[] = [];
   if (huquqlar.has("tranzaksiya.yaratish")) {
@@ -219,7 +276,16 @@ export default async function DashboardPage({
         </div>
       </div>
 
-      {categoryCount === 0 && (
+      {onboardingKorinish.length > 0 && business && (
+        <OnboardingKarta
+          biznesNomi={business.nomi}
+          yonalishLabel={biznesProfil(business.yonalish)?.label ?? null}
+          kunQoldi={ctx.access.kunQoldi}
+          qadamlar={onboardingKorinish}
+        />
+      )}
+
+      {categoryCount === 0 && onboardingKorinish.length === 0 && (
         <Card className="border-brand/40 bg-income-soft/30">
           <h2 className="font-semibold text-fg mb-1">Boshlashga tayyormisiz? 🚀</h2>
           <p className="text-sm text-muted mb-3">
