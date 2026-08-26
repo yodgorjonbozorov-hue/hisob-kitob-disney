@@ -101,6 +101,7 @@
     "test:postgres": "node -r ts-node/register tests/postgres.test.ts",
     "e2e:tayyorla": "node scripts/e2e-tayyorla.mjs",
     "test:smoke": "node -r ts-node/register tests/smoke-brauzer.test.ts",
+    "test:rasmli-import": "node -r ts-node/register tests/rasmli-import-brauzer.test.ts",
     "test:pos-e2e": "node -r ts-node/register tests/pos-brauzer.test.ts",
     "test:kunlik-e2e": "node -r ts-node/register tests/kunlik-brauzer.test.ts",
     "test:ai-e2e": "node -r ts-node/register tests/ai-brauzer.test.ts",

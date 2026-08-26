@@ -20,6 +20,7 @@ export interface EksportQatori {
   miqdor: number;
   minQoldiq: number;
   izoh: string;
+  rasmUrl: string;
 }
 
 export const EKSPORT_SARLAVHASI: string[] = MAHSULOT_USTUNLARI.map((u) => USTUN_SARLAVHALARI[u]);
@@ -49,5 +50,8 @@ export async function listMahsulotEksport(businessId: string): Promise<EksportQa
     miqdor: p.miqdor,
     minQoldiq: p.minQoldiq,
     izoh: p.izoh ?? "",
+    // Eksport-import aylanmasi rasmni ham saqlaydi: fayl qayta yuklansa
+    // havola shu ustundan qaytadan o'rnatiladi.
+    rasmUrl: p.rasmUrl ?? "",
   }));
 }

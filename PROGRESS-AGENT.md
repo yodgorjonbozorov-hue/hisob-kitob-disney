@@ -4965,3 +4965,77 @@ xato boshqa joyda takrorlanmaydi.
 kassir bilan `/app`, tranzaksiyalar, kunlik, pos, sotuv, qarzlar, crm,
 vazifalar — hammasi ochiladi; admin paneli o'zgarmagan. `npm run build` ✅,
 `test:isolation` (22) ✅, `test:panel` (22) ✅, `test:visibility` (10) ✅.
+
+### 2026-08-25 — Ombor importi: Excel fayl "yuklanmoqda"da abadiy osilishi (tugadi)
+
+**Muammo (foydalanuvchi xabari):** omborga Excel fayl import qilinganda
+"yuklanmoqda" holati 15 daqiqa turib ham tugamagan.
+
+**Ildiz sabab (empirik takrorlandi):** 10 MB gacha siqilgan xlsx ichida
+100 MB dan ortiq XML (200 ming qator) bo'lishi mumkin. `ExcelJS.load`
+faylni to'liq xotira modeliga yozadi — sinovda 10.8 MB fayl ~800 MB heap
+yedi; 256 MB heap'da jarayon OOM bilan o'ldi. Kichik serverda bu GC
+tiqilishi — so'rov hech qachon javob qaytarmaydi, klientda esa muddat
+(timeout) yo'q edi, shuning uchun UI abadiy "yuklanmoqda"da qolardi.
+
+**Tuzatish (uch qatlam):**
+1. `xlsxOqi.ts` — zip markaziy katalogidan ichki XML hajmi parse'dan OLDIN
+   o'qiladi (arxiv ochilmaydi, ~6 ms). 10 MB dan katta XML `XlsxXato`
+   bilan rad etiladi (import baribir 500 qator bilan cheklangan; 10 MB XML
+   ~20 ming qator — katta zaxira). Satrlar 5001 bilan cheklanadi — ortiqcha
+   qatorlar importda baribir ochiq "500 tadan ko'p" xatosi bo'ladi, jimgina
+   kesilmaydi. Streaming o'quvchi ATAYLAB ishlatilmadi: sharedStrings zip
+   ichida varaqdan keyin kelsa (haqiqiy Excel odati) matnlar buziladi —
+   sinovda tasdiqlandi.
+2. `api/products/import` — buzilgan/katta Excel 500 emas, aniq xabarli 400.
+3. `ImportModal` — so'rovga 60 s muddat (AbortController): server javobsiz
+   qolsa ham UI osilib qolmaydi. Tarmoq qatlami `importYuborish.ts` ga
+   ajratildi (komponent 250 satr chegarasida).
+
+**Tekshiruv:** 200 ming qatorli haqiqiy fayl 6 ms da tushunarli xato bilan
+rad etiladi; oddiy 300 qatorli fayl avvalgidek o'qiladi. `npm run build` ✅,
+`test:mahsulot-import` (23, 3 tasi yangi) ✅, `test:isolation` (22) ✅,
+`test:csv-import` (13) ✅.
+
+**Qo'shimcha (foydalanuvchi aniqlashtirdi — fayl 180 MB):** bunday fayl
+avval to'liq tarmoqqa yuklanib bo'lishi kerak edi, sekin internetda bu o'zi
+o'nlab daqiqa. Endi hajm KLIENTDA, yuborishdan oldin tekshiriladi
+(`MAKS_FAYL_HAJM`, server bilan bir xil 10 MB): javob bir zumda chiqadi va
+CSV sifatida saqlash / 500 qatordan bo'lish maslahat qilinadi. Modal matniga
+"10 MB gacha" qo'shildi. Test: fetch umuman chaqirilmasligi tekshiriladi
+(`test:mahsulot-import` — 24) ✅.
+
+### 2026-08-25 — Rasmli Excel importi (tugadi)
+
+**Talab (foydalanuvchi):** 180 MB lik Excel faylni aynan o'zini import
+qilish kerak — ichidagi tovar rasmlari bilan birga.
+
+**Arxitektura:** katta fayl serverga UMUMAN yuborilmaydi. XLSX brauzerning
+o'zida ochiladi (ExcelJS dinamik import — asosiy bundle'ga qo'shilmaydi):
+qatorlar yengil CSV matnga aylanib mavjud import endpointiga JSON bo'lib
+boradi; katakka joylashtirilgan rasmlar ajratiladi, canvas'da 900 px JPEG
+qilib siqiladi (~50-100 KB) va mavjud `/api/ombor/rasm` endpointiga 3 talik
+parallellikda yuklanadi; havolalar "Rasm" ustuni sifatida CSV'ga qo'shiladi.
+Import quvuri (tekshirish -> tasdiqlash -> atomik yozish) o'zgarmadi.
+
+**O'zgarishlar:**
+- `mahsulotImport.ts`: yangi `rasmUrl` ustuni (muqobil nomlari bitta
+  manbada — `lib/excel/rasmUstun.ts`; Bito "Surati" ham taniladi). Faqat
+  http(s) qiymat olinadi: fayl nomi yozilgan katak xato emas, "rasm yo'q".
+  Yangilash rejimida rasm ustunisiz fayl rasmga TEGMAYDI (narx qoidasi).
+- Eksport (`mahsulotEksport.ts`) endi rasm havolasini ham chiqaradi —
+  eksport->tahrir->import aylanmasi rasmni yo'qotmaydi.
+- Klient: `xlsxBrauzer.ts` (o'qish+rasm ankerlab olish),
+  `rasmYuklash.ts` (siqish+parallel yuklash), `useImportOqimi.ts` (oqim),
+  ImportModal yangi holatlar bilan. Saqlagich (BLOB token) sozlanmagan
+  bo'lsa foydalanuvchi IMPORTDAN OLDIN ogohlantiriladi va tovarlar
+  rasmsiz yuklanadi; ayrim rasm yuklanmasa import to'xtamaydi, yakunda
+  soni ko'rsatiladi.
+- Brauzerda ochilmagan kichik xlsx eski (server) yo'ldan o'tadi — eski
+  brauzerda ham import ishlayveradi.
+
+**Tekshiruv:** yangi e2e `npm run test:rasmli-import` (haqiqiy Chromium:
+rasmli xlsx tanlanadi, "2 tovar · rasm: 2" ko'rinadi, saqlagich
+ogohlantirishi chiqadi, import yakunlanadi, tovarlar ro'yxatda) ✅.
+`test:mahsulot-import` (26, 2 tasi yangi — rasm ustuni yozish/yangilash) ✅,
+`test:isolation` (22) ✅, `npm run build` ✅.

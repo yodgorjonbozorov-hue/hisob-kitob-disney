@@ -431,3 +431,138 @@ test("EXCEL (.xlsx) eksporti qayta o'qilib import qilinadi", async () => {
   assert.equal(qayta.sotuvNarx, asl.sotuvNarx);
   assert.equal(qayta.miqdor, asl.miqdor);
 });
+
+// ---------- Rasm ustuni ----------
+
+test("Rasm ustuni yangi tovarga yoziladi, havola bo'lmagani e'tiborsiz qoladi", async () => {
+  const csv = `Nomi,Sotuv narxi,Rasm
+Rasmli shar,5000,https://misol.uz/shar.jpg
+Rasmsiz shar,6000,IMG_0042.jpg`;
+  const { qatorlar, ustunlar, xatolar } = imp.mahsulotlarniOqi(csv);
+  assert.equal(xatolar.length, 0);
+  assert.ok(ustunlar.includes("rasmUrl"));
+  assert.equal(qatorlar[0].rasmUrl, "https://misol.uz/shar.jpg");
+  // Bito kabi dasturlar bu ustunga fayl NOMINI yozadi — bu xato emas,
+  // shunchaki "rasm yo'q".
+  assert.equal(qatorlar[1].rasmUrl, null);
+
+  const n = await T(() =>
+    imp.mahsulotlarniYoz({
+      businessId: t.business.id,
+      userId: t.user.id,
+      qatorlar,
+      ustunlar,
+      rejim: "qoshish",
+    })
+  );
+  assert.equal(n.qoshildi, 2);
+  const rasmli = await rawPrisma.product.findFirst({
+    where: { businessId: t.business.id, nomi: "Rasmli shar" },
+  });
+  assert.equal(rasmli.rasmUrl, "https://misol.uz/shar.jpg");
+  const rasmsiz = await rawPrisma.product.findFirst({
+    where: { businessId: t.business.id, nomi: "Rasmsiz shar" },
+  });
+  assert.equal(rasmsiz.rasmUrl, null);
+});
+
+test("'yangilash' rejimi rasmni almashtiradi, rasm ustunisiz fayl esa tegmaydi", async () => {
+  const yangilash = `Nomi,Rasm
+Rasmli shar,https://misol.uz/yangi.jpg`;
+  const b1 = imp.mahsulotlarniOqi(yangilash);
+  await T(() =>
+    imp.mahsulotlarniYoz({
+      businessId: t.business.id,
+      userId: t.user.id,
+      qatorlar: b1.qatorlar,
+      ustunlar: b1.ustunlar,
+      rejim: "yangilash",
+    })
+  );
+  let p = await rawPrisma.product.findFirst({
+    where: { businessId: t.business.id, nomi: "Rasmli shar" },
+  });
+  assert.equal(p.rasmUrl, "https://misol.uz/yangi.jpg");
+
+  // Rasm ustuni YO'Q fayl bilan yangilash rasmni o'chirmasin (narx qoidasi bilan bir xil).
+  const rasmsizFayl = imp.mahsulotlarniOqi(`Nomi,Sotuv narxi\nRasmli shar,7000`);
+  await T(() =>
+    imp.mahsulotlarniYoz({
+      businessId: t.business.id,
+      userId: t.user.id,
+      qatorlar: rasmsizFayl.qatorlar,
+      ustunlar: rasmsizFayl.ustunlar,
+      rejim: "yangilash",
+    })
+  );
+  p = await rawPrisma.product.findFirst({
+    where: { businessId: t.business.id, nomi: "Rasmli shar" },
+  });
+  assert.equal(p.rasmUrl, "https://misol.uz/yangi.jpg", "rasm o'chib ketdi");
+  assert.equal(p.sotuvNarx, 7000);
+});
+
+// ---------- Katta/buzilgan Excel serverni osiltirmasin ----------
+
+test("haddan katta Excel PARSE BOSHLANMASDAN rad etiladi", async () => {
+  const { buildMahsulotlarWorkbook } = await import("@/lib/excel/mahsulotlarWorkbook");
+  const { xlsxdanCsv, XlsxXato, zipXmlHajmi } = await import("@/lib/excel/xlsxOqi");
+
+  const qatorlar = await T(() => eksport.listMahsulotEksport(t.business.id));
+  const buffer = await buildMahsulotlarWorkbook(qatorlar);
+
+  // Hajm o'lchagich sog'lom faylning ichki XML hajmini ko'radi.
+  const hajm = zipXmlHajmi(buffer);
+  assert.ok(hajm !== null && hajm > 0, `zipXmlHajmi qaytardi: ${hajm}`);
+
+  // Chegara sun'iy pasaytiriladi — 200 ming qatorli faylni testda yasash shart
+  // emas, muhimi rad etish yo'li: XlsxXato, ExcelJS ishga tushmasdan.
+  await assert.rejects(
+    () => xlsxdanCsv(buffer, { maksXmlHajm: 100 }),
+    (e: unknown) => e instanceof XlsxXato && /juda katta/.test((e as Error).message)
+  );
+});
+
+test("satr chegarasi ulkan CSV matn yasashning oldini oladi", async () => {
+  const ExcelJS = (await import("exceljs")).default;
+  const { xlsxdanCsv } = await import("@/lib/excel/xlsxOqi");
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Katalog");
+  ws.addRow(["Nomi", "Sotuv narxi"]);
+  for (let i = 0; i < 20; i++) ws.addRow([`Tovar ${i}`, 1000 + i]);
+  const buffer = (await wb.xlsx.writeBuffer()) as unknown as ArrayBuffer;
+
+  const csv = await xlsxdanCsv(buffer, { maksSatr: 5 });
+  assert.equal(csv.trim().split("\n").length, 5);
+});
+
+test("10 MB dan katta fayl KLIENTDAN chiqmasdan rad etiladi", async () => {
+  // 180 MB fayl avval to'liq tarmoqqa yuklanishi kerak edi — sekin internetda
+  // bu o'zi o'nlab daqiqa "yuklanmoqda" degani. Endi fetch umuman chaqirilmaydi.
+  const { importYubor, MAKS_FAYL_HAJM } = await import("@/app/app/ombor/importYuborish");
+  const asliFetch = globalThis.fetch;
+  let fetchChaqirildi = false;
+  globalThis.fetch = (async () => {
+    fetchChaqirildi = true;
+    throw new Error("chaqirilmasligi kerak");
+  }) as typeof fetch;
+  try {
+    const katta = new File([new Uint8Array(MAKS_FAYL_HAJM + 1)], "katta.xlsx");
+    const javob = await importYubor(katta, "qoshish", true);
+    assert.equal(javob.ok, false);
+    assert.match((javob as { xabar: string }).xabar, /10 MB/);
+    assert.equal(fetchChaqirildi, false);
+  } finally {
+    globalThis.fetch = asliFetch;
+  }
+});
+
+test("zip bo'lmagan 'xlsx' tushunarli xato bilan rad etiladi", async () => {
+  const { xlsxdanCsv, XlsxXato } = await import("@/lib/excel/xlsxOqi");
+  const soxta = new TextEncoder().encode("bu excel emas, oddiy matn").buffer;
+  await assert.rejects(
+    () => xlsxdanCsv(soxta as ArrayBuffer),
+    (e: unknown) => e instanceof XlsxXato
+  );
+});

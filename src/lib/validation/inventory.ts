@@ -152,6 +152,7 @@ export const mahsulotImportQatorSchema = z.object({
   miqdor: z.number().int().min(0, "Qoldiq manfiy bo'lmasligi kerak").max(10_000_000).nullable().optional(),
   minQoldiq: z.number().int().min(0).max(1_000_000).nullable().optional(),
   izoh: z.string().trim().max(500).nullable().optional(),
+  rasmUrl: z.string().trim().max(1000).nullable().optional(),
 });
 
 export type MahsulotImportQatorInput = z.infer<typeof mahsulotImportQatorSchema>;
