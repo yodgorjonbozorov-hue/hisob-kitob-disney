@@ -5039,3 +5039,11 @@ rasmli xlsx tanlanadi, "2 tovar · rasm: 2" ko'rinadi, saqlagich
 ogohlantirishi chiqadi, import yakunlanadi, tovarlar ro'yxatda) ✅.
 `test:mahsulot-import` (26, 2 tasi yangi — rasm ustuni yozish/yangilash) ✅,
 `test:isolation` (22) ✅, `npm run build` ✅.
+
+**Qo'shimcha (mobil rasm yuklash):** tovar kartasidagi rasm tanlash endi
+yuklashdan oldin suratni brauzerda siqadi (`rasmSiqish.ts` — import bilan
+umumiy): telefon surati 3-8 MB o'rniga ~100 KB JPEG bo'lib ketadi, 5 MB
+chegarasiga urilmaydi, iPhone HEIC formati ham JPEG bo'lib chiqadi.
+`accept="image/*"` — kamera/galereya tanlovi to'liq ochiq. Eslatma:
+production'da rasmlar saqlanishi uchun Vercel'da Blob store ulanishi
+(`BLOB_READ_WRITE_TOKEN`) shart — usiz UI ochiq ogohlantiradi.
