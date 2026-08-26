@@ -5047,3 +5047,9 @@ chegarasiga urilmaydi, iPhone HEIC formati ham JPEG bo'lib chiqadi.
 `accept="image/*"` — kamera/galereya tanlovi to'liq ochiq. Eslatma:
 production'da rasmlar saqlanishi uchun Vercel'da Blob store ulanishi
 (`BLOB_READ_WRITE_TOKEN`) shart — usiz UI ochiq ogohlantiradi.
+
+**Saqlagich sozlandi (2026-08-26):** Vercel'da `balansa-rasmlar` nomli
+PUBLIC blob store yaratildi va loyihaga `BLOB` prefiksi + read-write token
+bilan ulandi (avvalgi Private store o'chirildi — private rejimda rasm URL
+lari ochiq o'qilmasdi). `BLOB_READ_WRITE_TOKEN` endi barcha muhitlarda bor;
+shu commit push'i yangi deploy boshlab, tokenni kuchga kiritadi.
