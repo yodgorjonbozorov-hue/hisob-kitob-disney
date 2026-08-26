@@ -5053,3 +5053,29 @@ PUBLIC blob store yaratildi va loyihaga `BLOB` prefiksi + read-write token
 bilan ulandi (avvalgi Private store o'chirildi — private rejimda rasm URL
 lari ochiq o'qilmasdi). `BLOB_READ_WRITE_TOKEN` endi barcha muhitlarda bor;
 shu commit push'i yangi deploy boshlab, tokenni kuchga kiritadi.
+Foydalanuvchi 249 tovar + 207 rasmni muvaffaqiyatli import qildi.
+
+### 2026-08-26 — Katalogni tozalash (tugadi)
+
+**Talab:** import keraksiz tovarlarni ham olib kelgan — foydalanuvchi
+"faqat Gullar kategoriyasi qolsin, qolganini o'chir" dedi. Bittalab
+o'chirish yuzlab bosish, ommaviy yo'l esa umuman yo'q edi (Product uchun
+DELETE endpointning o'zi yo'q).
+
+**Yechim:** Ombor "•••" menyusida "🧹 Katalogni tozalash" —
+QOLADIGAN kategoriyalar belgilanadi, qolgan tovarlar o'chadi. Ikki bosqich:
+server avval aniq hisob qaytaradi (nechta o'chadi / nofaol bo'ladi /
+qoladi), foydalanuvchi ko'rib tasdiqlagandagina yoziladi.
+
+Muhim qarorlar (`lib/services/katalogTozalash.ts`):
+- Sotuv/kirim/inventarizatsiya/xarid izi bor tovar O'CHIRILMAYDI (FK ham
+  Restrict) — `isActive: false` bo'ladi, hisobotlar teshilmaydi.
+- Hammasi bitta `runBusinessTx` da; har so'rovda businessId qo'lda.
+- "Hammasini o'chir" mumkin emas — kamida bitta kategoriya saqlanishi
+  shart (zod refine).
+- `notIn` NULL ni qamramasligi hisobga olingan: kategoriyasiz tovarlar
+  alohida bayroq bilan boshqariladi.
+
+Test: `npm run test:katalog-tozalash` (4 — hisob, kategoriyasiz bayrog'i,
+tarixli nofaol + tenant izolyatsiyasi, audit izi) ✅. `npm run build` ✅,
+`test:isolation` (22) ✅, `test:mahsulot-import` (26) ✅.

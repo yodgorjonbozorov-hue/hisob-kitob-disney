@@ -63,6 +63,7 @@
     "test:inventarizatsiya": "node -r ts-node/register tests/inventarizatsiya.test.ts",
     "test:csv-import": "node -r ts-node/register tests/csv-import.test.ts",
     "test:mahsulot-import": "node -r ts-node/register tests/mahsulot-import.test.ts",
+    "test:katalog-tozalash": "node -r ts-node/register tests/katalog-tozalash.test.ts",
     "test:narx-toldirish": "node -r ts-node/register tests/narx-toldirish.test.ts",
     "test:bot-holat": "node -r ts-node/register tests/bot-holat.test.ts",
     "test:visibility": "node -r ts-node/register tests/visibility.test.ts",

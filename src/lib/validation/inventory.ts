@@ -155,6 +155,24 @@ export const mahsulotImportQatorSchema = z.object({
   rasmUrl: z.string().trim().max(1000).nullable().optional(),
 });
 
+/**
+ * KATALOGNI TOZALASH — tanlangan kategoriyalar QOLADI, qolgan tovarlar
+ * o'chiriladi. Hech narsa saqlanmaydigan so'rov rad etiladi: "hammasini
+ * o'chir" tugmasi adashib bosiladigan narsa bo'lmasligi kerak.
+ */
+export const katalogTozalashSchema = z
+  .object({
+    saqlanadiganKategoriyalar: z.array(z.string().min(1)).max(500),
+    kategoriyasizSaqlansin: z.boolean().default(false),
+    /** true — faqat hisob-kitob qaytadi, hech narsa o'chirilmaydi. */
+    tekshirish: z.boolean().optional(),
+  })
+  .refine((d) => d.saqlanadiganKategoriyalar.length > 0 || d.kategoriyasizSaqlansin, {
+    message: "Kamida bitta kategoriya saqlanishi kerak",
+  });
+
+export type KatalogTozalashInput = z.infer<typeof katalogTozalashSchema>;
+
 export type MahsulotImportQatorInput = z.infer<typeof mahsulotImportQatorSchema>;
 
 /**

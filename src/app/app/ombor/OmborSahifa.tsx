@@ -14,6 +14,7 @@ import { YangiMahsulot } from "./YangiMahsulot";
 import { TovarKeldi } from "./TovarKeldi";
 import { TogrilashSheet, type TogrilashTuri } from "./TogrilashSheet";
 import { ImportModal } from "./ImportModal";
+import { KatalogTozalashModal } from "./KatalogTozalashModal";
 import { OmborBoshqaruv, OmborFab, type QoshimchaAmal } from "./OmborBoshqaruv";
 import { OMBOR_TABLAR, type OmborTab } from "./tablar";
 import type { AccountDTO } from "@/lib/queries/accounts";
@@ -63,6 +64,7 @@ export function OmborSahifa({
   const [tahrir, setTahrir] = useState<OmborMahsulotDTO | null>(null);
   const [togrilash, setTogrilash] = useState<TogrilashTuri | null>(null);
   const [importOchiq, setImportOchiq] = useState(false);
+  const [tozalashOchiq, setTozalashOchiq] = useState(false);
 
   /** Serverdan yangi KPI va ro'yxat — har yozuv amalidan keyin. */
   const yangila = () => router.refresh();
@@ -73,6 +75,7 @@ export function OmborSahifa({
     { nomi: "➖ Hisobdan chiqarish", onClick: () => setTogrilash("chiqarish") },
     { nomi: "📊 Excel eksport", href: "/api/products/export?format=xlsx", yuklab: true },
     { nomi: "📥 Fayldan yuklash", onClick: () => setImportOchiq(true) },
+    { nomi: "🧹 Katalogni tozalash", onClick: () => setTozalashOchiq(true) },
     { nomi: "🏷 Narx va qoldiq", href: "/app/ombor/narxlar" },
     { nomi: "🚚 Ta'minotchilar", href: "/app/ombor/taminotchilar" },
   ];
@@ -200,6 +203,9 @@ export function OmborSahifa({
       )}
 
       {importOchiq && <ImportModal onClose={() => setImportOchiq(false)} onDone={yangila} />}
+      {tozalashOchiq && (
+        <KatalogTozalashModal onClose={() => setTozalashOchiq(false)} onDone={yangila} />
+      )}
     </div>
   );
 }
