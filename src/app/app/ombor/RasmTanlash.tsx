@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { INPUT_CLASS } from "@/components/ui/fieldStyles";
+import { rasmniSiqish } from "./rasmSiqish";
 
 /**
  * MAHSULOT RASMI — telefonda kamera yoki galereya, kompyuterda fayl tanlash.
@@ -45,8 +46,18 @@ export function RasmTanlash({
     setXato(null);
     setYuklanmoqda(true);
     try {
+      // Telefon surati 3-8 MB (iPhone'da HEIC) bo'ladi — avval brauzerda
+      // 900 px JPEG ga siqiladi: yuklash tez, 5 MB chegarasiga urilmaydi,
+      // server tanimaydigan format ham JPEG bo'lib ketadi.
+      let jonatma = fayl;
+      try {
+        const siqilgan = await rasmniSiqish(fayl);
+        jonatma = new File([siqilgan], "rasm.jpg", { type: "image/jpeg" });
+      } catch {
+        // Siqib bo'lmagan fayl aslicha ketadi — yakuniy hukm serverda.
+      }
       const form = new FormData();
-      form.append("rasm", fayl);
+      form.append("rasm", jonatma);
       const res = await fetch("/api/ombor/rasm", { method: "POST", body: form });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -121,7 +132,7 @@ export function RasmTanlash({
       <input
         ref={input}
         type="file"
-        accept="image/jpeg,image/png,image/webp"
+        accept="image/*"
         className="hidden"
         onChange={(e) => {
           const f = e.target.files?.[0];

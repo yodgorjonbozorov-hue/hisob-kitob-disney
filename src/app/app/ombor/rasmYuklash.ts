@@ -1,45 +1,16 @@
 import type { TopilganRasm } from "./xlsxBrauzer";
+import { rasmniSiqish } from "./rasmSiqish";
 
 /**
  * EXCELDAN AJRATILGAN RASMLARNI SAQLAGICHGA YUKLASH.
  *
- * Har rasm avval brauzerda kichraytiriladi (kartochkada 900 px dan katta
- * rasm ma'nosiz, asl fayllar esa megabaytlab bo'ladi) va JPEG bo'lib
+ * Har rasm avval brauzerda kichraytiriladi (`rasmSiqish.ts`) va JPEG bo'lib
  * mavjud `/api/ombor/rasm` endpointiga ketadi — mahsulot kartasidagi rasm
  * yuklash bilan AYNAN bir yo'l.
  */
 
-const MAKS_TOMONI = 900;
-const JPEG_SIFAT = 0.82;
 /** Bir vaqtda nechta rasm yuklanadi — server va tarmoqni bo'g'maslik uchun. */
 const PARALLEL = 3;
-
-export async function rasmniSiqish(blob: Blob): Promise<Blob> {
-  const bitmap = await createImageBitmap(blob);
-  try {
-    const masshtab = Math.min(1, MAKS_TOMONI / Math.max(bitmap.width, bitmap.height));
-    const w = Math.max(1, Math.round(bitmap.width * masshtab));
-    const h = Math.max(1, Math.round(bitmap.height * masshtab));
-    const canvas = document.createElement("canvas");
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Canvas ochilmadi");
-    // JPEG shaffoflikni qora qiladi — oq fon chiziladi.
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, w, h);
-    ctx.drawImage(bitmap, 0, 0, w, h);
-    return await new Promise<Blob>((resolve, reject) =>
-      canvas.toBlob(
-        (b) => (b ? resolve(b) : reject(new Error("Rasmni siqib bo'lmadi"))),
-        "image/jpeg",
-        JPEG_SIFAT
-      )
-    );
-  } finally {
-    bitmap.close();
-  }
-}
 
 export interface RasmYuklashNatijasi {
   /** Varaq qatori -> saqlagichdagi ochiq manzil. */
