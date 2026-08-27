@@ -469,6 +469,24 @@ test("nofaol xodim tizimga kira olmaydi (login route fail-closed)", () => {
   assert.match(tenant, /if \(!user \|\| !user\.isActive\) return null/, "mavjud sessiya ham to'xtaydi");
 });
 
+test("rol har so'rovda bazadan yangilanadi (rol o'zgarishi qayta kirishni kutmaydi)", () => {
+  // Sessiya cookie'si 7 kun yashaydi. Rol faqat login paytida yozilsa,
+  // direktor qilib ko'tarilgan xodim qayta kirmaguncha eski rol bilan yuradi
+  // (menyuda Ombor chiqmaydi), tushirilgan xodimda esa olib tashlangan huquq
+  // cookie tugagunicha amal qiladi. Guard buni har so'rovda bazadan tuzatadi.
+  const tenant = readFileSync("src/lib/auth/tenant.ts", "utf8");
+  assert.match(
+    tenant,
+    /select: \{ tenantId: true, isActive: true, sessionEpoch: true, rol: true \}/,
+    "guard so'rovi rolni ham o'qishi kerak"
+  );
+  assert.match(
+    tenant,
+    /session\.rol = normalizeRol\(user\.rol\)/,
+    "sessiyadagi rol bazadagi bilan almashtirilishi kerak"
+  );
+});
+
 test("sahifada moliya ustunlari (balans/qarz/yozuvlar) qolmagan", () => {
   const client = readFileSync("src/app/app/admin/foydalanuvchilar/XodimlarRoyxat.tsx", "utf8");
   for (const ustun of ["Balans", "Qarz", "Yozuvlar"]) {

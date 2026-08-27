@@ -173,6 +173,22 @@ test("FAIL-CLOSED: biriktiruvsiz eski hisob sessiyadagi biznes bilan cheklanadi"
   });
 });
 
+test("KO'TARILGAN direktor eski cookie'dagi biznes bilan QAMALIB qolmaydi", async () => {
+  // Stsenariy: kassir direktor qilib ko'tarildi. Biriktiruvlari o'chirildi
+  // (OWNER biznessiz), lekin sessiya cookie'sida eski `businessId` qolgan —
+  // rol endi har so'rovda bazadan yangilanadi (lib/auth/tenant.ts), shuning
+  // uchun fail-closed zaxira yo'li boshqaruvchiga QO'LLANMAYDI.
+  await runWithTenant(TENANT, async () => {
+    const bizneslar = await getAccessibleBusinesses(sessiya(EGA, GULLAR));
+    assert.deepEqual(
+      bizneslar.map((b: any) => b.id).sort(),
+      [GULLAR, SOVGA].sort(),
+      "direktor barcha faol bizneslarni ko'rishi kerak"
+    );
+    assert.equal(await biznesRuxsatiBormi(sessiya(EGA, GULLAR), SOVGA), true);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // 2. Biriktiruvni o'zgartirish qoidalari
 // ---------------------------------------------------------------------------

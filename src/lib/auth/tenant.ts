@@ -2,6 +2,7 @@ import { requestCache } from "@/lib/requestCache";
 import { NextRequest, NextResponse } from "next/server";
 import { redirect } from "next/navigation";
 import { getCurrentUser, requireUser, type SessionData } from "./session";
+import { normalizeRol } from "./roles";
 import { handleApiError, UnauthorizedError, ForbiddenError } from "./guard";
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { runWithTenant } from "@/lib/db/tenantContext";
@@ -68,7 +69,7 @@ const tenantByIdCached = requestCache(async (tenantId: string): Promise<TenantIn
 const userTenantIdCached = requestCache(async (userId: string) =>
   rawPrisma.user.findUnique({
     where: { id: userId },
-    select: { tenantId: true, isActive: true, sessionEpoch: true },
+    select: { tenantId: true, isActive: true, sessionEpoch: true, rol: true },
   })
 );
 
@@ -83,6 +84,14 @@ async function loadTenant(session: Required<SessionData>): Promise<TenantInfo | 
   const user = await userTenantIdCached(session.userId);
   if (!user || !user.isActive) return null;
   if ((session.sessionEpoch ?? 0) !== user.sessionEpoch) return null;
+
+  // ROL HAR SO'ROVDA BAZADAN YANGILANADI. Sessiyadagi rol login paytida
+  // muhrlanadi (cookie 7 kun yashaydi): direktor xodimning rolini o'zgartirsa,
+  // xodim qayta kirmaguncha eski rol bilan yurardi — ko'tarilgan xodim yangi
+  // bo'limlarni (masalan Ombor) ko'rmasdi, tushirilgan xodimda esa olib
+  // tashlangan huquq 7 kungacha amal qilardi. Yozuv shusiz ham har so'rovda
+  // o'qiladi (yuqoridagi xavfsizlik tekshiruvlari uchun) — qo'shimcha so'rov YO'Q.
+  session.rol = normalizeRol(user.rol);
 
   // Sessiyadagi tenant bazadagisi bilan ziddiyatda bo'lsa — fail-closed.
   // (Foydalanuvchi boshqa kompaniyaga ko'chirilgan, cookie esa eski.)

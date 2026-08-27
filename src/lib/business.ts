@@ -2,6 +2,7 @@ import { requestCache } from "@/lib/requestCache";
 import { cookies, headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import type { SessionData } from "@/lib/auth/session";
+import { isManager } from "@/lib/auth/roles";
 import { BadRequestError } from "@/lib/auth/guard";
 
 export const ACTIVE_BUSINESS_COOKIE = "active_business";
@@ -62,11 +63,17 @@ const biriktirilganCached = requestCache(biriktirilganBiznesIdlari);
  * Sabab: hisob boshqa yo'l bilan yaratilgan bo'lishi mumkin (seed, e2e
  * skripti, qo'lda SQL) — u holda "qator yo'q" ni "cheklov yo'q" deb o'qish
  * xodimga barcha bizneslarni OCHIB YUBORARDI. Bu yerda aksincha: cheklov
- * saqlanadi. (Direktor/administratorda `businessId` baribir NULL.)
+ * saqlanadi.
+ *
+ * ISTISNO — boshqaruvchi (OWNER/ADMIN): unda cheklov bo'lmaydi. Kassirlikdan
+ * direktorlikka ko'tarilgan xodimning cookie'sida eski `businessId` qolib
+ * ketadi (sessiya 7 kun) — zaxira yo'l uni bitta biznesga qamab qo'ymasin.
+ * Rol har so'rovda bazadan yangilanadi (lib/auth/tenant.ts), unga ishonish mumkin.
  */
 async function ruxsatEtilganIdlar(session: SessionData): Promise<string[]> {
   const biriktirilgan = await biriktirilganCached(session.userId ?? "");
   if (biriktirilgan.length > 0) return biriktirilgan;
+  if (isManager(session.rol)) return [];
   return session.businessId ? [session.businessId] : [];
 }
 

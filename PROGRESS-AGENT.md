@@ -5139,3 +5139,32 @@ filial, yillik 9 950 000 / tejov 1 990 000), yaroqsiz URL parametrlari,
 375/390/768/1440 kengliklar, mavjud login — 62/62 ✅ (eslatma: landingdagi
 ESKI Rollar jadvali 375px da scrollWidth'ni oshiradi, lekin sahifa
 `overflow` bilan qirqilgan — foydalanuvchiga ko'rinmaydi, oldindan mavjud).
+
+## Rol o'zgarishi endi qayta kirishni kutmaydi (2026-08-27)
+
+**Muammo (mijoz xabari):** Isfan Optom biznesida Jajon xodimiga direktor
+roli berildi, lekin ilovada u hali ham "Kassir" bo'lib ko'rinardi va Ombor
+menyusi chiqmasdi.
+
+**Ildiz sabab:** rol sessiya cookie'siga faqat LOGIN paytida yoziladi
+(7 kun yashaydi). `PATCH /api/users/[id]` bazadagi rolni yangilaydi, lekin
+sessiyaga tegmaydi va `sessionEpoch` ham oshirmaydi — xodim qayta
+kirmaguncha eski rol bilan yuradi. Menyu (`computeNav`) va "Ombor"
+havolasi `session.rol` dan hisoblanadi, shuning uchun ko'tarilgan xodimga
+Ombor ko'rinmasdi. Teskari tomoni xavfsizlik teshigi edi: roli
+TUSHIRILGAN xodimning boshqaruv huquqi cookie tugagunicha amal qilardi.
+
+**Yechim:**
+- `lib/auth/tenant.ts`: guard shusiz ham har so'rovda xavfsizlik yozuvini
+  o'qiydi (`isActive`, `sessionEpoch`) — o'sha so'rovga `rol` qo'shildi va
+  `session.rol` har so'rovda bazadagi bilan yangilanadi (qo'shimcha DB
+  so'rovi YO'Q). Rol o'zgarishi endi keyingi sahifa ochilishida darhol
+  kuchga kiradi — qayta kirish shart emas.
+- `lib/business.ts` `ruxsatEtilganIdlar`: kassirlikdan ko'tarilgan
+  direktorning cookie'sida eski `businessId` qolib ketadi — fail-closed
+  zaxira yo'l endi boshqaruvchiga (OWNER/ADMIN) qo'llanmaydi, u barcha
+  bizneslarni ko'radi. Kassir/sotuvchi uchun fail-closed avvalgidek.
+
+Test: kop-biznes 19 (yangi: ko'tarilgan direktor eski cookie bilan qamalib
+qolmaydi) ✅, foydalanuvchilar 35 (yangi: guard rolni bazadan yangilashini
+manba bo'yicha qo'riqlaydi) ✅, isolation 22 ✅. `npm run build` ✅.
