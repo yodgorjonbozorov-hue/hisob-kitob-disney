@@ -5139,3 +5139,29 @@ filial, yillik 9 950 000 / tejov 1 990 000), yaroqsiz URL parametrlari,
 375/390/768/1440 kengliklar, mavjud login — 62/62 ✅ (eslatma: landingdagi
 ESKI Rollar jadvali 375px da scrollWidth'ni oshiradi, lekin sahifa
 `overflow` bilan qirqilgan — foydalanuvchiga ko'rinmaydi, oldindan mavjud).
+
+### 2026-08-27 — Qarz to'lov summasi avtomatik to'ldirilmasin (tugadi)
+
+**Talab:** Qarzdorlik → To'lov qabul qilish oynasi ochilganda summa
+inputiga mijozning JAMI qarzi (masalan 42 824 000) avtomatik yozilib
+qolardi. Operator qisman to'lovda (mijoz 5 000 000 berdi) eski qiymatni
+o'chirishni unutsa, butun qarz "to'landi" bo'lib yozilish xavfi bor edi.
+
+**Yechim:** summa maydoni endi BO'SH ochiladi, placeholder
+"To'lov summasini kiriting". Operator real olingan pulni o'zi yozadi.
+
+O'zgargan joylar:
+- `QarzdorTolovSheet.tsx` — `useState(formatSom(jamiQarz))` → `useState("")`;
+  "Qaysi qarzga yoziladi" selecti ham summani qayta to'ldirmaydi (operator
+  yozgani saqlanadi); Tasdiqlash tugmasi summa bo'sh/0 bo'lsa disabled.
+- `QarzTolovForm.tsx` (bitta qarz bo'yicha forma) — xuddi shu tuzatish.
+
+Validatsiya TEGILMADI, faqat tekshirildi: klientda `s <= 0` va
+`s > chegara` xatolari, `parseSomInput` manfiy sonni o'tkazmaydi
+(`[^\d]` olib tashlanadi); serverda zod `positive int` +
+`summa > qolgan` rad etiladi. FIFO taqsimot (`services/qarz.ts`,
+eng eski qarzdan) va kassa tanlash (naqd/click/bank → account) o'zgarmagan.
+
+Test: `npm run build` ✅, `test:qarz` (16) ✅, `test:qarzdorlik` (16) ✅,
+`test:qarz-taqsimot` (13) ✅, `test:isolation` (22) ✅,
+`test:qarzlar-brauzer` (8) ✅.

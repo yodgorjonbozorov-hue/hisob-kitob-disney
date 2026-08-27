@@ -45,7 +45,10 @@ export function QarzTolovForm({
   onCancel: () => void;
   onDone: () => void;
 }) {
-  const [summa, setSumma] = useState(formatSom(qolgan));
+  // Summa ATAYLAB bo'sh boshlanadi: operator mijoz real bergan pulni o'zi
+  // yozadi — qisman to'lovda oldindan to'ldirilgan jami summa xato
+  // tasdiqlashga olib kelardi.
+  const [summa, setSumma] = useState("");
   const [tolovTuri, setTolovTuri] = useState<QarzTolovUsuli>("naqd");
   const [accountId, setAccountId] = useState("");
   const [sana, setSana] = useState(todayDateOnlyString());
@@ -114,6 +117,7 @@ export function QarzTolovForm({
               const n = parseSomInput(e.target.value);
               setSumma(n ? formatSom(n) : "");
             }}
+            placeholder="To'lov summasini kiriting"
             className="w-full rounded-lg border border-line px-3 py-2 text-sm"
             autoFocus
           />
@@ -198,7 +202,7 @@ export function QarzTolovForm({
         <Button variant="secondary" type="button" onClick={onCancel} disabled={loading}>
           Bekor qilish
         </Button>
-        <Button type="button" onClick={yubor} disabled={loading}>
+        <Button type="button" onClick={yubor} disabled={loading || parseSomInput(summa) <= 0}>
           {loading ? "..." : beriladigan ? "To'ladim" : "Qabul qilish"}
         </Button>
       </div>
