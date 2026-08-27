@@ -81,7 +81,10 @@ export function QarzdorTolovSheet({
   onDone: (xabar: string) => void;
 }) {
   const beriladigan = turi === "beriladigan";
-  const [summa, setSumma] = useState(formatSom(jamiQarz));
+  // Summa ATAYLAB bo'sh boshlanadi: operator mijoz real bergan pulni o'zi
+  // yozadi. Jami qarzni oldindan yozib qo'yish qisman to'lovda xato
+  // tasdiqlashga olib kelardi.
+  const [summa, setSumma] = useState("");
   const [tolovTuri, setTolovTuri] = useState<QarzTolovUsuli>("naqd");
   const [accountId, setAccountId] = useState("");
   const [sana, setSana] = useState(todayDateOnlyString());
@@ -180,6 +183,7 @@ export function QarzdorTolovSheet({
               const n = parseSomInput(e.target.value);
               setSumma(n ? formatSom(n) : "");
             }}
+            placeholder="To'lov summasini kiriting"
             className="w-full min-h-[48px] rounded-lg border border-line px-3 py-2 text-lg font-semibold tnum"
             autoFocus
           />
@@ -252,9 +256,9 @@ export function QarzdorTolovSheet({
               id="qarzdor-tolov-qaysi"
               value={qolda}
               onChange={(e) => {
+                // Summa avtomatik to'ldirilmaydi — operator yozgan qiymat
+                // saqlanadi; chegaradan oshsa yuborishda xato ko'rsatiladi.
                 setQolda(e.target.value);
-                const q = ochiqQarzlar.find((x) => x.id === e.target.value);
-                setSumma(formatSom(q ? q.qolgan : jamiQarz));
               }}
               className="w-full min-h-[44px] rounded-lg border border-line px-3 py-2 text-sm bg-surface"
             >
@@ -331,7 +335,12 @@ export function QarzdorTolovSheet({
           <Button variant="secondary" onClick={onClose} disabled={loading}>
             Bekor qilish
           </Button>
-          <Button onClick={yubor} loading={loading} disabled={loading} className="min-h-[44px]">
+          <Button
+            onClick={yubor}
+            loading={loading}
+            disabled={loading || s <= 0}
+            className="min-h-[44px]"
+          >
             Tasdiqlash
           </Button>
         </div>
