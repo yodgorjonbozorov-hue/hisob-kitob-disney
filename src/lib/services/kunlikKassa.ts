@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import type { BusinessTx } from "@/lib/db/businessTx";
 import { ensureUserKassaTx, kassaQoldiqTx } from "@/lib/services/userKassa";
+import { QARZ_EMAS } from "@/lib/qarzFiltr";
 import { QOLDIQ_HOLATLARI } from "@/lib/validation/account";
 
 /**
@@ -49,15 +50,20 @@ export interface KunlikKassaManba {
  * Naqd kassalar ledgeri: yozuvlar (kirim − chiqim) + o'tkazmalar (kirgan −
  * chiqqan). Ikkala uchi ham naqd bo'lgan o'tkazma ikkala tomonda ham
  * ko'ringani uchun o'z-o'zini nolga chiqaradi — bu to'g'ri.
+ *
+ * Qarzga yozilgan kirim pul emas — qoldiq hisoblari bilan bir xil filtr.
+ * Kassa relatsiyasida `businessId` ham tekshiriladi: yozuv boshqa biznes
+ * kassasiga (eski ko'chirishdan qolgan bog'lanish) ishora qilsa, u bu
+ * biznes naqdiga kirmaydi.
  */
 export async function biznesNaqdQoldiqTx(tx: BusinessTx, businessId: string): Promise<number> {
   const [kirim, chiqim, kirgan, chiqqan] = await Promise.all([
     tx.transaction.aggregate({
-      where: { businessId, turi: "kirim", deletedAt: null, account: NAQD_KASSA },
+      where: { businessId, turi: "kirim", deletedAt: null, ...QARZ_EMAS, account: { ...NAQD_KASSA, businessId } },
       _sum: { summa: true },
     }),
     tx.transaction.aggregate({
-      where: { businessId, turi: "chiqim", deletedAt: null, account: NAQD_KASSA },
+      where: { businessId, turi: "chiqim", deletedAt: null, ...QARZ_EMAS, account: { ...NAQD_KASSA, businessId } },
       _sum: { summa: true },
     }),
     tx.accountTransfer.aggregate({

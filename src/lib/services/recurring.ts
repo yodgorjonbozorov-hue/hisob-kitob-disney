@@ -1,8 +1,9 @@
 import { prisma } from "@/lib/prisma";
-import { currentMonthString } from "@/lib/date";
+import { currentMonthString, utcDateToDateOnlyString } from "@/lib/date";
 import { logAudit } from "@/lib/services/audit";
 import { MANAGER_ROLLAR } from "@/lib/auth/roles";
 import { runBusinessTx } from "@/lib/db/businessTx";
+import { createTransactionTx } from "@/lib/services/transactionService";
 
 /**
  * Muddati kelgan takroriy tranzaksiyalarni yaratadi. Har oy `kun` sanasi kelganda
@@ -60,20 +61,21 @@ export async function generateDueRecurring(now: Date = new Date()): Promise<numb
     const admin = adminByBusiness.get(r.businessId) ?? tenantAdmin;
     if (!admin) continue;
 
-    const sana = new Date(Date.UTC(year, monthIdx, Math.min(r.kun, 28)));
+    const sana = utcDateToDateOnlyString(new Date(Date.UTC(year, monthIdx, Math.min(r.kun, 28))));
     // Tranzaksiya yaratish + "yaratildi" belgisi bitta atomik amalda:
     // o'rtada uzilsa keyingi ishga tushishda takroriy yozuv paydo bo'lmasin.
+    //
+    // `createTransactionTx` orqali — yozuv KASSAGA BOG'LANADI (qo'lda kiritilgan
+    // yozuv bilan bir xil qoida). Ilgari xom `create` ishlatilardi va takroriy
+    // chiqim (ijara, oylik) hech qaysi kassadan ayrilmasdi: kassa qoldig'i
+    // oydan-oyga soxta shishib borardi.
     const tx = await runBusinessTx(r.businessId, async (btx) => {
-      const created = await btx.transaction.create({
-        data: {
-          turi: r.turi,
-          categoryId: r.categoryId,
-          businessId: r.businessId,
-          summa: r.summa,
-          sana,
-          izoh: r.izoh ? `[Takroriy] ${r.izoh}` : "[Takroriy]",
-          userId: admin.id,
-        },
+      const created = await createTransactionTx(btx, admin.id, r.businessId, {
+        turi: r.turi as "kirim" | "chiqim",
+        categoryId: r.categoryId,
+        summa: r.summa,
+        sana,
+        izoh: r.izoh ? `[Takroriy] ${r.izoh}` : "[Takroriy]",
       });
       await btx.recurringTransaction.updateMany({
         where: { id: r.id, businessId: r.businessId },
