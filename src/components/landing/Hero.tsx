@@ -45,7 +45,7 @@ export function Hero() {
               href="/signup"
               className="rounded-[12px] bg-[#5EEAD4] px-[26px] py-[15px] text-[16px] font-semibold text-[#061413] hover:bg-[#99F6E4]"
             >
-              Bepul boshlash
+              14 kun bepul boshlash
             </Link>
             <a
               href="#kunlik"

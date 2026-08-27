@@ -23,6 +23,11 @@ export const signupSchema = z.object({
     .regex(/^\+?[\d\s()-]{9,17}$/, "Telefon raqam noto'g'ri (masalan: +998901234567)"),
   // Parol siyosati: kamida 8 belgi.
   parol: z.string().min(8, "Parol kamida 8 belgi bo'lishi kerak").max(100),
+  // ONBOARDING TANLOVLARI (tariflar sahifasidan) — majburiy emas va
+  // ISHONCHSIZ: yaroqsiz qiymat XATO EMAS, server uni e'tiborsiz qoldiradi
+  // (narx/tarif hisobi baribir serverda). Shu bois qat'iy enum emas.
+  yonalish: z.string().trim().max(30).optional(),
+  addons: z.array(z.string().trim().max(20)).max(10).optional(),
 });
 
 export type SignupInput = z.infer<typeof signupSchema>;

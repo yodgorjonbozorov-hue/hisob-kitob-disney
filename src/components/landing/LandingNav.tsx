@@ -4,11 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/Logo";
 
-/** Bo'lim havolalari — dizayndagi tartib. */
+/** Bo'lim havolalari — dizayndagi tartib. Tariflar alohida sahifa (/tariflar). */
 const HAVOLALAR = [
   { href: "#imkoniyatlar", matn: "Imkoniyatlar" },
-  { href: "#kunlik", matn: "Kunlik hisobot" },
-  { href: "#narx", matn: "Narx" },
+  { href: "#kimlar", matn: "Kimlar uchun" },
+  { href: "/tariflar", matn: "Tariflar" },
   { href: "#savollar", matn: "Savollar" },
 ] as const;
 
@@ -75,7 +75,7 @@ export function LandingNav() {
               href="/signup"
               className="rounded-full bg-[#5EEAD4] px-[18px] py-2.5 text-[15px] font-semibold text-[#061413] hover:bg-[#99F6E4]"
             >
-              Bepul boshlash
+              14 kun bepul boshlash
             </Link>
           </div>
 
@@ -137,7 +137,7 @@ function MobilMenyu({ yop }: { yop: () => void }) {
           onClick={yop}
           className="rounded-[16px] bg-[#5EEAD4] p-[18px] text-center text-[17px] font-semibold text-[#061413]"
         >
-          Bepul boshlash
+          14 kun bepul boshlash
         </Link>
         <p className="m-0 text-center text-[13px] text-[#F8FBFA]/50">
           14 kun bepul · Karta talab qilinmaydi
