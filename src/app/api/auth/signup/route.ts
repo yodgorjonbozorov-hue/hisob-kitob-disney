@@ -4,6 +4,8 @@ import { rawPrisma } from "@/lib/db/rawPrisma";
 import { getSession } from "@/lib/auth/session";
 import { signupSchema, normalizePhone } from "@/lib/validation/auth";
 import { createTenantWithOwner, findRecentDuplicateTenant } from "@/lib/services/signup";
+import { isBusinessType } from "@/lib/pricing/profil";
+import { isAddonKey } from "@/lib/pricing/config";
 import { rateLimit } from "@/lib/rateLimit";
 import { getClientIp } from "@/lib/services/audit";
 
@@ -57,11 +59,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Onboarding tanlovlari ishonchsiz kirish: yaroqsiz qiymat jimgina
+  // tashlab yuboriladi (xato emas) — ro'yxatdan o'tish baribir davom etadi.
+  const yonalish = isBusinessType(parsed.data.yonalish) ? parsed.data.yonalish : undefined;
+  const addons = (parsed.data.addons ?? []).filter(isAddonKey);
+
   const { tenant, user } = await createTenantWithOwner({
     kompaniyaNomi: parsed.data.kompaniya,
     ism: parsed.data.ism,
     login,
     parol: parsed.data.parol,
+    yonalish,
+    addons,
   });
 
   // Darhol tizimga kiritamiz.

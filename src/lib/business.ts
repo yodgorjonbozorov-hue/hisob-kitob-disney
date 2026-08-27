@@ -17,6 +17,8 @@ export interface BusinessDTO {
   shaxsiyKassa: boolean;
   /** Do'kon kassasi (POS) shu bizneste yuritiladimi — MAGAZIN moduli bayrog'i. */
   magazin: boolean;
+  /** Biznes yo'nalishi (sanoat) — onboarding shaxsiylashtiruvi (lib/pricing/profil.ts). */
+  yonalish: string | null;
 }
 
 const BIZNES_SELECT = {
@@ -27,6 +29,7 @@ const BIZNES_SELECT = {
   turi: true,
   shaxsiyKassa: true,
   magazin: true,
+  yonalish: true,
 } as const;
 
 /**

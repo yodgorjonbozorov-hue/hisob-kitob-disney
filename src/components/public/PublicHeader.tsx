@@ -34,6 +34,12 @@ export function PublicHeader({
         </Link>
         <nav className="flex items-center gap-1">
           <ThemeToggle />
+          <Link
+            href="/tariflar"
+            className="hidden sm:inline-flex items-center min-h-[44px] px-3 rounded-lg text-sm text-muted hover:text-fg hover:bg-surface-2 transition"
+          >
+            Tariflar
+          </Link>
           {joriy !== "login" && (
             <Link
               href="/login"

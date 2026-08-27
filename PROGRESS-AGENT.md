@@ -5080,6 +5080,92 @@ Test: `npm run test:katalog-tozalash` (4 — hisob, kategoriyasiz bayrog'i,
 tarixli nofaol + tenant izolyatsiyasi, audit izi) ✅. `npm run build` ✅,
 `test:isolation` (22) ✅, `test:mahsulot-import` (26) ✅.
 
+### 2026-08-26 — Tariflar → ro'yxatdan o'tish → sinov oqimi (tugadi)
+
+**Talab:** "Bitta Balansa, bitta narx tizimi" strategiyasi: landing → /tariflar
+(kalkulyator) → aqlli ro'yxatdan o'tish → 14 kunlik sinov → yo'nalishga
+moslashgan workspace. Sanoat bo'yicha alohida tarif YO'Q — biznes turi faqat
+shaxsiylashtiradi, narxni o'zgartirmaydi.
+
+**Yechim (yangi qatlamlar):**
+- `lib/pricing/config.ts` — YAGONA ommaviy narx manbai: baza 399 000, filial
+  +149 000 (birinchisi kiritilgan), 5 addon (Telegram 79k, CRM 99k, POS 99k,
+  Kengaytirilgan Ombor 79k, AI 99k), yillik = 10 oylik ("2 oy bepul").
+  `narxHisobla()` — barcha summalar shu funksiyadan. MUHIM CHEGARA: bu
+  marketing/onboarding qatlami; amaldagi to'lov (lib/billing/plans.ts,
+  Payme/Click) TEGILMAGAN — yangi model bo'yicha haqiqiy pul olish billing
+  integratsiyasini kutadi (quyida).
+- `lib/pricing/profil.ts` — 8 yo'nalish (auto/perfume/food/agro/service/
+  wholesale/manufacturing/other): boshlang'ich bayroqlar (omborli/magazin),
+  tavsiya addonlar, 3 qadamli onboarding. `biznesFaoliyati.ts` naqshining
+  ommaviy qatlami — jadval/hisob mantiqi hamma uchun BITTA.
+- `/tariflar` — kalkulyator (yo'nalish → filial slayderi → addonlar →
+  oylik/yillik), sticky xulosa, mobil pastki CTA, kiritilgan imkoniyatlar,
+  matritsa, FAQ. Tanlov URL'da (refresh/back chidamli), signup'ga
+  `?yonalish=&filiallar=&addons=&davr=` bilan o'tadi — ISHONCHSIZ hint:
+  yaroqsiz qiymat jimgina tushiriladi, narx/tarif serverda qayta hisoblanadi.
+- Landing: nav "Kimlar uchun"/"Tariflar", CTA "14 kun bepul boshlash",
+  yangi `KimlarUchun` bo'limi (narxsiz, profillardan), `Narx` bo'limi endi
+  yagona tizim teaser'i → /tariflar.
+- Signup 2 qadam (hisob → biznes sozlash, yo'nalish/filial oldindan
+  to'ldirilgan). Server: `Business.yonalish` (yangi NULL ustun, migratsiya
+  `20260826120000_biznes_yonalish`), tanlangan addon modullari TenantModule
+  orqali yoqiladi, sinov tarifi `sinovPlanTanla()` — modullarni qamrab
+  oladigan ENG ARZON plan (masalan CRM → PRO, XARID → SHOP). Foydalanuvchi
+  tanlamagan pullik modul HECH QACHON yoqilmaydi. Yo'nalishsiz signup —
+  avvalgidek (regressiya testi bor).
+- Dashboard: `OnboardingKarta` — faqat TRIAL tenantda, yo'nalishga mos 3
+  qadam, bajarilganlik HAQIQIY ma'lumotdan (mahsulot/sotuv/mijoz soni),
+  hammasi bajarilgach yo'qoladi. Sinov muddati mavjud `computeAccess` dan.
+
+**Tegilmagani:** trial/access tizimi (Tenant.status/trialEndsAt,
+computeAccess, BillingBanner, /billing) — allaqachon to'liq ishlaydi,
+qayta yozilmadi. PLANLAR narxlari o'zgartirilmadi.
+
+**Billing integratsiyasi KUTILMOQDA (hujjat):** /tariflar ko'rsatadigan
+"baza+filial+addon" summasini sinovdan keyin haqiqatda undirish uchun
+checkout hozircha plan-asosli (PLANLAR). Kelgusi qadam: `narxHisobla()`
+natijasini Payme/Click checkout'ga ulash yoki PLANLAR'ni shu modelga
+ko'chirish — mahsulot qarori bilan. Analitika hodisalari qo'shilmadi —
+loyihada analitika infratuzilmasi yo'q (yangi vendor kiritilmadi).
+
+Test: `npm run test:tariflar` (13 — narx formulasi, profillar, sinov plan
+tanlovi, signup shaxsiylashtiruvi) ✅. Regressiya: signup 11, isolation 22,
+modules 21, billing 22, migratsiya 12, izolyatsiya-royxati 9, bizneslar 21,
+dashboard-ux 21, avto 25, superadmin 11+27, kop-biznes 18, magazin 43,
+smoke (brauzer) 11 — hammasi ✅. `npm run build` ✅. Brauzerda qo'lda: Flow
+A (food+POS, 647 000), Flow B (service+CRM, 498 000), Flow C (agro, 5
+filial, yillik 9 950 000 / tejov 1 990 000), yaroqsiz URL parametrlari,
+375/390/768/1440 kengliklar, mavjud login — 62/62 ✅ (eslatma: landingdagi
+ESKI Rollar jadvali 375px da scrollWidth'ni oshiradi, lekin sahifa
+`overflow` bilan qirqilgan — foydalanuvchiga ko'rinmaydi, oldindan mavjud).
+
+### 2026-08-27 — Qarz to'lov summasi avtomatik to'ldirilmasin (tugadi)
+
+**Talab:** Qarzdorlik → To'lov qabul qilish oynasi ochilganda summa
+inputiga mijozning JAMI qarzi (masalan 42 824 000) avtomatik yozilib
+qolardi. Operator qisman to'lovda (mijoz 5 000 000 berdi) eski qiymatni
+o'chirishni unutsa, butun qarz "to'landi" bo'lib yozilish xavfi bor edi.
+
+**Yechim:** summa maydoni endi BO'SH ochiladi, placeholder
+"To'lov summasini kiriting". Operator real olingan pulni o'zi yozadi.
+
+O'zgargan joylar:
+- `QarzdorTolovSheet.tsx` — `useState(formatSom(jamiQarz))` → `useState("")`;
+  "Qaysi qarzga yoziladi" selecti ham summani qayta to'ldirmaydi (operator
+  yozgani saqlanadi); Tasdiqlash tugmasi summa bo'sh/0 bo'lsa disabled.
+- `QarzTolovForm.tsx` (bitta qarz bo'yicha forma) — xuddi shu tuzatish.
+
+Validatsiya TEGILMADI, faqat tekshirildi: klientda `s <= 0` va
+`s > chegara` xatolari, `parseSomInput` manfiy sonni o'tkazmaydi
+(`[^\d]` olib tashlanadi); serverda zod `positive int` +
+`summa > qolgan` rad etiladi. FIFO taqsimot (`services/qarz.ts`,
+eng eski qarzdan) va kassa tanlash (naqd/click/bank → account) o'zgarmagan.
+
+Test: `npm run build` ✅, `test:qarz` (16) ✅, `test:qarzdorlik` (16) ✅,
+`test:qarz-taqsimot` (13) ✅, `test:isolation` (22) ✅,
+`test:qarzlar-brauzer` (8) ✅.
+
 ### 2026-08-27 · Dashboard "Kassada" kartasi — kassa qoldig'i mantiqi tuzatildi
 
 **Muammo:** karta tarixiy kirimlardan qolgan soxta summani ko'rsatardi —

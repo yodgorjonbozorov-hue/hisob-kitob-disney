@@ -1,6 +1,10 @@
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { hashPassword } from "@/lib/auth/password";
 import { DEFAULT_KASSA_NOMI } from "@/lib/services/accounts";
+import { biznesProfil, type BusinessType } from "@/lib/pricing/profil";
+import { pricingConfig, isAddonKey, type AddonKey } from "@/lib/pricing/config";
+import { PLANLAR } from "@/lib/billing/plans";
+import { modulByCode } from "@/lib/modules/registry";
 
 /** Bepul sinov muddati (kun). */
 export const TRIAL_KUNLARI = 14;
@@ -109,6 +113,37 @@ export interface SignupParams {
   biznesTuri?: "umumiy" | "avto";
   /** Tarif kodi (lib/billing/plans.ts). Default STANDARD. */
   plan?: string;
+  /**
+   * Biznes yo'nalishi (tariflar sahifasidan) — boshlang'ich konfiguratsiya
+   * va onboarding shu profilga moslashadi (lib/pricing/profil.ts).
+   * NARXGA TA'SIR QILMAYDI.
+   */
+  yonalish?: BusinessType;
+  /**
+   * Foydalanuvchi kalkulyatorda ANIQ tanlagan qo'shimcha modullar. Sinov
+   * davrida shu modullar ochiladi — foydalanuvchi so'ramagan modul hech
+   * qachon o'z-o'zidan yoqilmaydi.
+   */
+  addons?: AddonKey[];
+}
+
+/**
+ * So'ralgan modullarni qamrab oladigan ENG ARZON tarifni topadi — sinov
+ * davri foydalanuvchi tanlagan imkoniyatlar bilan ishlashi uchun (modul
+ * darvozasi `plan.modullar` bilan tekshiriladi, lib/modules/guard.ts).
+ * Hech biri qamrab olmasa modul ro'yxati eng keng tarif tanlanadi.
+ * To'lov OLINMAYDI: bu faqat sinov davridagi ochiq modullar chegarasi.
+ */
+export function sinovPlanTanla(modulKodlari: string[]): string {
+  const kerak = modulKodlari.filter((k) => {
+    const m = modulByCode(k);
+    return m !== null && !m.core;
+  });
+  const nomzodlar = [...PLANLAR].sort((a, b) => a.oylikNarx - b.oylikNarx);
+  const qamragan = nomzodlar.find((p) => kerak.every((k) => p.modullar.includes(k)));
+  if (qamragan) return qamragan.code;
+  const engKeng = [...nomzodlar].sort((a, b) => b.modullar.length - a.modullar.length)[0];
+  return engKeng?.code ?? "STANDARD";
 }
 
 /**
@@ -124,6 +159,28 @@ export async function createTenantWithOwner(params: SignupParams) {
   const kirim = avto ? AVTO_KIRIM : STARTER_KIRIM;
   const chiqim = avto ? AVTO_CHIQIM : STARTER_CHIQIM;
 
+  // Yo'nalish profili — boshlang'ich bayroqlar va yoqiladigan modullar.
+  // Faqat shaxsiylashtirish: jadval/hisob mantig'i hamma uchun BIR XIL.
+  const profil = biznesProfil(params.yonalish);
+  const addonModullar = (params.addons ?? [])
+    .filter(isAddonKey)
+    .map((k) => pricingConfig.addons[k].modulKodi)
+    .filter((k): k is string => k !== null);
+
+  const modullar = new Set<string>(addonModullar);
+  let magazin = profil?.boshlangich.magazin ?? false;
+  if (modullar.has("MAGAZIN")) magazin = true;
+  if (magazin) modullar.add("MAGAZIN");
+  // Ombor: avto rejimi, profil talabi yoki OMBOR'ga tayangan modul (MAGAZIN,
+  // XARID — lib/modules/bogliqlik.ts) tanlanganda birga yoqiladi.
+  const omborli =
+    avto || (profil?.boshlangich.omborli ?? false) || magazin || modullar.has("XARID");
+  if (omborli) modullar.add("OMBOR");
+
+  // Sinov davri tarifi: foydalanuvchi tanlagan modullarni qamrab oladigan
+  // eng arzon tarif. ANIQ berilgan plan (superadmin oqimi) ustun turadi.
+  const plan = params.plan ?? (modullar.size > 0 ? sinovPlanTanla([...modullar]) : undefined);
+
   return rawPrisma.$transaction(async (tx) => {
     const tenant = await tx.tenant.create({
       data: {
@@ -131,7 +188,7 @@ export async function createTenantWithOwner(params: SignupParams) {
         slug,
         status: "TRIAL",
         trialEndsAt,
-        ...(params.plan ? { plan: params.plan } : {}),
+        ...(plan ? { plan } : {}),
       },
     });
 
@@ -141,7 +198,9 @@ export async function createTenantWithOwner(params: SignupParams) {
         nomi: params.kompaniyaNomi,
         tenantId: tenant.id,
         turi: avto ? "avto" : "umumiy",
-        omborli: avto,
+        omborli,
+        magazin,
+        yonalish: params.yonalish ?? null,
       },
     });
 
@@ -168,10 +227,12 @@ export async function createTenantWithOwner(params: SignupParams) {
       ],
     });
 
-    // Avto biznes uchun OMBOR (avtopark) moduli darhol yoqiladi.
-    if (avto) {
-      await tx.tenantModule.create({
-        data: { tenantId: tenant.id, code: "OMBOR", isActive: true },
+    // Profil/tanlovdan kelib chiqqan modullar darhol yoqiladi (avto uchun
+    // avvalgidek OMBOR shu to'plamda). Foydalanuvchi ANIQ tanlamagan pullik
+    // modul bu ro'yxatga tushmaydi.
+    if (modullar.size > 0) {
+      await tx.tenantModule.createMany({
+        data: [...modullar].map((code) => ({ tenantId: tenant.id, code, isActive: true })),
       });
     }
 
