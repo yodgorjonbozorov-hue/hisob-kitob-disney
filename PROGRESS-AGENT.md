@@ -5079,3 +5079,49 @@ Muhim qarorlar (`lib/services/katalogTozalash.ts`):
 Test: `npm run test:katalog-tozalash` (4 — hisob, kategoriyasiz bayrog'i,
 tarixli nofaol + tenant izolyatsiyasi, audit izi) ✅. `npm run build` ✅,
 `test:isolation` (22) ✅, `test:mahsulot-import` (26) ✅.
+
+### 2026-08-27 · Dashboard "Kassada" kartasi — kassa qoldig'i mantiqi tuzatildi
+
+**Muammo:** karta tarixiy kirimlardan qolgan soxta summani ko'rsatardi —
+pul allaqachon sarflangan bo'lsa ham qoldiq kamayavermasdi. Audit uchta
+teshikni topdi (hisoblash formulasi emas, LEDGERGA YOZISH yo'llari oqardi):
+
+1. **Takroriy (recurring) yozuv kassasiz yaratilardi** — `recurring.ts`
+   xom `create` ishlatgani uchun `accountId = null` qolardi. Takroriy
+   chiqim (ijara, oylik) hech qaysi kassadan ayrilmasdi va qoldiq
+   oydan-oyga shishib borardi.
+2. **`kassa-migratsiya` skripti QARZ kirimlarini ham kassaga bog'lardi**
+   (u har deployda ishlaydi). Qarzga yozilgan savdo pul emas — kassa
+   qoldig'i qarz savdolari hisobiga soxta oshardi.
+3. **Bulk-move `accountId` ni qayta bog'lamasdi** — ko'chirilgan yozuv
+   eski biznes kassasiga ishora qilib qolardi: manba kassaning chiqimi
+   ledgerdan yo'qolib qoldiq sababsiz ko'tarilardi, maqsad biznesda esa
+   yozuv umuman hisobga kirmasdi.
+
+**Nima qilindi**
+- `recurring.ts` endi `createTransactionTx` orqali yozadi — kassa
+  boshqa yozuvlar bilan bir xil qoidada tanlanadi.
+- Qarz filtri (`qarzFiltr.ts`) barcha ledger hisoblariga qo'shildi:
+  `getAccountBalances`, `getKassaKunlik`, `kassaQoldiqTx`,
+  `biznesNaqdQoldiqTx` (unga kassaning `businessId` tekshiruvi ham).
+- Bulk-move mantiqi `lib/services/tranzaksiyaKochirish.ts` ga ajratildi:
+  ko'chirishda kassa maqsad biznesning mos turdagi (naqd→naqd,
+  plastik/bank oilasi) kassasiga qayta bog'lanadi; qarz yozuvi kassasiz.
+- `scripts/kassa-migratsiya.ts` (deploy zanjiri): qarz yozuvlarini kassadan
+  UZADI, begona biznes kassasiga bog'langan yozuvlarni o'z biznesining mos
+  kassasiga o'tkazadi, bo'sh `accountId` bog'lashda qarzni chetlab o'tadi.
+  Idempotent — mavjud ma'lumot o'chirilmaydi, faqat bog'lanish tuzatiladi.
+
+**Fayllar:** `src/lib/queries/accounts.ts`, `src/lib/services/userKassa.ts`,
+`src/lib/services/kunlikKassa.ts`, `src/lib/services/recurring.ts`,
+`src/lib/services/tranzaksiyaKochirish.ts` (yangi),
+`src/app/api/transactions/bulk-move/route.ts`, `scripts/kassa-migratsiya.ts`,
+`tests/kassa-qoldiq.test.ts` (yangi), `package.json`
+
+Test: `npm run test:kassa-qoldiq` (5) ✅ — to'liq ssenariy (kirim→chiqim→
+transfer→chiqim = 0), qarz istisno emas: buzilgan bog'lanishda ham qoldiqqa
+kirmaydi, takroriy chiqim kassani kamaytiradi, bulk-move qayta bog'laydi,
+migratsiya skripti tuzatadi. Regressiya: `test:kassa` (11), `test:kassa-nazorat`
+(23), `test:kassa-transfer` (20), `test:kunlik-kassa` (18), `test:kassir-kassa`
+(22), `test:panel` (22), `test:automation`, `test:kirim-chiqim`,
+`test:isolation`, `test:kunlik`, `test:smena` — hammasi ✅. `npm run build` ✅.

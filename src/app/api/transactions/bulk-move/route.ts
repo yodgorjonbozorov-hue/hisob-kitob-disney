@@ -7,8 +7,7 @@ import { resolveActiveBusinessId } from "@/lib/business";
 import { logAudit, getClientIp } from "@/lib/services/audit";
 import { z } from "zod";
 import { dashboardYangilandi } from "@/lib/cache";
-import { kunlikBulkUz } from "@/lib/services/kunlik";
-import { kategoriyaIdTop } from "@/lib/kategoriyaNom";
+import { tranzaksiyalarniKochir } from "@/lib/services/tranzaksiyaKochirish";
 
 const schema = z.object({
   ids: z.array(z.string()).min(1).max(500),
@@ -17,8 +16,8 @@ const schema = z.object({
 
 /**
  * Tanlangan yozuvlarni joriy (aktiv) biznesdan boshqa biznesga ko'chiradi.
- * Faqat direktor/admin. Kategoriya maqsad biznesda nom+tur bo'yicha topiladi
- * yoki yaratiladi (transaction.category.businessId invarianti saqlanadi).
+ * Faqat direktor/admin. Ko'chirish mantiqi (kategoriya moslash, kassani
+ * maqsad biznesga qayta bog'lash) — `lib/services/tranzaksiyaKochirish.ts`.
  */
 export const POST = withTenant(async (request, _ctx, { session: user }) => {
   if (!isManager(user.rol)) {
@@ -42,61 +41,7 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
   const target = await prisma.business.findUnique({ where: { id: targetBusinessId }, select: { id: true } });
   if (!target) return NextResponse.json({ error: "Maqsad biznes topilmadi" }, { status: 404 });
 
-  // Faqat joriy biznesdagi, o'chirilmagan tanlangan yozuvlar.
-  const txs = await prisma.transaction.findMany({
-    where: { id: { in: ids }, businessId: sourceBusinessId, deletedAt: null },
-    select: { id: true, category: { select: { nomi: true, turi: true } } },
-  });
-
-  // Kategoriya keshi: "nomi::turi" -> maqsad kategoriya id.
-  // (Ilgari ajratgich sifatida NUL bayti ishlatilardi — grep faylni binary deb
-  // ko'rardi va ba'zi tool'lar buzilardi.)
-  const catCache = new Map<string, string>();
-  async function targetCategoryId(nomi: string, turi: string): Promise<string> {
-    const key = `${nomi}::${turi}`;
-    const cached = catCache.get(key);
-    if (cached) return cached;
-    // Registrga BEFARQ moslash: maqsad biznesda "bantik" bo'lsa, "Bantik"
-    // qayta yaratilmaydi (baza indeksi bunga yo'l ham bermasdi).
-    // Yaratish `upsert` — parallel ko'chirishda dublikat kategoriya yaratilmasin.
-    const id = await kategoriyaIdTop(
-      () =>
-        prisma.category.findMany({
-          where: { businessId: targetBusinessId, turi },
-          select: { id: true, nomi: true },
-        }),
-      () =>
-        prisma.category.upsert({
-          where: { nomi_turi_businessId: { nomi, turi, businessId: targetBusinessId } },
-          update: {},
-          create: { businessId: targetBusinessId, nomi, turi },
-          select: { id: true },
-        }),
-      nomi
-    );
-    catCache.set(key, id);
-    return id;
-  }
-
-  // N+1 tuzatildi: ilgari har yozuvga alohida `update` ketardi (500 tagacha
-  // ketma-ket so'rov). Endi yozuvlar maqsad kategoriyasi bo'yicha guruhlanadi
-  // va har guruh bitta `updateMany` bilan ko'chiriladi.
-  const guruhlar = new Map<string, string[]>();
-  for (const t of txs) {
-    const catId = await targetCategoryId(t.category.nomi, t.category.turi);
-    const ro = guruhlar.get(catId);
-    if (ro) ro.push(t.id);
-    else guruhlar.set(catId, [t.id]);
-  }
-
-  let moved = 0;
-  for (const [catId, txIds] of guruhlar) {
-    const res = await prisma.transaction.updateMany({
-      where: { id: { in: txIds }, businessId: sourceBusinessId, deletedAt: null },
-      data: { businessId: targetBusinessId, categoryId: catId },
-    });
-    moved += res.count;
-  }
+  const moved = await tranzaksiyalarniKochir(sourceBusinessId, targetBusinessId, ids);
 
   await logAudit({
     businessId: targetBusinessId, userId: user.userId, userIsm: user.ism,
@@ -105,13 +50,6 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
     after: { toBusinessId: targetBusinessId, count: moved },
     ip: getClientIp(request),
   });
-
-  // Boshqa biznesga ko'chgan yozuv manba biznes kunligidan chiqadi
-  // (kunlik — pul tushgan biznesning ko'zgusi).
-  await kunlikBulkUz(
-    sourceBusinessId,
-    txs.map((t) => t.id)
-  );
 
   // Ikkala biznes dashboardi ham o'zgardi.
   dashboardYangilandi(sourceBusinessId);
