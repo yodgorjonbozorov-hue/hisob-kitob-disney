@@ -147,6 +147,12 @@ model Business {
   // Biznes turi: "umumiy" | "avto". Avto — olib-sotarlar uchun (ombor → avtopark).
   // Faqat UI matnlari va sotuv qoidalariga ta'sir qiladi (lib/biznesTuri.ts).
   turi               String                 @default("umumiy")
+  /// BIZNES YO'NALISHI (sanoat) — tariflar sahifasida tanlangan soha
+  /// (lib/pricing/profil.ts: "food" | "service" | "agro" ...). FAQAT
+  /// shaxsiylashtirish uchun: onboarding qadamlari va tavsiyalar shu
+  /// yo'nalishga moslashadi. NARXGA va hisob mantiqiga TA'SIR QILMAYDI.
+  /// null — eski bizneslar va yo'nalishsiz ro'yxatdan o'tganlar.
+  yonalish           String?
   /// SHAXSIY KASSA REJIMI. Yoqilganda har xodimning naqd yozuvi UMUMIY kassaga
   /// emas, O'ZINING shaxsiy kassasiga (Account.userId) tushadi — "kimning
   /// qo'lida qancha pul bor" savoliga ledger javob beradi.
@@ -320,25 +326,33 @@ model AppSetting {
   value String
 }
 
-/// AI YORDAMCHI SUHBATI — server tomonda saqlanadi.
+/// AI COPILOT SUHBATI — server tomonda saqlanadi.
 ///
-/// Nega: ilgari suhbat tarixi mijozdan (brauzerdan) kelardi. Foydalanuvchi
-/// soxta `assistant` xabarini yuborib modelni chalg'itishi mumkin edi
-/// (prompt injection). Endi mijoz faqat SAVOL yuboradi, tarix esa shu
-/// jadvaldan olinadi.
+/// Nega serverda: ilgari suhbat tarixi mijozdan (brauzerdan) kelardi.
+/// Foydalanuvchi soxta `assistant` xabarini yuborib modelni chalg'itishi
+/// mumkin edi (prompt injection). Endi mijoz faqat SAVOL va suhbat ID'sini
+/// yuboradi, tarix esa shu jadvaldan olinadi.
 ///
-/// Bitta foydalanuvchi + biznes uchun bitta faol suhbat.
-model AiConversation {
+/// Bitta foydalanuvchi + biznes uchun BIR NECHTA suhbat bo'ladi ("Yangi
+/// suhbat" har safar yangi qator ochadi) — avvalgi `AiConversation` bitta
+/// faol suhbat bilan cheklangan edi va chat tarixi umuman yo'q edi.
+/// Egalik kaliti — (businessId, userId): boshqa foydalanuvchining suhbati
+/// hech qachon o'qilmaydi.
+model AiSuhbat {
   id         String   @id @default(cuid())
   tenantId   String
   businessId String
   userId     String
-  /// Xabarlar JSON massivi: [{ rol: "user" | "assistant", matn: string }]
+  /// Ro'yxatda ko'rinadigan qisqa nom — birinchi savoldan kesib olinadi
+  /// (AI chaqirilmaydi: sarlavha uchun token sarflashning ma'nosi yo'q).
+  sarlavha   String
+  /// Xabarlar JSON massivi:
+  /// [{ rol: "user" | "assistant", matn: string, havolalar?: [...], takliflar?: [...] }]
   xabarlar   String
   updatedAt  DateTime @updatedAt
   createdAt  DateTime @default(now())
 
-  @@unique([businessId, userId])
+  @@index([businessId, userId, updatedAt])
   @@index([tenantId, updatedAt])
 }
 
@@ -446,6 +460,18 @@ model AccountTransfer {
   radAt                DateTime?
   /// Rad etish yoki bekor qilish sababi (qabul qiluvchi yozadi).
   qarorIzoh            String?
+  /// KASSA TOPSHIRISH SNAPSHOTI (`turi = "smena"` da to'ldiriladi; boshqa
+  /// o'tkazmalarda null). Topshirish PAYTIDA server hisoblagan kassa
+  /// qoldig'i — kutilayotgan chiqim ayrilgan holda. MUZLATILADI: qaror
+  /// kutayotgan paytda kassaga yangi yozuv tushsa ham topshirish farqi
+  /// o'zgarmaydi, aks holda direktor tasdiqlayotgan raqam u ko'rgan
+  /// raqamdan boshqa bo'lib qolardi.
+  hisoblangan          Int?
+  /// `summa − hisoblangan` — KASSA FARQI. Manfiy = kamomad (kassir tizim
+  /// hisobidan kam topshirdi; qolgani uning kassasida ochiq turadi).
+  /// Manfiy qoldiq taqiqlangani uchun bu qiymat hech qachon musbat
+  /// bo'lmaydi — mavjud qoldiqdan ko'p pul o'tkazib bo'lmaydi.
+  farq                 Int?
   /// Bog'liq hujjat: "purchaseOrder" | "debt" | "storno" (+ relatedId).
   relatedType          String?
   relatedId            String?
@@ -478,7 +504,15 @@ model Category {
   approvalRules    ApprovalRule[]
   approvalRequests ApprovalRequest[]
   debts            Debt[]
+  /// CRM kunlik buyurtmalari — KATEGORIYA MANBAI BITTA: CRM alohida
+  /// kategoriya tizimi qurmaydi, aynan shu jadvaldan foydalanadi.
+  deals            Deal[]
 
+  /// DIQQAT: bu cheklov registrga SEZGIR ("Bantik" ≠ "bantik"). Registrga
+  /// befarq yagonalik esa IFODALI indeks bilan beriladi — `lower(trim("nomi"))`
+  /// bo'yicha, migratsiya `20260825130000_kategoriya_registrsiz_unique` da.
+  /// Prisma sxemasi ifodali indeksni ifodalay olmaydi, shuning uchun u faqat
+  /// SQL'da yashaydi (Postgres yo'li: scripts/pg-migratsiya.mjs, QOLDA bloki).
   @@unique([nomi, turi, businessId])
   @@index([turi, isActive])
   @@index([businessId])
@@ -524,6 +558,11 @@ model Transaction {
   /// HR: shu tranzaksiya oylik yoki avans to'lovi bo'lsa — o'sha yozuv.
   payroll         Payroll?         @relation("OylikChiqimi")
   advance         PayrollAdvance?  @relation("AvansChiqimi")
+  /// CRM: shu kirim CRM buyurtmasidan ko'chirilgan bo'lsa — o'sha buyurtma.
+  /// Bog'lanish BIR-BIRGA (Deal.transactionId UNIQUE), ya'ni bitta kirim
+  /// ortida ko'pi bilan bitta buyurtma turadi. Kirim ro'yxatidagi
+  /// "Manba: CRM" belgisi shu bog'lanishdan o'qiladi.
+  crmBuyurtma     Deal?            @relation("CrmBuyurtmaKirimi")
 
   // KOMPOZIT INDEKSLAR: SQLite bitta so'rovda bitta indeks ishlatadi, shuning uchun
   // 6 ta bitta-ustunli indeks deyarli foydasiz edi (va har yozuvni sekinlashtirardi).
@@ -926,10 +965,29 @@ model PurchaseOrder {
   tolanganSumma Int                 @default(0)
   /// Ta'minotchi tizim useri bo'lsa — qabul paytidagi kassa transferi.
   transferId    String?
+  /// TAKROR YUBORISHDAN HIMOYA (idempotentlik kaliti).
+  ///
+  /// "Ta'minotni saqlash" tugmasi ikki marta bosilsa (yoki tarmoq javobni
+  /// yo'qotib qayta yuborsa) ombor ikki marta oshib, qarz ikki marta
+  /// yozilardi. Frontend har oqim uchun BITTA kalit yaratadi va uni
+  /// har urinishda o'zgarmagan holda yuboradi; ikkinchi so'rov shu
+  /// UNIQUE cheklovga uriladi va xizmat MAVJUD yozuvni qaytaradi.
+  ///
+  /// Himoya ATAYLAB bazada: ilova kodi ham, brauzer ham xato qilsa
+  /// (yoki ikki so'rov bir vaqtda kelsa) baza ikkinchisini o'tkazmaydi.
+  idempotencyKey String?
+  /// Bekor qilingan payt (holat = "bekor" bo'lganda to'ldiriladi).
+  bekorSana     DateTime?
+  /// Bekor qilish sababi — auditda saqlanadi.
+  bekorSabab    String?
+  /// Kim bekor qilgani.
+  bekorUserId   String?
   createdAt     DateTime            @default(now())
   items         PurchaseOrderItem[]
 
+  @@unique([businessId, idempotencyKey])
   @@index([businessId, holat, sana])
+  @@index([businessId, qabulSana])
   @@index([supplierId])
 }
 
@@ -995,28 +1053,48 @@ model Stage {
 /// Bitim. Alohida "Lead" modeli YO'Q — birinchi bosqichdagi bitim = lead
 /// (sodda UX, konvertatsiya bosqichi degan ortiqcha qadam yo'q).
 model Deal {
-  id            String     @id @default(cuid())
+  id            String       @id @default(cuid())
   businessId    String
-  business      Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business      Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
   contactId     String?
-  contact       Contact?   @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contact       Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
   nomi          String
-  summa         Int        @default(0)
+  summa         Int          @default(0)
+  /// KUNLIK BUYURTMA: buyurtma kategoriyasi — KIRIM modulidagi AYNAN o'sha
+  /// `Category`. CRM uchun alohida kategoriya tizimi YO'Q: buyurtma kirimga
+  /// ko'chirilganda tranzaksiya shu kategoriya bilan yoziladi, shuning uchun
+  /// Kirimdagi kategoriya filtri CRM yozuvlarini o'zi qamrab oladi.
+  /// null — eski bitimlar (kategoriyasiz yaratilgan).
+  categoryId    String?
+  category      Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   stageId       String
-  stage         Stage      @relation(fields: [stageId], references: [id], onDelete: Restrict)
-  masulId       String // mas'ul foydalanuvchi
+  stage         Stage        @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  masulId       String // mas'ul xodim (foydalanuvchi)
   manba         String? // "qolda" | "telegram" | ...
+  /// Buyurtma sanasi (UTC-yarim tun, `lib/date.ts`). "Bugungi buyurtmalar"
+  /// paneli va kategoriya statistikasi shu maydon bo'yicha kesiladi.
+  /// `muddat` bilan ARALASHTIRILMAYDI: `muddat` — kelishilgan muddat,
+  /// `sana` — buyurtma qabul qilingan kun.
+  sana          DateTime?
   muddat        DateTime?
   yopilganAt    DateTime?
-  transactionId String? // Yutildi -> yozilgan kirim tranzaksiyasi
+  /// Shu buyurtmadan yozilgan KIRIM tranzaksiyasi.
+  /// UNIQUE — bitta buyurtma hech qachon ikkita kirim yarata olmaydi.
+  /// Himoya BAZA darajasida: frontend holatiga ham, faqat kod tekshiruviga
+  /// ham tayanilmaydi (parallel ikki so'rovda ikkinchisi cheklovga uriladi).
+  transactionId String?      @unique
+  transaction   Transaction? @relation("CrmBuyurtmaKirimi", fields: [transactionId], references: [id], onDelete: SetNull)
   izoh          String?
-  createdAt     DateTime   @default(now())
+  createdAt     DateTime     @default(now())
   deletedAt     DateTime?
   activities    Activity[]
   tasks         Task[]
 
   @@index([businessId, stageId])
   @@index([businessId, masulId])
+  /// "Bugungi buyurtmalar" va kategoriya statistikasi — eng ko'p o'qiladigan kesim.
+  @@index([businessId, sana])
+  @@index([categoryId])
 }
 
 // ==== Vazifalar moduli (BOS-3) ====
@@ -1325,6 +1403,24 @@ model DailyReport {
   submittedByIsm String?
   submittedAt    DateTime?
   sanalganNaqd   Int?
+  /// TIZIM HISOBI — topshirish paytida MUZLATILADI: kassirning shaxsiy
+  /// kassasidagi (yoki biznes naqd kassalaridagi) qoldiq. `naqdSumma` dan
+  /// FARQI: bu yerda naqd CHIQIM va kun boshidagi qoldiq ham hisobga olinadi.
+  /// Farq aynan shunga qarab o'lchanadi (`naqdSumma` ga emas).
+  kutilganNaqd   Int?
+  /// sanalganNaqd − kutilganNaqd. Manfiy = KAMOMAD, musbat = ORTIQCHA.
+  /// Muzlatilgan: keyin yozuv tahrirlansa ham kun farqi o'zgarmaydi.
+  kassaFarq      Int?
+  /// KUN TOPSHIRIG'INING PUL HARAKATI — `AccountTransfer` IDsi.
+  /// Topshirishda "kutilmoqda" holatida yaraladi, kun tasdiqlanganda
+  /// "bajarildi" ga o'tadi (kassir kassasi kamayadi, direktornikiga qo'shiladi).
+  /// NULL — pul ko'chmagan kun (naqd 0 yoki shaxsiy kassa rejimi yo'q).
+  /// FK ATAYLAB yo'q: o'tkazma storno bilan bekor qilinsa ham havola qolsin.
+  transferId     String?
+  /// Kassirning topshirish izohi (farq bo'lsa MAJBURIY — validatsiyada).
+  izoh           String?
+  /// Direktor qarorining izohi (ayniqsa rad etishda).
+  qarorIzoh      String?
   /// Tasdiqlagan foydalanuvchi (User.id) va ism snapshot'i — foydalanuvchi
   /// keyin o'chirilsa ham tarixda kim tasdiqlagani ko'rinib turadi.
   confirmedBy    String?

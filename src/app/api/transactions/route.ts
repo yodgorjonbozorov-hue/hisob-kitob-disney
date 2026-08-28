@@ -2,12 +2,13 @@ import { withTenant } from "@/lib/auth/tenant";
 import { NextResponse } from "next/server";
 import { createTransactionSchema } from "@/lib/validation/transaction";
 import { listTransactions } from "@/lib/queries/transactions";
-import { isTolovBolimi, type TolovBolimi } from "@/lib/tolovBolimi";
+import { isTolovBolimi, isTolovGuruhi, type TolovBolimi, type TolovGuruhi } from "@/lib/tolovBolimi";
 import { chiqimYubor } from "@/lib/services/approval";
 import { getEnabledModules } from "@/lib/modules/guard";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { dashboardYangilandi } from "@/lib/cache";
+import { hasPermission } from "@/lib/permissions/tekshir";
 
 export const GET = withTenant(async (request, _ctx, { session: user }) => {
 
@@ -33,11 +34,28 @@ export const GET = withTenant(async (request, _ctx, { session: user }) => {
     tolovBolimi: isTolovBolimi(searchParams.get("tolovBolimi"))
       ? (searchParams.get("tolovBolimi") as TolovBolimi)
       : null,
+    // Kirim/Chiqim sahifasidagi "To'lov" filtri (naqd/click/karta/qarz).
+    tolov: isTolovGuruhi(searchParams.get("tolov"))
+      ? (searchParams.get("tolov") as TolovGuruhi)
+      : null,
+    // "Kim kiritdi" filtri. Xodim uchun so'rovda kelgan qiymat baribir
+    // e'tiborga olinmaydi — ko'rinuvchanlik chegarasi ustun (queries/transactions.ts).
+    xodimId: searchParams.get("xodimId"),
     minSumma: searchParams.get("minSumma") ? parseInt(searchParams.get("minSumma")!, 10) : null,
     maxSumma: searchParams.get("maxSumma") ? parseInt(searchParams.get("maxSumma")!, 10) : null,
     page: parseInt(searchParams.get("page") ?? "1", 10),
     pageSize: parseInt(searchParams.get("pageSize") ?? "20", 10),
   });
+
+  // DAVR YAKUNI (jamiKirim / jamiChiqim / sof) — nozik ko'rsatkich.
+  // UI uni faqat `hisobot.korish` huquqi bilan ko'rsatadi; API ham AYNI
+  // qoidaga bo'ysunadi, aks holda tugmani yashirish himoya bo'lib qolardi.
+  // Ro'yxat, sahifalash va kunlik jamlar hammaga avvalgidek qaytadi —
+  // xodimning kundalik ishi to'xtamaydi.
+  if (!(await hasPermission(user.userId, "hisobot.korish"))) {
+    const { totals: _yashirin, ...qolgani } = result;
+    return NextResponse.json(qolgani);
+  }
 
   return NextResponse.json(result);
 });

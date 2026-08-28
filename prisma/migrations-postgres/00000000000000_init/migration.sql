@@ -135,16 +135,17 @@ CREATE TABLE "AppSetting" (
 );
 
 -- CreateTable
-CREATE TABLE "AiConversation" (
+CREATE TABLE "AiSuhbat" (
     "id" TEXT NOT NULL,
     "tenantId" TEXT NOT NULL,
     "businessId" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
+    "sarlavha" TEXT NOT NULL,
     "xabarlar" TEXT NOT NULL,
     "updatedAt" TIMESTAMP(3) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "AiConversation_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "AiSuhbat_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -194,6 +195,8 @@ CREATE TABLE "AccountTransfer" (
     "tasdiqlanganAt" TIMESTAMP(3),
     "radAt" TIMESTAMP(3),
     "qarorIzoh" TEXT,
+    "hisoblangan" INTEGER,
+    "farq" INTEGER,
     "relatedType" TEXT,
     "relatedId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -460,6 +463,10 @@ CREATE TABLE "PurchaseOrder" (
     "debtId" TEXT,
     "tolanganSumma" INTEGER NOT NULL DEFAULT 0,
     "transferId" TEXT,
+    "idempotencyKey" TEXT,
+    "bekorSana" TIMESTAMP(3),
+    "bekorSabab" TEXT,
+    "bekorUserId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "PurchaseOrder_pkey" PRIMARY KEY ("id")
@@ -512,9 +519,11 @@ CREATE TABLE "Deal" (
     "contactId" TEXT,
     "nomi" TEXT NOT NULL,
     "summa" INTEGER NOT NULL DEFAULT 0,
+    "categoryId" TEXT,
     "stageId" TEXT NOT NULL,
     "masulId" TEXT NOT NULL,
     "manba" TEXT,
+    "sana" TIMESTAMP(3),
     "muddat" TIMESTAMP(3),
     "yopilganAt" TIMESTAMP(3),
     "transactionId" TEXT,
@@ -696,6 +705,11 @@ CREATE TABLE "DailyReport" (
     "submittedByIsm" TEXT,
     "submittedAt" TIMESTAMP(3),
     "sanalganNaqd" INTEGER,
+    "kutilganNaqd" INTEGER,
+    "kassaFarq" INTEGER,
+    "transferId" TEXT,
+    "izoh" TEXT,
+    "qarorIzoh" TEXT,
     "confirmedBy" TEXT,
     "confirmedByIsm" TEXT,
     "confirmedAt" TIMESTAMP(3),
@@ -979,10 +993,10 @@ CREATE INDEX "UserBusiness_businessId_idx" ON "UserBusiness"("businessId");
 CREATE UNIQUE INDEX "UserBusiness_userId_businessId_key" ON "UserBusiness"("userId", "businessId");
 
 -- CreateIndex
-CREATE INDEX "AiConversation_tenantId_updatedAt_idx" ON "AiConversation"("tenantId", "updatedAt");
+CREATE INDEX "AiSuhbat_businessId_userId_updatedAt_idx" ON "AiSuhbat"("businessId", "userId", "updatedAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "AiConversation_businessId_userId_key" ON "AiConversation"("businessId", "userId");
+CREATE INDEX "AiSuhbat_tenantId_updatedAt_idx" ON "AiSuhbat"("tenantId", "updatedAt");
 
 -- CreateIndex
 CREATE INDEX "BotConversation_updatedAt_idx" ON "BotConversation"("updatedAt");
@@ -1156,7 +1170,13 @@ CREATE INDEX "Supplier_businessId_nomi_idx" ON "Supplier"("businessId", "nomi");
 CREATE INDEX "PurchaseOrder_businessId_holat_sana_idx" ON "PurchaseOrder"("businessId", "holat", "sana");
 
 -- CreateIndex
+CREATE INDEX "PurchaseOrder_businessId_qabulSana_idx" ON "PurchaseOrder"("businessId", "qabulSana");
+
+-- CreateIndex
 CREATE INDEX "PurchaseOrder_supplierId_idx" ON "PurchaseOrder"("supplierId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PurchaseOrder_businessId_idempotencyKey_key" ON "PurchaseOrder"("businessId", "idempotencyKey");
 
 -- CreateIndex
 CREATE INDEX "PurchaseOrderItem_orderId_idx" ON "PurchaseOrderItem"("orderId");
@@ -1174,10 +1194,19 @@ CREATE INDEX "Contact_businessId_tel_idx" ON "Contact"("businessId", "tel");
 CREATE INDEX "Stage_businessId_tartib_idx" ON "Stage"("businessId", "tartib");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Deal_transactionId_key" ON "Deal"("transactionId");
+
+-- CreateIndex
 CREATE INDEX "Deal_businessId_stageId_idx" ON "Deal"("businessId", "stageId");
 
 -- CreateIndex
 CREATE INDEX "Deal_businessId_masulId_idx" ON "Deal"("businessId", "masulId");
+
+-- CreateIndex
+CREATE INDEX "Deal_businessId_sana_idx" ON "Deal"("businessId", "sana");
+
+-- CreateIndex
+CREATE INDEX "Deal_categoryId_idx" ON "Deal"("categoryId");
 
 -- CreateIndex
 CREATE INDEX "Task_businessId_holat_idx" ON "Task"("businessId", "holat");
@@ -1525,7 +1554,13 @@ ALTER TABLE "Deal" ADD CONSTRAINT "Deal_businessId_fkey" FOREIGN KEY ("businessI
 ALTER TABLE "Deal" ADD CONSTRAINT "Deal_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Deal" ADD CONSTRAINT "Deal_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "Category"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Deal" ADD CONSTRAINT "Deal_stageId_fkey" FOREIGN KEY ("stageId") REFERENCES "Stage"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Deal" ADD CONSTRAINT "Deal_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Task" ADD CONSTRAINT "Task_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -1665,3 +1700,13 @@ ALTER TABLE "SupportMessage" ADD CONSTRAINT "SupportMessage_muallifId_fkey" FORE
 -- (scripts/pg-migratsiya.mjs har generatsiyada qo'shib qo'yadi.)
 -- ---------------------------------------------------------------------------
 CREATE INDEX "User_login_lower_idx" ON "User" (LOWER("login"));
+
+-- ---------------------------------------------------------------------------
+-- QO'LDA QO'SHILGAN: kategoriya nomining registrga BEFARQ yagonaligi.
+-- Sxemadagi @@unique([nomi, turi, businessId]) registrga sezgir, ya'ni
+-- "Bantik" va "bantik" ikki alohida kategoriya bo'lib qolardi. Ifodali
+-- indeksni Prisma sxemasi ifodalay olmaydi — SQLite yo'li migratsiya
+-- 20260825130000_kategoriya_registrsiz_unique da, Postgres yo'li shu yerda.
+-- ---------------------------------------------------------------------------
+CREATE UNIQUE INDEX "Category_businessId_turi_nomi_registrsiz_key"
+  ON "Category" ("businessId", "turi", LOWER(TRIM("nomi")));

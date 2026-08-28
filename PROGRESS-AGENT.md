@@ -3782,3 +3782,1432 @@ ustiga olib borish bilan aynan yashirilgan summa ko'rinib qolardi.
 Test: `tests/smoke-brauzer.test.ts` — qayta yuklashda `domcontentloaded`
 holatida ham summa yashirin qolishi tekshiriladi (ya'ni serverdan kelgan
 HTML'da yo'q).
+
+## Qarzdorlik mijoz kesimiga o'tkazildi — "1 mijoz = 1 qarzdor" (2026-08-25)
+
+### Muammo
+
+Bir mijoz besh marta qarzga olsa, qarzdorlar ro'yxatida BESH qarzdor bo'lib
+ko'rinardi. Sabab schema'da EMAS edi — `Contact 1 → N Debt` bog'lanishi
+allaqachon to'g'ri va qarzdorlar ro'yxati (`listQarzdorlar`,
+`getQarzdorTafsilot`) `qarzdorKalit()` bo'yicha jamlab beradi.
+
+Muammo YOZISH yo'lida edi: qarz uch joydan yoziladi, lekin faqat bittasi
+mijoz kartochkasi yaratardi.
+
+  - `services/pos.ts`       — kassadagi qarzga sotuv: `contactId` bo'sh qolardi;
+  - `services/inventory.ts` — Sotuv oynasi: xuddi shunday;
+  - `services/qarz.ts`      — kartochka faqat TELEFON bo'yicha qidirilardi,
+    ya'ni telefonsiz "Ali" ikki marta yozilsa IKKITA kartochka ochilardi.
+
+`contactId` bo'sh qolganda jamlash faqat ism matniga tayanadi, shuning uchun
+"Ali", "Ali " va "Ali Valiyev" uch qarzdor bo'lib chiqardi.
+
+### Yechim
+
+Yangi model YO'Q, migratsiya ham YO'Q — mavjud `Contact → Debt` yetarli.
+
+`src/lib/services/mijozAniqla.ts` — mijozni aniqlashning YAGONA joyi.
+Uchala yozish yo'li ham shundan o'tadi. Tartib (yuqoridagi qadam aniqroq):
+
+  1. `contactId` berilgan  → o'sha kartochka (biznesga tegishliligi tekshiriladi);
+  2. telefon aynan mos     → o'sha kartochka;
+  3. ism bo'yicha AYNAN BITTA nomzod → o'sha (telefoni bo'sh bo'lsa to'ldiriladi);
+  4. mos nomzod yo'q       → yangi kartochka.
+
+Bir xil ismli BIR NECHTA kartochka bo'lsa (telefon esa berilmagan) — hech
+biri tanlanmaydi, `contactId = null` qaytadi. Bu ATAYLAB: qarzni noto'g'ri
+odamning kartochkasiga yozib qo'yish ro'yxatda ikki qator ko'rinishidan
+ancha qimmat xato. Bunday holda operator qidiruv ro'yxatidan o'zi tanlaydi.
+
+Telefon ikki qiymatga ajratiladi (`telAjrat`): SOLISHTIRISH uchun
+normallashgan ko'rinish, SAQLASH uchun operator kiritgan matn. Kassa xom
+matn yuborishi mumkin — normallashmagan raqam bo'yicha kartochka
+qidirilmaydi, lekin matn baribir yo'qolmaydi.
+
+### Qarzga sotish oynasi
+
+POS (`TolovModal`) va Sotuv (`SotuvForm`) dagi oddiy `<select>` olib
+tashlandi — u qidiruvsiz edi va mijozlar soni o'sgan sari yaroqsizlanardi.
+O'rniga qarzlar sahifasi bilan AYNI `MijozTanlash`:
+
+  - qidiruv ism VA telefon bo'yicha, har natijada joriy qarz ko'rinadi;
+  - topilmasa "Mijoz topilmadi" va "+ Yangi mijoz" (ism / telefon / izoh),
+    saqlangach mijoz darhol tanlangan holatga o'tadi (`POST /api/debts/mijozlar`);
+  - tanlangach "Hozirgi qarz → Yangi qarz → Yangi jami" paneli
+    (`QarzOldinKorish`).
+
+Mijozlar ro'yxati endi sahifa yuklanishida OLINMAYDI (`pos/page.tsx`,
+`sotuv/page.tsx`) — qidiruv `/api/debts/mijozlar` orqali ketadi.
+
+### Ochiq qarz hisobi tuzatildi
+
+`qarzMijozlariTakror()` ochiq qarzni oxirgi 300 ta yozuvdan hisoblardi —
+ko'p savdoli biznesda ko'rsatilgan qarz KAM chiqardi. Endi `groupBy` bilan,
+chegarasiz. Kassir aynan shu raqamga qarab qarzga sotadi, u taxminiy
+bo'lishi mumkin emas.
+
+### Mavjud ma'lumot
+
+Hech narsa o'chirilmadi va birlashtirilmadi. Eski, kartochkasiz qarzlar
+avvalgidek ism bo'yicha jamlanib ko'rinaveradi.
+
+`scripts/qarz-mijoz-bogla.ts` — eski `contactId = null` qarzlarni mavjud
+kartochkalarga bog'laydi (telefon, yoki ism bo'yicha AYNAN BITTA moslik).
+Standart holatda faqat HISOBOT chiqaradi; yozish uchun `--yoz` kerak.
+Yangi kartochka yaratmaydi, kartochkalarni birlashtirmaydi, ikkilanishlarni
+ro'yxatga chiqarib odamga qoldiradi. Build zanjiriga ATAYLAB qo'shilmagan.
+
+### Test
+
+`tests/qarz-mijoz.test.ts` (`npm run test:qarz-mijoz`) — 16 ta test:
+yangi mijoz, unga uch marta qarz, ro'yxatda bitta qator, jami 1 500 000,
+tarixda uchala operatsiya, qisman to'lovdan keyin qoldiq 1 000 000,
+qidiruvda topish, dublikat kartochka ochilmasligi (telefon bilan, registr
+farqi bilan), ikkilanishda taxmin qilmaslik, POS qarzga sotuvining mavjud
+kartochkaga tushishi va naqd sotuv qarz yaratmasligi.
+
+`tests/pos-brauzer.test.ts` yangi qidiruv maydoniga moslandi.
+
+## CRM — kunlik buyurtmalar va Kirim bilan bitta hisob-kitob (2026-08-25)
+
+CRM "bitimlar doskasi" edi: bitimning kategoriyasi yo'q, sanasi yo'q, kirim
+esa QOTIRILGAN "Sotuv" kategoriyasiga yozilardi. Ya'ni Disney Navoiy uchun
+buyurtma "Onajon" bo'lsa ham, Kirimdagi kategoriya kesimida u "Sotuv"
+ichida ko'rinardi — CRM bir haqiqatni, Kirim boshqasini ko'rsatardi.
+Dublikat kirimga qarshi himoya ham faqat KODDA edi (`if (!deal.transactionId)`),
+bazada hech qanday cheklov yo'q edi.
+
+### Kategoriya manbai BITTA
+
+CRM o'zining kategoriya tizimini qurmaydi — `Deal.categoryId` to'g'ridan-to'g'ri
+Kirim modulining `Category` jadvaliga FK bilan bog'landi (faqat `turi="kirim"`,
+xizmat qatlamida ham, API'da ham tekshiriladi). Buyurtma kirimga
+o'tkazilganda tranzaksiya AYNAN o'sha kategoriya bilan yoziladi, shuning
+uchun Kirimdagi kategoriya filtri CRM yozuvlarini alohida ish qilmasdan
+qamrab oladi (`tests/crm.test.ts` da tekshiriladi).
+
+### Dublikat kirim: himoya BAZADA
+
+`Deal.transactionId` endi `@unique` va `Transaction` ga FK (`SET NULL`).
+Uch qatlam:
+
+1. **Baza** — UNIQUE indeks + tranzaksiya ichida
+   `updateMany({ where: { transactionId: null } })`. Shart bajarilmasa 0 qator
+   yangilanadi va butun `runBusinessTx` bekor qilinadi, ya'ni yuqorida
+   yaratilgan kirim ham bazaga TUSHMAYDI. Ikki so'rov bir vaqtda kelsa
+   ikkinchisi shu yerda to'xtaydi.
+2. **Xizmat qatlami** — boshida ochiq tekshiruv (tushunarli xato matni).
+3. **Frontend** — tugma o'chadi, "🟢 Kirim yozilgan" va yozuvga havola.
+
+Uchinchisi faqat qulaylik: test ilova kodini chetlab o'tib to'g'ridan-to'g'ri
+`rawPrisma.deal.update` bilan ikkinchi buyurtmani o'sha kirimga bog'lashga
+urinadi va UNIQUE cheklovga urilishini tekshiradi.
+
+Migratsiya `Deal` jadvalini qayta quradi (SQLite'da mavjud ustunga FK
+qo'shishning boshqa yo'li yo'q). UNIQUE indeksdan OLDIN ehtimoliy
+dublikatlar tozalanadi — eski kodda ular paydo bo'lmasligi kerak edi, lekin
+bazada cheklov bo'lmagani uchun buni kafolatlab bo'lmasdi; migratsiya
+"UNIQUE constraint failed" bilan yarim yo'lda to'xtamasin.
+
+### Pul faqat bitta yo'ldan yoziladi
+
+`moveDeal` ichidagi kirim yozish kodi olib tashlandi — u endi
+`lib/crm/kirim.ts` dagi `kirimgaKochirish` ni chaqiradi. Dublikat himoyasi,
+kategoriya tanlash va kunlik hisobot sinxroni YAGONA joyda tursin. Kanbanda
+"Yutildi" ga sudrab o'tkazish ham endi kirimni jimgina yozmaydi: tasdiq
+oynasi ochiladi (summa va kategoriya ko'rinib turadi). Pul yozadigan amal
+sudrab tashlash bilan bo'lmasin.
+
+`kunlikSinxron` ATAYLAB tranzaksiyadan TASHQARIDA chaqiriladi — u o'zi
+`runBusinessTx` ochadi, ichkarida chaqirilsa SQLite yozuv qulfida deadlock
+bo'lardi (`transactionService.createTransaction` dagi bilan bir xil sabab).
+
+### Statistika: summa yozuvning O'ZIDAN
+
+`lib/crm/statistika.ts` — "Bugungi buyurtmalar" va kategoriya kesimi.
+"Kirimga o'tgan" summa buyurtmaning `summa` sidan EMAS, bog'langan
+tranzaksiyadan olinadi (va `deletedAt` bo'lsa hisobga kirmaydi). Aks holda
+buyurtma summasi kirim yozilgandan keyin tahrirlansa ikki raqam ajralib
+ketardi. Shu sababdan API kirim yozilgan buyurtmaning summasi va
+kategoriyasini o'zgartirishni ham rad etadi.
+
+### Kirim ro'yxatida "CRM" belgisi
+
+`listTransactions` ga `crmBuyurtma` bog'lanishi qo'shildi — yozuv CRM
+buyurtmasidan kelgan bo'lsa ro'yxatda `CRM` belgisi ko'rinadi. Boshqa hech
+nima o'zgarmaydi: yozuv oddiy kirim kabi tahrirlanadi, o'chiriladi,
+hisobotlarga va kunlik hisobotga kiradi.
+
+### Fayllar
+
+Yangi: `lib/crm/kirim.ts`, `lib/crm/statistika.ts`, `lib/validation/crm.ts`,
+`api/crm/deals/[id]/kirim/route.ts`, `app/crm/{turlar,BuyurtmaKarta,
+BuyurtmaModal,BuyurtmaSheet,KirimTasdiq,BugungiPanel}.tsx`.
+Har komponent 250 satrdan qisqa (eng kattasi — 199).
+
+Testlar: `npm run test:crm` (19 ta). Qo'shimcha tekshirildi —
+`test:isolation`, `test:izolyatsiya-royxati`, `test:backup`, `test:postgres`,
+`test:migratsiya`, `test:apply-oqimi`, `test:agregat`, `test:kunlik`,
+`test:kategoriya`, `test:atomik`, `test:soft-delete`, `test:visibility`,
+`test:tasks`, `test:mijozlar` — hammasi yashil, `npm run build` o'tdi.
+
+---
+
+## Kirim bo'limida "Sotilgan mahsulotlar" statistikasi (2026-08-25)
+
+Ombordan sotilgan mahsulotlar endi Kirim bo'limida (Yozuvlar sahifasi)
+kategoriya va mahsulot kesimida ko'rinadi. Qo'lda hech narsa kiritilmaydi:
+**Ombor → Sotuv → Statistika** zanjiri `Sale` yozuvi orqali o'zi yuradi.
+
+### Nega `Sale`, `Transaction` emas
+
+Kirim tranzaksiyasidan mahsulot kesimini tiklab BO'LMAYDI:
+
+* naqd sotuv — bitta kirim tranzaksiya (`izoh` da nom bor, lekin matn);
+* POS cheki — 10 satr uchun ham BITTA tranzaksiya;
+* qarzga sotuv — tranzaksiya umuman yozilmaydi (kassa usuli).
+
+`Sale` esa uchala holatda ham bir xil to'ldiriladi va har satr bitta yozuv.
+Shu bois statistika `Sale` dan o'qiladi — chek darajasidagi pul yozuvi
+umuman ishtirok etmaydi va **ikki marta sanash imkoni yo'q**.
+
+### Qaytarish o'zi ayriladi
+
+`cancelSale` va `posChekBekor` `Sale.deletedAt` ni belgilaydi va AYNI
+paytda ombor qoldig'ini tiklaydi. So'rovdagi `deletedAt: null` sharti
+shuning uchun qaytarilgan mahsulotni statistikadan avtomatik chiqaradi —
+qoldiq va statistika bitta qoidadan yuradi, ajralib keta olmaydi.
+Qaytarilganlar soni/summasi ma'lumot uchun alohida qatorda ko'rsatiladi.
+
+### Jamlash bazada
+
+Bir mahsulot kun davomida 5 marta sotilsa 5 ta qator emas, bitta
+"25 dona sotildi" qatori chiqadi. Guruhlash `groupBy` bilan BAZADA
+bajariladi: 100 000 sotuvli bizneste barcha satrlarni RAM'ga yuklab
+JS'da jamlash serverni yiqitardi. `@@index([businessId, deletedAt, sana])`
+allaqachon bor edi — yangi indeks kerak bo'lmadi.
+
+**Sxema o'zgarmadi, migratsiya yo'q.**
+
+### Sana filtri klientda, sahifa qayta yuklanmaydi
+
+Birinchi ko'rinish ("Bugun") serverdan keladi, filtr almashtirilganda
+`/api/sales/statistika` chaqiriladi. Sabab: blokning sanasi yuqoridagi
+tranzaksiya ro'yxati filtridan MUSTAQIL — bitta `searchParams` ga
+bog'lansa "Bugungi sotuvlar" ni ochish butun ro'yxatni ham qaytadan
+filtrlab yuborardi.
+
+Presetlar brauzer soatidan emas, serverdan kelgan `bugun` satridan
+hisoblanadi: telefon vaqt mintaqasi noto'g'ri bo'lsa "Bugun" tugmasi
+bo'sh ro'yxat berardi.
+
+### Miqdor birliklar bo'yicha
+
+"93 dona + 40 kg = 133" ma'nosiz, shuning uchun yakun har birlikni
+alohida ko'rsatadi (bosh sahifadagi ombor kartasi bilan bir xil qoida).
+
+Fayllar: `src/lib/queries/sotuvStatistika.ts`,
+`src/app/api/sales/statistika/route.ts`,
+`src/app/app/tranzaksiyalar/SotilganMahsulotlar.tsx`,
+`SotuvKategoriyaGuruhi.tsx`, `sotuvSana.ts`.
+
+Test: `npm run test:sotuv-statistika` (13 ta) — jamlash, guruhlash, sana
+filtri, qaytarish, POS cheki, ombor qoldig'i bilan moslik, izolyatsiya.
+
+## CRM sotuvchilarga ko'rinmasdi — rol matritsasi va kategoriya tuzatildi (2026-08-25)
+
+Uch shikoyat bitta joydan chiqdi: CRM "ayrim sotuvchilarga" umuman
+ko'rinmasdi, eski buyurtmalardan yozilgan kirim kategoriyasiz tushardi.
+
+### 1. Rol matritsasi — asosiy sabab
+
+`lib/modules/registry.ts` dagi CRM moduli `rollar: ["OWNER", "ADMIN",
+"SELLER"]` edi. Sidebar, BottomNav, CommandPalette, sahifa guard'i
+(`requireModulePage`) va API guard'i (`withTenant({ module: "CRM" })`) —
+BESHALASI ham shu bitta ro'yxatdan o'qiladi. Ya'ni savdo maydonida
+"sotuvchi" bo'lib ishlaydigan, lekin hisobi KASSIR (CASHIER) rolida
+ochilgan xodim uchun menyuda CRM yo'q edi va to'g'ridan-to'g'ri
+`/app/crm` ga kirsa ham `/app` ga qaytarilardi.
+
+Endi CRM `HAMMA` (OWNER, ADMIN, CASHIER, SELLER) uchun ochiq. Bu FAQAT
+CRM: BOSHQARUV (bizneslar, foydalanuvchilar, rollar, audit, obuna), HR,
+XARID va oylik hisobot o'z ro'yxatlari bilan boshqaruvchilarda qoldi —
+test buni alohida majburlaydi.
+
+### 2. Kategoriya — "Kategoriyasiz" ning sababi
+
+Yangi buyurtmada kategoriya allaqachon Kirim modulining
+`Category` jadvalidan (`turi: "kirim"`, `businessId` bo'yicha) kelardi.
+Muammo ESKI buyurtmalarda edi: kategoriya maydoni qo'shilgunga qadar
+yaratilganlarda `categoryId` NULL, va uni interfeysdan TANLASH imkoni
+yo'q edi — bunday buyurtma kirimga o'tkazilganda zaxira kategoriyaga
+tushardi.
+
+`BuyurtmaTahrir.tsx` — buyurtma oynasida kategoriya va narxni tuzatish
+bloki. Faqat kirim YOZILMAGAN buyurtmada ko'rinadi: yozilgandan keyin
+server (`api/crm/deals/[id]`) ikkalasini qulflaydi, aks holda CRM bir
+raqamni, Kirim boshqasini ko'rsatardi.
+
+Kirimga o'tkazish yo'li o'zgarmadi — kategoriya avvalgidek buyurtmadan
+tranzaksiyaga ko'chadi va `Deal.transactionId` UNIQUE cheklovi bitta
+buyurtmadan ikkinchi kirim yozilishiga baza darajasida yo'l qo'ymaydi.
+
+### 3. Ko'p-bizneslik teshigi
+
+"Mas'ul xodim" ro'yxati `prisma.user.findMany({ isActive: true })` edi —
+tenant bo'yicha filtrlangan, lekin BIZNES bo'yicha emas. Bir kompaniyada
+ikki biznes bo'lsa, A biznesining sotuvchisi B biznesining xodimlarini
+ko'rar va buyurtmani ularga yozib qo'yishi mumkin edi. Endi ro'yxat ham,
+server tekshiruvi ham (`biznesXodimi`, `createDeal` va PATCH) mavjud
+`biznesXodimlariWhere` filtridan yuradi.
+
+Fayllar: `src/lib/modules/registry.ts`, `src/lib/crm/service.ts`,
+`src/app/api/crm/deals/[id]/route.ts`, `src/app/app/crm/page.tsx`,
+`CrmClient.tsx`, `BuyurtmaSheet.tsx`, `BuyurtmaTahrir.tsx` (yangi).
+
+**Sxema o'zgarmadi, migratsiya yo'q.**
+
+Test: `npm run test:crm` (24 ta) — rol matritsasi (4 rol kiradi, maxfiy
+modullar yopiq), sidebar havolalari, to'liq oqim (buyurtma → Yutildi →
+Kirim → bosh sahifadagi kategoriya kesimi), idempotentlik, eski
+kategoriyasiz buyurtma va ko'p-bizneslik izolyatsiyasi.
+
+## Kirim/Chiqim sahifasi — to'liq redesign (2026-08-25)
+
+`/app/tranzaksiyalar` mijoz kunda eng ko'p ochadigan sahifa edi, lekin u
+"baza jadvali" bo'lib qolgandi: forma doim ochiq turib ekranning yarmini
+egallardi, telefonda esa 9 ustunli jadval yon tomonga siljitilardi va
+summani ko'rish uchun har qatorni surish kerak bo'lardi.
+
+### 1. Nom
+
+UI'dagi noaniq "Yozuvlar" — **"Kirim / Chiqim"** (yon menyu),
+telefon tabida "Kirim/Chiqim" (uch tab 375px da sig'ishi kerak),
+sahifa sarlavhasi esa **"Kirim va chiqimlar"**. Route o'zgarmadi.
+
+### 2. Yozuv kiritish — forma varaqqa ko'chdi
+
+Sarlavha yonida `+ Kirim` / `− Chiqim`; telefonda pastki o'ng burchakda
+yozuvli FAB (`+ Yangi`) → tur tanlash varag'i → forma. FAB ATAYLAB
+dumaloq emas: pastki panelning markazidagi umumiy "tez qo'shish" tugmasi
+ham dumaloq va teal — ikkitasi bir xil ko'rinsa qaysi biri nima
+qilishini bilib bo'lmasdi. Balandligi ham markaziy tugmadan yuqorida.
+
+Formada summa eng tepada va eng katta (`SummaMaydoni`): `inputMode=numeric`,
+kiritilgani guruhlanadi (`1 000 000`) va ostida `1 000 000 so'm` deb
+takrorlanadi — "70000/700000" adashuvi eng qimmat xatolardan biri.
+Serverga baribir xom butun son ketadi.
+
+Kategoriya dropdown emas, katakchalar (`KategoriyaTanlov`): tepada
+"Ko'p ishlatiladigan" (oxirgi 90 kun tarixidan — `getTezKategoriyalar`),
+20+ kategoriyada qidiruv maydoni. Bu FAQAT tartib: kategoriya qoidalari
+o'zgarmadi va tarix bo'sh bo'lsa ro'yxat avvalgi (alifbo) tartibida qoladi.
+
+**Ikki marta yuborish** `useRef` bilan bloklanadi — React state asinxron
+bo'lgani uchun ikki tez bosishda `loading` hali `true` bo'lib ulgurmasdi.
+Brauzerda tekshirildi: `click({clickCount: 2})` → BITTA POST.
+
+TASDIQLASH moduli 202 qaytarganda (chegaradan oshgan chiqim) yozuv
+ro'yxatga QO'SHILMAYDI — ilgari so'rov obyekti tranzaksiya sifatida
+ro'yxatga tushib qolardi.
+
+### 3. Davr yakuni (`SummaryBar`)
+
+Ro'yxat tepasida Kirim / Chiqim / Sof + to'lov taqsimoti. **Kirim va
+chiqim taqsimotlari ikki ALOHIDA qatorda** — aralashsa "Naqd 12 mln"
+degan ma'nosiz raqam chiqardi.
+
+Buning uchun `listTransactions` ga additiv `totals.taqsimot` qo'shildi:
+`{ kirim: {naqd, click, karta}, chiqim: {...}, qarz }`. Guruhga
+biriktirish `lib/tolovBolimi.ts` dagi mavjud `amaldagiBolim` ustiga
+qurildi (`tolovGuruhi`) — ro'yxatdagi belgi bilan yuqoridagi taqsimot
+hech qachon zid bo'lmaydi. Eski `naqdKirim/clickKirim/qarzKirim`
+maydonlari BIT-BITGA o'zgarmadi: ularga boshqa ekranlar va testlar
+bog'langan.
+
+### 4. Filtrlar
+
+Presetlar saqlandi; ustiga **Turi, To'lov (naqd/click/karta/qarz),
+Kategoriya, Kim kiritdi, Sana oralig'i, Summa oralig'i** qo'shildi.
+Hammasi URL parametrlarida — havola nusxalansa boshqa odam ayni
+ro'yxatni ko'radi va eksport ham shu parametrlarni oladi.
+
+Telefonda `[Bugun][Bu hafta][Bu oy] [Filter (3)]` — qolgani varaqda,
+tanlovlar DARHOL qo'llanmaydi ("Natijalarni ko'rsatish" bosilguncha).
+
+Qidiruv endi izoh BILAN BIRGA kategoriya nomi bo'yicha ham ishlaydi.
+
+**Xavfsizlik:** `xodimId` — filtr, `userId` — ko'rinuvchanlik CHEGARASI.
+Chegara ustun turadi, ya'ni xodim `xodimId` yuborib boshqa xodimning
+yozuvlarini KO'RA OLMAYDI (test bilan qulflandi).
+
+### 5. Ro'yxat
+
+Desktopda jadval qoldi, lekin ierarxiya tozalandi va har qatordagi
+ikkita matn tugmasi `⋯` menyusiga yig'ildi (Batafsil / Tahrirlash /
+O'chirish). Summa faqat RANGGA tayanmaydi: `+`/`−` belgisi va
+Kirim/Chiqim nishoni ham bor.
+
+Telefonda jadval umuman ishlatilmaydi — `TransactionCards` (kun bo'yicha
+guruhlangan kartalar, yopishqoq kun sarlavhasi). Qatorga bosilganda
+tafsilot varag'i ochiladi (ilgari to'g'ridan-to'g'ri TAHRIRLASH oynasi
+ochilardi — "ko'rmoqchi" bo'lgan odam "o'zgartirmoqchi" oynaga tushardi).
+
+O'chirish `confirm()` emas, summa/kategoriya/sanani takrorlaydigan
+tasdiq oynasi. Soft-delete va 5s "Qaytarish" o'zgarmadi.
+
+### 6. Unumdorlik
+
+Sahifalash allaqachon SERVERDA edi; sahifa hajmi 20 → **50**. Filtr,
+qidiruv va jamilar butun to'plam bo'yicha serverda hisoblanadi, brauzerga
+yuklangan 50 ta yozuv bo'yicha emas. Taqsimot uchun bitta `groupBy`
+qo'shildi — N+1 yo'q.
+
+### 7. Ilova qobig'idagi yon ta'sir (sahifadan tashqarida)
+
+`src/app/app/layout.tsx` da `md:flex-row` → `lg:flex-row`. Sidebar
+`hidden lg:flex`, MobileNav esa `lg:hidden` — qator maketi `md` da
+yoqilgani uchun MobileNav 768px da YON USTUN bo'lib qolar va kontentni
+o'ngga surib yuborardi. Bu barcha sahifalarga tegishli eski xato edi;
+planshet tekshiruvi shusiz o'tmaydi.
+
+### Fayllar
+
+Yangi: `YangiYozuv.tsx`, `TurVaTolov.tsx`, `SummaMaydoni.tsx`,
+`KategoriyaTanlov.tsx`, `SummaryBar.tsx`, `FiltrSheet.tsx`,
+`TransactionTable.tsx`, `TransactionCards.tsx`, `AmalMenu.tsx`,
+`DetailSheet.tsx`, `OchirishTasdiq.tsx`, `ImportExportMenu.tsx`,
+`BulkAmallar.tsx`, `src/lib/queries/tezKategoriyalar.ts`.
+
+O'zgargan: `page.tsx`, `TransactionsClient.tsx`, `TransactionForm.tsx`,
+`TransactionFilters.tsx`, `TransactionList.tsx`, `turlar.ts`,
+`loading.tsx`, `src/lib/queries/transactions.ts`, `src/lib/tolovBolimi.ts`,
+`src/lib/modules/registry.ts`, `src/app/api/transactions/route.ts`,
+`.../export/route.ts`, `src/app/app/layout.tsx`.
+
+**Sxema o'zgarmadi, migratsiya yo'q.**
+
+### Test
+
+Yangi: `npm run test:kirim-chiqim` (13 ta) — guruhlar kesishmasligi va
+to'plamni qoplashi, kirim/chiqim taqsimotining aralashmasligi, taqsimot
+yig'indisi = qarzsiz jami, `xodimId` ning chegarani kengaytira olmasligi,
+kategoriya nomi bo'yicha qidiruv, tez kategoriyalar.
+
+Yangilangan: `test:visibility` (taqsimot ham chegarada), `test:smoke`
+(forma endi varaqda ochiladi).
+
+O'tdi: kirim-chiqim, visibility, isolation, qarz, tolov-taqsimoti,
+kategoriya, soft-delete, csv-import, kunlik, agregat, modules, selos-kg,
+tasdiqlash, kop-biznes, smoke (brauzer) — hammasi yashil, `npm run build` ham.
+
+Brauzerda 1440/1280/768/390/375 px da tekshirildi: gorizontal siljish
+YO'Q, JS xatosi yo'q, oqimlar (kirim/chiqim qo'shish, filtr varag'i,
+tafsilot, `⋯` menyu, o'chirish tasdig'i, Import/Export menyusi) ishlaydi.
+---
+
+## Bizneslar sahifasi — zamonaviy business management (2026-08-25)
+
+Branch: `claude/modernize-bizneslar-page-jtopkl`. **Sxema o'zgarmadi,
+migratsiya yo'q.**
+
+### Eski holat
+
+`/app/admin/bizneslar` texnik jadval edi: 7 ustun (Rejim, Ombor, Kassa,
+Kategoriyalar…) va har qatorda 6 ta yonma-yon amal — "Omborni yoqish",
+"Kassani yoqish", "Avto rejim", "Nofaollashtirish", "Tozalash",
+"O'chirish". Qaytarib bo'lmaydigan ikki amal kundalik amallar bilan bir
+qatorda turardi. Qidiruv, filtr, saralash va tafsilot sahifasi yo'q edi.
+Mobil ko'rinish `Jadval` komponentining umumiy kartochkasi edi.
+
+### Yangi tuzilma
+
+- Ro'yxat: xulosa (jami/faol/nofaol/tranzaksiya) → qidiruv + filtr +
+  saralash → jadval (≥1024px) yoki kartochkalar (<1024px). Qatorda faqat
+  **[Ochish]** va **[•••]**.
+- `•••` ichida: Sozlamalar, Modullar, Xodimlar, Kassa sozlamalari, Ombor
+  sozlamalari, Faollashtirish/Nofaollashtirish va (faqat OWNER) "Xavfli
+  zona…" havolasi. Tozalash/O'chirishning O'ZI menyuda YO'Q.
+- Tafsilot `/app/admin/bizneslar/[id]` — bo'limlar: Umumiy, Modullar,
+  Xodimlar, Kassa, Ombor, Xavfsizlik. Desktopda tab, mobilda navigatsiya
+  kartochkalari.
+- Yangi biznes — 5 qadamli sozlash oqimi (nomi/faoliyat → modullar →
+  kassa → xodimlar → tayyor).
+
+### Backend (yangi xizmat qatlami)
+
+`lib/services/biznesRoyxat.ts` (agregatsiya, N+1 yo'q),
+`biznesTafsilot.ts`, `biznesYaratish.ts` (takroriy yuborish to'sig'i,
+kassa uzilsa biznes ortga qaytariladi), `biznesOchirish.ts` (OWNER + nom
+tasdig'i + bo'sh biznes sharti). `lib/modules/biznesModullari.ts` — biznes
+uchun amalda ishlaydigan modullar (tenant moduli ∩ biznes bayrog'i),
+`computeNav` bilan bir xil qoida.
+
+Kuchaytirilgan qoidalar: biznesni o'chirish `requireManager` dan
+**OWNER**ga toraytirildi va endi so'rov tanasida nom tasdig'ini talab
+qiladi; PATCH da `magazin` faqat `omborli` bilan yoqiladi (ilgari bu
+qoida faqat UI'da edi).
+
+### Yo'l-yo'lakay topilgan maket xatosi
+
+`app/layout.tsx` konteyneri `md:flex-row` edi, yon panel esa `lg:flex`.
+768–1023px oraligida maket qator bo'lib qolar, lekin yon panel o'rniga
+MobileNav va BottomNav yonma-yon turib butun enni yeb qo'yardi — `main`
+bor-yo'g'i **64px** ga siqilardi va bu BARCHA sahifalarga tegishli edi.
+Konteyner `lg:flex-row` ga o'tkazildi. (Xuddi shu xatoni Kirim/Chiqim
+redesign sessiyasi ham topgan — merge paytida ikkalasi bir xil o'zgarish
+bo'lib chiqdi, faqat izoh matni farq qildi.)
+
+### Test
+
+`npm run test:bizneslar` (21 ta — izolyatsiya, IDOR, qidiruv/filtr/
+saralash, yaratish va dublikat, tarif chegarasi, nofaollashtirish,
+o'chirish huquqi) va `npm run test:bizneslar-brauzer` (10 ta — 1440/1280/
+768/390/375px, gorizontal siljish yo'q, `•••` tarkibi, xavfli zona,
+wizard). Regressiya: isolation, kop-biznes, modules, tozalash, kassa,
+magazin, crm, audit, signup, billing, visibility, backup, pro,
+soft-delete, atomik va smoke — hammasi yashil.
+
+---
+
+## 2026-08-25 — OMBOR VA TA'MINOT BITTA MODULDA
+
+Ombor uch joyga bo'lingan edi: **Ombor** (jadval), **Xarid** (uch qadamli
+buyurtma) va **Ta'minotchilar** (reyestr). "Tovar keldi" deyish uchun
+foydalanuvchi avval qaysi bo'limga borishni, keyin qoralama → tasdiqlash →
+qabul qilish zanjirini o'tishi kerak edi. Gul do'koni yoki kichik magazin
+uchun bu ortiqcha: tovar allaqachon kelgan, uni faqat yozib qo'yish kerak.
+
+### Nima o'zgardi
+
+- Yon panelda faqat **Ombor** qoldi. `XARID` moduli o'chirilmadi —
+  navigatsiyasi bo'shatildi (`registry.ts`), sahifalari yangi manzilga
+  yo'naltirildi (`/app/xarid` → `/app/ombor?tab=taminotlar`).
+- Ombor uch tabga bo'lindi: **Mahsulotlar | Ta'minotlar | Inventarizatsiya**.
+  Tab URL'da (`?tab=`) — server faqat ochiq tab ma'lumotini yuklaydi.
+- Asosiy amal bitta: **"+ Tovar keldi"** — 4 qadamli oqim (kimdan → qanday
+  to'landi → nima keldi → saqlash). Ikkinchi darajali amallar `•••` menyusida,
+  telefonda pastki o'ngdagi 📦 tugmasi ostida.
+- Mahsulotlar POS uslubidagi **rasmli kartochka gridida** (telefonda 2 ustun,
+  desktopda 4–5). Rasm mavjud saqlagichga (`lib/storage/driver.ts`) yuklanadi.
+- AVTO (olib-sotar) rejimi ESKI ko'rinishida qoldi — `/app/ombor/avtopark`.
+  U yerda bitta yozuv = bitta mashina, kartochka gridi ham, miqdor kiritish
+  ham ma'nosiz.
+
+### Hisob qoidasi — bitta manba
+
+Ombor va pul yozuvlari **faqat** `qabulYozuvlariTx` da (`services/xarid.ts`).
+Yangi bir qadamli oqim ham, eski uch qadamli qabul ham o'shani chaqiradi —
+ikki oqim hech qachon ikki xil natija bera olmaydi.
+
+- **Naqd/Karta** → chiqim tranzaksiya (karta uchun kassa aniq tanlanadi:
+  `createTransactionTx` ning kassasiz tarmog'i birinchi faol kassani olardi
+  va pulni naqd kassadan chiqarib yuborardi).
+- **Qarzga** → "beriladigan" `Debt`; pul umuman qimirlamaydi, faqat
+  "Men qarzdorman" oshadi.
+- Tannarx qoidasi O'ZGARMADI (oxirgi kelgan narx snapshot) — yangi hisob
+  usuli ATAYLAB kiritilmadi.
+
+### Takror saqlashdan himoya
+
+`PurchaseOrder.idempotencyKey` + `@@unique([businessId, idempotencyKey])`.
+Frontend oqim ochilganda bir marta kalit yaratadi; ikkinchi so'rov bazada
+to'xtaydi va xizmat MAVJUD yozuvni qaytaradi (xato emas). Faqat ilova
+darajasidagi tekshiruv yetarli emas: parallel ikki so'rov ikkalasi ham
+"hali yo'q" deb ko'rardi.
+
+### Bekor qilish — teskari yozuvlar
+
+`taminotBekor`: qoldiq qaytariladi + `StockAdjustment` (tarix qayta
+yozilmaydi), qarz o'chiriladi, chiqim yumshoq o'chiriladi. Tovarning bir
+qismi sotilgan yoki qarz bo'yicha to'lov qilingan bo'lsa — RAD ETILADI.
+
+### Ishlash
+
+Qidiruv va sahifalash SERVER tomonda (`lib/queries/ombor.ts`). 1200 mahsulotli
+bazada Ombor sahifasi telefonda ~0,9 s, qidiruv ~1,2 s da ochiladi.
+
+Migratsiya: `20260825120000_taminot_idempotentlik`.
+Test: `npm run test:taminot` (18 ta).
+
+---
+
+## 2026-08-25 · Kassalar sahifasi — pul nazorati markazi
+
+Branch: `claude/kassalar-cash-control-center-ayo90h`. Faqat `/app/kassa`
+(va uning `[id]` detali) qayta ishlandi; boshqa sahifalar tegilmadi.
+
+### Nima o'zgardi
+
+Sahifa "qoldiq ko'rsatadigan ro'yxat" edi: `Jami kassalar` summasi, kassa
+kartalari, katta bo'sh "Kassa harakatlari" bloki va sahifa pastida katta
+"Shaxsiy kassa rejimi" paneli. Kassani TOPSHIRISH bu sahifada umuman yo'q
+edi — u faqat `/app/kassam` da bor edi, kassa FARQI esa hech qayerda
+saqlanmasdi.
+
+Endi sahifa oltita savolga javob beradi: jami qancha pul bor, u qaysi
+kassada, bugun qancha kirdi/chiqdi, kim topshirmadi, farq bormi, pul
+kimdan kimga o'tdi. `Jami kassalar` → **`Jami qoldiq`** (+ naqd/plastik/
+bank taqsimoti), tepada bugungi kirim/chiqim/sof/kutilmoqda KPI qatori,
+kutilayotgan topshirishlar ixcham panelda FARQ bilan, har kassa kartasida
+bugungi kesim va "⋯" amallari, harakatlar lentasi Bugun/Hafta/Oy/Barchasi
+filtri bilan, rejim esa "⚙ Kassa sozlamalari" ichiga yig'ildi.
+Mobil (375/390px): 2×2 KPI, karta-ro'yxat, pastda yopishqoq "+ Amal"
+tugmasi (tab-bar ustida) va pastdan chiqadigan varaqlar.
+
+### Biznes mantig'i
+
+Hisob-kitob qoidalari O'ZGARMADI: qoldiq ledgerdan (`Transaction` +
+`AccountTransfer`), o'tkazma kirim/chiqim yozmaydi, manfiy qoldiq
+taqiqlangan, atomiklik `runBusinessTx` da.
+
+Yagona qo'shimcha — **kassa farqi**: `AccountTransfer` ga ikkita NULL
+bo'lishi mumkin ustun qo'shildi (`hisoblangan`, `farq`) va ular faqat
+`turi = "smena"` da to'ldiriladi. Server topshirish paytidagi mavjud
+qoldiqni O'ZI hisoblab qatorga muzlatadi, farq = `summa − hisoblangan`.
+Farq nolga teng bo'lmasa izoh (kamomad sababi) majburiy — serverda ham,
+formada ham. Farq va sabab auditga tushadi. Kamomad kassirning kassasida
+OCHIQ qoladi (pul o'z-o'zidan yo'qolmaydi).
+
+Audit kengaytirildi: kassa ochish/tahrirlash/o'chirish va shaxsiy kassa
+rejimi o'zgarishi endi `logAudit` ga yoziladi.
+
+Migratsiya: `20260825120000_kassa_topshirish_farqi` — faqat ikkita
+`ALTER TABLE ... ADD COLUMN`, mavjud ma'lumot tegilmaydi. Postgres init
+migratsiyasi `npm run pg:migratsiya` bilan qayta generatsiya qilindi.
+
+### Testlar
+
+`npm run test:kassa-nazorat` (23 ta) — balans, bugungi kesim, o'tkazma
+(kirim/chiqim o'zgarmasligi), kamomadli topshirish va farqning
+muzlatilishi, izohsiz farqning rad etilishi, ikki marta yuborish/qabul
+qilish, tenant va biznes izolyatsiyasi, huquqlar, davr filtri.
+
+`npm run test:kassa-brauzer` (8 ta) — 375/390/768/1280/1440px da sahifa
+chiziladi, gorizontal siljish yo'q, yopishqoq tugma tab-bar bilan
+urishmaydi, varaqlar ochiladi, farq jonli hisoblanadi, detal filtri
+ishlaydi. Skrinshotlar: `.screenshots/kassa-nazorat/`.
+
+Regressiya: `test:kassa`, `test:kassa-transfer`, `test:kassir-kassa`,
+`test:handover-migratsiya`, `test:isolation`, `test:izolyatsiya-royxati`,
+`test:agregat`, `test:audit`, `test:audit-qoldiq`, `test:atomik`,
+`test:soft-delete`, `test:backup`, `test:migratsiya`, `test:postgres`,
+`test:kunlik`, `test:smena`, `test:pro`, `test:visibility`, `test:smoke`
+— hammasi yashil. `npm run build` o'tadi.
+
+---
+
+## Kunlik hisobot / smena / kassa topshirish — to'liq qayta ishlash (2026-08-25)
+
+Kunlik hisobot sahifasi (`/app/kunlik`) auditdan o'tkazildi. Uchta jiddiy
+buxgalteriya xatosi topildi va tuzatildi; UI kassirning haqiqiy ish oqimiga
+qarab qayta qurildi.
+
+### Topilgan xatolar
+
+**1. IKKITA KIRIM DAFTARI.** "Tushum kiritish" faqat `DailyTransaction`
+yozardi — hech qanday `Transaction` yaratmasdi. Natijada o'sha pul kunlik
+hisobotda ko'rinardi, lekin Dashboard "Jami Kirim", oylik hisobot,
+kategoriya kesimi va kassa qoldig'ida UMUMAN yo'q edi. Teskari yo'nalish esa
+ishlardi (`kunlikSinxron`), ya'ni ko'prik bir tomonlama edi va ikki daftar
+birinchi uzilishdayoq ajralardi.
+
+**2. "KASSADA BO'LISHI KERAK" MANFIY CHIQARDI** (mijozda −12 679 000).
+Smena oynasida KIRIM `DailyTransaction` dan, CHIQIM esa `Transaction` dan
+olinardi. `DailyTransaction` faqat BUGUNGI sanali va kun OCHIQ bo'lgandagina
+yaratilardi, chiqim esa `createdAt` bo'yicha hech qanday sana shartisiz
+sanalardi. Kechagi sana bilan kiritilgan kirim oynaga tushmasdi, o'sha
+paytda kiritilgan chiqim esa tushardi — hisob asta-sekin minusga ketardi.
+
+**3. FARQ YOLG'ON KAMOMAD KO'RSATARDI.** `sanalganNaqd` kunning NAQD KIRIMI
+(`naqdSumma`) bilan solishtirilardi. Naqd chiqim va kun boshidagi qoldiq
+hisobga olinmasdi: 10 mln kirim + 3 mln naqd chiqim bo'lgan kunda kassada
+7 mln bo'ladi, tizim esa 10 mln kutib "3 mln KAMOMAD" deb ogohlantirardi.
+
+**4. PUL HECH QAYERGA KO'CHMASDI.** Kun "tasdiqlangan" bo'lsa ham
+kassirning kassa qoldig'i o'zgarmasdi — `submitKunlikReport` va
+`confirmKunlikReport` faqat holatni almashtirardi.
+
+### Yechim
+
+Kunlik hisobot endi YAGONA ledger (`Transaction` + `AccountTransfer`) ustidagi
+HOSILA ko'rinish:
+
+- **Tushum** haqiqiy `Transaction` (kirim) yaratadi va unga bog'langan
+  `DailyTransaction` qatori bitta tranzaksiyada quriladi (`transactionId`).
+  Kategoriya tanlanadi — mavjud Kirim modulining kategoriyalaridan.
+  O'chirish ikkala tomonni birga oladi.
+- **Smena oynasi** kirimni ham, chiqimni ham `Transaction` dan va bitta
+  naqdlik qoidasidan (`naqdChiqimmi`) oladi — simmetriya tiklandi.
+- **Tizim hisobi** kassirning HAQIQIY kassa qoldig'idan olinadi
+  (`topshiruvchiKassaTx` → ledger) va topshirishda MUZLATILADI
+  (`DailyReport.kutilganNaqd`).
+- **Pul harakati** mavjud `AccountTransfer` (`turi = "smena"`) ledgerida:
+  topshirishda "kutilmoqda", direktor qabul qilganda "bajarildi". Ya'ni
+  `Transaction` YOZILMAYDI — Jami Kirim ham, Jami Chiqim ham o'zgarmaydi.
+  Qayta ochilsa STORNO yoziladi (ledger append-only).
+
+Ortiqcha pul ko'chmaydi (`kochadiganSumma`): uning ledgerda manbasi yo'q,
+ko'chirilsa kassir qoldig'i manfiyga tushardi. U `kassaFarq` da yozib
+qoldiriladi — direktor ko'rib, kerak bo'lsa alohida kirim qiladi.
+
+### RBAC o'zgarishi
+
+`getKunlikRuxsat.tasdiqlaydi` endi `direktormi || boshqaruvchimi`. Ilgari
+boshqaruvchi faqat direktor tayinlanmagan bo'lsa tasdiqlardi — direktor
+etib tayinlangan kassirning O'ZI kunni topshirsa, kunni yopadigan hech kim
+qolmasdi. O'rniga `qarorKunlikReport` da O'ZINI O'ZI TASDIQLASH TAQIQI
+qo'shildi: topshirgan xodim (boshqaruvchi bo'lmasa) o'z topshirig'ini yopa
+olmaydi.
+
+### Migratsiya
+
+`20260825120000_kunlik_kassa_topshirish` — `DailyReport` ga 5 ta NULLABLE
+ustun (`kutilganNaqd`, `kassaFarq`, `transferId`, `izoh`, `qarorIzoh`).
+Jadval qayta qurilmaydi, eski kunlar avvalgidek o'qiladi (ularda
+`kutilganNaqd` null — o'sha yerda eski taqqoslash saqlanadi, tarixdagi
+raqamlar "o'z-o'zidan" o'zgarmasin).
+
+### Test
+
+- `npm run test:kunlik-kassa` (18 ta) — accounting invarianti:
+  10 mln kirim / 3 mln chiqim → 7 mln topshirildi → kassir 0, direktor
+  +7 mln, Jami Kirim HALI HAM 10 mln, Jami Chiqim HALI HAM 3 mln, pul
+  harakati bitta, dublikat yozuv nol; farq (kamomad/ortiqcha) sababsiz
+  yopilmaydi va totallarni buzmaydi; 5 ta parallel topshirish/tasdiqlashda
+  faqat bittasi o'tadi; storno; RBAC; tenant izolyatsiyasi.
+- `npm run test:kunlik-e2e` (8 ta) — 1440/1280/768/390/375 da gorizontal
+  siljish yo'q, element ekrandan chiqmaydi, sticky amal paneli pastki
+  navigatsiya bilan kesishmaydi, raqamli klaviatura va solishtiruv varag'i
+  ishlaydi.
+- `npm run test:kunlik` (27) va `test:smena` (14) yangi shartnomaga
+  moslashtirildi.
+---
+
+## Kategoriyalar sahifasi — xavfsiz boshqaruv va registrsiz dublikat himoyasi (2026-08-25)
+
+Eski sahifada faqat ikkita narsa bor edi: Kirim/Chiqim tablari va
+"Nofaollashtirish" tugmasi. Qidiruv yo'q, holat filtri yo'q, kategoriya
+ishlatilganini bilishning imkoni yo'q, nomni O'ZGARTIRIB BO'LMASDI —
+ya'ni "shar bezaklar" ni "Shar bezaklari" ga tuzatish uchun yangi
+kategoriya yaratishdan boshqa yo'l qolmasdi va eski yozuvlar boshqa
+kategoriyada osilib qolardi.
+
+### 1. Dublikat: registrga sezgir yagonalik
+
+`@@unique([nomi, turi, businessId])` registrga SEZGIR edi. Bitta biznesda
+"Bantik", "bantik" va "BANTIK" uchta alohida kategoriya bo'lib yashardi:
+bitta xarajat turi hisobotda uch qatorga bo'linardi, byudjet faqat
+bittasini ko'rardi.
+
+Yechim — IFODALI UNIQUE INDEKS `lower(trim("nomi"))` bo'yicha (migratsiya
+`20260825130000_kategoriya_registrsiz_unique`). Ilova darajasidagi
+tekshiruv YETARLI EMAS: ikki so'rov bir vaqtda kelsa ikkalasi ham
+"bunday nom yo'q" deb ko'radi. Prisma sxemasi ifodali indeksni ifodalay
+olmaydi, shuning uchun Postgres yo'li `scripts/pg-migratsiya.mjs` dagi
+QO'LDA blokiga qo'shildi.
+
+Migratsiya mavjud registr-dublikatlarini O'CHIRMAYDI va BIRLASHTIRMAYDI
+(har biriga tranzaksiya/byudjet/qarz FK bilan bog'langan bo'lishi
+mumkin): birinchisi nomini saqlaydi, qolganlariga id qo'shimchasi
+yopishtiriladi.
+
+Yon ta'sir: servislar (`ensureCategoryTx`, CSV import, biznesga
+ko'chirish) kategoriyani `upsert` bilan NOMI bo'yicha izlardi. Endi ular
+`kategoriyaIdTop()` orqali registrsiz izlaydi — aks holda foydalanuvchi
+qo'lda "sotuv" yaratib qo'ygan biznesda keyingi POS savdosi indeksga
+urilib YIQILARDI.
+
+### 2. Tizim kategoriyalari
+
+POS, qarz, ombor, xarid va HR servislari kategoriyani NOMI bo'yicha
+topadi ("Sotuv", "Qarz to'lovi", "Qarz to'lash", "Tovar xaridi",
+"Mashina xaridi", "Mashina xarajati", "Oylik", "Avans"). Ularni qayta
+nomlash keyingi avtomatik yozuvda kategoriyani QAYTA yaratardi —
+bitta oqim ikkiga bo'linardi. Nofaollashtirilsa esa formalardan
+yo'qolardi, lekin servis unga yozishda davom etardi.
+
+Ro'yxat `src/lib/kategoriyaNom.ts` da; UI "Tizim" nishonini ko'rsatadi va
+tugmalarni yashiradi, backend esa 403 qaytaradi (tugmani yashirish
+himoya emas). Test manba fayllardagi qotirilgan nomlarni ro'yxat bilan
+solishtiradi — ro'yxat eskirsa qizil bo'ladi.
+
+### 3. Tarix buzilmasligi
+
+`DELETE` route ATAYLAB YO'Q va test uning paydo bo'lishini qo'riqlaydi.
+Qayta nomlash mavjud qatorni `update` qiladi — ID o'zgarmaydi, ya'ni
+tranzaksiya, byudjet, qarz va CRM bitimlari joyida qoladi. Turni
+o'zgartirish esa faqat kategoriya HECH QAYERDA ishlatilmagan bo'lsa
+mumkin (yettita bog'lanish tekshiriladi).
+
+`QuickAddSheet` `/api/categories` ni `active` filtrisiz o'qirdi — butun
+ilovada nofaol kategoriya hamon tanlanadigan YAGONA joy shu edi. Tuzatildi.
+
+### 4. Sahifa
+
+Qidiruv + `Faol | Nofaol | Barchasi` filtri, har kategoriyaga yozuvlar
+soni (tranzaksiyalar ro'yxatiga havola) va joriy oy summasi. Raqamlar
+ikkita `groupBy` bilan olinadi — kategoriya soni qanday bo'lsa ham
+uchta so'rov (N+1 yo'q). Davr summasi bosh sahifadagi kategoriya
+taqsimoti bilan AYNI real-pul qoidasidan o'tadi, aks holda ikki ekran
+ikki xil raqam ko'rsatardi.
+
+Fayllar: `src/lib/kategoriyaNom.ts` (yangi),
+`src/lib/services/kategoriya.ts` (yangi),
+`src/app/app/admin/kategoriyalar/` (page + 4 komponent + turlar),
+`src/app/api/categories/**`, `src/lib/validation/category.ts`,
+`src/lib/services/inventory.ts`, `csvImport.ts`,
+`src/app/api/transactions/bulk-move/route.ts`,
+`src/components/nav/QuickAddSheet.tsx`, `prisma/schema.prisma` (izoh),
+migratsiya + Postgres init.
+
+Test: `npm run test:kategoriya-boshqaruv` (19 ta) — dublikat (registr,
+bo'shliq, poyga), rename tarixi, nofaollashtirish/faollashtirish, tur
+o'zgarishi, tizim himoyasi, IDOR va RBAC, statistika.
+
+## Davr yakuni faqat direktorga; to'lov taqsimoti olib tashlandi (2026-08-25)
+
+Loyiha egasi ikki narsani so'radi: (1) Kirim/Chiqim sahifasidagi to'lov
+taqsimoti qatorlari (Naqd / Click / Karta / Qarz — kirim va chiqim bo'yicha)
+kerak emas; (2) Jami kirim, Jami chiqim va Sof foyda FAQAT direktorga
+ko'rinsin.
+
+### Nima o'zgardi
+
+`SummaryBar` endi faqat uchta kartadan iborat: Kirim, Chiqim, Sof.
+Taqsimot qatorlari (`Qator` komponenti) butunlay olib tashlandi.
+
+Blok `isManager(currentUserRol)` sharti bilan render qilinadi. Kassir va
+sotuvchi uni umuman ko'rmaydi. Bu shunchaki oyna emas: server ham ularga
+faqat O'Z yozuvlarini beradi (`transactionScopeUserId`), ya'ni bu raqamlar
+ularga baribir biznesning to'liq manzarasini bermasdi — endi esa yarim
+haqiqatni ko'rsatadigan blok umuman chiqmaydi.
+
+### O'lik kod olib tashlandi
+
+Taqsimot ko'rsatilmagach, uni tayyorlaydigan hisob-kitob ham keraksiz
+qoldi. Har sahifa yuklanishida bekorga ketadigan uchta so'rov o'chirildi:
+
+1. `listTransactions` dagi `guruhSums` (`groupBy` by turi+tolovTuri+accountId)
+   va undan chiqadigan `totals.taqsimot`. `naqdKirim/clickKirim/qarzKirim`
+   avvalgidek joyida — ularga boshqa ekranlar bog'langan.
+2. `page.tsx` dagi `prisma.debt.aggregate` (qarz yozuvlari jami).
+3. `page.tsx` dagi `prisma.dailyTransaction.aggregate` (kunlik hisobotdagi
+   qarz tushumlari) va uni o'rab turgan `isModuleOnForTenant(KUNLIK)` tekshiruvi.
+
+`hideProfit` bayrog'i ham o'chdi: u faqat sotuvchidan "Sof" ni yashirish
+uchun edi, endi butun blok direktorga qulflangan.
+
+`lib/tolovBolimi.ts` dagi `tolovGuruhi` / `tolovGuruhiWhere` QOLDI — ular
+"To'lov" filtrida va ro'yxatdagi belgida ishlatiladi.
+
+`loading.tsx` skeletidan "Davr yakuni" bloki olib tashlandi: skelet rolni
+bilmaydi, uni har kimga ko'rsatib keyin yo'qotish kassirda maket sakrashiga
+olib kelardi.
+
+Fayllar: `SummaryBar.tsx`, `TransactionsClient.tsx`, `page.tsx`,
+`loading.tsx`, `src/lib/queries/transactions.ts`.
+
+**Sxema o'zgarmadi, migratsiya yo'q.**
+
+### Test
+
+`test:kirim-chiqim` taqsimot testlari o'rniga davr yakuni testlariga
+almashtirildi (jami qarzsiz to'plamdan, filtrga bo'ysunadi) — 12 ta.
+`test:visibility` `totals` shakli asl holiga qaytdi.
+
+Brauzerda ikki rol bilan tekshirildi (1440 va 375px): direktorda Kirim /
+Chiqim / Sof kartalari bor, taqsimot qatorlari yo'q; kassirda blok umuman
+ko'rinmaydi, sahifa filtrlardan boshlanadi. Gorizontal siljish va JS
+xatosi yo'q.
+
+O'tdi: kirim-chiqim, visibility, isolation, qarz, tolov-taqsimoti,
+kategoriya, soft-delete, csv-import, kunlik, agregat, modules, crm,
+tasdiqlash, kop-biznes, selos-kg, smoke — hammasi yashil, build ham.
+
+## Kirim/Chiqim: kategoriya kesimi qaytarildi, davr yakuni huquqqa bog'landi (2026-08-25)
+
+Uch talab: (1) asosiy ro'yxat sana emas, KATEGORIYA bo'yicha bo'lsin;
+(2) to'lov usuli taqsimoti yuqoridan olib tashlansin; (3) Kirim/Chiqim/Sof
+faqat direktorga ko'rinsin — CSS bilan yashirish emas.
+
+(2) va (3) ning UI qismi oldingi yozuvda bajarilgan edi; bu yozuv
+kategoriya kesimini va huquqning SERVER tomonidagi majburlanishini
+qo'shadi.
+
+### 1. Kategoriya kesimi — sahifaning asosiy ro'yxati
+
+Ierarxiya endi: Kirim/Chiqim → BO'LIM (Kirim / Chiqim) → KATEGORIYA →
+o'sha kategoriyaning yozuvlari → yozuvlar ichida sana guruhi (Bugun /
+Kecha / eskiroq).
+
+Kategoriya jamlari SERVERDA hisoblanadi — `listKategoriyaJamlari`
+(`lib/queries/transactions.ts`). U mavjud `buildTransactionWhere` dan
+yuradi, ya'ni ro'yxat, eksport va kategoriya kesimi AYNI filtrdan
+chiqadi. Bu eng muhim invariant: kartadagi summa ochilgandagi yozuvlar
+yig'indisiga TENG (test bilan qulflangan — har kategoriya uchun
+`total` va yig'indi solishtiriladi).
+
+Kategoriya ochilganda yozuvlar `/api/transactions?categoryId=...` dan,
+joriy filtr parametrlari bilan keladi. Sana filtri, qidiruv, to'lov va
+xodim filtri kesimga ham, ichkaridagi yozuvlarga ham bir xil qo'llanadi.
+
+Kirim va chiqim ikki ALOHIDA bo'limda: bitta ro'yxatda aralashsa,
+"+"/"−" belgilariga qaramay ko'z ularni qo'shib o'qiydi va bo'lim
+yig'indisi ma'nosini yo'qotadi.
+
+Tekis ro'yxat YO'QOLMADI: "Kategoriya | Ro'yxat" almashtirgichi bor
+(`?korinish=royxat`), asosiysi — kategoriya. Ro'yxat ko'rinishida
+desktop jadvali, ommaviy belgilash, ko'chirish va sahifalash avvalgidek
+ishlaydi.
+
+QARZ haqida: bu sahifadagi ro'yxat qarzga yozilgan yozuvlarni HAM
+ko'rsatadi (`realPul` yoqilmagan), demak kategoriya jamisi ham ularni
+o'z ichiga oladi. Yuqoridagi "Sof" esa ataylab REAL pul
+(`lib/qarzFiltr.ts`) — u boshqa savolga javob beradi.
+
+### 2. Davr yakuni — mavjud granular huquq bilan
+
+Yangi ruxsat tizimi kiritilmadi. Mavjud `lib/permissions` katalogidagi
+`hisobot.korish` huquqi ishlatiladi:
+
+* OWNER va ADMIN — bor (`BARCHA_HUQUQLAR`);
+* CASHIER va SELLER — YO'Q;
+* maxsus rol (PRO) — biznes egasi o'zi bera oladi.
+
+Sahifa: huquq yo'q bo'lsa `totals` klientga UMUMAN yuborilmaydi
+(`totals={jamiKorish ? result.totals : null}`) — HTMLda ham yo'q, bo'sh
+karta ham qolmaydi, filtrlar tepaga suriladi.
+
+API: `/api/transactions` GET huquq yo'q bo'lsa javobdan `totals` ni
+olib tashlaydi. Ro'yxat, sahifalash va kunlik jamlar hammaga avvalgidek
+qaytadi — xodimning kundalik ishi to'xtamaydi. Brauzerda tekshirildi:
+kassir uchun `"totals" in javob === false`, `items` esa joyida.
+
+Eslatma: ADMIN ham ko'radi. `isManager` va `BARCHA_HUQUQLAR` bo'yicha
+ADMIN — OWNER bilan teng huquqli va bosh sahifada AYNI raqamlarni
+ko'radi; uni faqat shu kartadan uzish himoya bermas, shunchaki
+nomuvofiqlik tug'dirardi. Faqat OWNER kerak bo'lsa — `katalog.ts` dagi
+ADMIN to'plamidan `hisobot.korish` ni olib tashlash kifoya.
+
+### 3. Fayllar
+
+Yangi: `KategoriyaKorinish.tsx` (kesim + yuklash), `KategoriyaBolimi.tsx`
+(bir bo'lim), `YozuvOynalari.tsx` (tafsilot/tahrirlash/o'chirish oynalari
+— ikkala ko'rinish uchun bitta to'plam), `useYozuvHolati.ts` (ro'yxat
+holati va optimistik amallar).
+
+O'zgargan: `page.tsx` (filtr bitta joyda, kesim + huquq so'rovi),
+`TransactionsClient.tsx`, `TransactionList.tsx`, `TransactionCards.tsx`
+(kategoriya ichida nomi takrorlanmaydi), `lib/queries/transactions.ts`,
+`api/transactions/route.ts`.
+
+**Sxema o'zgarmadi, migratsiya yo'q.**
+
+### 4. Test
+
+`test:kirim-chiqim` 12 → 19 ta. Yangi: kategoriya takrorlanmasligi,
+jami = yozuvlar yig'indisi (har kategoriya uchun), kirim/chiqim
+aralashmasligi, sana filtri kesimni o'zgartirishi, qidiruv, ko'rinuvchanlik
+chegarasi, `hisobot.korish` matritsasi.
+
+`test:smoke` — kirim qo'shish oqimi yangi ko'rinishga moslandi: yozuv
+kategoriya ochilganda va "Ro'yxat" ko'rinishida topiladi.
+
+O'tdi (fail 0): kirim-chiqim 19, visibility 10, isolation 22,
+izolyatsiya-royxati 9, qarz 16, tolov-taqsimoti 11, kategoriya 11,
+soft-delete 8, csv-import 13, kunlik 27, agregat 7, modules 15, crm 24,
+tasdiqlash 20, kop-biznes 18, selos-kg 21, foydalanuvchilar 34,
+kassa-nazorat 23. Build va TypeScript ham toza.
+
+QOLGAN QIZIL (meniki emas): `test:smoke` dagi `/app/ombor` sarlavha
+tekshiruvi. Ombor/Ta'minot birlashtirish commiti smoke ro'yxatidagi
+`/app/xarid` ni `/app/ombor` ga almashtirgan, lekin e2e fixture'da
+admin biznesi ataylab `omborli = 0` (`scripts/e2e-tayyorla.mjs`), yangi
+`/app/ombor/page.tsx` esa bunda `/app` ga yo'naltiradi. Mahsulot xatosi
+emas — testning o'z fixture'i bilan ziddiyati.
+## Boshqaruv paneli (/app) — Business Control Center
+
+Bosh sahifa oddiy statistika ro'yxatidan biznes holatini 10 soniyada
+ko'rsatadigan panelga aylantirildi. Faqat `/app` — boshqa sahifalarning
+UI va biznes mantig'iga tegilmadi.
+
+- 5 KPI: Jami kirim, Jami chiqim, Sof foyda, **Kassada** (yangi — faol
+  kassalar joriy qoldig'i, tur bo'yicha kesim bilan), Menga qarzdor.
+  Beshalasida ko'z tugmasi (`lib/pulYashirish.ts` ga `kassa` va `qarz`
+  kartalari qo'shildi).
+- **Pul oqimi** grafigi (7 kun / 30 kun / 3 oy / 1 yil) — ikki so'rov,
+  to'rtta filtr klientda kesiladi. Eski "6 oy dinamikasi" va "Kunlik
+  dinamika" grafiklari shu blok bilan almashtirildi.
+- **Balansa Insight** — deterministik xulosa dvigateli
+  (`lib/services/dashboardInsight.ts`), AI chaqiruvisiz.
+- **Bugungi holat** va **Diqqat talab qiladi** bloklari.
+- Kategoriya taqsimoti default TOP 5 + "Barchasini ko'rish".
+- "+ Yangi" tez amal menyusi — mavjud formalarni qayta ishlatadi.
+- Adaptivlik: har blok modul + rol + granular huquq bilan yopiladi;
+  biznes nomiga qarab shart YO'Q.
+- Yangi so'rovlar: `lib/queries/dashboardPanel.ts`; testlar:
+  `tests/panel.test.ts` (`npm run test:panel`).
+- OMBOR kartasi KPI qatoridan olib tashlandi (5 KPI talabi) — ombor
+  holati endi "Diqqat talab qiladi" blokida (tugagan / minimal qoldiqdan
+  kam) va `/app/ombor` sahifasida.
+
+---
+
+## QARZLAR MODULI — to'lov taqsimoti, kategoriya atributsiyasi va mobil UX (2026-08-25)
+
+Modul allaqachon mustahkam edi: qarz kirim yozmasligi, to'lov sanasi bilan
+kirim, idempotentlik va tenant izolyatsiyasi ishlab turardi. Quyidagi uchta
+teshik yopildi va sahifa telefon uchun qayta terildi.
+
+### 1. Kategoriya atributsiyasi (eng muhim tuzatish)
+
+Ilgari HAR QANDAY qarz to'lovi zaxira "Qarz to'lovi" kategoriyasiga
+yozilardi. "Bantik" savdosidan chiqqan 500 ming qarz to'langanda hisobotdagi
+"Kirim — kategoriya bo'yicha" kesimida "Bantik" emas, "Qarz to'lovi"
+ko'rinardi: qarzga sotilgan tovarlarning butun tahlili yo'q edi.
+
+Endi `tolovKategoriyaTx` qarzning O'Z kategoriyasini ishlatadi. Ikki shart
+bilan: kategoriya ayni biznesniki va yo'nalishi mos (kirimga kirim
+kategoriyasi). Mos kelmasa — avvalgi zaxira nom.
+
+### 2. Ko'p qarzli to'lov taqsimoti — `qarzdorTolov`
+
+Bir mijozda uchta ochiq qarz bo'lsa, to'lov qaysi biriga tushishi degan
+savolga javob YO'Q edi: xodim qo'lda tanlardi. Yangi xizmat bitta summani
+mijozning barcha ochiq qarzlari bo'ylab ENG ESKISIDAN boshlab taqsimlaydi
+(FIFO). Qoida kodda ham, testda ham hujjatlangan.
+
+Har qarz uchun ALOHIDA `DebtPayment` va ALOHIDA kirim yoziladi — 1,2 mln
+to'lov uchta turli kategoriyadagi qarzni yopsa, kirim ham uchga bo'linib
+har biri o'z kategoriyasiga tushadi. Hammasi bitta `runBusinessTx` ichida.
+
+Qo'lda taqsimlash saqlanib qoldi: `taqsimot` berilsa aynan shunday yoziladi
+(yig'indisi summaga teng bo'lishi majburiy).
+
+Overpayment JIM qabul qilinmaydi — mijozning jami qoldig'idan ortiq summa
+aniq xato bilan rad etiladi. Yashirin avans/kredit balansi ATAYLAB
+yaratilmadi: tizimda bunday konsepsiya yo'q.
+
+Takror bosishdan himoya: kalit taqsimotdan OLDIN tekshiriladi. Bu shart —
+birinchi so'rov qarz qoldiqlarini o'zgartirgani uchun ikkinchi so'rov
+BOSHQA taqsimot hisoblab, uni yangi to'lov deb yozib yuborardi.
+
+### 3. Qarzdor agregatsiyasi va muddat tili
+
+`QarzdorDTO` boyidi: muddati o'tgan summa, eng yaqin muddat, eng eski qarz
+yoshi (kun), oxirgi to'lov summasi, kritiklik holati. Hammasi BITTA
+`findMany` dan quriladi — N+1 yo'q.
+
+`src/lib/qarzMuddat.ts` — muddat holatining YAGONA manbai (server ham,
+brauzer ham). Beshta holat: kechikdi / bugun / yaqin / keyin / muddatsiz.
+Faqat rangga tayanilmaydi: "7 kun kechikdi" matni har doim yonida.
+
+Dashboard: "Yaqin muddatli (7 kun)" qo'shildi; "Bugun to'langan" endi
+`debt.turi` bo'yicha ajratiladi — biz ta'minotchiga to'lagan pul mijozdan
+kelgan pul kartasiga qo'shilmaydi.
+
+### 4. UI
+
+KPI kartalar BOSILADI va tegishli filtrga o'tadi; telefonda ular
+gorizontal suriladigan lenta (beshta kartani 2 ustunga tersak ro'yxat
+ekrandan tushib ketardi). "Barcha" yo'nalishi olib tashlandi — aktiv va
+majburiyat aralashmasin.
+
+Tez filtr chiplari: Barchasi / Muddati o'tgan / Bugun / 7 kun ichida /
+Ochiq / Qisman to'langan / Yopilgan. Standart tartib — eng kritigi tepada.
+
+Qarzdor kartasi: jami qarz, ochiq qarzlar soni, muddati o'tgan summa, eng
+eski qarz yoshi, eng yaqin muddat, oxirgi to'lov, `tel:` qo'ng'iroq va
+to'g'ridan-to'g'ri "To'lov qabul qilish".
+
+`QarzdorTolovSheet` — yangi to'lov varag'i. Pul QAYSI qarzlarga tushishi
+tasdiqlashdan OLDIN ko'rinadi: avtomatik qoida jimgina ishlab ketmaydi.
+
+Dublikat mijoz ogohlantirishi: server mavjud kartochkani qaytarsa
+(`mavjud: true`), forma buni AYTADI — operator kiritgan telefon boshqa
+odamning kartochkasiga tegishli bo'lishi mumkin.
+
+### Fayllar
+
+Xizmat/so'rov: `src/lib/services/qarz.ts`, `src/lib/queries/qarz.ts`,
+`src/lib/services/mijozAniqla.ts`, `src/lib/validation/qarz.ts`,
+`src/lib/qarzMuddat.ts` (yangi).
+
+API: `src/app/api/debts/qarzdor/tolov/route.ts` (yangi),
+`src/app/api/debts/mijozlar/route.ts`.
+
+UI: `QarzlarClient.tsx`, `QarzKPI.tsx`, `QarzFiltrPanel.tsx`,
+`QarzdorRoyxat.tsx`, `QarzdorTafsilot.tsx`, `QarzJadval.tsx`,
+`QarzMuddatBadge.tsx` (yangi), `QarzdorTolovSheet.tsx` (yangi),
+`src/components/qarz/YangiMijozForm.tsx`.
+
+**Sxema o'zgarmadi, migratsiya yo'q.**
+
+### Test
+
+`npm run test:qarz-taqsimot` (13 ta, yangi) — FIFO taqsimoti, kategoriya
+atributsiyasi, faqat to'langan summaning kirimga tushishi, takror bosish
+(shu jumladan qarz to'liq yopilgandan keyingi holat), overpayment rad
+etilishi, qo'lda taqsimlash, ta'minotchi oqimi (chiqim, kirimga
+tushmaydi), tenant izolyatsiyasi va yopilgach tarixning saqlanishi.
+
+`npm run test:qarzlar-brauzer` (8 ta, yangi) — 1440/1280/768/390/375px da
+gorizontal skroll yo'qligi, sticky FAB pastki navigatsiya bilan
+to'qnashmasligi, raqamli klaviatura va to'lov varag'ining qatlam tartibi.
+Suratlar `tests/suratlar/` ga tushadi (repoga qo'shilmaydi).
+
+Regressiya: 48 to'plam o'tdi (qarz, qarzdorlik, qarz-mijoz, avto, atomik,
+agregat, audit, izolyatsiya, smoke va boshqalar) — yiqilgani yo'q.
+
+## 2026-08-25 — BALANSA AI: savol-javob blokidan BUSINESS COPILOT'ga
+
+Faqat `/app/ai` va unga kerak bo'lgan backend AI/analitika qatlami
+o'zgardi. Boshqa sahifalar va modullar tegilmadi.
+
+### Muammo
+
+Eski AI bloki ~135 satrlik kichik kartochka edi va olti dona umumiy
+tool'ga tayanardi (`oylik_xulosa`, `kategoriya_taqsimoti`, `oylik_trend`,
+`qarzdorlik`, `crm_holati`, `vazifalar_holati`). Uchta jiddiy kamchilik:
+
+1. **Ruxsat qatlami yo'q edi.** Tool'lar faqat MODUL yoqilganini
+   tekshirardi, granular huquqni emas — ya'ni hisobot huquqi olib
+   qo'yilgan foydalanuvchi AI orqali sof foydani so'rab olaverardi.
+2. **Davr tushunchasi yo'q edi.** Faqat "oy" bor edi: "bugun qancha
+   kirdi?", "shu hafta?", "iyulni avgust bilan solishtir" — javobsiz.
+3. **Raqamni model yozardi.** Tool xom JSON qaytarardi, foiz va farqni
+   model o'zi hisoblardi — ya'ni taxminiy raqam yozish yo'li ochiq edi.
+
+### Yechim: to'rt qatlam
+
+`lib/ai/davr.ts` — davr kodini ("bugun", "3oy", "2026-07",
+"2026-07-01:2026-07-15") chegaraga aylantiradi. Model sana hisoblamaydi.
+
+`lib/ai/ruxsat.ts` — XAVFSIZLIK CHEGARASI. Sakkiz soha (moliya, hisobot,
+kassa, qarz, ombor, crm, vazifalar, mijozlar), har biri o'sha sohaning
+SAHIFASI talab qiladigan AYNI huquq bilan ochiladi (`lib/permissions`).
+Ruxsatsiz soha tool'i modelga umuman yuborilmaydi.
+
+`lib/ai/analitika.ts` — deterministik agregatlar. Farq, foiz, ulush va
+"eng kattasi" SERVERDA hisoblanadi, modelga tayyor raqam va tayyor matn
+("138,3 mln so'm") boradi. Qarz filtri (`QARZ_EMAS`) va soft-delete
+butun tizim bilan bir xil, ya'ni AI javobi bosh sahifa va oylik hisobot
+bilan bitta raqamni ko'rsatadi.
+
+`lib/ai/tools.ts` — 12 ta tool, hammasi FAQAT O'QISH. `businessId`
+har doim serverdagi kontekstdan; savol matnidagi "boshqa biznes ID sini
+tekshir" kabi ko'rsatma tool darajasida ta'sirsiz.
+
+### Hallutsinatsiyaga qarshi uch qavat
+
+1. Tool natijasi tayyor matn beradi — model formatlamaydi va hisoblamaydi.
+2. System prompt: ma'lumot yo'q bo'lsa "Bu ma'lumotni aniq hisoblash uchun
+   yetarli ma'lumot topilmadi" deb ayt, taxmin qilma.
+3. `raqamNazorati()` — model birorta tool chaqirmagan bo'lsa, javobdagi
+   pul ko'rinishidagi raqam BLOKLANADI (o'ylab topilgan bo'lishi aniq).
+
+### Chat tarixi — yangi jadval
+
+`AiConversation` da foydalanuvchi × biznes uchun ATIGI BITTA qator bor
+edi. `AiSuhbat` o'sha cheklovni olib tashlaydi (ko'p suhbat, sarlavha
+bilan). Migratsiya eski yozishmalarni ko'chiradi va shundan keyin eski
+jadvalni o'chiradi — ma'lumot yo'qolmaydi.
+
+Egalik kaliti o'zgarmagan: `(businessId, userId)`. `rawPrisma` ataylab —
+har chat xabari scoped klient orqali audit jurnaliga tushib, jurnalni
+shovqinga to'ldirardi (`tests/audit.test.ts` buni qo'riqlaydi).
+
+### AI'siz ishlaydigan qismlar (token tejash)
+
+"Bugungi xulosa" kartasi, tayyor savollar va javobdan keyingi chiplar —
+hammasi deterministik. Sahifa ochilishi bitta ham AI so'rovi sarflamaydi.
+
+Fayllar: `src/lib/ai/{davr,ruxsat,analitika,xulosa,tools,claude,suhbatlar,takliflar,javobFormat}.ts`,
+`src/app/api/ai/chat/route.ts`, `src/app/api/ai/suhbatlar/**`,
+`src/app/app/ai/**` (7 ta komponent), `prisma/schema.prisma`,
+`prisma/migrations/20260825140000_ai_copilot_suhbatlar/`.
+
+**Migratsiya bor** — `--create-only` uslubida yozildi, apply QILINMADI
+(deploy paytida `scripts/db-migrate.mjs` o'zi qo'llaydi; undan oldin
+`scripts/deploy-zaxira.mjs` xom surat oladi). Xavf darajasi: past —
+bitta CREATE TABLE + INSERT…SELECT + DROP; ko'chirish scratch bazada
+haqiqiy yozuv bilan sinaldi.
+
+Test: `npm run test:ai` (28 ta — aniqlik, RBAC, tenant, prompt injection,
+hallutsinatsiya, suhbat izolyatsiyasi) va `npm run test:ai-e2e` (8 ta —
+1440/1280/768/390/375 da gorizontal siljish yo'q, kompozer ko'rinadi,
+pastki menyu bilan ustma-ust tushmaydi). `npm run build` ✅.
+
+### 2026-08-25 — Kassir/sotuvchi bosh sahifasi yiqilishi (tugadi)
+
+**Muammo (production, foydalanuvchi skrinshoti):** kassir yoki sotuvchi
+tizimga kirganda `/app` sahifasi "Tizimda vaqtincha nosozlik" xato ekraniga
+tushardi. Direktor/administratorda hammasi ishlagani uchun sinovlarda
+sezilmagan.
+
+**Ildiz sabab:** `src/app/app/page.tsx` da kassir/sotuvchi tarmog'i
+`runWithTenant(...)` callback ichidan `<XodimEkrani/>` ni JSX sifatida
+qaytarardi. React async server komponentni callback TUGAGANDAN KEYIN render
+qiladi — AsyncLocalStorage konteksti allaqachon yopilgan, `XodimEkrani`
+ichidagi tenant-scoped `prisma` so'rovlari "Tenant konteksti yo'q" bilan
+yiqilardi. Panel redizayni (fc98003) kassir mantiqini alohida async
+komponentga ajratganda kirib qolgan regressiya.
+
+**Tuzatish:** JSX o'rniga to'g'ridan-to'g'ri chaqiruv —
+`return await XodimEkrani({ session })`. Shunda barcha so'rovlar kontekst
+ichida bajariladi. Boshqa sahifa komponentlari tekshirildi: faqat
+`XodimEkrani` o'zi ma'lumot yuklaydi, qolganlari props orqali oladi —
+xato boshqa joyda takrorlanmaydi.
+
+**Tekshiruv:** production build + haqiqiy brauzerda (390px, iPhone UA)
+kassir bilan `/app`, tranzaksiyalar, kunlik, pos, sotuv, qarzlar, crm,
+vazifalar — hammasi ochiladi; admin paneli o'zgarmagan. `npm run build` ✅,
+`test:isolation` (22) ✅, `test:panel` (22) ✅, `test:visibility` (10) ✅.
+
+### 2026-08-25 — Ombor importi: Excel fayl "yuklanmoqda"da abadiy osilishi (tugadi)
+
+**Muammo (foydalanuvchi xabari):** omborga Excel fayl import qilinganda
+"yuklanmoqda" holati 15 daqiqa turib ham tugamagan.
+
+**Ildiz sabab (empirik takrorlandi):** 10 MB gacha siqilgan xlsx ichida
+100 MB dan ortiq XML (200 ming qator) bo'lishi mumkin. `ExcelJS.load`
+faylni to'liq xotira modeliga yozadi — sinovda 10.8 MB fayl ~800 MB heap
+yedi; 256 MB heap'da jarayon OOM bilan o'ldi. Kichik serverda bu GC
+tiqilishi — so'rov hech qachon javob qaytarmaydi, klientda esa muddat
+(timeout) yo'q edi, shuning uchun UI abadiy "yuklanmoqda"da qolardi.
+
+**Tuzatish (uch qatlam):**
+1. `xlsxOqi.ts` — zip markaziy katalogidan ichki XML hajmi parse'dan OLDIN
+   o'qiladi (arxiv ochilmaydi, ~6 ms). 10 MB dan katta XML `XlsxXato`
+   bilan rad etiladi (import baribir 500 qator bilan cheklangan; 10 MB XML
+   ~20 ming qator — katta zaxira). Satrlar 5001 bilan cheklanadi — ortiqcha
+   qatorlar importda baribir ochiq "500 tadan ko'p" xatosi bo'ladi, jimgina
+   kesilmaydi. Streaming o'quvchi ATAYLAB ishlatilmadi: sharedStrings zip
+   ichida varaqdan keyin kelsa (haqiqiy Excel odati) matnlar buziladi —
+   sinovda tasdiqlandi.
+2. `api/products/import` — buzilgan/katta Excel 500 emas, aniq xabarli 400.
+3. `ImportModal` — so'rovga 60 s muddat (AbortController): server javobsiz
+   qolsa ham UI osilib qolmaydi. Tarmoq qatlami `importYuborish.ts` ga
+   ajratildi (komponent 250 satr chegarasida).
+
+**Tekshiruv:** 200 ming qatorli haqiqiy fayl 6 ms da tushunarli xato bilan
+rad etiladi; oddiy 300 qatorli fayl avvalgidek o'qiladi. `npm run build` ✅,
+`test:mahsulot-import` (23, 3 tasi yangi) ✅, `test:isolation` (22) ✅,
+`test:csv-import` (13) ✅.
+
+**Qo'shimcha (foydalanuvchi aniqlashtirdi — fayl 180 MB):** bunday fayl
+avval to'liq tarmoqqa yuklanib bo'lishi kerak edi, sekin internetda bu o'zi
+o'nlab daqiqa. Endi hajm KLIENTDA, yuborishdan oldin tekshiriladi
+(`MAKS_FAYL_HAJM`, server bilan bir xil 10 MB): javob bir zumda chiqadi va
+CSV sifatida saqlash / 500 qatordan bo'lish maslahat qilinadi. Modal matniga
+"10 MB gacha" qo'shildi. Test: fetch umuman chaqirilmasligi tekshiriladi
+(`test:mahsulot-import` — 24) ✅.
+
+### 2026-08-25 — Rasmli Excel importi (tugadi)
+
+**Talab (foydalanuvchi):** 180 MB lik Excel faylni aynan o'zini import
+qilish kerak — ichidagi tovar rasmlari bilan birga.
+
+**Arxitektura:** katta fayl serverga UMUMAN yuborilmaydi. XLSX brauzerning
+o'zida ochiladi (ExcelJS dinamik import — asosiy bundle'ga qo'shilmaydi):
+qatorlar yengil CSV matnga aylanib mavjud import endpointiga JSON bo'lib
+boradi; katakka joylashtirilgan rasmlar ajratiladi, canvas'da 900 px JPEG
+qilib siqiladi (~50-100 KB) va mavjud `/api/ombor/rasm` endpointiga 3 talik
+parallellikda yuklanadi; havolalar "Rasm" ustuni sifatida CSV'ga qo'shiladi.
+Import quvuri (tekshirish -> tasdiqlash -> atomik yozish) o'zgarmadi.
+
+**O'zgarishlar:**
+- `mahsulotImport.ts`: yangi `rasmUrl` ustuni (muqobil nomlari bitta
+  manbada — `lib/excel/rasmUstun.ts`; Bito "Surati" ham taniladi). Faqat
+  http(s) qiymat olinadi: fayl nomi yozilgan katak xato emas, "rasm yo'q".
+  Yangilash rejimida rasm ustunisiz fayl rasmga TEGMAYDI (narx qoidasi).
+- Eksport (`mahsulotEksport.ts`) endi rasm havolasini ham chiqaradi —
+  eksport->tahrir->import aylanmasi rasmni yo'qotmaydi.
+- Klient: `xlsxBrauzer.ts` (o'qish+rasm ankerlab olish),
+  `rasmYuklash.ts` (siqish+parallel yuklash), `useImportOqimi.ts` (oqim),
+  ImportModal yangi holatlar bilan. Saqlagich (BLOB token) sozlanmagan
+  bo'lsa foydalanuvchi IMPORTDAN OLDIN ogohlantiriladi va tovarlar
+  rasmsiz yuklanadi; ayrim rasm yuklanmasa import to'xtamaydi, yakunda
+  soni ko'rsatiladi.
+- Brauzerda ochilmagan kichik xlsx eski (server) yo'ldan o'tadi — eski
+  brauzerda ham import ishlayveradi.
+
+**Tekshiruv:** yangi e2e `npm run test:rasmli-import` (haqiqiy Chromium:
+rasmli xlsx tanlanadi, "2 tovar · rasm: 2" ko'rinadi, saqlagich
+ogohlantirishi chiqadi, import yakunlanadi, tovarlar ro'yxatda) ✅.
+`test:mahsulot-import` (26, 2 tasi yangi — rasm ustuni yozish/yangilash) ✅,
+`test:isolation` (22) ✅, `npm run build` ✅.
+
+**Qo'shimcha (mobil rasm yuklash):** tovar kartasidagi rasm tanlash endi
+yuklashdan oldin suratni brauzerda siqadi (`rasmSiqish.ts` — import bilan
+umumiy): telefon surati 3-8 MB o'rniga ~100 KB JPEG bo'lib ketadi, 5 MB
+chegarasiga urilmaydi, iPhone HEIC formati ham JPEG bo'lib chiqadi.
+`accept="image/*"` — kamera/galereya tanlovi to'liq ochiq. Eslatma:
+production'da rasmlar saqlanishi uchun Vercel'da Blob store ulanishi
+(`BLOB_READ_WRITE_TOKEN`) shart — usiz UI ochiq ogohlantiradi.
+
+**Saqlagich sozlandi (2026-08-26):** Vercel'da `balansa-rasmlar` nomli
+PUBLIC blob store yaratildi va loyihaga `BLOB` prefiksi + read-write token
+bilan ulandi (avvalgi Private store o'chirildi — private rejimda rasm URL
+lari ochiq o'qilmasdi). `BLOB_READ_WRITE_TOKEN` endi barcha muhitlarda bor;
+shu commit push'i yangi deploy boshlab, tokenni kuchga kiritadi.
+Foydalanuvchi 249 tovar + 207 rasmni muvaffaqiyatli import qildi.
+
+### 2026-08-26 — Katalogni tozalash (tugadi)
+
+**Talab:** import keraksiz tovarlarni ham olib kelgan — foydalanuvchi
+"faqat Gullar kategoriyasi qolsin, qolganini o'chir" dedi. Bittalab
+o'chirish yuzlab bosish, ommaviy yo'l esa umuman yo'q edi (Product uchun
+DELETE endpointning o'zi yo'q).
+
+**Yechim:** Ombor "•••" menyusida "🧹 Katalogni tozalash" —
+QOLADIGAN kategoriyalar belgilanadi, qolgan tovarlar o'chadi. Ikki bosqich:
+server avval aniq hisob qaytaradi (nechta o'chadi / nofaol bo'ladi /
+qoladi), foydalanuvchi ko'rib tasdiqlagandagina yoziladi.
+
+Muhim qarorlar (`lib/services/katalogTozalash.ts`):
+- Sotuv/kirim/inventarizatsiya/xarid izi bor tovar O'CHIRILMAYDI (FK ham
+  Restrict) — `isActive: false` bo'ladi, hisobotlar teshilmaydi.
+- Hammasi bitta `runBusinessTx` da; har so'rovda businessId qo'lda.
+- "Hammasini o'chir" mumkin emas — kamida bitta kategoriya saqlanishi
+  shart (zod refine).
+- `notIn` NULL ni qamramasligi hisobga olingan: kategoriyasiz tovarlar
+  alohida bayroq bilan boshqariladi.
+
+Test: `npm run test:katalog-tozalash` (4 — hisob, kategoriyasiz bayrog'i,
+tarixli nofaol + tenant izolyatsiyasi, audit izi) ✅. `npm run build` ✅,
+`test:isolation` (22) ✅, `test:mahsulot-import` (26) ✅.
+
+### 2026-08-26 — Tariflar → ro'yxatdan o'tish → sinov oqimi (tugadi)
+
+**Talab:** "Bitta Balansa, bitta narx tizimi" strategiyasi: landing → /tariflar
+(kalkulyator) → aqlli ro'yxatdan o'tish → 14 kunlik sinov → yo'nalishga
+moslashgan workspace. Sanoat bo'yicha alohida tarif YO'Q — biznes turi faqat
+shaxsiylashtiradi, narxni o'zgartirmaydi.
+
+**Yechim (yangi qatlamlar):**
+- `lib/pricing/config.ts` — YAGONA ommaviy narx manbai: baza 399 000, filial
+  +149 000 (birinchisi kiritilgan), 5 addon (Telegram 79k, CRM 99k, POS 99k,
+  Kengaytirilgan Ombor 79k, AI 99k), yillik = 10 oylik ("2 oy bepul").
+  `narxHisobla()` — barcha summalar shu funksiyadan. MUHIM CHEGARA: bu
+  marketing/onboarding qatlami; amaldagi to'lov (lib/billing/plans.ts,
+  Payme/Click) TEGILMAGAN — yangi model bo'yicha haqiqiy pul olish billing
+  integratsiyasini kutadi (quyida).
+- `lib/pricing/profil.ts` — 8 yo'nalish (auto/perfume/food/agro/service/
+  wholesale/manufacturing/other): boshlang'ich bayroqlar (omborli/magazin),
+  tavsiya addonlar, 3 qadamli onboarding. `biznesFaoliyati.ts` naqshining
+  ommaviy qatlami — jadval/hisob mantiqi hamma uchun BITTA.
+- `/tariflar` — kalkulyator (yo'nalish → filial slayderi → addonlar →
+  oylik/yillik), sticky xulosa, mobil pastki CTA, kiritilgan imkoniyatlar,
+  matritsa, FAQ. Tanlov URL'da (refresh/back chidamli), signup'ga
+  `?yonalish=&filiallar=&addons=&davr=` bilan o'tadi — ISHONCHSIZ hint:
+  yaroqsiz qiymat jimgina tushiriladi, narx/tarif serverda qayta hisoblanadi.
+- Landing: nav "Kimlar uchun"/"Tariflar", CTA "14 kun bepul boshlash",
+  yangi `KimlarUchun` bo'limi (narxsiz, profillardan), `Narx` bo'limi endi
+  yagona tizim teaser'i → /tariflar.
+- Signup 2 qadam (hisob → biznes sozlash, yo'nalish/filial oldindan
+  to'ldirilgan). Server: `Business.yonalish` (yangi NULL ustun, migratsiya
+  `20260826120000_biznes_yonalish`), tanlangan addon modullari TenantModule
+  orqali yoqiladi, sinov tarifi `sinovPlanTanla()` — modullarni qamrab
+  oladigan ENG ARZON plan (masalan CRM → PRO, XARID → SHOP). Foydalanuvchi
+  tanlamagan pullik modul HECH QACHON yoqilmaydi. Yo'nalishsiz signup —
+  avvalgidek (regressiya testi bor).
+- Dashboard: `OnboardingKarta` — faqat TRIAL tenantda, yo'nalishga mos 3
+  qadam, bajarilganlik HAQIQIY ma'lumotdan (mahsulot/sotuv/mijoz soni),
+  hammasi bajarilgach yo'qoladi. Sinov muddati mavjud `computeAccess` dan.
+
+**Tegilmagani:** trial/access tizimi (Tenant.status/trialEndsAt,
+computeAccess, BillingBanner, /billing) — allaqachon to'liq ishlaydi,
+qayta yozilmadi. PLANLAR narxlari o'zgartirilmadi.
+
+**Billing integratsiyasi KUTILMOQDA (hujjat):** /tariflar ko'rsatadigan
+"baza+filial+addon" summasini sinovdan keyin haqiqatda undirish uchun
+checkout hozircha plan-asosli (PLANLAR). Kelgusi qadam: `narxHisobla()`
+natijasini Payme/Click checkout'ga ulash yoki PLANLAR'ni shu modelga
+ko'chirish — mahsulot qarori bilan. Analitika hodisalari qo'shilmadi —
+loyihada analitika infratuzilmasi yo'q (yangi vendor kiritilmadi).
+
+Test: `npm run test:tariflar` (13 — narx formulasi, profillar, sinov plan
+tanlovi, signup shaxsiylashtiruvi) ✅. Regressiya: signup 11, isolation 22,
+modules 21, billing 22, migratsiya 12, izolyatsiya-royxati 9, bizneslar 21,
+dashboard-ux 21, avto 25, superadmin 11+27, kop-biznes 18, magazin 43,
+smoke (brauzer) 11 — hammasi ✅. `npm run build` ✅. Brauzerda qo'lda: Flow
+A (food+POS, 647 000), Flow B (service+CRM, 498 000), Flow C (agro, 5
+filial, yillik 9 950 000 / tejov 1 990 000), yaroqsiz URL parametrlari,
+375/390/768/1440 kengliklar, mavjud login — 62/62 ✅ (eslatma: landingdagi
+ESKI Rollar jadvali 375px da scrollWidth'ni oshiradi, lekin sahifa
+`overflow` bilan qirqilgan — foydalanuvchiga ko'rinmaydi, oldindan mavjud).
+
+### 2026-08-27 — Qarz to'lov summasi avtomatik to'ldirilmasin (tugadi)
+
+**Talab:** Qarzdorlik → To'lov qabul qilish oynasi ochilganda summa
+inputiga mijozning JAMI qarzi (masalan 42 824 000) avtomatik yozilib
+qolardi. Operator qisman to'lovda (mijoz 5 000 000 berdi) eski qiymatni
+o'chirishni unutsa, butun qarz "to'landi" bo'lib yozilish xavfi bor edi.
+
+**Yechim:** summa maydoni endi BO'SH ochiladi, placeholder
+"To'lov summasini kiriting". Operator real olingan pulni o'zi yozadi.
+
+O'zgargan joylar:
+- `QarzdorTolovSheet.tsx` — `useState(formatSom(jamiQarz))` → `useState("")`;
+  "Qaysi qarzga yoziladi" selecti ham summani qayta to'ldirmaydi (operator
+  yozgani saqlanadi); Tasdiqlash tugmasi summa bo'sh/0 bo'lsa disabled.
+- `QarzTolovForm.tsx` (bitta qarz bo'yicha forma) — xuddi shu tuzatish.
+
+Validatsiya TEGILMADI, faqat tekshirildi: klientda `s <= 0` va
+`s > chegara` xatolari, `parseSomInput` manfiy sonni o'tkazmaydi
+(`[^\d]` olib tashlanadi); serverda zod `positive int` +
+`summa > qolgan` rad etiladi. FIFO taqsimot (`services/qarz.ts`,
+eng eski qarzdan) va kassa tanlash (naqd/click/bank → account) o'zgarmagan.
+
+Test: `npm run build` ✅, `test:qarz` (16) ✅, `test:qarzdorlik` (16) ✅,
+`test:qarz-taqsimot` (13) ✅, `test:isolation` (22) ✅,
+`test:qarzlar-brauzer` (8) ✅.
+
+### 2026-08-27 · Dashboard "Kassada" kartasi — kassa qoldig'i mantiqi tuzatildi
+
+**Muammo:** karta tarixiy kirimlardan qolgan soxta summani ko'rsatardi —
+pul allaqachon sarflangan bo'lsa ham qoldiq kamayavermasdi. Audit uchta
+teshikni topdi (hisoblash formulasi emas, LEDGERGA YOZISH yo'llari oqardi):
+
+1. **Takroriy (recurring) yozuv kassasiz yaratilardi** — `recurring.ts`
+   xom `create` ishlatgani uchun `accountId = null` qolardi. Takroriy
+   chiqim (ijara, oylik) hech qaysi kassadan ayrilmasdi va qoldiq
+   oydan-oyga shishib borardi.
+2. **`kassa-migratsiya` skripti QARZ kirimlarini ham kassaga bog'lardi**
+   (u har deployda ishlaydi). Qarzga yozilgan savdo pul emas — kassa
+   qoldig'i qarz savdolari hisobiga soxta oshardi.
+3. **Bulk-move `accountId` ni qayta bog'lamasdi** — ko'chirilgan yozuv
+   eski biznes kassasiga ishora qilib qolardi: manba kassaning chiqimi
+   ledgerdan yo'qolib qoldiq sababsiz ko'tarilardi, maqsad biznesda esa
+   yozuv umuman hisobga kirmasdi.
+
+**Nima qilindi**
+- `recurring.ts` endi `createTransactionTx` orqali yozadi — kassa
+  boshqa yozuvlar bilan bir xil qoidada tanlanadi.
+- Qarz filtri (`qarzFiltr.ts`) barcha ledger hisoblariga qo'shildi:
+  `getAccountBalances`, `getKassaKunlik`, `kassaQoldiqTx`,
+  `biznesNaqdQoldiqTx` (unga kassaning `businessId` tekshiruvi ham).
+- Bulk-move mantiqi `lib/services/tranzaksiyaKochirish.ts` ga ajratildi:
+  ko'chirishda kassa maqsad biznesning mos turdagi (naqd→naqd,
+  plastik/bank oilasi) kassasiga qayta bog'lanadi; qarz yozuvi kassasiz.
+- `scripts/kassa-migratsiya.ts` (deploy zanjiri): qarz yozuvlarini kassadan
+  UZADI, begona biznes kassasiga bog'langan yozuvlarni o'z biznesining mos
+  kassasiga o'tkazadi, bo'sh `accountId` bog'lashda qarzni chetlab o'tadi.
+  Idempotent — mavjud ma'lumot o'chirilmaydi, faqat bog'lanish tuzatiladi.
+
+**Fayllar:** `src/lib/queries/accounts.ts`, `src/lib/services/userKassa.ts`,
+`src/lib/services/kunlikKassa.ts`, `src/lib/services/recurring.ts`,
+`src/lib/services/tranzaksiyaKochirish.ts` (yangi),
+`src/app/api/transactions/bulk-move/route.ts`, `scripts/kassa-migratsiya.ts`,
+`tests/kassa-qoldiq.test.ts` (yangi), `package.json`
+
+Test: `npm run test:kassa-qoldiq` (5) ✅ — to'liq ssenariy (kirim→chiqim→
+transfer→chiqim = 0), qarz istisno emas: buzilgan bog'lanishda ham qoldiqqa
+kirmaydi, takroriy chiqim kassani kamaytiradi, bulk-move qayta bog'laydi,
+migratsiya skripti tuzatadi. Regressiya: `test:kassa` (11), `test:kassa-nazorat`
+(23), `test:kassa-transfer` (20), `test:kunlik-kassa` (18), `test:kassir-kassa`
+(22), `test:panel` (22), `test:automation`, `test:kirim-chiqim`,
+`test:isolation`, `test:kunlik`, `test:smena` — hammasi ✅. `npm run build` ✅.

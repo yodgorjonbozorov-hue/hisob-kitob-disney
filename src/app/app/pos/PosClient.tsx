@@ -9,7 +9,6 @@ import { useToast } from "@/components/ui/Toast";
 import { formatSomLabel } from "@/lib/format";
 import type { PosMahsulotDTO, PosKategoriyaDTO } from "@/lib/queries/pos";
 import type { AccountDTO } from "@/lib/queries/accounts";
-import type { MijozDTO } from "@/lib/queries/mijoz";
 import { Savat } from "./Savat";
 import { MahsulotTori } from "./MahsulotTori";
 import { TolovModal, type TolovTuri } from "./TolovModal";
@@ -29,13 +28,11 @@ export function PosClient({
   mahsulotlar,
   kategoriyalar,
   kassalar,
-  mijozlar,
 }: {
   mahsulotlar: PosMahsulotDTO[];
   kategoriyalar: PosKategoriyaDTO[];
   kassalar: AccountDTO[];
   /** MIJOZLAR moduli yoqiq bo'lsa — qarzga sotuvda limit ishlaydigan kartochkalar. */
-  mijozlar: MijozDTO[];
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -173,7 +170,6 @@ export function PosClient({
         <TolovModal
           jami={savat.jami}
           kassalar={kassalar}
-          mijozlar={mijozlar}
           yuborilmoqda={yuborilmoqda}
           xato={xato}
           onClose={() => setTolov(false)}

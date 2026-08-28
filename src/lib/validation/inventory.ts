@@ -152,7 +152,26 @@ export const mahsulotImportQatorSchema = z.object({
   miqdor: z.number().int().min(0, "Qoldiq manfiy bo'lmasligi kerak").max(10_000_000).nullable().optional(),
   minQoldiq: z.number().int().min(0).max(1_000_000).nullable().optional(),
   izoh: z.string().trim().max(500).nullable().optional(),
+  rasmUrl: z.string().trim().max(1000).nullable().optional(),
 });
+
+/**
+ * KATALOGNI TOZALASH — tanlangan kategoriyalar QOLADI, qolgan tovarlar
+ * o'chiriladi. Hech narsa saqlanmaydigan so'rov rad etiladi: "hammasini
+ * o'chir" tugmasi adashib bosiladigan narsa bo'lmasligi kerak.
+ */
+export const katalogTozalashSchema = z
+  .object({
+    saqlanadiganKategoriyalar: z.array(z.string().min(1)).max(500),
+    kategoriyasizSaqlansin: z.boolean().default(false),
+    /** true — faqat hisob-kitob qaytadi, hech narsa o'chirilmaydi. */
+    tekshirish: z.boolean().optional(),
+  })
+  .refine((d) => d.saqlanadiganKategoriyalar.length > 0 || d.kategoriyasizSaqlansin, {
+    message: "Kamida bitta kategoriya saqlanishi kerak",
+  });
+
+export type KatalogTozalashInput = z.infer<typeof katalogTozalashSchema>;
 
 export type MahsulotImportQatorInput = z.infer<typeof mahsulotImportQatorSchema>;
 
@@ -174,3 +193,24 @@ export const narxToldirishSchema = z.object({
 });
 
 export type NarxToldirishInput = z.infer<typeof narxToldirishSchema>;
+
+/**
+ * SOTILGAN MAHSULOTLAR STATISTIKASI — sana oralig'i (Kirim bo'limidagi blok).
+ *
+ * Faqat o'qish so'rovi, lekin sana baribir tekshiriladi: formatsiz qiymat
+ * `new Date(...)` ni Invalid Date qilib, so'rovni jimgina BO'SH natijaga
+ * aylantirardi.
+ */
+const SANA_FORMATI = /^\d{4}-\d{2}-\d{2}$/;
+
+export const sotuvStatistikaSchema = z
+  .object({
+    from: z.string().regex(SANA_FORMATI, "Sana formati noto'g'ri (YYYY-MM-DD)"),
+    to: z.string().regex(SANA_FORMATI, "Sana formati noto'g'ri (YYYY-MM-DD)"),
+  })
+  .refine((d) => d.from <= d.to, {
+    message: "Boshlanish sanasi tugash sanasidan keyin bo'lmasligi kerak",
+    path: ["from"],
+  });
+
+export type SotuvStatistikaInput = z.infer<typeof sotuvStatistikaSchema>;

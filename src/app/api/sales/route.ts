@@ -6,6 +6,7 @@ import { resolveActiveBusinessId, requireOmborli } from "@/lib/business";
 import { createSale } from "@/lib/services/inventory";
 import { listRecentSales } from "@/lib/queries/inventory";
 import { dashboardYangilandi } from "@/lib/cache";
+import { isModuleOnForTenant } from "@/lib/modules/guard";
 
 export const GET = withTenant(async (_request, _ctx, { session: user }) => {
   forbidSeller(user.rol);
@@ -19,7 +20,8 @@ export const GET = withTenant(async (_request, _ctx, { session: user }) => {
 }, { module: "OMBOR" });
 
 /** Sotuv — admin va kassir. */
-export const POST = withTenant(async (request, _ctx, { session: user }) => {
+export const POST = withTenant(async (request, _ctx, tenantCtx) => {
+  const user = tenantCtx.session;
   forbidSeller(user.rol);
 
   const businessId = await resolveActiveBusinessId(user);
@@ -32,6 +34,10 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
     return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
   }
 
+  // Mijoz kartochkasi faqat MIJOZLAR moduli yoqiq bo'lsa yaratiladi
+  // (/api/debts va /api/pos/chek bilan bir xil qoida).
+  const mijozlarModuli = await isModuleOnForTenant(tenantCtx.tenantId, "MIJOZLAR");
+
   const sale = await createSale({
     businessId,
     productId: parsed.data.productId,
@@ -40,6 +46,7 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
     contactId: parsed.data.contactId,
     mijozNomi: parsed.data.mijozNomi,
     mijozTel: parsed.data.mijozTel,
+    mijozSaqla: mijozlarModuli,
     narx: parsed.data.narx,
     accountId: parsed.data.accountId,
     sana: parsed.data.sana,

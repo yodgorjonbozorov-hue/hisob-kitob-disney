@@ -31,3 +31,8 @@ prisma/.pg-*.tmp.prisma
 /test-results/
 /playwright-report/
 /blob-report/
+.vercel
+.env*
+
+# Responsive verifikatsiya suratlari — repoga qo'shilmaydi.
+tests/suratlar/

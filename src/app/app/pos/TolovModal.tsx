@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Money } from "@/components/ui/Money";
 import { formatSomLabel } from "@/lib/format";
 import type { AccountDTO } from "@/lib/queries/accounts";
-import type { MijozDTO } from "@/lib/queries/mijoz";
+import { MijozTanlash, type MijozTanlov } from "@/components/qarz/MijozTanlash";
 
 /**
  * TO'LOV OYNASI — savat yig'ilgach kassir shu yerda to'lovni yakunlaydi.
@@ -25,10 +25,11 @@ const USULLAR: Array<{ code: TolovTuri; label: string }> = [
   { code: "qarz", label: "Qarz" },
 ];
 
+const BOSH_MIJOZ: MijozTanlov = { contactId: null, ism: "", tel: "" };
+
 export function TolovModal({
   jami,
   kassalar,
-  mijozlar,
   yuborilmoqda,
   xato,
   onClose,
@@ -36,7 +37,6 @@ export function TolovModal({
 }: {
   jami: number;
   kassalar: AccountDTO[];
-  mijozlar: MijozDTO[];
   yuborilmoqda: boolean;
   xato: string | null;
   onClose: () => void;
@@ -50,30 +50,24 @@ export function TolovModal({
 }) {
   const [tolovTuri, setTolovTuri] = useState<TolovTuri>("naqd");
   const [accountId, setAccountId] = useState<string>(kassalar[0]?.id ?? "");
-  const [contactId, setContactId] = useState<string>("");
-  const [mijozNomi, setMijozNomi] = useState("");
-  const [mijozTel, setMijozTel] = useState("");
+  const [mijoz, setMijoz] = useState<MijozTanlov>(BOSH_MIJOZ);
   // Naqd to'lovda kassir qaytimni sanashi kerak — eng ko'p uchraydigan xato joyi.
   const [olindi, setOlindi] = useState<string>("");
 
   const qarz = tolovTuri === "qarz";
-  const tanlanganMijoz = useMemo(
-    () => mijozlar.find((m) => m.id === contactId) ?? null,
-    [mijozlar, contactId]
-  );
   const qaytim = olindi ? Number(olindi) - jami : null;
 
   function tasdiqla() {
     onTasdiq({
       tolovTuri,
       accountId: qarz ? null : accountId || null,
-      contactId: qarz && contactId ? contactId : null,
-      mijozNomi: qarz ? (tanlanganMijoz?.ism ?? mijozNomi).trim() || null : null,
-      mijozTel: qarz ? (tanlanganMijoz?.tel ?? mijozTel).trim() || null : null,
+      contactId: qarz ? mijoz.contactId : null,
+      mijozNomi: qarz ? mijoz.ism.trim() || null : null,
+      mijozTel: qarz ? mijoz.tel.trim() || null : null,
     });
   }
 
-  const tasdiqMumkin = qarz ? !!(tanlanganMijoz?.ism ?? mijozNomi).trim() : true;
+  const tasdiqMumkin = qarz ? !!mijoz.ism.trim() : true;
 
   return (
     <Modal open onClose={onClose} title="To'lov">
@@ -146,46 +140,17 @@ export function TolovModal({
 
         {qarz && (
           <div className="space-y-2">
-            {mijozlar.length > 0 && (
-              <div>
-                <label className="block text-xs text-muted mb-1">Mijoz kartochkasi</label>
-                <select
-                  value={contactId}
-                  onChange={(e) => setContactId(e.target.value)}
-                  className="w-full rounded-lg border border-line px-3 py-2 text-sm bg-surface"
-                >
-                  <option value="">— tanlanmagan (ism qo&apos;lda) —</option>
-                  {mijozlar.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.ism}
-                      {m.ochiqQarz > 0 ? ` — qarzi ${formatSomLabel(m.ochiqQarz)}` : ""}
-                    </option>
-                  ))}
-                </select>
-                {tanlanganMijoz?.qarzLimit != null && (
-                  <p className="text-xs text-faint mt-1">
-                    Qarz limiti: {formatSomLabel(tanlanganMijoz.qarzLimit)} · ochiq qarz:{" "}
-                    {formatSomLabel(tanlanganMijoz.ochiqQarz)}
-                  </p>
-                )}
-              </div>
-            )}
-            {!contactId && (
-              <>
-                <input
-                  value={mijozNomi}
-                  onChange={(e) => setMijozNomi(e.target.value)}
-                  placeholder="Mijoz ismi (majburiy)"
-                  className="w-full rounded-lg border border-line px-3 py-2 text-sm bg-surface"
-                />
-                <input
-                  value={mijozTel}
-                  onChange={(e) => setMijozTel(e.target.value)}
-                  placeholder="Telefon (ixtiyoriy)"
-                  className="w-full rounded-lg border border-line px-3 py-2 text-sm bg-surface"
-                />
-              </>
-            )}
+            {/* Mijoz tanlash — qarzlar sahifasi bilan AYNI komponent.
+                Kassir mavjud mijozni topib tanlaydi (joriy qarzi ko'rinadi)
+                yoki "+ Yangi mijoz" bilan kartochka ochadi. Ism qo'lda
+                yozilganda ham server kartochkani o'zi topadi/yaratadi
+                (lib/services/mijozAniqla.ts) — bir mijoz bitta qarzdor. */}
+            <MijozTanlash
+              qiymat={mijoz}
+              onChange={setMijoz}
+              disabled={yuborilmoqda}
+              yangiSumma={jami}
+            />
             <p className="text-xs text-faint">
               Qarzga sotuvda pul kassaga tushmaydi — daromad qarz to&apos;langanda yoziladi.
             </p>

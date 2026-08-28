@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { ROL_LABEL, type Rol } from "@/lib/auth/roles";
-import type { MobileTab } from "@/lib/modules/registry";
+import { GURUH_TARTIBI, GURUH_YORLIQ, type MobileTab, type NavGuruh } from "@/lib/modules/registry";
 import { QuickAddSheet } from "./QuickAddSheet";
 import { TelegramLinkButton } from "@/components/TelegramLinkButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -16,8 +16,8 @@ interface Props {
   rol: Rol;
   /** Registry'dan hisoblangan pastki tablar (computeMobileTabs). */
   tabs: MobileTab[];
-  /** Menyu sheet'idagi barcha havolalar (registry nav'idan). */
-  menyu: { label: string; href: string }[];
+  /** Menyu sheet'idagi barcha havolalar (registry nav'idan), bo'limi bilan. */
+  menyu: { label: string; href: string; guruh?: NavGuruh }[];
 }
 
 
@@ -41,11 +41,23 @@ export function BottomNav({ ism, rol, tabs, menyu }: Props) {
   const left = tabs.slice(0, mid);
   const right = tabs.slice(mid);
 
-  // Menyu sheet: bildirishnomalar + registry'dan kelgan havolalar.
-  const allLinks: { label: string; href: string }[] = [
-    { label: "Bildirishnomalar", href: "/app/bildirishnomalar" },
-    ...menyu,
-  ];
+  /*
+   * MENYU VARAG'I — yon menyu bilan BIR XIL bo'limlarga bo'linadi
+   * (Asosiy / Ish jarayoni / Sozlamalar). Ilgari barcha havolalar bitta
+   * uzun to'rda turardi va telefonda "Audit jurnali" bilan "Kirim / Chiqim"
+   * bir xil vaznda ko'rinardi.
+   *
+   * Ro'yxatning O'ZI o'zgarmaydi: nimani ko'rish rol va modul shartlari
+   * bilan serverda hal qilinadi.
+   */
+  const bolimlar = GURUH_TARTIBI.map((g) => ({
+    guruh: g,
+    yorliq: GURUH_YORLIQ[g],
+    items:
+      g === "asosiy"
+        ? [{ label: "Bildirishnomalar", href: "/app/bildirishnomalar" }, ...menyu.filter((l) => l.guruh === g)]
+        : menyu.filter((l) => (l.guruh ?? "ish") === g),
+  })).filter((b) => b.items.length > 0);
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -130,23 +142,28 @@ export function BottomNav({ ism, rol, tabs, menyu }: Props) {
               </div>
               <ThemeToggle />
             </div>
-            <div className="grid grid-cols-2 gap-2 mb-4">
-              {allLinks.map((l) => {
-                const active = pathname === l.href;
-                return (
-                  <Link
-                    key={l.href}
-                    href={l.href}
-                    onClick={() => setMenuOpen(false)}
-                    className={`rounded-lg px-3 py-3 text-sm font-medium border ${
-                      active ? "bg-brand text-brand-fg border-transparent" : "bg-surface-2 text-fg border-line"
-                    }`}
-                  >
-                    {l.label}
-                  </Link>
-                );
-              })}
-            </div>
+            {bolimlar.map((bolim) => (
+              <div key={bolim.guruh} className="mb-4">
+                <p className="text-2xs text-faint uppercase tracking-wide mb-1.5">{bolim.yorliq}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {bolim.items.map((l) => {
+                    const active = pathname === l.href;
+                    return (
+                      <Link
+                        key={l.href}
+                        href={l.href}
+                        onClick={() => setMenuOpen(false)}
+                        className={`rounded-lg px-3 py-3 text-sm font-medium border ${
+                          active ? "bg-brand text-brand-fg border-transparent" : "bg-surface-2 text-fg border-line"
+                        }`}
+                      >
+                        {l.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
             <TelegramLinkButton className="block text-sm text-muted mb-3" />
             <Link
               href="/parol-ozgartirish"

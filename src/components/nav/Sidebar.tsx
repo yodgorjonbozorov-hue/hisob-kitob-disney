@@ -2,16 +2,15 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, LogOut, KeyRound, type LucideIcon } from "lucide-react";
-import { cn } from "@/lib/cn";
-import { ikon } from "./ikonlar";
+import { Bell, LogOut, KeyRound, Sparkles } from "lucide-react";
 import { ROL_LABEL, type Rol } from "@/lib/auth/roles";
-import type { NavItem } from "@/lib/modules/registry";
+import { AI_HREF, guruhlanganNav, type NavItem } from "@/lib/modules/registry";
 import { TelegramLinkButton } from "@/components/TelegramLinkButton";
 import { BusinessSwitcher } from "@/components/BusinessSwitcher";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Logo } from "@/components/Logo";
 import { useNotifCount } from "./useNotifCount";
+import { SidebarNav, SidebarLink } from "./SidebarNav";
 
 interface BusinessOption { id: string; nomi: string }
 interface Props {
@@ -35,27 +34,17 @@ export default function Sidebar({ ism, rol, businesses, activeBusinessId, navIte
     router.refresh();
   }
 
-  const item = (href: string, label: string, Icon: LucideIcon, badge?: number) => {
-    const active = pathname === href;
-    return (
-      <Link
-        key={href + label}
-        href={href}
-        className={cn(
-          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition",
-          active ? "bg-brand-wash text-brand font-medium" : "text-muted hover:bg-surface-2 hover:text-fg"
-        )}
-      >
-        <Icon className="w-[18px] h-[18px] shrink-0" strokeWidth={active ? 2.25 : 2} />
-        <span className="flex-1">{label}</span>
-        {badge ? (
-          <span className="bg-expense text-white text-2xs font-semibold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center tnum">
-            {badge}
-          </span>
-        ) : null}
-      </Link>
-    );
-  };
+  /*
+   * AI YORDAMCHI — ro'yxatdan AJRATILADI.
+   *
+   * Havolaning O'ZI registry'da qoladi (modul yoqilganligi va rol matritsasi
+   * o'sha yerda hal qilinadi), shu bois bu yerda hech qanday yangi shart
+   * YO'Q: element ro'yxatga tushgan bo'lsa — foydalanuvchining unga ruxsati
+   * bor. U shunchaki oddiy qator o'rniga yuqorida ajralib turadigan tugma
+   * bo'lib chiziladi va uzun menyudan bitta qator bo'shatadi.
+   */
+  const aiItem = navItems.find((n) => n.href === AI_HREF) ?? null;
+  const bolimlar = guruhlanganNav(navItems.filter((n) => n.href !== AI_HREF));
 
   return (
     <aside className="w-64 shrink-0 bg-surface border-r border-line min-h-screen hidden lg:flex lg:flex-col">
@@ -68,10 +57,34 @@ export default function Sidebar({ ism, rol, businesses, activeBusinessId, navIte
         <p className="text-2xs text-faint px-1 mb-1.5 uppercase tracking-wide">Biznes</p>
         <BusinessSwitcher businesses={businesses} activeId={activeBusinessId} />
       </div>
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {item("/app/bildirishnomalar", "Bildirishnomalar", Bell, notifCount)}
-        {navItems.map((l) => item(l.href, l.label, ikon(l.icon)))}
-      </nav>
+      {aiItem && (
+        <div className="px-3 pt-3">
+          <Link
+            href={aiItem.href}
+            className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium border transition ${
+              pathname === aiItem.href
+                ? "bg-brand text-brand-fg border-transparent shadow-card"
+                : "bg-brand-wash text-brand border-brand/30 hover:border-brand hover:shadow-card"
+            }`}
+          >
+            <Sparkles className="w-[18px] h-[18px] shrink-0" strokeWidth={2.25} aria-hidden />
+            <span className="flex-1">{aiItem.label}</span>
+          </Link>
+        </div>
+      )}
+      <SidebarNav
+        bolimlar={bolimlar}
+        pathname={pathname}
+        yuqori={
+          <SidebarLink
+            href="/app/bildirishnomalar"
+            label="Bildirishnomalar"
+            Icon={Bell}
+            active={pathname === "/app/bildirishnomalar"}
+            badge={notifCount}
+          />
+        }
+      />
       <div className="px-4 py-4 border-t border-line space-y-2">
         <div className="flex items-center justify-between">
           <div className="min-w-0">

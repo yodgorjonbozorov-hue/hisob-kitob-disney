@@ -3,24 +3,29 @@
 import { useState, type FormEvent } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { Money } from "@/components/ui/Money";
+import { FarqBloki, SummaInput, sonOqi } from "./SummaInput";
 
 /**
- * SMENANI YOPISH — xodim smena oxirida kassadagi naqdni SANAB kiritadi.
+ * SMENANI YOPISH — solishtiruv varag'i (reconciliation sheet).
  *
- * Tizim hisobi bu yerda ataylab KO'RSATILMAYDI (TopshirishModal bilan bir xil
- * qoida): xodim "qancha chiqishi kerak"ni ko'rsa, sanamasdan o'sha raqamni
- * yozib qo'yishi mumkin — nazorat ma'nosini yo'qotadi.
+ * "Yopish" tugmasi bosilishi bilan smena KO'R-KO'RONA yopilmaydi: avval shu
+ * varaq ochiladi, tizim hisobi bilan real sanalgan pul yonma-yon turadi va
+ * farq DARHOL hisoblanadi.
+ *
+ * Tizim hisobi faqat uni ko'rish huquqi borga (`kutilganNaqd !== null`)
+ * ko'rsatiladi — xodimga esa yashiriladi, u avval sanaydi.
  *
  * "Kassada qoldirilgan" — qaytim uchun ataylab qoldirilgan pul. Odatda 0:
  * pul to'liq topshiriladi va keyingi smena 0 dan boshlanadi.
  */
 export function SmenaYopishModal({
   raqam,
+  kutilganNaqd,
   onClose,
   onDone,
 }: {
   raqam: number;
+  kutilganNaqd: number | null;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -30,21 +35,23 @@ export function SmenaYopishModal({
   const [loading, setLoading] = useState(false);
   const [xato, setXato] = useState<string | null>(null);
 
-  const son = (v: string) => Number(v.replace(/[\s,]/g, ""));
-  const sanalganSon = son(sanalgan);
-  const qoldirilganSon = qoldirilgan.trim() === "" ? 0 : son(qoldirilgan);
-  const sanalganTogri =
-    sanalgan.trim() !== "" && Number.isInteger(sanalganSon) && sanalganSon >= 0;
-  const qoldirilganTogri = Number.isInteger(qoldirilganSon) && qoldirilganSon >= 0;
+  const sanalganSon = sonOqi(sanalgan);
+  const qoldirilganSon = qoldirilgan.trim() === "" ? 0 : sonOqi(qoldirilgan);
+  const farq = kutilganNaqd === null || sanalganSon === null ? null : sanalganSon - kutilganNaqd;
+  const izohKerak = farq !== null && farq !== 0;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!sanalganTogri) {
+    if (sanalganSon === null) {
       setXato("Sanalgan naqd 0 yoki undan katta butun son bo'lishi kerak");
       return;
     }
-    if (!qoldirilganTogri || qoldirilganSon > sanalganSon) {
+    if (qoldirilganSon === null || qoldirilganSon > sanalganSon) {
       setXato("Kassada qoldirilgan pul sanalgan puldan ko'p bo'lmaydi");
+      return;
+    }
+    if (izohKerak && !izoh.trim()) {
+      setXato("Farq bor — sababini yozing");
       return;
     }
     setLoading(true);
@@ -77,51 +84,30 @@ export function SmenaYopishModal({
       <form onSubmit={submit} className="space-y-3">
         <p className="text-sm text-muted">
           Kassadagi naqd pulni <span className="font-medium text-fg">sanab</span>, aniq summani
-          kiriting. Tizim shu smenaning hisobi bilan solishtiradi — farq bo&apos;lsa darhol
-          ko&apos;rinadi.
+          kiriting.
         </p>
 
-        <div>
-          <label className="block text-sm text-muted mb-1" htmlFor="smena-sanalgan">
-            Kassadagi naqd (sanab chiqilgan, so&apos;m)
-          </label>
-          <input
-            id="smena-sanalgan"
-            value={sanalgan}
-            onChange={(e) => setSanalgan(e.target.value)}
-            required
-            inputMode="numeric"
-            placeholder="1 500 000"
-            className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-line text-fg tnum"
-          />
-          {sanalganTogri && (
-            <p className="text-2xs text-faint mt-1">
-              Kiritilgan: <Money value={sanalganSon} size="sm" tone="neutral" />
-            </p>
-          )}
-        </div>
+        <SummaInput
+          id="smena-sanalgan"
+          label="Real kassada (sanab chiqilgan, so'm)"
+          value={sanalgan}
+          onChange={setSanalgan}
+          autoFocus
+        />
 
-        <div>
-          <label className="block text-sm text-muted mb-1" htmlFor="smena-qoldirilgan">
-            Kassada qoldirildi (qaytim uchun, so&apos;m)
-          </label>
-          <input
-            id="smena-qoldirilgan"
-            value={qoldirilgan}
-            onChange={(e) => setQoldirilgan(e.target.value)}
-            inputMode="numeric"
-            placeholder="0"
-            className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-line text-fg tnum"
-          />
-          <p className="text-2xs text-faint mt-1">
-            Bo&apos;sh qoldirilsa — 0. Ya&apos;ni pul to&apos;liq topshirildi va keyingi smena
-            <span className="text-fg"> 0 dan</span> boshlanadi.
-          </p>
-        </div>
+        <FarqBloki kutilgan={kutilganNaqd} real={sanalganSon} />
+
+        <SummaInput
+          id="smena-qoldirilgan"
+          label="Kassada qoldirildi (qaytim uchun, so'm)"
+          value={qoldirilgan}
+          onChange={setQoldirilgan}
+          yordam="Bo'sh qoldirilsa — 0. Ya'ni pul to'liq topshirildi va keyingi smena 0 dan boshlanadi."
+        />
 
         <div>
           <label className="block text-sm text-muted mb-1" htmlFor="smena-izoh">
-            Izoh (ixtiyoriy)
+            Izoh {izohKerak ? <span className="text-expense">— majburiy</span> : "(ixtiyoriy)"}
           </label>
           <input
             id="smena-izoh"
@@ -129,7 +115,7 @@ export function SmenaYopishModal({
             onChange={(e) => setIzoh(e.target.value)}
             maxLength={300}
             placeholder="Masalan: kam chiqqan pul sababi"
-            className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-line text-fg"
+            className="w-full min-h-[44px] px-3 py-2 rounded-xl bg-surface-2 border border-line text-fg focus:border-brand focus:outline-none"
           />
         </div>
 
@@ -140,12 +126,15 @@ export function SmenaYopishModal({
 
         {xato && <p className="text-sm text-expense">{xato}</p>}
 
-        <div className="flex gap-2 pt-1">
-          <Button type="submit" loading={loading}>
-            🔒 Smenani yopish
-          </Button>
-          <Button type="button" variant="secondary" onClick={onClose}>
+        {/* Klaviatura ochilganda tugma yo'qolib ketmasin — varaq ichida
+            oxirgi blok bo'lib qoladi va Modal'ning o'z scroll'i uni
+            ko'rinishda ushlab turadi. */}
+        <div className="flex flex-col-reverse sm:flex-row gap-2 pt-1 sticky bottom-0 bg-surface pb-1">
+          <Button type="button" variant="secondary" onClick={onClose} className="sm:w-auto w-full">
             Bekor qilish
+          </Button>
+          <Button type="submit" loading={loading} className="w-full sm:w-auto">
+            🔒 Smenani yopish
           </Button>
         </div>
       </form>

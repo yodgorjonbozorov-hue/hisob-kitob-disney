@@ -193,9 +193,23 @@ test("direktor tayinlanadi va almashtirilishi mumkin", async () => {
   assert.equal(d.direktorIsm, "Abdulloh Karimov");
 });
 
-test("direktor tayinlangach boshqaruvchi tasdiqlay olmaydi, direktor tasdiqlaydi", async () => {
+test("tayinlangan direktor tasdiqlaydi; boshqaruvchi ham huquqli (boshi berk ko'cha bo'lmasin)", async () => {
+  // Boshqaruvchi huquqi SAQLANADI — direktorning o'zi kunni topshirgan
+  // holatda kunni yopadigan yagona odam u bo'lib qoladi (o'zini o'zi
+  // tasdiqlash taqiqi tufayli).
+  const egaRuxsat = await A(() => kunlikSvc.getKunlikRuxsat(tA.business.id, egaAktor()));
+  assert.equal(egaRuxsat.tasdiqlaydi, true);
+
+  // Oddiy xodim (direktor ham, boshqaruvchi ham emas) tasdiqlay olmaydi.
   await assert.rejects(
-    () => A(() => kunlikSvc.confirmKunlikReport(tA.business.id, egaAktor(), bugun)),
+    () =>
+      A(() =>
+        kunlikSvc.confirmKunlikReport(
+          tA.business.id,
+          { userId: "boshqa-xodim", ism: "Xodim", rol: "SELLER" },
+          bugun
+        )
+      ),
     /direktor/i
   );
 
@@ -257,10 +271,26 @@ test("qayta ochish: xodimga taqiq, direktor/boshqaruvchiga ruxsat; keyin tuzatil
   assert.equal(r2.items.length, r1.items.length - 1);
   const ochirilgan = await rawPrisma.dailyTransaction.findUnique({ where: { id: oxirgi.id } });
   assert.ok(ochirilgan.deletedAt);
+  // Bog'langan kirim yozuvi HAM o'chadi — aks holda kunlik va Dashboard
+  // raqamlari ajralib ketardi (ikkita kirim daftari muammosi).
+  if (ochirilgan.transactionId) {
+    const yozuv = await rawPrisma.transaction.findUnique({
+      where: { id: ochirilgan.transactionId },
+    });
+    assert.ok(yozuv.deletedAt, "bog'langan kirim yozuvi ham o'chishi kerak");
+  }
 
-  // Tahrirlash ham ishlaydi va qayta jamlanadi
+  // Tushum endi HAQIQIY kirim yozuvi bilan juft yuradi, shuning uchun
+  // kunlikda TAHRIRLANMAYDI (manba — Transaction). Tuzatish yo'li:
+  // o'chirib qaytadan kiritish.
   const t = r2.items[0];
-  await A(() => kunlikSvc.updateKunlikTushum(tA.business.id, egaAktor(), t.id, { summa: t.summa + 1_000 }));
+  await assert.rejects(
+    () => A(() => kunlikSvc.updateKunlikTushum(tA.business.id, egaAktor(), t.id, { summa: t.summa + 1_000 })),
+    /bog'langan/i
+  );
+  await A(() =>
+    kunlikSvc.addKunlikTushum(tA.business.id, kassirAktor(), { summa: 1_000, tolovTuri: "CASH" })
+  );
   const r3 = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
   assert.equal(r3.jamiSumma, r2.jamiSumma + 1_000);
 
@@ -293,7 +323,10 @@ test("getKunlikRuxsat: direktor/boshqaruvchi/xodim to'g'ri ajratiladi", async ()
   const ega = await A(() => kunlikSvc.getKunlikRuxsat(tA.business.id, egaAktor()));
   assert.equal(ega.boshqaruvchimi, true);
   assert.equal(ega.direktormi, false);
-  assert.equal(ega.tasdiqlaydi, false); // direktor tayinlangan — ega tasdiqlamaydi
+  // Boshqaruvchi HAR DOIM tasdiqlay oladi: direktor tayinlangan bo'lsa ham.
+  // Aks holda direktorning o'zi kunni topshirganda (o'zini o'zi tasdiqlash
+  // taqiqi tufayli) kunni yopadigan hech kim qolmasdi.
+  assert.equal(ega.tasdiqlaydi, true);
   assert.equal(ega.tahrirlaydi, true);
   assert.equal(ega.tarixniKoradi, true);
 
@@ -400,14 +433,11 @@ test("Yozuvlardan bugungi kirim kunlikka o'zi tushadi; boshqa sana va chiqim tus
   r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
   assert.equal(r.clickSumma, bosh.clickSumma + 300_000);
 
-  // 5) Ulangan tushumni kunlikdan o'chirib/tahrirlab bo'lmaydi — manba Yozuvlarda
-  await assert.rejects(
-    () => A(() => kunlikSvc.deleteKunlikTushum(tA.business.id, egaAktor(), ulangan.id)),
-    /Yozuvlar/
-  );
+  // 5) Ulangan tushum kunlikda TAHRIRLANMAYDI (manba — Transaction),
+  //    lekin O'CHIRISH ikkala tomonni birga oladi.
   await assert.rejects(
     () => A(() => kunlikSvc.updateKunlikTushum(tA.business.id, egaAktor(), ulangan.id, { summa: 1 })),
-    /Yozuvlar/
+    /bog'langan/i
   );
 
   // 6) Yozuv o'chirilsa -> kunlikdan ham chiqadi; tiklansa -> qaytadi
@@ -533,13 +563,25 @@ test("xodim kassani topshiradi: sanalgan naqd, farq, tushum qulfi, direktor tasd
   assert.equal(r0.holat, "OPEN");
   assert.equal(r0.sanalganNaqd, null, "qayta ochilganda topshiruv ham tozalanadi");
 
-  // Xodim (sotuvchi/kassir) kassani topshiradi — tizim naqdidan 50 000 KAM sanadi.
-  const sanalgan = r0.naqdSumma - 50_000;
-  const topshirildi = await A(() =>
-    kunlikSvc.submitKunlikReport(tA.business.id, kassirAktor(), bugun, sanalgan)
+  // TIZIM HISOBI endi kunning naqd KIRIMI emas, KASSA QOLDIG'I (naqd kirim
+  // − naqd chiqim + o'tkazmalar). Kassir shundan 50 000 KAM sanadi.
+  const kassa = await A(() => kunlikQ.getKunlikKassa(tA.business.id, kassir.id));
+  const kutilgan = kassa.qoldiq;
+  const sanalgan = kutilgan - 50_000;
+
+  // FARQ SABABSIZ YOPILMAYDI — izohsiz topshiriq rad etiladi.
+  await assert.rejects(
+    () => A(() => kunlikSvc.submitKunlikReport(tA.business.id, kassirAktor(), bugun, sanalgan)),
+    /sababini yozing/i
+  );
+
+  const { report: topshirildi } = await A(() =>
+    kunlikSvc.submitKunlikReport(tA.business.id, kassirAktor(), bugun, sanalgan, "50 000 yo'qoldi")
   );
   assert.equal(topshirildi.holat, "SUBMITTED");
   assert.equal(topshirildi.sanalganNaqd, sanalgan);
+  assert.equal(topshirildi.kutilganNaqd, kutilgan, "tizim hisobi muzlatilishi kerak");
+  assert.equal(topshirildi.kassaFarq, -50_000);
   assert.equal(topshirildi.submittedByIsm, "Abdulloh Karimov");
   assert.ok(topshirildi.submittedAt);
 
@@ -547,6 +589,7 @@ test("xodim kassani topshiradi: sanalgan naqd, farq, tushum qulfi, direktor tasd
   const dto = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
   assert.equal(dto.holat, "SUBMITTED");
   assert.equal(dto.naqdFarq, -50_000);
+  assert.equal(dto.izoh, "50 000 yo'qoldi");
 
   // Topshirilgan kunga tushum kiritib bo'lmaydi (raqamlar muzlagan)
   await assert.rejects(
@@ -567,20 +610,27 @@ test("xodim kassani topshiradi: sanalgan naqd, farq, tushum qulfi, direktor tasd
   const dto2 = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
   assert.equal(dto2.jamiSumma, dto.jamiSumma, "topshirilgan kun o'zgarmasin");
 
-  // Qayta topshirish rad etiladi
+  // Qayta topshirish rad etiladi (DOUBLE-SUBMIT himoyasi)
   await assert.rejects(
-    () => A(() => kunlikSvc.submitKunlikReport(tA.business.id, kassirAktor(), bugun, sanalgan)),
+    () => A(() => kunlikSvc.submitKunlikReport(tA.business.id, kassirAktor(), bugun, sanalgan, "takror")),
     /allaqachon.*topshirilgan/i
   );
 
-  // Direktor SUBMITTED holatdan tasdiqlaydi; topshiruv ma'lumoti saqlanadi
-  const tasdiq = await A(() => kunlikSvc.confirmKunlikReport(tA.business.id, kassirAktor(), bugun));
+  // O'ZINI O'ZI TASDIQLASH TAQIQI: topshirgan xodim (bu yerda direktor
+  // etib tayinlangan kassir) o'z topshirig'ini yopa olmaydi.
+  await assert.rejects(
+    () => A(() => kunlikSvc.confirmKunlikReport(tA.business.id, kassirAktor(), bugun)),
+    /o'zingiz tasdiqlay olmaysiz/i
+  );
+
+  // Boshqaruvchi (egasi) SUBMITTED holatdan tasdiqlaydi; topshiruv saqlanadi
+  const tasdiq = await A(() => kunlikSvc.confirmKunlikReport(tA.business.id, egaAktor(), bugun));
   assert.equal(tasdiq.holat, "CONFIRMED");
   assert.equal(tasdiq.sanalganNaqd, sanalgan, "sanalgan naqd tarixda qoladi");
 
   // Tasdiqlangan kunni qayta topshirib bo'lmaydi
   await assert.rejects(
-    () => A(() => kunlikSvc.submitKunlikReport(tA.business.id, kassirAktor(), bugun, sanalgan)),
+    () => A(() => kunlikSvc.submitKunlikReport(tA.business.id, kassirAktor(), bugun, sanalgan, "takror")),
     /tasdiqlangan/i
   );
 });
@@ -590,7 +640,7 @@ test("kelajak kunni topshirib bo'lmaydi; tarixda topshiruv holati ko'rinadi", as
     new Date(date.dateOnlyStringToUTCDate(bugun).getTime() + 24 * 60 * 60 * 1000)
   );
   await assert.rejects(
-    () => A(() => kunlikSvc.submitKunlikReport(tA.business.id, kassirAktor(), ertaga, 0)),
+    () => A(() => kunlikSvc.submitKunlikReport(tA.business.id, kassirAktor(), ertaga, 0, "test")),
     /kelajak/i
   );
 

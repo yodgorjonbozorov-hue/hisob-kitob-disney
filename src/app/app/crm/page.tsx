@@ -1,39 +1,105 @@
 import { requireTenantPage } from "@/lib/auth/tenant";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { requireModulePage } from "@/lib/modules/guard";
+import { prisma } from "@/lib/prisma";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import { getBoard } from "@/lib/crm/service";
+import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
+import { kunlikBuyurtmalar, kategoriyaStatistikasi } from "@/lib/crm/statistika";
+import { todayTashkentDateOnlyString, utcDateToDateOnlyString } from "@/lib/date";
 import { CrmClient } from "./CrmClient";
+import { BugungiPanel } from "./BugungiPanel";
 
-/** CRM kanban — bitimlar doskasi. */
+/** CRM — Disney Navoiy kunlik buyurtmalari doskasi. */
 export default async function CrmPage() {
   const ctx = await requireTenantPage();
-  const { tenantId } = ctx;
+  const { tenantId, session } = ctx;
   return runWithTenant(tenantId, async () => {
     await requireModulePage(ctx, "CRM");
-    const businessId = await resolveActiveBusinessId(ctx.session);
-    const business = await getActiveBusiness(ctx.session);
+    const businessId = await resolveActiveBusinessId(session);
+    const business = await getActiveBusiness(session);
+    const bugun = todayTashkentDateOnlyString();
 
-    const board = businessId ? await getBoard(businessId) : { stages: [], deals: [] };
+    if (!businessId) {
+      return (
+        <div className="space-y-4">
+          <h1 className="text-xl sm:text-2xl font-bold text-fg">CRM — Buyurtmalar</h1>
+          <p className="text-muted">Sizga biznes biriktirilmagan. Admin bilan bog&apos;laning.</p>
+        </div>
+      );
+    }
+
+    const [board, kategoriyalar, xodimlar, kunlik, kategoriyaStat] = await Promise.all([
+      getBoard(businessId),
+      // KATEGORIYA MANBAI BITTA: Kirim modulining kategoriyalari.
+      prisma.category.findMany({
+        where: { businessId, turi: "kirim", isActive: true },
+        select: { id: true, nomi: true },
+        orderBy: [{ tartib: "asc" }, { nomi: "asc" }],
+      }),
+      // MAS'UL XODIM ro'yxati — faqat SHU biznesda ishlaydiganlar. Tenant
+      // filtri o'zi yetarli emas: bir kompaniyada bir necha biznes bo'lsa,
+      // A biznesining sotuvchisi B biznesining xodimlarini ko'rardi.
+      prisma.user.findMany({
+        where: { isActive: true, ...biznesXodimlariWhere(businessId) },
+        select: { id: true, ism: true },
+        orderBy: { ism: "asc" },
+      }),
+      kunlikBuyurtmalar(businessId, bugun),
+      kategoriyaStatistikasi(businessId),
+    ]);
+
+    const ismlar = new Map(xodimlar.map((x) => [x.id, x.ism]));
+    const stages = board.stages.map((s) => ({ id: s.id, nomi: s.nomi, turi: s.turi }));
 
     return (
       <div className="space-y-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-fg">CRM</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-fg">CRM — Buyurtmalar</h1>
           <p className="text-sm text-muted mt-1">
-            Biznes: <span className="font-medium text-fg">{business?.nomi ?? "—"}</span> · Bitimlarni
-            bosqichlar bo'ylab yuriting
+            Biznes: <span className="font-medium text-fg">{business?.nomi ?? "—"}</span> · Kunlik
+            buyurtmalar va ularning Kirimga o&apos;tishi
           </p>
         </div>
+
+        <BugungiPanel
+          kunlik={{
+            sana: kunlik.sana,
+            jami: kunlik.jami,
+            kirimga: kunlik.kirimga,
+            kutilmoqda: kunlik.kutilmoqda,
+            soni: kunlik.soni,
+            qatorlar: kunlik.buyurtmalar.map((b) => ({
+              id: b.id,
+              nomi: b.nomi,
+              kategoriya: b.kategoriya,
+              summa: b.summa,
+              kirimBor: Boolean(b.transactionId),
+            })),
+          }}
+          kategoriyalar={kategoriyaStat}
+        />
+
         <CrmClient
-          stages={board.stages.map((s) => ({ id: s.id, nomi: s.nomi, turi: s.turi }))}
-          deals={board.deals.map((d) => ({
+          stages={stages}
+          kategoriyalar={kategoriyalar}
+          xodimlar={xodimlar}
+          meId={session.userId}
+          bugun={bugun}
+          buyurtmalar={board.deals.map((d) => ({
             id: d.id,
             nomi: d.nomi,
             summa: d.summa,
             stageId: d.stageId,
+            categoryId: d.categoryId,
+            kategoriya: d.category?.nomi ?? null,
             kontakt: d.contact?.ism ?? null,
             tel: d.contact?.tel ?? null,
+            sana: d.sana ? utcDateToDateOnlyString(d.sana) : null,
+            izoh: d.izoh,
+            masulId: d.masulId,
+            masulIsm: ismlar.get(d.masulId) ?? null,
+            transactionId: d.transactionId,
           }))}
         />
       </div>

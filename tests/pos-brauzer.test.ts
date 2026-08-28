@@ -404,7 +404,12 @@ async function sotuvniYakunla(
   await page.waitForSelector("text=To'lov usuli", { timeout: 15_000 });
   await page.getByRole("button", { name: usul, exact: true }).click();
   if (mijoz) {
-    await page.getByPlaceholder("Mijoz ismi (majburiy)").fill(mijoz);
+    // Mijoz maydoni endi QIDIRUV: yozilgan matn ostida takliflar ro'yxati
+    // ochiladi. Mos mijoz bo'lmasa matn yangi mijoz ismi bo'lib ketadi
+    // (server kartochkani o'zi ochadi — lib/services/mijozAniqla.ts).
+    await page.getByPlaceholder("Mijozni qidiring (ism yoki telefon)").fill(mijoz);
+    // Takliflar ro'yxati "Sotish" tugmasini to'sib qo'ymasligi uchun yopamiz.
+    await page.getByText("To'lov usuli").click();
   }
 
   const [javob] = await Promise.all([

@@ -8,7 +8,6 @@ import { Jadval, type Ustun } from "@/components/ui/Jadval";
 import { formatSomLabel, formatDateUZ } from "@/lib/format";
 import { isAvto, omborMatn } from "@/lib/biznesTuri";
 import type { ProductKassirDTO, SaleDTO } from "@/lib/queries/inventory";
-import type { MijozDTO } from "@/lib/queries/mijoz";
 import type { AccountDTO } from "@/lib/queries/accounts";
 import { SotuvBekorModal } from "./SotuvBekorModal";
 import { SotuvForm } from "./SotuvForm";
@@ -18,7 +17,6 @@ export function SotuvClient({
   initialSales,
   biznesTuri = "umumiy",
   bekorQilaOladi = false,
-  mijozlar = [],
   kassalar = [],
 }: {
   products: ProductKassirDTO[];
@@ -27,7 +25,6 @@ export function SotuvClient({
   /** Sotuvni bekor qilish faqat direktor/adminda (kassir o'z xatosini yashira olmasin). */
   bekorQilaOladi?: boolean;
   /** MIJOZLAR moduli yoqiq bo'lsa — qarz limiti ishlaydigan mijoz kartochkalari. */
-  mijozlar?: MijozDTO[];
   /** Faol kassalar — naqd sotuvda pul qaysi kassaga tushishini tanlash uchun. */
   kassalar?: AccountDTO[];
 }) {
@@ -84,7 +81,6 @@ export function SotuvClient({
       <SotuvForm
         products={products}
         biznesTuri={biznesTuri}
-        mijozlar={mijozlar}
         kassalar={kassalar}
         onSold={(sale) => {
           setSales((prev) => [sale, ...prev]);

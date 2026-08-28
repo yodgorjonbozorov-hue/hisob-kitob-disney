@@ -8,6 +8,7 @@ import { ensureCategoryTx } from "@/lib/services/inventory";
 import { ensureUserKassaTx } from "@/lib/services/userKassa";
 import { shaxsiyKassaId } from "@/lib/services/kassaTanlash";
 import { qarzLimitTekshirTx } from "@/lib/services/mijoz";
+import { mijozniAniqlaTx } from "@/lib/services/mijozAniqla";
 import { logAudit } from "@/lib/services/audit";
 import { todayDateOnlyString, dateOnlyStringToUTCDate } from "@/lib/date";
 import {
@@ -17,7 +18,12 @@ import {
   type QarzTolovUsuli,
 } from "@/lib/validation/qarz";
 
-/** Bizga qarzdor mijoz to'laganda ochiladigan kirim kategoriyasi. */
+/**
+ * ZAXIRA KATEGORIYALAR — qarz qaysi kategoriya hisobiga berilgani noma'lum
+ * bo'lganda ishlatiladi. Qarzda `categoryId` bo'lsa to'lov AYNAN o'shanga
+ * yoziladi (`tolovKategoriyaTx`), aks holda hisobotdagi "Kirim — kategoriya
+ * bo'yicha" kesimida butun qarz savdosi bitta ustunga yig'ilib qolardi.
+ */
 const QARZ_TOLOVI_KATEGORIYA = "Qarz to'lovi";
 /** Biz qarzdor bo'lgan qarzni to'laganda — chiqim kategoriyasi. */
 const QARZ_TOLASH_KATEGORIYA = "Qarz to'lash";
@@ -145,61 +151,6 @@ export async function createQarz(params: CreateQarzParams) {
   return qarz;
 }
 
-/**
- * Mijozni aniqlaydi: mavjud kartochka, yangi kartochka yoki faqat ism+telefon.
- *
- * `mijozSaqla` bayrog'ini API qatlami MIJOZLAR moduli holatiga qarab beradi —
- * o'chirilgan modul uchun kartochka yaratilmasin.
- */
-async function mijozniAniqlaTx(
-  tx: BusinessTx,
-  params: CreateQarzParams
-): Promise<{ contactId: string | null; ism: string; tel: string | null }> {
-  if (params.contactId) {
-    const contact = await tx.contact.findFirst({
-      where: { id: params.contactId, businessId: params.businessId, deletedAt: null },
-      select: { id: true, ism: true, tel: true },
-    });
-    if (!contact) throw new ForbiddenError("Mijoz topilmadi");
-    // Formada telefon to'ldirilgan va kartochkada yo'q bo'lsa — kartochka
-    // to'ldiriladi (mijoz ma'lumoti saqlansin degan talab).
-    if (params.mijozTel && !contact.tel) {
-      await tx.contact.updateMany({
-        where: { id: contact.id, businessId: params.businessId },
-        data: { tel: params.mijozTel },
-      });
-    }
-    return { contactId: contact.id, ism: contact.ism, tel: contact.tel ?? params.mijozTel ?? null };
-  }
-
-  const ism = params.mijozNomi?.trim();
-  if (!ism) throw new BadRequestError("Mijoz ismi kiritilishi shart");
-  const tel = params.mijozTel ?? null;
-
-  if (!params.mijozSaqla) return { contactId: null, ism, tel };
-
-  // Telefon bo'yicha mavjud kartochka qidiriladi — bir mijozning ikkita
-  // kartochkasi paydo bo'lmasin (raqam allaqachon normallashtirilgan).
-  const mavjud = tel
-    ? await tx.contact.findFirst({
-        where: { businessId: params.businessId, tel, deletedAt: null },
-        select: { id: true, ism: true, tel: true },
-      })
-    : null;
-  if (mavjud) return { contactId: mavjud.id, ism: mavjud.ism, tel: mavjud.tel };
-
-  const yangi = await tx.contact.create({
-    data: {
-      businessId: params.businessId,
-      ism,
-      tel: tel ?? undefined,
-      createdBy: params.userId,
-    },
-    select: { id: true },
-  });
-  return { contactId: yangi.id, ism, tel };
-}
-
 // ---------------------------------------------------------------------------
 // To'lov
 // ---------------------------------------------------------------------------
@@ -282,6 +233,194 @@ export async function qarzTolov(params: QarzTolovParams): Promise<QarzTolovNatij
   return natija;
 }
 
+/**
+ * KATEGORIYA ATRIBUTSIYASI — qarz to'lovi qaysi kirim kategoriyasiga tushadi.
+ *
+ * Qarz "Bantik" savdosidan chiqqan bo'lsa, u to'langanda kirim ham AYNAN
+ * "Bantik" kategoriyasiga yozilishi kerak: aks holda hisobotdagi "Kirim —
+ * kategoriya bo'yicha" kesimida butun qarzga savdo bitta "Qarz to'lovi"
+ * ustuniga yig'ilib, mahsulot tahlili yo'qolardi.
+ *
+ * Qarz kategoriyasi ikki shartda ishlatiladi: u AYNI biznesniki va
+ * yo'nalishi to'g'ri (kirimga kirim kategoriyasi, chiqimga chiqim). Chiqim
+ * kategoriyasiga kirim yozib qo'yish hisobotni buzardi — bunday holatda
+ * zaxira kategoriya ishlaydi.
+ */
+async function tolovKategoriyaTx(
+  tx: BusinessTx,
+  businessId: string,
+  debtCategoryId: string | null,
+  beriladigan: boolean
+): Promise<string> {
+  const kerakli: "kirim" | "chiqim" = beriladigan ? "chiqim" : "kirim";
+  if (debtCategoryId) {
+    const cat = await tx.category.findFirst({
+      where: { id: debtCategoryId, businessId, turi: kerakli, isActive: true },
+      select: { id: true },
+    });
+    if (cat) return cat.id;
+  }
+  return ensureCategoryTx(
+    tx,
+    businessId,
+    beriladigan ? QARZ_TOLASH_KATEGORIYA : QARZ_TOLOVI_KATEGORIYA,
+    kerakli
+  );
+}
+
+/** `bittaQarzgaTolovTx` uchun bitta to'lov haqidagi ma'lumot. */
+interface BittaTolov {
+  summa: number;
+  sana: string;
+  tolovTuri?: QarzTolovUsuli | null;
+  accountId?: string | null;
+  izoh?: string | null;
+  idempotencyKey?: string | null;
+}
+
+/** Bitta qarzga yozilgan to'lovning natijasi (taqsimotdagi bir bo'lak). */
+interface TolovBolagi {
+  debtId: string;
+  paymentId: string;
+  transactionId: string | null;
+  summa: number;
+  qolgan: number;
+  status: QarzHolat;
+}
+
+/**
+ * BITTA QARZGA TO'LOV — pul harakati, to'lov yozuvi va qoldiq bir joyda.
+ *
+ * Uchala qadam ham chaqiruvchining tranzaksiyasi ICHIDA bajariladi: bitta
+ * qarzga to'lov ham (`qarzTolov`), mijozning bir nechta qarzi bo'ylab
+ * taqsimlangan to'lov ham (`qarzdorTolov`) aynan shu funksiyaga tayanadi —
+ * ikki yo'lda ikki xil buxgalteriya bo'lib qolmasin.
+ *
+ * Qarzning holati va summasi CHAQIRUVCHIDA tekshirilgan bo'lishi shart
+ * (bekor qilinganmi, qolganidan oshmadimi) — bu funksiya yozadi, qaror
+ * qabul qilmaydi.
+ */
+async function bittaQarzgaTolovTx(
+  tx: BusinessTx,
+  businessId: string,
+  userId: string,
+  debt: {
+    id: string;
+    turi: string;
+    mijozNomi: string;
+    jamiSumma: number;
+    tolangan: number;
+    categoryId: string | null;
+  },
+  tolov: BittaTolov
+): Promise<TolovBolagi> {
+  const beriladigan = debt.turi === "beriladigan";
+  const supplierUser = beriladigan ? await taminotchiUserTx(tx, businessId, debt.id) : null;
+
+  let transactionId: string | null = null;
+  let accountId: string | null = tolov.accountId ?? null;
+
+  if (supplierUser) {
+    // PRO: qarz ICHKI ta'minotchi-user'ga tegishli bo'lsa — to'lov chiqim emas,
+    // xaridor kassasidan ta'minotchining shaxsiy kassasiga TRANSFER: pul biznes
+    // ichida qoldi, kirim/chiqim sun'iy oshmasligi kerak.
+    const tolovchi = await tx.user.findFirst({
+      where: { id: userId, tenantId: currentTenantId(), isActive: true },
+      select: { id: true, ism: true },
+    });
+    if (!tolovchi) throw new ForbiddenError("Foydalanuvchi topilmadi");
+    const fromAccount = await ensureUserKassaTx(tx, businessId, tolovchi);
+    const toAccount = await ensureUserKassaTx(tx, businessId, supplierUser);
+    await tx.accountTransfer.create({
+      data: {
+        businessId,
+        fromAccountId: fromAccount.id,
+        toAccountId: toAccount.id,
+        summa: tolov.summa,
+        valyuta: "UZS",
+        sana: dateOnlyStringToUTCDate(tolov.sana),
+        izoh: `Qarz to'lash: ${debt.mijozNomi}`,
+        userId,
+        fromUserId: tolovchi.id,
+        fromUserIsm: tolovchi.ism,
+        toUserId: supplierUser.id,
+        toUserIsm: supplierUser.ism,
+        holat: "bajarildi",
+        relatedType: "debt",
+        relatedId: debt.id,
+      },
+    });
+    accountId = fromAccount.id;
+  } else {
+    // Kategoriya qarzdan meros qilib olinadi (yuqoridagi izoh).
+    const categoryId = await tolovKategoriyaTx(tx, businessId, debt.categoryId, beriladigan);
+    // To'lov usuli tranzaksiyaning to'lov turiga o'giriladi: bank ham,
+    // Click ham naqdsiz pul — kassa qoldig'ida ikkalasi "click" tarafida.
+    const txTolovTuri = tolov.tolovTuri === "naqd" ? "naqd" : tolov.tolovTuri ? "click" : null;
+    accountId = await kassaniAniqlaTx(tx, businessId, tolov.accountId, txTolovTuri, userId);
+    const txn = await createTransactionTx(tx, userId, businessId, {
+      turi: beriladigan ? "chiqim" : "kirim",
+      categoryId,
+      accountId,
+      tolovTuri: txTolovTuri,
+      summa: tolov.summa,
+      // ENG MUHIM QATOR: kirim TO'LOV sanasi bilan yoziladi.
+      sana: tolov.sana,
+      izoh:
+        tolov.izoh?.trim() ||
+        `${beriladigan ? "Qarz to'lash" : "Qarz to'lovi"}: ${debt.mijozNomi}`,
+    });
+    transactionId = txn.id;
+  }
+
+  const payment = await tx.debtPayment.create({
+    data: {
+      debtId: debt.id,
+      businessId,
+      summa: tolov.summa,
+      sana: dateOnlyStringToUTCDate(tolov.sana),
+      tolovTuri: tolov.tolovTuri ?? undefined,
+      accountId: accountId ?? undefined,
+      izoh: tolov.izoh?.trim() || undefined,
+      userId,
+      transactionId,
+      idempotencyKey: tolov.idempotencyKey ?? undefined,
+    },
+    select: { id: true },
+  });
+
+  // Optimistik qulf: `tolangan` biz o'qigan qiymatda qolgan bo'lsagina yoziladi.
+  // Ikki xodim bir vaqtda to'lov kiritsa — ikkinchisi jimgina yo'qolmaydi.
+  const yangiTolangan = debt.tolangan + tolov.summa;
+  const status = qarzHolatHisobla(debt.jamiSumma, yangiTolangan);
+  const upd = await tx.debt.updateMany({
+    where: {
+      id: debt.id,
+      businessId,
+      tolangan: debt.tolangan,
+      isYopilgan: false,
+    },
+    data: {
+      tolangan: yangiTolangan,
+      status,
+      isYopilgan: yopiqmi(status),
+      updatedBy: userId,
+    },
+  });
+  if (upd.count === 0) {
+    throw new BadRequestError("Qarz holati o'zgardi — sahifani yangilab qayta urinib ko'ring");
+  }
+
+  return {
+    debtId: debt.id,
+    paymentId: payment.id,
+    transactionId,
+    summa: tolov.summa,
+    qolgan: debt.jamiSumma - yangiTolangan,
+    status,
+  };
+}
+
 async function tolovTx(
   tx: BusinessTx,
   params: QarzTolovParams,
@@ -316,115 +455,24 @@ async function tolovTx(
     throw new BadRequestError("To'lov summasi qolgan qarzdan ko'p");
   }
 
-  const beriladigan = debt.turi === "beriladigan";
-  const supplierUser = beriladigan ? await taminotchiUserTx(tx, params.businessId, debt.id) : null;
-
-  let transactionId: string | null = null;
-  let accountId: string | null = params.accountId ?? null;
-
-  if (supplierUser) {
-    // PRO: qarz ICHKI ta'minotchi-user'ga tegishli bo'lsa — to'lov chiqim emas,
-    // xaridor kassasidan ta'minotchining shaxsiy kassasiga TRANSFER: pul biznes
-    // ichida qoldi, kirim/chiqim sun'iy oshmasligi kerak.
-    const tolovchi = await tx.user.findFirst({
-      where: { id: params.userId, tenantId: currentTenantId(), isActive: true },
-      select: { id: true, ism: true },
-    });
-    if (!tolovchi) throw new ForbiddenError("Foydalanuvchi topilmadi");
-    const fromAccount = await ensureUserKassaTx(tx, params.businessId, tolovchi);
-    const toAccount = await ensureUserKassaTx(tx, params.businessId, supplierUser);
-    await tx.accountTransfer.create({
-      data: {
-        businessId: params.businessId,
-        fromAccountId: fromAccount.id,
-        toAccountId: toAccount.id,
-        summa: params.summa,
-        valyuta: "UZS",
-        sana: dateOnlyStringToUTCDate(sana),
-        izoh: `Qarz to'lash: ${debt.mijozNomi}`,
-        userId: params.userId,
-        fromUserId: tolovchi.id,
-        fromUserIsm: tolovchi.ism,
-        toUserId: supplierUser.id,
-        toUserIsm: supplierUser.ism,
-        holat: "bajarildi",
-        relatedType: "debt",
-        relatedId: debt.id,
-      },
-    });
-    accountId = fromAccount.id;
-  } else {
-    const categoryId = await ensureCategoryTx(
-      tx,
-      params.businessId,
-      beriladigan ? QARZ_TOLASH_KATEGORIYA : QARZ_TOLOVI_KATEGORIYA,
-      beriladigan ? "chiqim" : "kirim"
-    );
-    // To'lov usuli tranzaksiyaning to'lov turiga o'giriladi: bank ham,
-    // Click ham naqdsiz pul — kassa qoldig'ida ikkalasi "click" tarafida.
-    const txTolovTuri = params.tolovTuri === "naqd" ? "naqd" : params.tolovTuri ? "click" : null;
-    accountId = await kassaniAniqlaTx(
-      tx,
-      params.businessId,
-      params.accountId,
-      txTolovTuri,
-      params.userId
-    );
-    const txn = await createTransactionTx(tx, params.userId, params.businessId, {
-      turi: beriladigan ? "chiqim" : "kirim",
-      categoryId,
-      accountId,
-      tolovTuri: txTolovTuri,
-      summa: params.summa,
-      // ENG MUHIM QATOR: kirim TO'LOV sanasi bilan yoziladi.
-      sana,
-      izoh: params.izoh?.trim() || `${beriladigan ? "Qarz to'lash" : "Qarz to'lovi"}: ${debt.mijozNomi}`,
-    });
-    transactionId = txn.id;
-  }
-
-  const payment = await tx.debtPayment.create({
-    data: {
-      debtId: debt.id,
-      businessId: params.businessId,
-      summa: params.summa,
-      sana: dateOnlyStringToUTCDate(sana),
-      tolovTuri: params.tolovTuri ?? undefined,
-      accountId: accountId ?? undefined,
-      izoh: params.izoh?.trim() || undefined,
-      userId: params.userId,
-      transactionId,
-      idempotencyKey: params.idempotencyKey ?? undefined,
-    },
-    select: { id: true },
+  const bolak = await bittaQarzgaTolovTx(tx, params.businessId, params.userId, debt, {
+    summa: params.summa,
+    sana,
+    tolovTuri: params.tolovTuri,
+    accountId: params.accountId,
+    izoh: params.izoh,
+    idempotencyKey: params.idempotencyKey,
   });
-
-  // Optimistik qulf: `tolangan` biz o'qigan qiymatda qolgan bo'lsagina yoziladi.
-  // Ikki xodim bir vaqtda to'lov kiritsa — ikkinchisi jimgina yo'qolmaydi.
-  const yangiTolangan = debt.tolangan + params.summa;
-  const status = qarzHolatHisobla(debt.jamiSumma, yangiTolangan);
-  const upd = await tx.debt.updateMany({
-    where: {
-      id: debt.id,
-      businessId: params.businessId,
-      tolangan: debt.tolangan,
-      isYopilgan: false,
-    },
-    data: {
-      tolangan: yangiTolangan,
-      status,
-      isYopilgan: yopiqmi(status),
-      updatedBy: params.userId,
-    },
-  });
-  if (upd.count === 0) {
-    throw new BadRequestError("Qarz holati o'zgardi — sahifani yangilab qayta urinib ko'ring");
-  }
 
   return holatNatijasi(
-    { ...debt, tolangan: yangiTolangan, status, isYopilgan: yopiqmi(status) },
-    payment.id,
-    transactionId,
+    {
+      ...debt,
+      tolangan: debt.tolangan + params.summa,
+      status: bolak.status,
+      isYopilgan: yopiqmi(bolak.status),
+    },
+    bolak.paymentId,
+    bolak.transactionId,
     true
   );
 }
@@ -526,6 +574,353 @@ async function kassaniAniqlaTx(
     select: { id: true },
   });
   return birinchi?.id ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Mijoz bo'yicha to'lov — bir nechta qarz ustiga taqsimlash
+// ---------------------------------------------------------------------------
+
+/**
+ * TAQSIMLASH QOIDASI (yangi biznes qoidasi, 2026-08).
+ *
+ * Bir mijozda bir nechta ochiq qarz bo'lsa, bitta to'lov qaysi qarzni
+ * yopadi degan savolga ilgari javob YO'Q edi: xodim qarzni qo'lda tanlardi,
+ * tanlamasa hech narsa bo'lmasdi. Endi qoida aniq va hujjatlangan:
+ *
+ *   ENG ESKI OCHIQ QARZDAN BOSHLAB (`sana` bo'yicha, teng bo'lsa
+ *   `createdAt` bo'yicha) to'lov ketma-ket to'ldiriladi.
+ *
+ * Masalan A(500k, 10-avg), B(1m, 15-avg), C(2m, 20-avg) va 1,2 mln to'lov:
+ *   A → 500k (yopildi), B → 700k (300k qoldi), C → tegilmadi.
+ *
+ * Nega eng eskisidan: eski qarz eng ko'p kechikkan va undirish ehtimoli eng
+ * past qarz — pul kelganda birinchi navbatda o'sha yopiladi. Bu buxgalteriya
+ * amaliyotidagi odatiy FIFO taqsimoti.
+ *
+ * QO'LDA TAQSIMLASH ham qoladi: `taqsimot` berilsa aynan o'sha bo'yicha
+ * yoziladi (xodim "bu pul aynan shu savdo uchun" deb bilsa). Avtomatik
+ * qoida faqat tanlov qilinmagan holatga.
+ */
+export type QarzTaqsimotUsuli = "eng-eski" | "qolda";
+
+export interface QarzdorTolovParams {
+  businessId: string;
+  userId: string;
+  turi: "olinadigan" | "beriladigan";
+  /** `qarzdorKalit()` natijasi — "contact:<id>" yoki "ism:<kichik harf>". */
+  kalit: string;
+  summa: number;
+  /** "YYYY-MM-DD" — kirim/chiqim AYNAN shu sana bilan yoziladi. */
+  sana?: string | null;
+  tolovTuri?: QarzTolovUsuli | null;
+  accountId?: string | null;
+  izoh?: string | null;
+  idempotencyKey?: string | null;
+  /**
+   * QO'LDA TAQSIMLASH: qaysi qarzga qancha. Berilsa yig'indisi `summa` ga
+   * teng bo'lishi SHART — aks holda pul yo'qoladi yoki ikki marta yoziladi.
+   */
+  taqsimot?: { debtId: string; summa: number }[] | null;
+}
+
+export interface QarzdorTolovNatija {
+  /** Haqiqatda yozilgan jami summa. */
+  summa: number;
+  /** Taqsimot: qaysi qarzga qancha tushdi va qanchasi qoldi. */
+  bolaklar: TolovBolagi[];
+  /** Shu qarzdorning to'lovdan KEYINGI umumiy qoldig'i. */
+  qolgan: number;
+  /** Nechta qarz shu to'lov bilan to'liq yopildi. */
+  yopilganSoni: number;
+  /** Shu so'rov haqiqatda yangi to'lov yozdimi (false — takror bosish). */
+  yangiTolov: boolean;
+  usul: QarzTaqsimotUsuli;
+}
+
+/** Qarzdorning ochiq qarzlarini eng eskisidan boshlab o'qiydi. */
+async function qarzdorOchiqQarzlariTx(
+  tx: BusinessTx,
+  businessId: string,
+  turi: string,
+  kalit: string
+) {
+  const contactId = kalit.startsWith("contact:") ? kalit.slice("contact:".length) : null;
+  const ismKalit = kalit.startsWith("ism:") ? kalit.slice("ism:".length) : null;
+  if (!contactId && !ismKalit) throw new BadRequestError("Qarzdor kaliti noto'g'ri");
+
+  // Tranzaksiya ichida xom `tx` ishlatiladi — `businessId` sharti QO'LDA.
+  const hammasi = await tx.debt.findMany({
+    where: {
+      businessId,
+      turi,
+      isYopilgan: false,
+      ...(contactId ? { contactId } : { contactId: null }),
+    },
+    orderBy: [{ sana: "asc" }, { createdAt: "asc" }],
+    select: {
+      id: true,
+      turi: true,
+      mijozNomi: true,
+      jamiSumma: true,
+      tolangan: true,
+      categoryId: true,
+      status: true,
+    },
+  });
+
+  // Kartochkasiz qarzdor ism bo'yicha birlashadi — `qarzdorKalit()` bilan
+  // AYNI qoida (registr va chetdagi bo'shliqlar farqi hisobga olinmaydi).
+  const debts = ismKalit
+    ? hammasi.filter((d) => d.mijozNomi.trim().toLowerCase() === ismKalit)
+    : hammasi;
+
+  return debts.filter((d) => d.status !== "CANCELLED" && d.jamiSumma - d.tolangan > 0);
+}
+
+/**
+ * MIJOZ BO'YICHA TO'LOV — bitta summa, bir nechta qarz, BITTA tranzaksiya.
+ *
+ * Har qarz uchun ALOHIDA `DebtPayment` va ALOHIDA kirim yoziladi. Bu ataylab:
+ * 1,2 mln to'lov uchta turli kategoriyadagi qarzni yopsa, kirim ham uchga
+ * bo'linib har biri o'z kategoriyasiga tushadi (10-talab). Bitta yirik
+ * yozuv qilib qo'yish kategoriya kesimini yolg'onga aylantirardi.
+ *
+ * Hammasi bitta `runBusinessTx` ichida: taqsimotning yarmi yozilib yarmi
+ * yozilmay qolishi — hisobning buzilishi.
+ */
+export async function qarzdorTolov(params: QarzdorTolovParams): Promise<QarzdorTolovNatija> {
+  if (params.summa <= 0) throw new BadRequestError("To'lov summasi musbat bo'lishi kerak");
+  if (!Number.isInteger(params.summa)) {
+    throw new BadRequestError("To'lov summasi butun son bo'lishi kerak");
+  }
+  const sana = params.sana ?? todayDateOnlyString();
+
+  let natija: QarzdorTolovNatija;
+  try {
+    natija = await runBusinessTx(params.businessId, (tx) => qarzdorTolovTx(tx, params, sana));
+  } catch (e) {
+    // TAKROR BOSISH POYGASI: ikki so'rov bir vaqtda o'tsa ikkinchisi unique
+    // kalitga uriladi. Bu xato emas — birinchisi allaqachon yozgan.
+    if (unikallikXatosi(e) && params.idempotencyKey) {
+      return mavjudQarzdorTolovi(params);
+    }
+    throw e;
+  }
+
+  if (natija.yangiTolov) {
+    await logAudit({
+      businessId: params.businessId,
+      action: "create",
+      entity: "debtPayment",
+      entityId: natija.bolaklar[0]?.paymentId ?? params.kalit,
+      after: {
+        qarzdor: params.kalit,
+        turi: params.turi,
+        summa: natija.summa,
+        sana,
+        tolovTuri: params.tolovTuri ?? null,
+        accountId: params.accountId ?? null,
+        usul: natija.usul,
+        taqsimot: natija.bolaklar.map((b) => ({
+          debtId: b.debtId,
+          summa: b.summa,
+          qolgan: b.qolgan,
+          status: b.status,
+          transactionId: b.transactionId,
+        })),
+        yopilganSoni: natija.yopilganSoni,
+        qolgan: natija.qolgan,
+      },
+    });
+  }
+  return natija;
+}
+
+async function qarzdorTolovTx(
+  tx: BusinessTx,
+  params: QarzdorTolovParams,
+  sana: string
+): Promise<QarzdorTolovNatija> {
+  const debts = await qarzdorOchiqQarzlariTx(tx, params.businessId, params.turi, params.kalit);
+  if (debts.length === 0) throw new BadRequestError("Bu qarzdorda ochiq qarz yo'q");
+
+  // TAKROR BOSISH: ayni kalit bilan shu qarzdorning qarzlariga to'lov
+  // allaqachon yozilganmi. Tekshiruv taqsimotdan OLDIN, chunki birinchi
+  // so'rov qarz qoldiqlarini o'zgartirib yuborgan bo'ladi va ikkinchi
+  // so'rov boshqa taqsimot hisoblab, uni yangi to'lov deb yozib yuborardi.
+  if (params.idempotencyKey) {
+    const oldingi = await mavjudBolaklarTx(tx, params);
+    if (oldingi) return oldingi;
+  }
+
+  const taqsimot = params.taqsimot?.length
+    ? qoldaTaqsimla(params.taqsimot, debts, params.summa)
+    : engEskidanTaqsimla(debts, params.summa);
+
+  const bolaklar: TolovBolagi[] = [];
+  for (const t of taqsimot) {
+    const debt = debts.find((d) => d.id === t.debtId);
+    if (!debt) throw new BadRequestError("Qarz topilmadi");
+    bolaklar.push(
+      await bittaQarzgaTolovTx(tx, params.businessId, params.userId, debt, {
+        summa: t.summa,
+        sana,
+        tolovTuri: params.tolovTuri,
+        accountId: params.accountId,
+        izoh: params.izoh,
+        idempotencyKey: params.idempotencyKey,
+      })
+    );
+  }
+
+  const jamiQoldiq = debts.reduce((acc, d) => acc + (d.jamiSumma - d.tolangan), 0);
+  return {
+    summa: bolaklar.reduce((acc, b) => acc + b.summa, 0),
+    bolaklar,
+    qolgan: jamiQoldiq - params.summa,
+    yopilganSoni: bolaklar.filter((b) => b.qolgan === 0).length,
+    yangiTolov: true,
+    usul: params.taqsimot?.length ? "qolda" : "eng-eski",
+  };
+}
+
+/**
+ * ENG ESKI OCHIQ QARZDAN BOSHLAB taqsimlash (standart qoida).
+ *
+ * OVERPAYMENT JIM QABUL QILINMAYDI: qarzdorning jami qoldig'idan ortiq
+ * summa aniq xato bilan rad etiladi. Yashirin avans/kredit balansi ataylab
+ * yaratilmaydi — tizimda bunday konsepsiya yo'q, uni jimgina o'ylab
+ * chiqarish pulni ko'rinmas joyga yashirish bo'lardi.
+ */
+function engEskidanTaqsimla(
+  debts: { id: string; jamiSumma: number; tolangan: number }[],
+  summa: number
+): { debtId: string; summa: number }[] {
+  const jami = debts.reduce((acc, d) => acc + (d.jamiSumma - d.tolangan), 0);
+  if (summa > jami) {
+    throw new BadRequestError(
+      "To'lov summasi mijozning jami qarzidan ko'p — summani tekshiring"
+    );
+  }
+
+  const natija: { debtId: string; summa: number }[] = [];
+  let qoldi = summa;
+  for (const d of debts) {
+    if (qoldi <= 0) break;
+    const qolgan = d.jamiSumma - d.tolangan;
+    const ulush = Math.min(qoldi, qolgan);
+    natija.push({ debtId: d.id, summa: ulush });
+    qoldi -= ulush;
+  }
+  return natija;
+}
+
+/** Qo'lda berilgan taqsimotni tekshiradi (yig'indi, qoldiq, egalik). */
+function qoldaTaqsimla(
+  taqsimot: { debtId: string; summa: number }[],
+  debts: { id: string; jamiSumma: number; tolangan: number }[],
+  summa: number
+): { debtId: string; summa: number }[] {
+  const korilgan = new Set<string>();
+  let yigindi = 0;
+  for (const t of taqsimot) {
+    if (!Number.isInteger(t.summa) || t.summa <= 0) {
+      throw new BadRequestError("Taqsimotdagi har summa musbat butun son bo'lishi kerak");
+    }
+    if (korilgan.has(t.debtId)) {
+      throw new BadRequestError("Bitta qarz taqsimotda ikki marta ko'rsatilgan");
+    }
+    korilgan.add(t.debtId);
+    const debt = debts.find((d) => d.id === t.debtId);
+    if (!debt) throw new BadRequestError("Taqsimotdagi qarz bu mijozda ochiq emas");
+    if (t.summa > debt.jamiSumma - debt.tolangan) {
+      throw new BadRequestError("Taqsimotdagi summa qarz qoldig'idan ko'p");
+    }
+    yigindi += t.summa;
+  }
+  if (yigindi !== summa) {
+    throw new BadRequestError("Taqsimot yig'indisi to'lov summasiga teng emas");
+  }
+  return taqsimot;
+}
+
+/**
+ * Shu kalit bilan allaqachon yozilgan to'lov bo'laklarini qaytaradi.
+ * Topilmasa `null` — demak bu yangi to'lov.
+ */
+async function mavjudBolaklarTx(
+  tx: BusinessTx,
+  params: QarzdorTolovParams
+): Promise<QarzdorTolovNatija | null> {
+  const debtIds = (
+    await tx.debt.findMany({
+      where: {
+        businessId: params.businessId,
+        turi: params.turi,
+        ...(params.kalit.startsWith("contact:")
+          ? { contactId: params.kalit.slice("contact:".length) }
+          : { contactId: null }),
+      },
+      select: { id: true, mijozNomi: true },
+    })
+  )
+    .filter((d) =>
+      params.kalit.startsWith("ism:")
+        ? d.mijozNomi.trim().toLowerCase() === params.kalit.slice("ism:".length)
+        : true
+    )
+    .map((d) => d.id);
+  if (debtIds.length === 0) return null;
+
+  const oldingi = await tx.debtPayment.findMany({
+    where: {
+      businessId: params.businessId,
+      debtId: { in: debtIds },
+      idempotencyKey: params.idempotencyKey,
+    },
+    select: { id: true, debtId: true, summa: true, transactionId: true },
+  });
+  if (oldingi.length === 0) return null;
+
+  const debts = await tx.debt.findMany({
+    where: { businessId: params.businessId, id: { in: oldingi.map((p) => p.debtId) } },
+    select: { id: true, jamiSumma: true, tolangan: true, status: true },
+  });
+  const holat = new Map(debts.map((d) => [d.id, d]));
+
+  const bolaklar: TolovBolagi[] = oldingi.map((p) => {
+    const d = holat.get(p.debtId);
+    return {
+      debtId: p.debtId,
+      paymentId: p.id,
+      transactionId: p.transactionId,
+      summa: p.summa,
+      qolgan: d ? d.jamiSumma - d.tolangan : 0,
+      status: (d?.status as QarzHolat) ?? "OPEN",
+    };
+  });
+
+  const ochiq = await qarzdorOchiqQarzlariTx(
+    tx,
+    params.businessId,
+    params.turi,
+    params.kalit
+  );
+  return {
+    summa: bolaklar.reduce((acc, b) => acc + b.summa, 0),
+    bolaklar,
+    qolgan: ochiq.reduce((acc, d) => acc + (d.jamiSumma - d.tolangan), 0),
+    yopilganSoni: bolaklar.filter((b) => b.qolgan === 0).length,
+    yangiTolov: false,
+    usul: params.taqsimot?.length ? "qolda" : "eng-eski",
+  };
+}
+
+/** Poyga natijasida yo'qotilgan javobni bazadan qayta o'qiydi. */
+async function mavjudQarzdorTolovi(params: QarzdorTolovParams): Promise<QarzdorTolovNatija> {
+  const natija = await runBusinessTx(params.businessId, (tx) => mavjudBolaklarTx(tx, params));
+  if (!natija) throw new BadRequestError("To'lov holatini o'qib bo'lmadi");
+  return natija;
 }
 
 // ---------------------------------------------------------------------------

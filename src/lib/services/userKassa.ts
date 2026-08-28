@@ -4,6 +4,7 @@ import { currentTenantId } from "@/lib/db/tenantContext";
 import { isManager } from "@/lib/auth/roles";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { logAudit } from "@/lib/services/audit";
+import { QARZ_EMAS } from "@/lib/qarzFiltr";
 import { QOLDIQ_HOLATLARI, type UserTransferInput } from "@/lib/validation/account";
 
 /**
@@ -47,7 +48,11 @@ export async function ensureUserKassaTx(
   });
 }
 
-/** Kassaning joriy qoldig'i — tranzaksiya ichida, ledger'dan. */
+/**
+ * Kassaning joriy qoldig'i — tranzaksiya ichida, ledger'dan.
+ * Qarzga yozilgan kirim pul emas — `getAccountBalances` bilan bir xil filtr,
+ * aks holda ikki hisob bir kassa uchun ikki xil raqam berardi.
+ */
 export async function kassaQoldiqTx(
   tx: BusinessTx,
   businessId: string,
@@ -55,11 +60,11 @@ export async function kassaQoldiqTx(
 ): Promise<number> {
   const [kirim, chiqim, kirgan, chiqqan] = await Promise.all([
     tx.transaction.aggregate({
-      where: { businessId, accountId, turi: "kirim", deletedAt: null },
+      where: { businessId, accountId, turi: "kirim", deletedAt: null, ...QARZ_EMAS },
       _sum: { summa: true },
     }),
     tx.transaction.aggregate({
-      where: { businessId, accountId, turi: "chiqim", deletedAt: null },
+      where: { businessId, accountId, turi: "chiqim", deletedAt: null, ...QARZ_EMAS },
       _sum: { summa: true },
     }),
     // "kutilmoqda"/"rad" qoldiqqa kirmaydi — pul hali (yoki umuman) ko'chmagan.

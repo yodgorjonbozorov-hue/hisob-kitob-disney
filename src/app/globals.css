@@ -159,6 +159,28 @@ input[inputmode="numeric"] {
   padding-bottom: calc(1rem + env(safe-area-inset-bottom));
 }
 
+/* AI COPILOT EKRANI — to'liq balandlikdagi suhbat.
+
+   Sahifaning O'ZI siljimasligi kerak: suriladigan yagona joy — xabarlar
+   lentasi. Shuning uchun konteyner balandligi ekrandan navigatsiya
+   panellarini ayirib olinadi:
+     · mobil: yuqori panel (MobileNav ≈ 57px) + pastki tab-bar (56px) + iyak;
+     · lg+ : yon menyu bor, faqat `main` ning vertikal ichki bo'shlig'i (4rem).
+   `dvh` — mobil brauzer manzil satri yig'ilganda ham to'g'ri balandlik
+   (`vh` eski brauzerlar uchun zaxira sifatida oldin turadi). */
+.ai-ekran {
+  height: calc(100vh - 57px - 56px - env(safe-area-inset-bottom));
+  height: calc(100dvh - 57px - 56px - env(safe-area-inset-bottom));
+}
+
+@media (min-width: 1024px) {
+  .ai-ekran {
+    height: calc(100vh - 4rem);
+    height: calc(100dvh - 4rem);
+    min-height: 520px;
+  }
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    MOBIL ERGONOMIKA
    Telefonda ilova "veb-sahifa" emas, ilova bo'lib his qilinishi uchun

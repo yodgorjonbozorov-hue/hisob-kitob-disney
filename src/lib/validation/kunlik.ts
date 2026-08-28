@@ -38,6 +38,13 @@ export const createKunlikTushumSchema = z.object({
   tolovTuri: z.enum(KUNLIK_TOLOV_TURLARI, {
     errorMap: () => ({ message: "To'lov turi noto'g'ri (Naqd/Click/Qarz)" }),
   }),
+  /**
+   * Kirim kategoriyasi. Tushum endi HAQIQIY `Transaction` yaratadi (kunlik
+   * ikkinchi kirim daftarini yuritmaydi), shuning uchun kategoriya kerak.
+   * Berilmasa — biznesning "Kunlik tushum" zaxira kategoriyasi ishlatiladi,
+   * ya'ni eski chaqiruvlar (bot, testlar) buzilmaydi.
+   */
+  categoryId: z.string().min(1).optional(),
   izoh: z.string().trim().max(300, "Izoh 300 belgidan oshmasin").optional(),
 });
 export type CreateKunlikTushumInput = z.infer<typeof createKunlikTushumSchema>;
@@ -58,6 +65,26 @@ export const kunlikSanaSchema = z.object({ sana: sanaSchema });
 export type KunlikSanaInput = z.infer<typeof kunlikSanaSchema>;
 
 /**
+ * DIREKTOR QARORI — kun yakunini qabul qilish yoki rad etish.
+ *
+ * Rad etishda izoh MAJBURIY: kassir nima uchun rad etilganini bilishi kerak,
+ * aks holda topshiriq qorong'i qoladi va tuzatib bo'lmaydi.
+ */
+export const kunlikQarorSchema = z
+  .object({
+    sana: sanaSchema,
+    amal: z.enum(["qabul", "rad"], {
+      errorMap: () => ({ message: "Qaror noto'g'ri (qabul/rad)" }),
+    }),
+    qarorIzoh: z.string().trim().max(300, "Izoh 300 belgidan oshmasin").optional(),
+  })
+  .refine((d) => d.amal !== "rad" || !!d.qarorIzoh, {
+    message: "Rad etish sababini yozing",
+    path: ["qarorIzoh"],
+  });
+export type KunlikQarorInput = z.infer<typeof kunlikQarorSchema>;
+
+/**
  * KASSA TOPSHIRISH: xodim kun oxirida kassadagi naqdni SANAB kiritadi.
  * 0 ham mumkin (naqd tushum bo'lmagan kun).
  */
@@ -68,6 +95,12 @@ export const kunlikTopshirishSchema = z.object({
     .int("Sanalgan naqd butun son bo'lishi kerak (so'm)")
     .min(0, "Sanalgan naqd manfiy bo'lmaydi")
     .max(100_000_000_000, "Summa juda katta"),
+  /**
+   * Farq (kamomad/ortiqcha) bo'lganda MAJBURIY — sababsiz farq yopilmaydi.
+   * Majburiylik xizmat qatlamida tekshiriladi: farq serverda hisoblanadi,
+   * frontend yuborgan raqamga ishonilmaydi.
+   */
+  izoh: z.string().trim().max(300, "Izoh 300 belgidan oshmasin").optional(),
 });
 export type KunlikTopshirishInput = z.infer<typeof kunlikTopshirishSchema>;
 

@@ -114,7 +114,12 @@ export function QarzForm({
         </p>
       </div>
 
-      <MijozTanlash qiymat={mijoz} onChange={setMijoz} disabled={loading} />
+      <MijozTanlash
+        qiymat={mijoz}
+        onChange={setMijoz}
+        disabled={loading}
+        yangiSumma={parseSomInput(summaText)}
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>

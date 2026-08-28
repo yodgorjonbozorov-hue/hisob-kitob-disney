@@ -1,5 +1,5 @@
 import { requestCache } from "@/lib/requestCache";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import type { SessionData } from "@/lib/auth/session";
 import { BadRequestError } from "@/lib/auth/guard";
@@ -17,6 +17,8 @@ export interface BusinessDTO {
   shaxsiyKassa: boolean;
   /** Do'kon kassasi (POS) shu bizneste yuritiladimi — MAGAZIN moduli bayrog'i. */
   magazin: boolean;
+  /** Biznes yo'nalishi (sanoat) — onboarding shaxsiylashtiruvi (lib/pricing/profil.ts). */
+  yonalish: string | null;
 }
 
 const BIZNES_SELECT = {
@@ -27,6 +29,7 @@ const BIZNES_SELECT = {
   turi: true,
   shaxsiyKassa: true,
   magazin: true,
+  yonalish: true,
 } as const;
 
 /**
@@ -123,8 +126,22 @@ export async function resolveActiveBusinessId(session: SessionData): Promise<str
   return cookieBusinessIdCached(session.tenantId ?? "");
 }
 
-/** Cookie'dan o'qiladigan aktiv biznes (bo'lmasa/nomos bo'lsa — null). */
+/**
+ * Cookie'dan o'qiladigan aktiv biznes (bo'lmasa/nomos bo'lsa — null).
+ *
+ * MOBIL KLIENT cookie yuritmaydi — u tanlovni `X-Active-Business` header'ida
+ * yuboradi. Header USTUVOR, lekin bu xavfsizlikni bo'shatmaydi: qiymat quyida
+ * baribir ruxsat ro'yxati (`ruxsatEtilganIdlar`) yoki faol biznes mavjudligi
+ * bilan tekshiriladi; bitta biznesga biriktirilgan xodim uchun esa umuman
+ * o'qilmaydi (resolveActiveBusinessId birinchi shartda qaytadi).
+ */
 async function cookieBiznesId(): Promise<string | null> {
+  try {
+    const headerId = (await headers()).get("x-active-business");
+    if (headerId) return headerId;
+  } catch {
+    // headers() request kontekstidan tashqarida ishlamaydi — cookie yo'liga o'tamiz
+  }
   return (await cookies()).get(ACTIVE_BUSINESS_COOKIE)?.value ?? null;
 }
 

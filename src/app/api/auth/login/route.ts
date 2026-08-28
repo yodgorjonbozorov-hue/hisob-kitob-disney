@@ -4,7 +4,7 @@ import { rawPrisma as prisma } from "@/lib/db/rawPrisma";
 import { Prisma } from "@prisma/client";
 import { registrsizTeng } from "@/lib/db/dialect";
 import { verifyPassword } from "@/lib/auth/password";
-import { getSession } from "@/lib/auth/session";
+import { getSession, sealMobileSession } from "@/lib/auth/session";
 import { normalizeRol } from "@/lib/auth/roles";
 import { loginSchema } from "@/lib/validation/auth";
 import { rateLimit, rateLimitReset } from "@/lib/rateLimit";
@@ -131,6 +131,29 @@ export async function POST(request: NextRequest) {
   await session.save();
 
   await loginUrinishiYoz({ login, ip, ok: true, userId: user.id, tenantId: user.tenantId });
+
+  // MOBIL KLIENT: cookie o'rniga xuddi shu sessiya ma'lumoti Bearer token
+  // sifatida qaytariladi (lib/auth/session.ts dagi izohga qarang). Veb klient
+  // uchun javob o'zgarmagan — token faqat so'ralganda qo'shiladi.
+  if (request.headers.get("x-balansa-client") === "mobile") {
+    const token = await sealMobileSession({
+      userId: user.id,
+      login: user.login,
+      ism: user.ism,
+      rol: normalizeRol(user.rol),
+      tenantId: user.tenantId ?? null,
+      businessId: user.businessId ?? null,
+      mustChangePassword: user.mustChangePassword ?? false,
+      impersonatedBy: null,
+      sessionEpoch: user.sessionEpoch ?? 0,
+    });
+    return NextResponse.json({
+      ok: true,
+      rol: normalizeRol(user.rol),
+      mustChangePassword: user.mustChangePassword ?? false,
+      token,
+    });
+  }
 
   return NextResponse.json({ ok: true, rol: user.rol, mustChangePassword: user.mustChangePassword ?? false });
 }

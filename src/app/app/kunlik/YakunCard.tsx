@@ -1,170 +1,180 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Money } from "@/components/ui/Money";
-import type { KunlikReportDTO } from "@/lib/queries/kunlik";
+import type { KunlikKassaDTO, KunlikReportDTO } from "@/lib/queries/kunlik";
 import type { KunlikRuxsat } from "@/lib/services/kunlik";
-import { TopshirishModal } from "./TopshirishModal";
+import { farqKorinishi } from "./holat";
 import { vaqtUzToshkent } from "./vaqt";
 
 /**
- * KUN YAKUNI KARTASI: jami summa, holat (ochiq / topshirilgan / tasdiqlangan),
- * kassa topshiruvi solishtiruvi (tizim vs sanalgan naqd, FARQ) va amallar.
+ * KUN YAKUNI — kassa topshiruvi va uning holati.
+ *
+ * ═══ NIMA KO'RSATILADI ═══
+ *  - kun OCHIQ bo'lsa: hozir kassangizda qancha pul bor va uni topshirish;
+ *  - TOPSHIRILGAN bo'lsa: tizim / real / farq uchligi va kim topshirgani —
+ *    direktor aynan shu uchlikka qarab qaror qiladi;
+ *  - TASDIQLANGAN bo'lsa: o'sha uchlik + kim va qachon tasdiqlagani.
+ *
+ * ═══ NEGA "JAMI KIRIM" BU YERDA YO'Q ═══
+ * Kirim/chiqim yuqoridagi xulosa kartalarida. Bu karta faqat PUL HARAKATI
+ * haqida: kassa topshirish kirim ham, chiqim ham emas.
  */
 export function YakunCard({
   report,
+  kassa,
   ruxsat,
   bugungi,
+  loading,
+  onTopshirish,
+  onQaror,
+  onQaytaOch,
 }: {
   report: KunlikReportDTO;
+  kassa: KunlikKassaDTO;
   ruxsat: KunlikRuxsat;
   bugungi: boolean;
+  loading: boolean;
+  onTopshirish: () => void;
+  onQaror: (amal: "qabul" | "rad") => void;
+  onQaytaOch: () => void;
 }) {
-  const router = useRouter();
-  const [topshirishModal, setTopshirishModal] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [xato, setXato] = useState<string | null>(null);
-
   const ochiq = report.holat === "OPEN";
   const topshirilgan = report.holat === "SUBMITTED";
-
-  async function amal(url: string) {
-    setLoading(true);
-    setXato(null);
-    try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sana: report.sana }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setXato(data.error ?? "Xatolik yuz berdi");
-        return;
-      }
-      router.refresh();
-    } catch {
-      setXato("Serverga ulanib bo'lmadi");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const badge = ochiq ? (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-2 text-fg border border-line">
-      🟡 Tasdiqlanmagan
-    </span>
-  ) : topshirilgan ? (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-2 text-fg border border-line">
-      📤 Topshirilgan — direktor tasdig&apos;ini kutmoqda
-    </span>
-  ) : (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-brand-wash text-brand border border-line">
-      🟢 Tasdiqlangan
-    </span>
-  );
+  const farq = farqKorinishi(report.naqdFarq);
 
   return (
     <Card>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-sm text-muted">💰 Sof natija · kunlik yakun</p>
-          <Money
-            value={report.sofSumma}
-            size="display"
-            tone={report.sofSumma >= 0 ? "brand" : "expense"}
-            signed={report.sofSumma < 0}
-          />
-          <p className="text-sm text-muted mt-1 tnum">
-            📈 Kirim: <span className="text-fg">{report.jamiSumma.toLocaleString("uz-UZ")}</span> · 📉
-            Chiqim: <span className="text-fg">{report.chiqimSumma.toLocaleString("uz-UZ")}</span>
-          </p>
-        </div>
-        <div className="text-right space-y-2">
-          <p className="text-sm">{badge}</p>
-          {topshirilgan && (
-            <p className="text-2xs text-muted">
-              Topshirdi: <span className="text-fg">{report.submittedByIsm ?? "—"}</span>
-              {report.submittedAt && (
-                <span className="text-faint"> · {vaqtUzToshkent(report.submittedAt)}</span>
-              )}
-            </p>
-          )}
-          {report.holat === "CONFIRMED" && (
-            <div className="text-2xs text-muted space-y-0.5">
-              <p>
-                Tasdiqlagan: <span className="text-fg">{report.confirmedByIsm ?? "—"}</span>
-              </p>
-              {report.confirmedAt && <p className="text-faint">{vaqtUzToshkent(report.confirmedAt)}</p>}
-            </div>
-          )}
-        </div>
+        <p className="text-sm text-muted">🔐 Kun yakuni · kassa topshirish</p>
+        {report.transferId && (
+          <span className="text-2xs text-faint">
+            {topshirilgan ? "Pul hali kassirda" : "Pul markaziy kassada"}
+          </span>
+        )}
       </div>
 
-      {/* Kassa topshiruvi solishtiruvi — pul nazoratining yuragi */}
+      {/* OCHIQ KUN — hozir kassada qancha bor. */}
+      {ochiq && (
+        <div className="mt-3 rounded-xl border border-line bg-surface-2 p-3">
+          <p className="text-2xs text-faint">
+            {kassa.shaxsiy ? kassa.kassaNomi ?? "Sizning kassangiz" : "Biznes naqd kassasi"} —
+            tizim bo&apos;yicha
+          </p>
+          <div className="mt-0.5">
+            <Money
+              value={kassa.qoldiq}
+              size="display"
+              tone={kassa.qoldiq < 0 ? "expense" : "brand"}
+              signed={kassa.qoldiq < 0}
+            />
+          </div>
+          {kassa.kutilayotgan > 0 && (
+            <p className="text-2xs text-debt-fg mt-1">
+              ⏳ {kassa.kutilayotgan.toLocaleString("uz-UZ")} so&apos;m tasdiq kutmoqda — u hali
+              shu qoldiq ichida.
+            </p>
+          )}
+          {kassa.qoldiq < 0 && (
+            <p className="text-2xs text-expense-fg mt-1">
+              ⚠ Qoldiq manfiy: kassadan chiqim kirimdan ko&apos;p yozilgan. Topshirishdan oldin
+              yozuvlarni tekshiring.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* TOPSHIRILGAN / TASDIQLANGAN — muzlatilgan solishtiruv. */}
       {report.sanalganNaqd !== null && (
-        <div className="mt-4 rounded-xl border border-line bg-surface-2 p-4 space-y-1 text-sm tnum">
+        <div className="mt-3 rounded-xl border border-line bg-surface-2 p-3 space-y-1 text-sm tnum">
           <div className="flex justify-between gap-3">
-            <span className="text-muted">💵 Naqd (tizim hisobi)</span>
-            <Money value={report.naqdSumma} size="sm" tone="neutral" />
+            <span className="text-muted">Tizim bo&apos;yicha kassada</span>
+            {report.kutilganNaqd === null ? (
+              <span className="text-faint">—</span>
+            ) : (
+              <Money value={report.kutilganNaqd} size="sm" tone="neutral" />
+            )}
           </div>
           <div className="flex justify-between gap-3">
-            <span className="text-muted">💵 Naqd (xodim sanadi)</span>
+            <span className="text-muted">Real topshirilgan</span>
             <Money value={report.sanalganNaqd} size="sm" tone="neutral" />
           </div>
           <div className="flex justify-between gap-3 pt-1 border-t border-line">
             <span className="font-medium text-fg">Farq</span>
-            {report.naqdFarq === 0 ? (
-              <span className="text-brand font-medium">✅ Yo&apos;q — mos</span>
-            ) : (
-              <span className="text-expense font-semibold">
-                {report.naqdFarq! < 0
-                  ? `⚠️ KAM: −${Math.abs(report.naqdFarq!).toLocaleString("uz-UZ")} so'm`
-                  : `⚠️ Ortiqcha: +${report.naqdFarq!.toLocaleString("uz-UZ")} so'm`}
-              </span>
-            )}
+            <span className={farq ? farq.klass : "text-faint"}>{farq ? farq.matn : "—"}</span>
           </div>
+          {report.izoh && (
+            <p className="text-2xs text-muted pt-1">Kassir izohi: {report.izoh}</p>
+          )}
+          {report.qarorIzoh && (
+            <p className="text-2xs text-muted">Direktor izohi: {report.qarorIzoh}</p>
+          )}
         </div>
       )}
 
-      <div className="mt-4 flex flex-wrap gap-2 justify-end">
-        {ochiq && bugungi && (
-          <Button variant="secondary" onClick={() => setTopshirishModal(true)}>
-            📤 Kunni direktorga topshirish
-          </Button>
+      <div className="mt-3 space-y-1 text-2xs text-muted">
+        {report.submittedByIsm && (
+          <p>
+            Topshirdi: <span className="text-fg">{report.submittedByIsm}</span>
+            {report.submittedAt && (
+              <span className="text-faint"> · {vaqtUzToshkent(report.submittedAt)}</span>
+            )}
+          </p>
         )}
-        {(ochiq || topshirilgan) && ruxsat.tasdiqlaydi && (
-          <Button onClick={() => amal("/api/kunlik/tasdiqlash")} loading={loading}>
+        {report.confirmedByIsm && (
+          <p>
+            Tasdiqladi: <span className="text-fg">{report.confirmedByIsm}</span>
+            {report.confirmedAt && (
+              <span className="text-faint"> · {vaqtUzToshkent(report.confirmedAt)}</span>
+            )}
+          </p>
+        )}
+      </div>
+
+      {/* AMALLAR — desktop uchun; mobil'da sticky panelda takrorlanadi. */}
+      <div className="mt-4 hidden sm:flex flex-wrap gap-2 justify-end">
+        {ochiq && bugungi && (
+          <Button onClick={onTopshirish}>📤 Kunni direktorga topshirish</Button>
+        )}
+        {topshirilgan && ruxsat.tasdiqlaydi && (
+          <>
+            <Button variant="secondary" onClick={() => onQaror("rad")} loading={loading}>
+              Rad etish
+            </Button>
+            <Button onClick={() => onQaror("qabul")} loading={loading}>
+              ✅ Qabul qilish
+            </Button>
+          </>
+        )}
+        {ochiq && !bugungi && ruxsat.tasdiqlaydi && (
+          <Button onClick={() => onQaror("qabul")} loading={loading}>
             ✅ Kun yakunini tasdiqlash
           </Button>
         )}
         {!ochiq && ruxsat.tahrirlaydi && (
-          <Button variant="secondary" onClick={() => amal("/api/kunlik/qayta-ochish")} loading={loading}>
+          <Button variant="secondary" onClick={onQaytaOch} loading={loading}>
             Qayta ochish (tuzatish uchun)
           </Button>
         )}
       </div>
 
-      {xato && <p className="text-sm text-expense mt-3">{xato}</p>}
       {ochiq && !ruxsat.tasdiqlaydi && (
         <p className="text-2xs text-faint mt-3">
           Kun oxirida kassani sanab &quot;Direktorga topshirish&quot;ni bosing — kun yakunini
-          faqat tayinlangan direktor tasdiqlaydi.
+          faqat direktor tasdiqlaydi.
         </p>
       )}
-
-      {topshirishModal && (
-        <TopshirishModal
-          sana={report.sana}
-          onClose={() => setTopshirishModal(false)}
-          onDone={() => {
-            setTopshirishModal(false);
-            router.refresh();
-          }}
-        />
+      {topshirilgan && !ruxsat.tasdiqlaydi && (
+        <p className="text-2xs text-faint mt-3">
+          Direktor tasdiqlaguncha pul sizning kassangizda turadi. Tasdiqlangach kassangiz{" "}
+          <span className="text-fg">0</span> ga tushadi.
+        </p>
+      )}
+      {!ochiq && ruxsat.tahrirlaydi && (
+        <p className="text-2xs text-faint mt-2">
+          Qayta ochilsa pul harakati ham orqaga qaytariladi (storno) — kassir qaytadan topshiradi.
+        </p>
       )}
     </Card>
   );

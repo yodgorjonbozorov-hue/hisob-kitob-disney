@@ -1,6 +1,7 @@
 import { runBusinessTx } from "@/lib/db/businessTx";
 import { logAudit } from "@/lib/services/audit";
 import { csvQatorniBol, csvSatrlar, ajratgichniTop, ustunKaliti } from "@/lib/csv";
+import { RASM_USTUN_KALITLARI } from "@/lib/excel/rasmUstun";
 import { mahsulotImportQatorSchema, BIRLIKLAR, type Birlik } from "@/lib/validation/inventory";
 
 /**
@@ -40,6 +41,8 @@ export const MAHSULOT_USTUNLARI = [
   "miqdor",
   "minQoldiq",
   "izoh",
+  // Oxirida turadi — eksport ustun harflari (F..I raqam formati) siljimasin.
+  "rasmUrl",
 ] as const;
 
 export type MahsulotUstuni = (typeof MAHSULOT_USTUNLARI)[number];
@@ -56,6 +59,7 @@ export const USTUN_SARLAVHALARI: Record<MahsulotUstuni, string> = {
   miqdor: "Qoldiq",
   minQoldiq: "Min qoldiq",
   izoh: "Izoh",
+  rasmUrl: "Rasm",
 };
 
 /**
@@ -127,6 +131,9 @@ const USTUN_MUQOBILLARI: Record<string, MahsulotUstuni> = {
   description: "izoh",
   comment: "izoh",
 };
+// Rasm ustuni nomlari bitta manbadan olinadi (`lib/excel/rasmUstun.ts`) —
+// brauzerdagi rasmli import ham aynan shu ro'yxat bilan ishlaydi.
+for (const kalit of RASM_USTUN_KALITLARI) USTUN_MUQOBILLARI[kalit] = "rasmUrl";
 
 /** O'lchov birligi muqobillari — noma'lum birlik xato emas, "dona" bo'ladi. */
 const BIRLIK_MUQOBILLARI: Record<string, Birlik> = {
@@ -183,6 +190,7 @@ export interface MahsulotQatori {
   miqdor: number | null | undefined;
   minQoldiq: number | null | undefined;
   izoh: string | null | undefined;
+  rasmUrl: string | null | undefined;
 }
 
 export interface OqishNatijasi {
@@ -289,6 +297,14 @@ export function mahsulotlarniOqi(matn: string): OqishNatijasi {
       return v ? sonniOqi(v) : null;
     };
 
+    // Rasm ustuni faqat http(s) havolani qabul qiladi. Bito kabi dasturlar
+    // "Surati" ustuniga fayl NOMINI yozadi — uni saqlab bo'lmaydi, lekin bu
+    // qatorni xato qilish ham noto'g'ri: havola bo'lmagan qiymat shunchaki
+    // "rasm yo'q" deb olinadi.
+    const rasmXom = matnMaydon("rasmUrl");
+    const rasmUrl =
+      rasmXom === undefined ? undefined : rasmXom && /^https?:\/\//i.test(rasmXom) ? rasmXom : null;
+
     const parsed = mahsulotImportQatorSchema.safeParse({
       nomi: xom.nomi ?? "",
       sku: matnMaydon("sku"),
@@ -300,6 +316,7 @@ export function mahsulotlarniOqi(matn: string): OqishNatijasi {
       miqdor: sonMaydon("miqdor"),
       minQoldiq: sonMaydon("minQoldiq"),
       izoh: matnMaydon("izoh"),
+      rasmUrl,
     });
 
     if (!parsed.success) {
@@ -341,6 +358,7 @@ export function mahsulotlarniOqi(matn: string): OqishNatijasi {
       miqdor: q.miqdor,
       minQoldiq: q.minQoldiq,
       izoh: q.izoh,
+      rasmUrl: q.rasmUrl,
     });
   }
 
@@ -501,6 +519,7 @@ export async function mahsulotlarniYoz(params: {
             sotuvNarx: q.sotuvNarx ?? 0,
             minQoldiq: q.minQoldiq ?? undefined,
             izoh: q.izoh ?? undefined,
+            rasmUrl: q.rasmUrl ?? undefined,
           },
           select: { id: true },
         });
@@ -534,6 +553,7 @@ export async function mahsulotlarniYoz(params: {
         sotuvNarx?: number;
         minQoldiq?: number;
         izoh?: string;
+        rasmUrl?: string;
       } = { nomi: q.nomi };
       if (bor("sku") && q.sku) data.sku = q.sku;
       if (bor("barcode") && q.barcode) data.barcode = q.barcode;
@@ -543,6 +563,7 @@ export async function mahsulotlarniYoz(params: {
       if (bor("sotuvNarx") && q.sotuvNarx != null) data.sotuvNarx = q.sotuvNarx;
       if (bor("minQoldiq") && q.minQoldiq != null) data.minQoldiq = q.minQoldiq;
       if (bor("izoh") && q.izoh != null) data.izoh = q.izoh;
+      if (bor("rasmUrl") && q.rasmUrl != null) data.rasmUrl = q.rasmUrl;
 
       await tx.product.update({
         where: { id: mavjudId, businessId: params.businessId },

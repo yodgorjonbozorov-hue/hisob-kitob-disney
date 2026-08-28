@@ -2,6 +2,12 @@ import { prisma } from "@/lib/prisma";
 import { qidiruvRejimi } from "@/lib/db/dialect";
 import { dateOnlyStringToUTCDate, todayDateOnlyString } from "@/lib/date";
 import { qarzHolatHisobla, type QarzHolat } from "@/lib/validation/qarz";
+import {
+  muddatHolati,
+  MUDDAT_TARTIBI,
+  YAQIN_MUDDAT_KUN,
+  type MuddatHolat,
+} from "@/lib/qarzMuddat";
 import type { Prisma } from "@prisma/client";
 
 /**
@@ -331,10 +337,39 @@ export interface QarzdorDTO {
   ochiqSoni: number;
   /** Oxirgi to'lov sanasi (ISO) — hech to'lov bo'lmagan bo'lsa null. */
   oxirgiTolov: string | null;
+  /** Oxirgi to'lov summasi (so'm) — to'lov bo'lmasa null. */
+  oxirgiTolovSumma: number | null;
   /** Eng eski ochiq qarz sanasi (ISO). */
   eskiSana: string;
+  /** Eng eski ochiq qarz necha KUNLIK ("Eng eski qarz: 18 kun"). */
+  eskiKun: number;
   /** Kamida bitta qarzning muddati o'tib ketgan. */
   muddatOtdi: boolean;
+  /** MUDDATI O'TGAN qarzlar QOLDIG'I (so'm) — kartadagi qizil raqam. */
+  muddatiOtganSumma: number;
+  /** ENG YAQIN to'lov muddati (ISO) — ochiq qarzlar orasidan. */
+  yaqinMuddat: string | null;
+  /**
+   * QARZDORNING KRITIKLIGI — eng og'ir holatdagi qarzi bo'yicha. Ro'yxat
+   * shu bo'yicha tartiblanadi: muddati o'tgan → bugun → yaqin → keyingi.
+   */
+  muddatHolat: MuddatHolat;
+  /** Muddatgacha (yoki muddatdan beri) qolgan kun — `muddatHolat` bilan juft. */
+  muddatKun: number | null;
+  /** Qarzdorning umumiy holati: hech to'lamaganmi yoki qisman to'laganmi. */
+  status: QarzHolat;
+}
+
+/** Qarzdorlar ro'yxati filtri — hammasi SERVERDA qo'llanadi. */
+export interface QarzdorFiltr {
+  turi?: string | null;
+  q?: string | null;
+  /** Muddat kesimi: "kechikdi" | "bugun" | "yaqin". */
+  muddat?: MuddatHolat | null;
+  /** Holat kesimi: OPEN (hech to'lanmagan) yoki PARTIALLY_PAID. */
+  status?: QarzHolat | null;
+  /** Tartib: kritiklik (standart), summa yoki muddat bo'yicha. */
+  tartib?: "kritik" | "summa" | "muddat" | "ism" | null;
 }
 
 /** Ochiq qarzlar bir so'rovda o'qiladigan chegara (qarzdorlar kesimi uchun). */
@@ -345,10 +380,17 @@ const QARZDOR_LIMIT = 2000;
  *
  * Faqat OCHIQ qarzlar o'qiladi (yopilgani va bekor qilingani chiqmaydi):
  * bu ro'yxat "kimdan qancha undirish kerak" savoliga javob beradi.
+ *
+ * N+1 YO'Q (31-talab): butun ro'yxat BITTA `findMany` bilan olinadi va
+ * jamlanma xotirada quriladi. Har qarzdor uchun alohida so'rov qilinsa
+ * 200 qarzdorli biznesda sahifa 200 ta so'rovda ochilardi.
+ *
+ * Filtr va tartib ham SHU YERDA: brauzerda filtrlash `QARZDOR_LIMIT` dan
+ * keyingi qarzdorlarni ko'rinmas qilib qo'yardi.
  */
 export async function listQarzdorlar(
   businessId: string,
-  filtr: { turi?: string | null; q?: string | null } = {}
+  filtr: QarzdorFiltr = {}
 ): Promise<QarzdorDTO[]> {
   const where: Prisma.DebtWhereInput = { businessId, isYopilgan: false };
   if (filtr.turi === "olinadigan" || filtr.turi === "beriladigan") where.turi = filtr.turi;
@@ -376,14 +418,15 @@ export async function listQarzdorlar(
       payments: {
         orderBy: [{ sana: "desc" }, { createdAt: "desc" }],
         take: 1,
-        select: { sana: true, createdAt: true },
+        select: { sana: true, createdAt: true, summa: true },
       },
     },
     orderBy: [{ sana: "asc" }, { createdAt: "asc" }],
     take: QARZDOR_LIMIT,
   });
 
-  const bugun = dateOnlyStringToUTCDate(todayDateOnlyString()).getTime();
+  const bugunStr = todayDateOnlyString();
+  const bugun = dateOnlyStringToUTCDate(bugunStr).getTime();
   const jamlanma = new Map<string, QarzdorDTO>();
 
   for (const d of debts) {
@@ -391,8 +434,11 @@ export async function listQarzdorlar(
     if (qoldiq <= 0) continue;
     const kalit = `${d.turi}|${qarzdorKalit(d.contactId, d.mijozNomi)}`;
     const sana = (d.sana ?? d.createdAt).toISOString();
+    const muddatISO = d.muddat ? d.muddat.toISOString() : null;
     const oxirgi = d.payments[0];
     const tolovSana = oxirgi ? (oxirgi.sana ?? oxirgi.createdAt).toISOString() : null;
+    const kechikdi = d.muddat !== null && d.muddat.getTime() < bugun;
+    const { holat, kun } = muddatHolati(muddatISO, false, bugunStr);
 
     const mavjud = jamlanma.get(kalit);
     if (!mavjud) {
@@ -407,8 +453,15 @@ export async function listQarzdorlar(
         jamiTolangan: d.tolangan,
         ochiqSoni: 1,
         oxirgiTolov: tolovSana,
+        oxirgiTolovSumma: oxirgi ? oxirgi.summa : null,
         eskiSana: sana,
-        muddatOtdi: d.muddat !== null && d.muddat.getTime() < bugun,
+        eskiKun: kunFarqi(sana, bugun),
+        muddatOtdi: kechikdi,
+        muddatiOtganSumma: kechikdi ? qoldiq : 0,
+        yaqinMuddat: muddatISO,
+        muddatHolat: holat,
+        muddatKun: kun,
+        status: d.tolangan > 0 ? "PARTIALLY_PAID" : "OPEN",
       });
       continue;
     }
@@ -419,15 +472,87 @@ export async function listQarzdorlar(
     mavjud.tel = mavjud.tel ?? d.mijozTel;
     if (tolovSana && (!mavjud.oxirgiTolov || tolovSana > mavjud.oxirgiTolov)) {
       mavjud.oxirgiTolov = tolovSana;
+      mavjud.oxirgiTolovSumma = oxirgi ? oxirgi.summa : null;
     }
-    if (sana < mavjud.eskiSana) mavjud.eskiSana = sana;
-    if (d.muddat !== null && d.muddat.getTime() < bugun) mavjud.muddatOtdi = true;
+    if (sana < mavjud.eskiSana) {
+      mavjud.eskiSana = sana;
+      mavjud.eskiKun = kunFarqi(sana, bugun);
+    }
+    if (kechikdi) {
+      mavjud.muddatOtdi = true;
+      mavjud.muddatiOtganSumma += qoldiq;
+    }
+    // Eng YAQIN muddat: mavjudi yo'q bo'lsa yoki bu qarzniki oldinroq bo'lsa.
+    if (muddatISO && (!mavjud.yaqinMuddat || muddatISO < mavjud.yaqinMuddat)) {
+      mavjud.yaqinMuddat = muddatISO;
+    }
+    // Kritiklik — qarzdorning ENG OG'IR holatdagi qarzi bo'yicha.
+    if (MUDDAT_TARTIBI[holat] < MUDDAT_TARTIBI[mavjud.muddatHolat]) {
+      mavjud.muddatHolat = holat;
+      mavjud.muddatKun = kun;
+    }
+    if (d.tolangan > 0) mavjud.status = "PARTIALLY_PAID";
   }
 
-  // Eng katta qarz yuqorida — u bilan ish ko'proq.
-  return Array.from(jamlanma.values()).sort(
-    (a, b) => b.qarz - a.qarz || a.ism.localeCompare(b.ism)
-  );
+  let natija = Array.from(jamlanma.values());
+
+  // Muddat kesimi: "kechikdi" tanlansa faqat muddati o'tgan qarzi borlar.
+  if (filtr.muddat) {
+    const kerakli = filtr.muddat;
+    natija = natija.filter((q) =>
+      kerakli === "yaqin"
+        ? // "7 kun ichida" — bugun va kechikkanlar ham kirmaydi, faqat oldinda
+          // turgan yaqin muddat (kechikkanlarning o'z chipi bor).
+          q.muddatHolat === "yaqin"
+        : q.muddatHolat === kerakli
+    );
+  }
+  if (filtr.status) {
+    natija = natija.filter((q) => q.status === filtr.status);
+  }
+
+  return saralaQarzdorlar(natija, filtr.tartib ?? "kritik");
+}
+
+/** Ikki sana orasidagi to'liq kun farqi (qarz yoshi uchun). */
+function kunFarqi(sanaISO: string, bugunMs: number): number {
+  const kun = Math.round((bugunMs - Date.parse(sanaISO.slice(0, 10))) / 86_400_000);
+  return kun > 0 ? kun : 0;
+}
+
+/**
+ * QARZDORLAR TARTIBI (14-talab).
+ *
+ * Standart — "kritik": muddati o'tganlar tepada, keyin bugun to'lashi
+ * kerak bo'lganlar, so'ng yaqinlashayotganlar. Bir xil kritiklikdagilar
+ * ichida katta summa yuqorida — u bilan ish ko'proq.
+ */
+function saralaQarzdorlar(
+  royxat: QarzdorDTO[],
+  tartib: "kritik" | "summa" | "muddat" | "ism"
+): QarzdorDTO[] {
+  const nusxa = [...royxat];
+  switch (tartib) {
+    case "summa":
+      return nusxa.sort((a, b) => b.qarz - a.qarz || a.ism.localeCompare(b.ism));
+    case "ism":
+      return nusxa.sort((a, b) => a.ism.localeCompare(b.ism));
+    case "muddat":
+      // Muddatsizlar oxirida: ular bo'yicha kelishuv yo'q.
+      return nusxa.sort(
+        (a, b) =>
+          (a.yaqinMuddat ?? "9999").localeCompare(b.yaqinMuddat ?? "9999") ||
+          b.qarz - a.qarz
+      );
+    default:
+      return nusxa.sort(
+        (a, b) =>
+          MUDDAT_TARTIBI[a.muddatHolat] - MUDDAT_TARTIBI[b.muddatHolat] ||
+          b.muddatiOtganSumma - a.muddatiOtganSumma ||
+          b.qarz - a.qarz ||
+          a.ism.localeCompare(b.ism)
+      );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -615,14 +740,28 @@ export interface QarzDashboardDTO {
   bugunYopilgan: number;
   /** Muddati o'tgan ochiq qarzlar qoldig'i. */
   muddatiOtgan: number;
+  /**
+   * YAQIN MUDDATLI — bugundan boshlab `YAQIN_MUDDAT_KUN` ichida to'lanishi
+   * kerak bo'lgan ochiq qarzlar qoldig'i. "Muddati o'tgan" bilan
+   * KESISHMAYDI: u kechikkanlar, bu esa hali kechikmaganlar.
+   */
+  yaqinMuddatli: number;
   /** Qarzdor mijozlar soni (ochiq qarzi borlar). */
   mijozlarSoni: number;
+  /** Muddati o'tgan qarzi bor qarzdorlar soni. */
+  muddatiOtganSoni: number;
   /** Biz qarzdormiz — to'lanishi kerak bo'lgan pul. */
   beriladiganJami: number;
+  /** Nechta kreditor (biz qarzdor bo'lgan shaxs/tashkilot). */
+  beriladiganSoni: number;
+  /** "Men qarzdorman" tarafidagi muddati o'tgan majburiyat. */
+  beriladiganMuddatiOtgan: number;
+  /** Bugun BIZ to'lagan qarzlar (chiqim) — mijoz to'lovlaridan alohida. */
+  bugunTolaganim: number;
 }
 
 /**
- * Qarzlar dashboardi — beshta ko'rsatkich, beshta agregat so'rov.
+ * Qarzlar dashboardi — ko'rsatkichlar SERVERDA, agregat so'rovlar bilan.
  *
  * Ro'yxatni brauzerda jamlash mumkin edi, lekin u 1000 yozuv bilan
  * chegaralangan: minglab qarzi bor biznesda ko'rsatkichlar yolg'on bo'lardi.
@@ -631,7 +770,20 @@ export async function getQarzDashboard(businessId: string): Promise<QarzDashboar
   const bugunBosh = dateOnlyStringToUTCDate(todayDateOnlyString());
   const bugunOxir = new Date(bugunBosh.getTime() + 24 * 60 * 60 * 1000);
 
-  const [ochiq, berilgan, tolangan, otgan, mijozlar, beriladigan] = await Promise.all([
+  // "Yaqin muddat" oynasi: ertadan boshlab YAQIN_MUDDAT_KUN ichida.
+  const yaqinOxir = new Date(bugunBosh.getTime() + (YAQIN_MUDDAT_KUN + 1) * 24 * 60 * 60 * 1000);
+
+  const [
+    ochiq,
+    berilgan,
+    tolangan,
+    otgan,
+    yaqin,
+    mijozlar,
+    beriladigan,
+    beriladiganOtgan,
+    tolaganim,
+  ] = await Promise.all([
     prisma.debt.aggregate({
       where: { businessId, turi: "olinadigan", isYopilgan: false },
       _sum: { jamiSumma: true, tolangan: true },
@@ -645,21 +797,57 @@ export async function getQarzDashboard(businessId: string): Promise<QarzDashboar
       },
       _sum: { jamiSumma: true },
     }),
-    prisma.debtPayment.aggregate({
-      where: { businessId, sana: { gte: bugunBosh, lt: bugunOxir } },
+    // BUGUN TO'LANGAN — mijozlardan kelgan pul. `debt.turi` bo'yicha
+    // ajratiladi: biz ta'minotchiga to'lagan pul KIRIM emas, uni shu
+    // kartaga qo'shish "bugun qancha pul keldi" savoliga yolg'on javob
+    // berardi (26-talab).
+    prisma.debtPayment.groupBy({
+      by: ["debtId"],
+      where: {
+        businessId,
+        sana: { gte: bugunBosh, lt: bugunOxir },
+        debt: { turi: "olinadigan" },
+      },
       _sum: { summa: true },
     }),
     prisma.debt.aggregate({
       where: { businessId, turi: "olinadigan", isYopilgan: false, muddat: { lt: bugunBosh } },
       _sum: { jamiSumma: true, tolangan: true },
     }),
+    // Bugun ham shu oynaga kiradi: "bugun to'lashi kerak" — eng shoshilinch
+    // yaqin muddat, uni kechikkanlar tarafiga qo'shib bo'lmaydi.
+    prisma.debt.aggregate({
+      where: {
+        businessId,
+        turi: "olinadigan",
+        isYopilgan: false,
+        muddat: { gte: bugunBosh, lt: yaqinOxir },
+      },
+      _sum: { jamiSumma: true, tolangan: true },
+    }),
+    // Qarzdorlar soni uchun kalitlar. Muddat ham o'qiladi: "muddati o'tgan
+    // qarzdorlar soni" AYNI to'plamdan chiqadi, ikkinchi so'rov qilinmaydi.
     prisma.debt.findMany({
       where: { businessId, turi: "olinadigan", isYopilgan: false },
-      select: { contactId: true, mijozNomi: true },
+      select: { contactId: true, mijozNomi: true, muddat: true },
     }),
-    prisma.debt.aggregate({
+    prisma.debt.groupBy({
+      by: ["contactId", "mijozNomi"],
       where: { businessId, turi: "beriladigan", isYopilgan: false },
       _sum: { jamiSumma: true, tolangan: true },
+    }),
+    prisma.debt.aggregate({
+      where: { businessId, turi: "beriladigan", isYopilgan: false, muddat: { lt: bugunBosh } },
+      _sum: { jamiSumma: true, tolangan: true },
+    }),
+    prisma.debtPayment.groupBy({
+      by: ["debtId"],
+      where: {
+        businessId,
+        sana: { gte: bugunBosh, lt: bugunOxir },
+        debt: { turi: "beriladigan" },
+      },
+      _sum: { summa: true },
     }),
   ]);
 
@@ -670,14 +858,39 @@ export async function getQarzDashboard(businessId: string): Promise<QarzDashboar
   // sahifadagi "N ta qarzdor" bilan AYNI kalit ishlatiladi, aks holda ikki
   // ekranda ikki xil son chiqardi.
   const kalitlar = new Set(mijozlar.map((m) => qarzdorKalit(m.contactId, m.mijozNomi)));
+  const kechikkanKalitlar = new Set(
+    mijozlar
+      .filter((m) => m.muddat !== null && m.muddat.getTime() < bugunBosh.getTime())
+      .map((m) => qarzdorKalit(m.contactId, m.mijozNomi))
+  );
+
+  // Kreditorlar: bir kalitga yig'ilgan, qoldig'i musbatlari sanaladi
+  // (`getQarzJamlari` bilan AYNI qoida).
+  const kreditorlar = new Map<string, number>();
+  let beriladiganJami = 0;
+  for (const r of beriladigan) {
+    const q = (r._sum.jamiSumma ?? 0) - (r._sum.tolangan ?? 0);
+    if (q <= 0) continue;
+    beriladiganJami += q;
+    const k = qarzdorKalit(r.contactId, r.mijozNomi);
+    kreditorlar.set(k, (kreditorlar.get(k) ?? 0) + q);
+  }
+
+  const jamla = (rows: { _sum: { summa: number | null } }[]) =>
+    rows.reduce((acc, r) => acc + (r._sum.summa ?? 0), 0);
 
   return {
     ochiqJami: qoldiq(ochiq),
     bugunBerilgan: berilgan._sum.jamiSumma ?? 0,
-    bugunYopilgan: tolangan._sum.summa ?? 0,
+    bugunYopilgan: jamla(tolangan),
     muddatiOtgan: qoldiq(otgan),
+    yaqinMuddatli: qoldiq(yaqin),
     mijozlarSoni: kalitlar.size,
-    beriladiganJami: qoldiq(beriladigan),
+    muddatiOtganSoni: kechikkanKalitlar.size,
+    beriladiganJami,
+    beriladiganSoni: kreditorlar.size,
+    beriladiganMuddatiOtgan: qoldiq(beriladiganOtgan),
+    bugunTolaganim: jamla(tolaganim),
   };
 }
 
@@ -701,14 +914,35 @@ export interface QarzMijozDTO {
  * yozish mumkin bo'lishi kerak. Shuning uchun manba ikkita — mijoz
  * kartochkalari va oldingi qarzlardagi ism/telefon juftliklari.
  */
+/**
+ * BITTA MIJOZNING JORIY OCHIQ QARZI (so'm).
+ *
+ * Qarzga sotish oynasidagi "Hozirgi qarz → Yangi jami" paneli shu raqamdan
+ * boshlanadi. Ataylab alohida so'rov: forma ochilganda mijoz oldindan
+ * tanlangan bo'lishi mumkin (qarzdor kartochkasidan yoki yangi yaratilgandan
+ * keyin) va u holda qidiruv ro'yxati umuman yuklanmaydi.
+ */
+export async function mijozOchiqQarzi(
+  businessId: string,
+  contactId: string
+): Promise<number> {
+  const jam = await prisma.debt.aggregate({
+    where: { businessId, contactId, turi: "olinadigan", isYopilgan: false },
+    _sum: { jamiSumma: true, tolangan: true },
+  });
+  const qoldiq = (jam._sum.jamiSumma ?? 0) - (jam._sum.tolangan ?? 0);
+  return qoldiq > 0 ? qoldiq : 0;
+}
+
 export async function qarzMijozlariTakror(
   businessId: string,
   q: string | null
 ): Promise<QarzMijozDTO[]> {
   const rejim = qidiruvRejimi();
   const qidiruv = q?.trim();
+  const izla = (xonalar: Prisma.DebtWhereInput[]) => (qidiruv ? { OR: xonalar } : {});
 
-  const [contacts, debts] = await Promise.all([
+  const [contacts, ochiqlar, kartochkasizYozuvlar] = await Promise.all([
     prisma.contact.findMany({
       where: {
         businessId,
@@ -721,50 +955,73 @@ export async function qarzMijozlariTakror(
       orderBy: { ism: "asc" },
       take: 20,
     }),
+    // OCHIQ QARZ — `groupBy` bilan, TO'LIQ. Ilgari bu yerda oxirgi 300 ta
+    // yozuv o'qilardi va ko'p savdoli biznesda ko'rsatilgan qarz KAM chiqardi.
+    // Kassir aynan shu raqamga qarab qarzga sotadi, shuning uchun u taxminiy
+    // bo'lishi mumkin emas.
+    prisma.debt.groupBy({
+      by: ["contactId", "mijozNomi"],
+      where: { businessId, turi: "olinadigan", isYopilgan: false },
+      _sum: { jamiSumma: true, tolangan: true },
+    }),
+    // Kartochkasiz, qarzi YOPILGAN mijozlar ham qidiruvda chiqsin — kassir
+    // eski xaridorni ism bilan topa olsin. Chegara bor: bu faqat qulaylik.
     prisma.debt.findMany({
       where: {
         businessId,
         turi: "olinadigan",
-        ...(qidiruv
-          ? {
-              OR: [
-                { mijozNomi: { contains: qidiruv, ...rejim } },
-                { mijozTel: { contains: qidiruv, ...rejim } },
-              ],
-            }
-          : {}),
+        contactId: null,
+        ...izla([
+          { mijozNomi: { contains: qidiruv as string, ...rejim } },
+          { mijozTel: { contains: qidiruv as string, ...rejim } },
+        ]),
       },
-      select: { contactId: true, mijozNomi: true, mijozTel: true, jamiSumma: true, tolangan: true, isYopilgan: true },
+      select: { mijozNomi: true, mijozTel: true },
       orderBy: { createdAt: "desc" },
-      take: 300,
+      take: 100,
     }),
   ]);
 
-  const ochiqQarz = new Map<string, number>();
-  const kartochkasizlar = new Map<string, QarzMijozDTO>();
-  for (const d of debts) {
-    const kalit = d.contactId ?? `ism:${d.mijozNomi.toLowerCase()}`;
-    if (!d.isYopilgan) {
-      ochiqQarz.set(kalit, (ochiqQarz.get(kalit) ?? 0) + (d.jamiSumma - d.tolangan));
-    }
-    if (!d.contactId && !kartochkasizlar.has(kalit)) {
-      kartochkasizlar.set(kalit, {
-        contactId: null,
-        ism: d.mijozNomi,
-        tel: d.mijozTel,
-        ochiqQarz: 0,
-      });
+  // Kartochkali mijozlarning ochiq qarzi — `contactId` bo'yicha.
+  const kartochkaQarzi = new Map<string, number>();
+  // Kartochkasiz qarzdorlar — `qarzdorKalit()` bilan AYNI ism kaliti bo'yicha,
+  // aks holda qidiruvdagi summa qarzdorlar ro'yxatidagidan farq qilardi.
+  const ismQarzi = new Map<string, number>();
+  const ismKorinishi = new Map<string, { ism: string; tel: string | null }>();
+
+  for (const r of ochiqlar) {
+    const qoldiq = (r._sum.jamiSumma ?? 0) - (r._sum.tolangan ?? 0);
+    if (qoldiq <= 0) continue;
+    if (r.contactId) {
+      kartochkaQarzi.set(r.contactId, (kartochkaQarzi.get(r.contactId) ?? 0) + qoldiq);
+    } else {
+      const kalit = qarzdorKalit(null, r.mijozNomi);
+      ismQarzi.set(kalit, (ismQarzi.get(kalit) ?? 0) + qoldiq);
+      if (!ismKorinishi.has(kalit)) ismKorinishi.set(kalit, { ism: r.mijozNomi, tel: null });
     }
   }
 
+  for (const d of kartochkasizYozuvlar) {
+    const kalit = qarzdorKalit(null, d.mijozNomi);
+    const bor = ismKorinishi.get(kalit);
+    if (!bor) ismKorinishi.set(kalit, { ism: d.mijozNomi, tel: d.mijozTel });
+    else if (!bor.tel && d.mijozTel) bor.tel = d.mijozTel;
+  }
+
+  const matn = qidiruv?.toLowerCase() ?? null;
   const natija: QarzMijozDTO[] = contacts.map((c) => ({
     contactId: c.id,
     ism: c.ism,
     tel: c.tel,
-    ochiqQarz: ochiqQarz.get(c.id) ?? 0,
+    ochiqQarz: kartochkaQarzi.get(c.id) ?? 0,
   }));
-  for (const [kalit, m] of kartochkasizlar) {
-    natija.push({ ...m, ochiqQarz: ochiqQarz.get(kalit) ?? 0 });
+
+  for (const [kalit, m] of ismKorinishi) {
+    // Qidiruv kartochkasizlarga JS tomonda qo'llanadi: ochiq qarz `groupBy`
+    // filtrsiz o'qiladi (jami to'g'ri chiqishi uchun), shuning uchun mos
+    // kelmaydiganlari shu yerda chiqarib tashlanadi.
+    if (matn && !m.ism.toLowerCase().includes(matn) && !(m.tel ?? "").includes(matn)) continue;
+    natija.push({ contactId: null, ism: m.ism, tel: m.tel, ochiqQarz: ismQarzi.get(kalit) ?? 0 });
   }
 
   // Ochiq qarzi borlar yuqorida — ular bilan ish ko'proq bo'ladi.
