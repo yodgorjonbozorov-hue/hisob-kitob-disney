@@ -5211,3 +5211,48 @@ migratsiya skripti tuzatadi. Regressiya: `test:kassa` (11), `test:kassa-nazorat`
 (23), `test:kassa-transfer` (20), `test:kunlik-kassa` (18), `test:kassir-kassa`
 (22), `test:panel` (22), `test:automation`, `test:kirim-chiqim`,
 `test:isolation`, `test:kunlik`, `test:smena` — hammasi ✅. `npm run build` ✅.
+
+### 2026-08-28 — Davomat 2.0: selfie + GPS davomat, ish jadvali, jarima/bonus, oylik integratsiyasi (tugadi)
+
+**Branch:** `claude/balansa-hr-attendance-payroll-xz5ior`
+
+**Nima qilindi**
+- Migratsiya `20260828090000_davomat_2_selfie_gps` — FAQAT qo'shuvchi: 9 yangi jadval
+  (`WorkLocation`, `WorkSchedule`, `WorkScheduleDay`, `AttendanceCheck`,
+  `AttendanceSelfie`, `PenaltyRule`, `EmployeePenalty`, `EmployeeBonus`, `HrSetting`)
+  va `Attendance`/`Employee`/`Payroll` ga yangi ustunlar (ALTER ADD COLUMN, default bilan).
+  Hech qanday jadval qayta qurilmaydi, mavjud HR-lite oqimi buzilmaydi.
+  Baza darajasida himoya: bitta davomatga bitta avto-jarima (qisman unique indeks),
+  bir xodim + bir kun = bitta yozuv (mavjud unique).
+- Xodim check-in/check-out: `/app/hr/men` (mobil ustuvor) — old kamera selfie
+  (getUserMedia + `capture="user"` fallback), GPS, server Haversine radius tekshiruvi.
+  VAQT FAQAT server soati; kim ekani sessiyadan; frontend businessId/vaqtga ishonilmaydi.
+- Selfie DB'da base64 saqlanadi (`saqlagich: "db"`, 400 KB chegara, mijoz siqadi) —
+  ochiq URL YO'Q, faqat avtorizatsiyalangan `/api/hr/davomat/selfie/[id]`
+  (boshqaruvchi yoki xodimning o'zi).
+- Ish jadvali (haftalik shablon + imtiyoz/grace + standart + xodimga biriktirish),
+  ish joylari (GPS nuqta + radius preset), xodim siyosati (selfie/GPS/radius alohida).
+- Jarima qoidalari (biznes sozlaydi, kesishuv tekshiruvi, namunaviy to'plam 1 bosishda);
+  kechikish/kelmaganlikda avto-jarima KUTILMOQDA holatida ochiladi, oylikka FAQAT
+  tasdiqlangani kiradi (summani tahrirlash asl summa bilan auditda qoladi).
+- Oylik formulasi kengaydi: hisoblangan + qoshimcha + bonuslar − ushlab − jarimalar − avans
+  (`Payroll.bonuslar/jarimalar` snapshot ustunlari; avans/tasdiq oqimlari sinxron).
+- Cron `/api/cron/davomat` (20:00 UTC = 01:00 Toshkent): o'tgan Toshkent kuni bo'yicha
+  jadvalda ish kuni bo'lgan, yozuvi yo'q xodimlar "kelmadi" + jarima; dam kuni hech qachon
+  kelmadi bo'lmaydi; idempotent.
+- Direktor sahifalari: `/app/hr/bugun` (jonli panel: kim keldi/kechikdi/ishda/ketdi,
+  selfie/masofa, davr hisobot bloki), `/app/hr/jadval`, `/app/hr/oylik`, `/app/hr/jarima`,
+  `/app/hr/sozlamalar`, `/app/hr/xodim/[id]` (tarix + dalillar + siyosat + tuzatish).
+  Admin tuzatishi asl dalilni o'chirmaydi — alohida `admin` manbali check yozuvi
+  (kim/qachon/sabab/avvalgi qiymat) + audit log.
+- HR moduli rollari HAMMA bo'ldi (xodim "Davomatim"ni ko'rishi uchun); boshqaruv
+  sahifa/API'lari avvalgidek `requireManager` bilan qulflangan.
+- Faza 2 (CCTV/yuz tanish) uchun tayyor: `AttendanceCheck.manba` = "selfie_gps" |
+  "admin" | "kamera" — kamera hodisasi shu jadvalga yozilib, o'sha jarima/oylik
+  dvigatelidan foydalanadi. RTSP/ONVIF ATAYLAB yozilmagan.
+
+**Testlar:** `tests/davomat.test.ts` (18 test: chegara 09:05/09:06, Haversine,
+radius rad, selfie/GPS siyosati, dublikat check-in/out, tenant izolyatsiyasi,
+admin tuzatish, jarima tasdiqlash/rad/oylik, kelmaganlar cron, qoida kesishuvi).
+`test:izolyatsiya-royxati`, `test:backup`, `test:hr`, `test:isolation`, `test:dialect`
+(pg init migratsiya qayta yaratildi — 61 jadval) — yashil. `npm run build` o'tdi.

@@ -186,17 +186,42 @@ export async function oylikHisobla(
     });
     const avans = avansAgg._sum.summa ?? 0;
 
+    // Davomat 2.0: oy bo'yicha bonuslar va TASDIQLANGAN jarimalar (snapshot).
+    const { from, to } = monthRangeUTC(data.oy);
+    const [bonusAgg, jarimaAgg] = await Promise.all([
+      tx.employeeBonus.aggregate({
+        where: { businessId, employeeId: data.employeeId, sana: { gte: from, lt: to } },
+        _sum: { summa: true },
+      }),
+      tx.employeePenalty.aggregate({
+        where: {
+          businessId,
+          employeeId: data.employeeId,
+          holat: "tasdiqlandi",
+          sana: { gte: from, lt: to },
+        },
+        _sum: { summa: true },
+      }),
+    ]);
+    const bonuslar = bonusAgg._sum.summa ?? 0;
+    const jarimalar = jarimaAgg._sum.summa ?? 0;
+
     const qoshimcha = data.qoshimcha ?? mavjud?.qoshimcha ?? 0;
     const ushlab = data.ushlab ?? mavjud?.ushlab ?? 0;
     // Manfiy oylik yozilmaydi: avans hisoblangandan ko'p bo'lsa qarz keyingi
     // oyga o'tadi (bu yerda 0 bilan cheklanadi, farq izohda ko'rinadi).
-    const tolanadigan = Math.max(0, hisoblangan + qoshimcha - ushlab - avans);
+    const tolanadigan = Math.max(
+      0,
+      hisoblangan + qoshimcha + bonuslar - ushlab - jarimalar - avans
+    );
 
     const qiymatlar = {
       yarimKunlar,
       hisoblangan,
       qoshimcha,
       ushlab,
+      bonuslar,
+      jarimalar,
       avans,
       tolanadigan,
       ...(data.izoh !== undefined ? { izoh: data.izoh?.trim() || null } : {}),
@@ -327,7 +352,12 @@ export async function avansBer(businessId: string, userId: string, data: AvansIn
           avans: yangiAvans,
           tolanadigan: Math.max(
             0,
-            payroll.hisoblangan + payroll.qoshimcha - payroll.ushlab - yangiAvans
+            payroll.hisoblangan +
+              payroll.qoshimcha +
+              payroll.bonuslar -
+              payroll.ushlab -
+              payroll.jarimalar -
+              yangiAvans
           ),
         },
       });

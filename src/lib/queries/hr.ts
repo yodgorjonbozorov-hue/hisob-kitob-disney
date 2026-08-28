@@ -43,6 +43,9 @@ export interface OylikDTO {
   hisoblangan: number;
   qoshimcha: number;
   ushlab: number;
+  /** Davomat 2.0: oy bonuslari va tasdiqlangan jarimalar (snapshot). */
+  bonuslar: number;
+  jarimalar: number;
   avans: number;
   tolanadigan: number;
   holat: string;
@@ -86,6 +89,8 @@ export async function listOyliklar(businessId: string, oy: string): Promise<Oyli
       hisoblangan: p?.hisoblangan ?? 0,
       qoshimcha: p?.qoshimcha ?? 0,
       ushlab: p?.ushlab ?? 0,
+      bonuslar: p?.bonuslar ?? 0,
+      jarimalar: p?.jarimalar ?? 0,
       // Vedomost yo'q bo'lsa ham berilgan avans ko'rinib tursin.
       avans: p?.avans ?? avansMap.get(x.id) ?? 0,
       tolanadigan: p?.tolanadigan ?? 0,

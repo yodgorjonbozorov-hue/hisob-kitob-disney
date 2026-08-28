@@ -54,7 +54,11 @@ export type AuditEntity =
   | "cashHandover"
   // MAGAZIN moduli
   | "posChek"
-  | "productCategory";
+  | "productCategory"
+  // Davomat 2.0
+  | "attendance"
+  | "employeePenalty"
+  | "employeeBonus";
 
 interface AuditInput {
   businessId?: string | null;
