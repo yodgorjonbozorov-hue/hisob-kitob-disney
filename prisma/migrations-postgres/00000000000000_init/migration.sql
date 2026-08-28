@@ -83,6 +83,7 @@ CREATE TABLE "Business" (
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "omborli" BOOLEAN NOT NULL DEFAULT false,
     "turi" TEXT NOT NULL DEFAULT 'umumiy',
+    "yonalish" TEXT,
     "shaxsiyKassa" BOOLEAN NOT NULL DEFAULT false,
     "magazin" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -636,6 +637,11 @@ CREATE TABLE "Employee" (
     "izoh" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "deletedAt" TIMESTAMP(3),
+    "workScheduleId" TEXT,
+    "workLocationId" TEXT,
+    "selfieTalab" BOOLEAN NOT NULL DEFAULT true,
+    "gpsTalab" BOOLEAN NOT NULL DEFAULT true,
+    "radiusTalab" BOOLEAN NOT NULL DEFAULT true,
 
     CONSTRAINT "Employee_pkey" PRIMARY KEY ("id")
 );
@@ -649,6 +655,17 @@ CREATE TABLE "Attendance" (
     "holat" TEXT NOT NULL DEFAULT 'keldi',
     "izoh" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "kelganVaqt" TIMESTAMP(3),
+    "ketganVaqt" TIMESTAMP(3),
+    "kechikishDaqiqa" INTEGER NOT NULL DEFAULT 0,
+    "jarimaDaqiqa" INTEGER NOT NULL DEFAULT 0,
+    "ertaKetishDaqiqa" INTEGER NOT NULL DEFAULT 0,
+    "ortiqchaDaqiqa" INTEGER NOT NULL DEFAULT 0,
+    "ishlanganDaqiqa" INTEGER NOT NULL DEFAULT 0,
+    "rejaBoshlanish" TEXT,
+    "rejaTugash" TEXT,
+    "rejaImtiyoz" INTEGER,
+    "manba" TEXT,
 
     CONSTRAINT "Attendance_pkey" PRIMARY KEY ("id")
 );
@@ -679,6 +696,8 @@ CREATE TABLE "Payroll" (
     "hisoblangan" INTEGER NOT NULL DEFAULT 0,
     "qoshimcha" INTEGER NOT NULL DEFAULT 0,
     "ushlab" INTEGER NOT NULL DEFAULT 0,
+    "bonuslar" INTEGER NOT NULL DEFAULT 0,
+    "jarimalar" INTEGER NOT NULL DEFAULT 0,
     "avans" INTEGER NOT NULL DEFAULT 0,
     "tolanadigan" INTEGER NOT NULL DEFAULT 0,
     "holat" TEXT NOT NULL DEFAULT 'qoralama',
@@ -689,6 +708,155 @@ CREATE TABLE "Payroll" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "Payroll_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "WorkLocation" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "nomi" TEXT NOT NULL,
+    "lat" DOUBLE PRECISION NOT NULL,
+    "lng" DOUBLE PRECISION NOT NULL,
+    "radiusM" INTEGER NOT NULL DEFAULT 100,
+    "standart" BOOLEAN NOT NULL DEFAULT false,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "WorkLocation_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "WorkSchedule" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "nomi" TEXT NOT NULL,
+    "imtiyozDaqiqa" INTEGER NOT NULL DEFAULT 5,
+    "standart" BOOLEAN NOT NULL DEFAULT false,
+    "kuchgaKirgan" TIMESTAMP(3),
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "WorkSchedule_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "WorkScheduleDay" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "scheduleId" TEXT NOT NULL,
+    "hafta" INTEGER NOT NULL,
+    "ishKuni" BOOLEAN NOT NULL DEFAULT true,
+    "boshlanish" TEXT,
+    "tugash" TEXT,
+
+    CONSTRAINT "WorkScheduleDay_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AttendanceCheck" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "attendanceId" TEXT NOT NULL,
+    "employeeId" TEXT NOT NULL,
+    "turi" TEXT NOT NULL,
+    "vaqt" TIMESTAMP(3) NOT NULL,
+    "manba" TEXT NOT NULL DEFAULT 'selfie_gps',
+    "lat" DOUBLE PRECISION,
+    "lng" DOUBLE PRECISION,
+    "aniqlikM" INTEGER,
+    "masofaM" INTEGER,
+    "ruxsatRadiusM" INTEGER,
+    "workLocationId" TEXT,
+    "selfieId" TEXT,
+    "userId" TEXT,
+    "sabab" TEXT,
+    "oldingiVaqt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AttendanceCheck_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AttendanceSelfie" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "employeeId" TEXT NOT NULL,
+    "turi" TEXT NOT NULL,
+    "saqlagich" TEXT NOT NULL,
+    "url" TEXT,
+    "mazmun" TEXT,
+    "mimeType" TEXT NOT NULL,
+    "hajm" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "AttendanceSelfie_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "PenaltyRule" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "turi" TEXT NOT NULL DEFAULT 'kechikish',
+    "minDaqiqa" INTEGER NOT NULL DEFAULT 0,
+    "maxDaqiqa" INTEGER,
+    "summa" INTEGER NOT NULL,
+    "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "PenaltyRule_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "EmployeePenalty" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "employeeId" TEXT NOT NULL,
+    "attendanceId" TEXT,
+    "ruleId" TEXT,
+    "sana" TIMESTAMP(3) NOT NULL,
+    "summa" INTEGER NOT NULL,
+    "aslSumma" INTEGER NOT NULL,
+    "sabab" TEXT NOT NULL,
+    "manba" TEXT NOT NULL DEFAULT 'avto',
+    "holat" TEXT NOT NULL DEFAULT 'kutilmoqda',
+    "tasdiqlaganId" TEXT,
+    "tasdiqlanganAt" TIMESTAMP(3),
+    "radEtganId" TEXT,
+    "radEtilganAt" TIMESTAMP(3),
+    "izoh" TEXT,
+    "userId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "EmployeePenalty_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "EmployeeBonus" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "employeeId" TEXT NOT NULL,
+    "sana" TIMESTAMP(3) NOT NULL,
+    "summa" INTEGER NOT NULL,
+    "sabab" TEXT NOT NULL,
+    "izoh" TEXT,
+    "userId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "EmployeeBonus_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "HrSetting" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "xodimOylikKoradi" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "HrSetting_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -1272,6 +1440,12 @@ CREATE INDEX "Employee_businessId_isActive_deletedAt_idx" ON "Employee"("busines
 CREATE INDEX "Employee_userId_idx" ON "Employee"("userId");
 
 -- CreateIndex
+CREATE INDEX "Employee_workScheduleId_idx" ON "Employee"("workScheduleId");
+
+-- CreateIndex
+CREATE INDEX "Employee_workLocationId_idx" ON "Employee"("workLocationId");
+
+-- CreateIndex
 CREATE INDEX "Attendance_businessId_sana_idx" ON "Attendance"("businessId", "sana");
 
 -- CreateIndex
@@ -1303,6 +1477,60 @@ CREATE INDEX "Payroll_transactionId_idx" ON "Payroll"("transactionId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Payroll_employeeId_oy_key" ON "Payroll"("employeeId", "oy");
+
+-- CreateIndex
+CREATE INDEX "WorkLocation_businessId_isActive_idx" ON "WorkLocation"("businessId", "isActive");
+
+-- CreateIndex
+CREATE INDEX "WorkSchedule_businessId_isActive_idx" ON "WorkSchedule"("businessId", "isActive");
+
+-- CreateIndex
+CREATE INDEX "WorkScheduleDay_businessId_idx" ON "WorkScheduleDay"("businessId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "WorkScheduleDay_scheduleId_hafta_key" ON "WorkScheduleDay"("scheduleId", "hafta");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "AttendanceCheck_selfieId_key" ON "AttendanceCheck"("selfieId");
+
+-- CreateIndex
+CREATE INDEX "AttendanceCheck_businessId_vaqt_idx" ON "AttendanceCheck"("businessId", "vaqt");
+
+-- CreateIndex
+CREATE INDEX "AttendanceCheck_attendanceId_idx" ON "AttendanceCheck"("attendanceId");
+
+-- CreateIndex
+CREATE INDEX "AttendanceCheck_employeeId_vaqt_idx" ON "AttendanceCheck"("employeeId", "vaqt");
+
+-- CreateIndex
+CREATE INDEX "AttendanceCheck_workLocationId_idx" ON "AttendanceCheck"("workLocationId");
+
+-- CreateIndex
+CREATE INDEX "AttendanceSelfie_businessId_employeeId_createdAt_idx" ON "AttendanceSelfie"("businessId", "employeeId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "PenaltyRule_businessId_isActive_idx" ON "PenaltyRule"("businessId", "isActive");
+
+-- CreateIndex
+CREATE INDEX "EmployeePenalty_businessId_holat_sana_idx" ON "EmployeePenalty"("businessId", "holat", "sana");
+
+-- CreateIndex
+CREATE INDEX "EmployeePenalty_employeeId_sana_idx" ON "EmployeePenalty"("employeeId", "sana");
+
+-- CreateIndex
+CREATE INDEX "EmployeePenalty_attendanceId_idx" ON "EmployeePenalty"("attendanceId");
+
+-- CreateIndex
+CREATE INDEX "EmployeePenalty_ruleId_idx" ON "EmployeePenalty"("ruleId");
+
+-- CreateIndex
+CREATE INDEX "EmployeeBonus_businessId_sana_idx" ON "EmployeeBonus"("businessId", "sana");
+
+-- CreateIndex
+CREATE INDEX "EmployeeBonus_employeeId_sana_idx" ON "EmployeeBonus"("employeeId", "sana");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "HrSetting_businessId_key" ON "HrSetting"("businessId");
 
 -- CreateIndex
 CREATE INDEX "DailyReport_businessId_holat_sana_idx" ON "DailyReport"("businessId", "holat", "sana");
@@ -1617,6 +1845,12 @@ ALTER TABLE "Employee" ADD CONSTRAINT "Employee_businessId_fkey" FOREIGN KEY ("b
 ALTER TABLE "Employee" ADD CONSTRAINT "Employee_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Employee" ADD CONSTRAINT "Employee_workScheduleId_fkey" FOREIGN KEY ("workScheduleId") REFERENCES "WorkSchedule"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Employee" ADD CONSTRAINT "Employee_workLocationId_fkey" FOREIGN KEY ("workLocationId") REFERENCES "WorkLocation"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Attendance" ADD CONSTRAINT "Attendance_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1639,6 +1873,63 @@ ALTER TABLE "Payroll" ADD CONSTRAINT "Payroll_employeeId_fkey" FOREIGN KEY ("emp
 
 -- AddForeignKey
 ALTER TABLE "Payroll" ADD CONSTRAINT "Payroll_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "WorkLocation" ADD CONSTRAINT "WorkLocation_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "WorkSchedule" ADD CONSTRAINT "WorkSchedule_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "WorkScheduleDay" ADD CONSTRAINT "WorkScheduleDay_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "WorkScheduleDay" ADD CONSTRAINT "WorkScheduleDay_scheduleId_fkey" FOREIGN KEY ("scheduleId") REFERENCES "WorkSchedule"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AttendanceCheck" ADD CONSTRAINT "AttendanceCheck_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AttendanceCheck" ADD CONSTRAINT "AttendanceCheck_attendanceId_fkey" FOREIGN KEY ("attendanceId") REFERENCES "Attendance"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AttendanceCheck" ADD CONSTRAINT "AttendanceCheck_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AttendanceCheck" ADD CONSTRAINT "AttendanceCheck_workLocationId_fkey" FOREIGN KEY ("workLocationId") REFERENCES "WorkLocation"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AttendanceCheck" ADD CONSTRAINT "AttendanceCheck_selfieId_fkey" FOREIGN KEY ("selfieId") REFERENCES "AttendanceSelfie"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AttendanceSelfie" ADD CONSTRAINT "AttendanceSelfie_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AttendanceSelfie" ADD CONSTRAINT "AttendanceSelfie_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "PenaltyRule" ADD CONSTRAINT "PenaltyRule_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EmployeePenalty" ADD CONSTRAINT "EmployeePenalty_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EmployeePenalty" ADD CONSTRAINT "EmployeePenalty_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EmployeePenalty" ADD CONSTRAINT "EmployeePenalty_attendanceId_fkey" FOREIGN KEY ("attendanceId") REFERENCES "Attendance"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EmployeePenalty" ADD CONSTRAINT "EmployeePenalty_ruleId_fkey" FOREIGN KEY ("ruleId") REFERENCES "PenaltyRule"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EmployeeBonus" ADD CONSTRAINT "EmployeeBonus_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EmployeeBonus" ADD CONSTRAINT "EmployeeBonus_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "HrSetting" ADD CONSTRAINT "HrSetting_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "DailyReport" ADD CONSTRAINT "DailyReport_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

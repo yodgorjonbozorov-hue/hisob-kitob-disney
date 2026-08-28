@@ -11,6 +11,7 @@ import { STAVKA_NOMI, type StavkaTuri } from "@/lib/validation/hr";
 import { shiftMonthString } from "@/lib/date";
 import type { XodimDTO, OylikDTO, HrStats } from "@/lib/queries/hr";
 import { XodimModal } from "./XodimModal";
+import { XodimlarJadvali } from "./XodimlarJadvali";
 import { OylikModal, AvansModal } from "./OylikModal";
 
 const HOLAT_TONE: Record<string, "kirim" | "chiqim" | "neutral"> = {
@@ -30,11 +31,15 @@ export function HrClient({
   oyliklar,
   stats,
   oy,
+  initialTab = "oylik",
+  basePath = "/app/hr",
 }: {
   xodimlar: XodimDTO[];
   oyliklar: OylikDTO[];
   stats: HrStats;
   oy: string;
+  initialTab?: "oylik" | "xodimlar";
+  basePath?: string;
 }) {
   const router = useRouter();
   const [xodimModal, setXodimModal] = useState<XodimDTO | "yangi" | null>(null);
@@ -42,10 +47,10 @@ export function HrClient({
   const [avansModal, setAvansModal] = useState<OylikDTO | null>(null);
   const [amal, setAmal] = useState<string | null>(null);
   const [xato, setXato] = useState<string | null>(null);
-  const [tab, setTab] = useState<"oylik" | "xodimlar">("oylik");
+  const [tab, setTab] = useState<"oylik" | "xodimlar">(initialTab);
 
   function oyniOzgart(delta: number) {
-    router.push(`/app/hr?oy=${shiftMonthString(oy, delta)}`);
+    router.push(`${basePath}?oy=${shiftMonthString(oy, delta)}`);
   }
 
   async function tola(payrollId: string) {
@@ -152,10 +157,13 @@ export function HrClient({
                       </td>
                       <td className="py-2.5 text-right tnum">
                         {o.hisoblangan.toLocaleString("uz-UZ")}
-                        {(o.qoshimcha > 0 || o.ushlab > 0) && (
+                        {(o.qoshimcha > 0 || o.ushlab > 0 || o.bonuslar > 0 || o.jarimalar > 0) && (
                           <span className="block text-2xs text-faint">
-                            {o.qoshimcha > 0 && `+${o.qoshimcha.toLocaleString("uz-UZ")}`}
-                            {o.ushlab > 0 && ` −${o.ushlab.toLocaleString("uz-UZ")}`}
+                            {o.qoshimcha + o.bonuslar > 0 &&
+                              `+${(o.qoshimcha + o.bonuslar).toLocaleString("uz-UZ")}`}
+                            {o.ushlab + o.jarimalar > 0 &&
+                              ` −${(o.ushlab + o.jarimalar).toLocaleString("uz-UZ")}`}
+                            {o.jarimalar > 0 && " (jarima)"}
                           </span>
                         )}
                       </td>
@@ -195,54 +203,12 @@ export function HrClient({
               </table>
             </div>
           )
-        ) : xodimlar.length === 0 ? (
-          <EmptyState
-            icon="👷"
-            title="Hali xodim yo'q"
-            description="Xodim kartochkasi tizim hisobidan alohida: tizimga kirmaydigan xodimlarga ham oylik yuritiladi."
-            action={<Button onClick={() => setXodimModal("yangi")}>Birinchi xodim</Button>}
-          />
         ) : (
-          <div className="jadval-siljish">
-            <table className="w-full text-sm min-w-[32rem]">
-              <thead>
-                <tr className="text-left text-faint text-xs uppercase">
-                  <th className="pb-2">Ism</th>
-                  <th className="pb-2">Lavozim</th>
-                  <th className="pb-2">Telefon</th>
-                  <th className="pb-2 text-right">Stavka</th>
-                  <th className="pb-2 text-right">Amallar</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {xodimlar.map((x) => (
-                  <tr key={x.id} className={x.isActive ? "" : "opacity-50"}>
-                    <td className="py-2.5 font-medium">
-                      {x.ism}
-                      {!x.isActive && <span className="block text-2xs text-faint">Ishlamaydi</span>}
-                    </td>
-                    <td className="py-2.5">{x.lavozim ?? "—"}</td>
-                    <td className="py-2.5">{x.tel ?? "—"}</td>
-                    <td className="py-2.5 text-right tnum">
-                      {x.stavka.toLocaleString("uz-UZ")}
-                      <span className="block text-2xs text-faint">
-                        {STAVKA_NOMI[x.stavkaTuri as StavkaTuri] ?? x.stavkaTuri}
-                      </span>
-                    </td>
-                    <td className="py-2.5 text-right">
-                      <button
-                        type="button"
-                        onClick={() => setXodimModal(x)}
-                        className="text-2xs text-brand hover:underline"
-                      >
-                        Tahrirlash
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <XodimlarJadvali
+            xodimlar={xodimlar}
+            onTahrir={(x) => setXodimModal(x)}
+            onYangi={() => setXodimModal("yangi")}
+          />
         )}
       </Card>
 

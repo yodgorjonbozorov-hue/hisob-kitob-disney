@@ -107,6 +107,16 @@ const BUSINESS_SCOPED = new Set([
   "Attendance",
   "Payroll",
   "PayrollAdvance",
+  // Davomat 2.0 — selfie/GPS davomat, jadval, jarima/bonus
+  "WorkLocation",
+  "WorkSchedule",
+  "WorkScheduleDay",
+  "AttendanceCheck",
+  "AttendanceSelfie",
+  "PenaltyRule",
+  "EmployeePenalty",
+  "EmployeeBonus",
+  "HrSetting",
   // Hujjatlar (Faza 6.6)
   "Contract",
   "Attachment",

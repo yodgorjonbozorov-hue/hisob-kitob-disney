@@ -210,6 +210,16 @@ model Business {
   /// Ko'p-bizneslik biriktiruvlari (UserBusiness) — bir xodim bir nechta
   /// bizneste ishlashi mumkin.
   userBiriktiruvlar  UserBusiness[]
+  // Davomat 2.0 (selfie/GPS) modullari
+  workLocations      WorkLocation[]
+  workSchedules      WorkSchedule[]
+  workScheduleDays   WorkScheduleDay[]
+  attendanceChecks   AttendanceCheck[]
+  attendanceSelfies  AttendanceSelfie[]
+  penaltyRules       PenaltyRule[]
+  penalties          EmployeePenalty[]
+  bonuses            EmployeeBonus[]
+  hrSetting          HrSetting?
 
   @@index([tenantId])
 }
@@ -1269,12 +1279,31 @@ model Employee {
   createdAt    DateTime  @default(now())
   deletedAt    DateTime?
 
+  // ---- Davomat 2.0 (selfie/GPS) siyosati ----
+  /// Ish jadvali. NULL — biznesning standart jadvali qo'llanadi.
+  workScheduleId String?
+  workSchedule   WorkSchedule? @relation(fields: [workScheduleId], references: [id], onDelete: SetNull)
+  /// Ish joyi (GPS radius). NULL — biznes standart ish joyi qo'llanadi.
+  workLocationId String?
+  workLocation   WorkLocation? @relation(fields: [workLocationId], references: [id], onDelete: SetNull)
+  /// Davomat siyosati: har xodimga alohida sozlanadi (ofis/dala/masofaviy).
+  selfieTalab    Boolean       @default(true)
+  gpsTalab       Boolean       @default(true)
+  /// false — GPS yoziladi, lekin ish joyi radiusi TEKSHIRILMAYDI (dala xodimi).
+  radiusTalab    Boolean       @default(true)
+
   attendances Attendance[]
   payrolls    Payroll[]
   advances    PayrollAdvance[]
+  checks      AttendanceCheck[]
+  selfies     AttendanceSelfie[]
+  penalties   EmployeePenalty[]
+  bonuses     EmployeeBonus[]
 
   @@index([businessId, isActive, deletedAt])
   @@index([userId])
+  @@index([workScheduleId])
+  @@index([workLocationId])
 }
 
 /// DAVOMAT — bir xodim, bir kun, bir yozuv.
@@ -1292,6 +1321,26 @@ model Attendance {
   holat      String   @default("keldi")
   izoh       String?
   createdAt  DateTime @default(now())
+
+  // ---- Davomat 2.0: kelish/ketish vaqtlari (server soati, UTC) ----
+  kelganVaqt DateTime?
+  ketganVaqt DateTime?
+  /// Xom kechikish (daqiqa): jadval boshlanishidan keyin kelgan vaqt.
+  kechikishDaqiqa  Int @default(0)
+  /// Jarima hisobiga o'tadigan kechikish: imtiyoz (grace) ichida bo'lsa 0.
+  jarimaDaqiqa     Int @default(0)
+  ertaKetishDaqiqa Int @default(0)
+  ortiqchaDaqiqa   Int @default(0)
+  ishlanganDaqiqa  Int @default(0)
+  /// Jadval SNAPSHOT'i — keyin jadval o'zgarsa ham hisob auditga ochiq qoladi.
+  rejaBoshlanish String?
+  rejaTugash     String?
+  rejaImtiyoz    Int?
+  /// Tekshiruv manbai: "selfie_gps" | "admin" | "kamera" (Faza 2). NULL — eski qo'lda yozuv.
+  manba String?
+
+  checks    AttendanceCheck[]
+  penalties EmployeePenalty[]
 
   @@unique([employeeId, sana])
   @@index([businessId, sana])
@@ -1341,10 +1390,14 @@ model Payroll {
   yarimKunlar   Int          @default(0)
   /// Stavka bo'yicha asosiy hisob.
   hisoblangan   Int          @default(0)
-  /// Ustama/mukofot.
+  /// Ustama/mukofot (qo'lda kiritiladi).
   qoshimcha     Int          @default(0)
-  /// Ushlab qolish (jarima, yetishmovchilik).
+  /// Ushlab qolish (qo'lda kiritiladi: yetishmovchilik va sh.k.).
   ushlab        Int          @default(0)
+  /// Davomat 2.0: shu oydagi bonuslar yig'indisi (EmployeeBonus, snapshot).
+  bonuslar      Int          @default(0)
+  /// Davomat 2.0: TASDIQLANGAN jarimalar yig'indisi (EmployeePenalty, snapshot).
+  jarimalar     Int          @default(0)
   /// Shu oyda berilgan avanslar yig'indisi (snapshot).
   avans         Int          @default(0)
   /// hisoblangan + qoshimcha - ushlab - avans (manfiy bo'lmaydi).
@@ -1361,6 +1414,223 @@ model Payroll {
   @@unique([employeeId, oy])
   @@index([businessId, oy, holat])
   @@index([transactionId])
+}
+
+// ==== DAVOMAT 2.0 (Xodimlar moduli: selfie + GPS + jadval + jarima) ====
+
+/// ISH JOYI — davomat GPS tekshiruvi uchun nuqta (ofis, do'kon, filial).
+/// Radius ichida check-in qabul qilinadi (Haversine, server tomonda).
+model WorkLocation {
+  id         String    @id @default(cuid())
+  businessId String
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  nomi       String
+  lat        Float
+  lng        Float
+  /// Ruxsat etilgan radius (metr).
+  radiusM    Int       @default(100)
+  /// Biznes standart ish joyi — xodimga alohida biriktirilmagan bo'lsa shu olinadi.
+  standart   Boolean   @default(false)
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
+
+  employees Employee[]
+  checks    AttendanceCheck[]
+
+  @@index([businessId, isActive])
+}
+
+/// ISH JADVALI — haftalik shablon. Kunlari `WorkScheduleDay` da.
+/// Direktor/Admin tuzadi va xodimlarga biriktiradi; xodim faqat ko'radi.
+model WorkSchedule {
+  id            String    @id @default(cuid())
+  businessId    String
+  business      Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  nomi          String
+  /// Kechikish imtiyozi (daqiqa): shu chegaragacha "vaqtida" hisoblanadi.
+  imtiyozDaqiqa Int       @default(5)
+  /// Biznes standart jadvali — xodimga alohida biriktirilmagan bo'lsa shu olinadi.
+  standart      Boolean   @default(false)
+  /// Jadval shu sanadan kuchga kiradi (NULL — darhol).
+  kuchgaKirgan  DateTime?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  deletedAt     DateTime?
+
+  kunlar    WorkScheduleDay[]
+  employees Employee[]
+
+  @@index([businessId, isActive])
+}
+
+/// JADVAL KUNI — haftaning bir kuni (0=Yakshanba ... 6=Shanba, JS getUTCDay).
+/// `ishKuni=false` — dam olish kuni; u kelmaganlik hisoblanMAYDI.
+model WorkScheduleDay {
+  id         String       @id @default(cuid())
+  businessId String
+  business   Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  scheduleId String
+  schedule   WorkSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  hafta      Int
+  ishKuni    Boolean      @default(true)
+  /// "HH:MM" — Toshkent vaqti bo'yicha ish boshlanishi.
+  boshlanish String?
+  /// "HH:MM" — Toshkent vaqti bo'yicha ish tugashi.
+  tugash     String?
+
+  @@unique([scheduleId, hafta])
+  @@index([businessId])
+}
+
+/// DAVOMAT TEKSHIRUVI — har bir kelish/ketish hodisasining O'ZGARMAS dalili.
+/// Admin tuzatishi ham yangi yozuv sifatida qo'shiladi (asl dalil o'chmaydi).
+/// Faza 2 (kamera/yuz tanish) shu jadvalga "kamera" manbali yozuv qo'shadi.
+model AttendanceCheck {
+  id           String     @id @default(cuid())
+  businessId   String
+  business     Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  attendanceId String
+  attendance   Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  employeeId   String
+  employee     Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  /// "kelish" | "ketish"
+  turi         String
+  /// SERVER vaqti (UTC) — mijoz soatiga hech qachon ishonilmaydi.
+  vaqt         DateTime
+  /// "selfie_gps" | "admin" | "kamera" (Faza 2)
+  manba        String     @default("selfie_gps")
+  lat          Float?
+  lng          Float?
+  /// GPS aniqligi (metr, qurilma bergan accuracy).
+  aniqlikM     Int?
+  /// Ish joyigacha hisoblangan masofa (metr, Haversine).
+  masofaM      Int?
+  ruxsatRadiusM Int?
+  workLocationId String?
+  workLocation   WorkLocation? @relation(fields: [workLocationId], references: [id], onDelete: SetNull)
+  selfieId     String?    @unique
+  selfie       AttendanceSelfie? @relation(fields: [selfieId], references: [id], onDelete: SetNull)
+  /// Admin tuzatishda: kim, nima sababdan, avvalgi qiymat nima edi.
+  userId       String?
+  sabab        String?
+  oldingiVaqt  DateTime?
+  createdAt    DateTime   @default(now())
+
+  @@index([businessId, vaqt])
+  @@index([attendanceId])
+  @@index([employeeId, vaqt])
+  @@index([workLocationId])
+}
+
+/// DAVOMAT SELFIESI — maxfiy shaxsiy ma'lumot. Ochiq URL YO'Q: faqat
+/// avtorizatsiyalangan `/api/hr/davomat/selfie/[id]` orqali beriladi.
+/// `saqlagich`: "blob" (Vercel Blob, url to'ldiriladi) | "db" (mazmun base64 —
+/// blob sozlanmagan muhitda zaxira yo'l, qat'iy hajm chegarasi bilan).
+model AttendanceSelfie {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  /// "kelish" | "ketish"
+  turi       String
+  saqlagich  String
+  url        String?
+  mazmun     String?
+  mimeType   String
+  hajm       Int
+  createdAt  DateTime @default(now())
+
+  check AttendanceCheck?
+
+  @@index([businessId, employeeId, createdAt])
+}
+
+/// JARIMA QOIDASI — biznes o'zi sozlaydi (hardcode YO'Q).
+/// turi "kechikish": [minDaqiqa..maxDaqiqa] oralig'iga tushgan xom kechikish.
+/// turi "kelmadi": kelmagan kun uchun bir martalik summa (daqiqa maydonlari 0).
+model PenaltyRule {
+  id         String    @id @default(cuid())
+  businessId String
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  turi       String    @default("kechikish")
+  minDaqiqa  Int       @default(0)
+  /// NULL — yuqori chegara yo'q (masalan "31+ daqiqa").
+  maxDaqiqa  Int?
+  summa      Int
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  deletedAt  DateTime?
+
+  penalties EmployeePenalty[]
+
+  @@index([businessId, isActive])
+}
+
+/// XODIM JARIMASI — avtomatik (davomatdan) yoki qo'lda. Oylikka FAQAT
+/// "tasdiqlandi" holatidagilar kiradi; "kutilmoqda"/"rad" hisobga olinmaydi.
+model EmployeePenalty {
+  id           String      @id @default(cuid())
+  businessId   String
+  business     Business    @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  employeeId   String
+  employee     Employee    @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  attendanceId String?
+  attendance   Attendance? @relation(fields: [attendanceId], references: [id], onDelete: SetNull)
+  ruleId       String?
+  rule         PenaltyRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  sana         DateTime
+  summa        Int
+  /// Asl (avtomatik hisoblangan) summa — tasdiqda tahrirlangan bo'lsa farq ko'rinadi.
+  aslSumma     Int
+  sabab        String
+  /// "avto" | "qolda"
+  manba        String      @default("avto")
+  /// "kutilmoqda" | "tasdiqlandi" | "rad"
+  holat        String      @default("kutilmoqda")
+  tasdiqlaganId String?
+  tasdiqlanganAt DateTime?
+  radEtganId   String?
+  radEtilganAt DateTime?
+  izoh         String?
+  /// Qo'lda yaratganda — kim.
+  userId       String?
+  createdAt    DateTime    @default(now())
+
+  @@index([businessId, holat, sana])
+  @@index([employeeId, sana])
+  @@index([attendanceId])
+  @@index([ruleId])
+}
+
+/// XODIM BONUSI — direktor/admin beradi. Oylik hisobida qo'shiladi.
+model EmployeeBonus {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  sana       DateTime
+  summa      Int
+  sabab      String
+  izoh       String?
+  userId     String
+  createdAt  DateTime @default(now())
+
+  @@index([businessId, sana])
+  @@index([employeeId, sana])
+}
+
+/// HR SOZLAMALARI — bir biznesga bitta yozuv (DailyReportSetting uslubi).
+model HrSetting {
+  id         String   @id @default(cuid())
+  businessId String   @unique
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  /// Xodim o'z oyligini (vedomost) ko'ra oladimi.
+  xodimOylikKoradi Boolean @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 // ==== KUNLIK HISOBOT moduli ====

@@ -78,8 +78,22 @@ export const ZAXIRA_JADVALLARI = [
   "purchaseOrderItem",
   "approvalRule",
   "approvalRequest",
+  // Davomat 2.0: DIQQAT: `workLocation` va `workSchedule` `employee`dan OLDIN
+  // turishi SHART — Employee ikkalasiga FK bilan murojaat qiladi
+  // (workLocationId/workScheduleId). `workScheduleDay` jadvaldan KEYIN.
+  "workLocation",
+  "workSchedule",
+  "workScheduleDay",
   "employee",
   "attendance",
+  // `attendanceSelfie` `attendanceCheck`dan OLDIN — Check.selfieId unga FK.
+  "attendanceSelfie",
+  "attendanceCheck",
+  "penaltyRule",
+  // `employeePenalty` employee/attendance/penaltyRule'dan KEYIN (uchalasiga FK).
+  "employeePenalty",
+  "employeeBonus",
+  "hrSetting",
   "payroll",
   "payrollAdvance",
   "contract",

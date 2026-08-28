@@ -158,6 +158,44 @@ export async function hisobotIshi() {
 // 4. Takroriylar va vazifalar (06:00)
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// 5. Davomat: kelmaganlarni belgilash (01:00 Toshkent = 20:00 UTC)
+// ---------------------------------------------------------------------------
+
+/**
+ * O'tgan Toshkent kuni bo'yicha: jadvalda ish kuni bo'lgan, lekin davomat
+ * yozuvi yo'q xodimlar "kelmadi" deb belgilanadi va (qoida bo'lsa) KUTILMOQDA
+ * jarima ochiladi. Kun tugagach ishlaydi — xodim erta "kelmadi" bo'lib
+ * qolmaydi; dam olish kuni hech qachon "kelmadi" bo'lmaydi. Idempotent.
+ */
+export async function davomatIshi() {
+  const { isModuleOnForTenant } = await import("@/lib/modules/guard");
+  const { kelmaganlarniBelgila } = await import("@/lib/services/davomat");
+  const { toshkentSana } = await import("@/lib/davomat/vaqt");
+  const { prisma } = await import("@/lib/prisma");
+
+  // Kecha (Toshkent bo'yicha): cron yarim tundan keyin ishlaydi.
+  const kecha = toshkentSana(new Date(Date.now() - 24 * 60 * 60 * 1000));
+
+  const natija = await tenantlarBoylab(async (tenantId) => {
+    if (!(await isModuleOnForTenant(tenantId, "HR"))) return 0;
+    // Tenant kontekstidamiz — tenant-scoped prisma bizneslarni beradi.
+    const bizneslar = await prisma.business.findMany({
+      where: { isActive: true },
+      select: { id: true },
+    });
+    let jami = 0;
+    for (const biznes of bizneslar) {
+      const { belgilandi } = await kelmaganlarniBelgila(biznes.id, kecha);
+      jami += belgilandi;
+    }
+    return jami;
+  }, "Davomat kelmaganlar");
+
+  await cronBelgisi("davomat");
+  return { sana: kecha, belgilandi: natija.jami, xato: natija.xato };
+}
+
 export async function vazifaIshi() {
   const { generateDueRecurring } = await import("@/lib/services/recurring");
   const { sendTaskReminders } = await import("@/lib/tasks/service");

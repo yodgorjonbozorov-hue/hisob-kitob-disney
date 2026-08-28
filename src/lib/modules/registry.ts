@@ -243,15 +243,27 @@ export const MODULLAR: ModulTarifi[] = [
   },
   {
     code: "HR",
-    nomi: "Xodimlar (HR-lite)",
+    nomi: "Xodimlar",
     tavsif:
-      "Xodim kartochkasi, davomat va oylik: stavka, avans, ushlab qolish va ustama. Oylik to'langanda chiqim tranzaksiya avtomatik yoziladi.",
+      "Xodimlar, selfie+GPS davomat, ish jadvali, jarima/bonus va oylik. Oylik to'langanda chiqim tranzaksiya avtomatik yoziladi.",
     core: false,
-    // Oylik — pul va shaxsiy ma'lumot, shuning uchun faqat boshqaruvchilar.
-    rollar: BOSHQARUVCHILAR,
+    // Modul HAMMAga ochiq: oddiy xodim "Davomatim" (o'z check-in) sahifasidan
+    // foydalanadi. Oylik/jarima/jadval kabi boshqaruv sahifa va API'lari esa
+    // per-route `requireManager` + nav `rollar` bilan FAQAT boshqaruvchilarda
+    // qoladi — modul darajasini kengaytirish ularga ruxsat OCHMAYDI.
+    rollar: HAMMA,
     nav: [
-      { href: "/app/hr", label: "Xodimlar", icon: "hr", tartib: 39, rollar: BOSHQARUVCHILAR },
-      { href: "/app/hr/davomat", label: "Davomat", icon: "attendance", tartib: 40, rollar: BOSHQARUVCHILAR },
+      // Xodimning o'z davomati — barcha rollarga (mobil ustuvor).
+      { href: "/app/hr/men", label: "Davomatim", icon: "attendance", tartib: 22, rollar: HAMMA },
+      // Boshqaruv bo'limi (spec: Umumiy / Xodimlar / Davomat / Ish jadvali /
+      // Oylik / Jarima & Bonus / Sozlamalar).
+      { href: "/app/hr/bugun", label: "Davomat bugun", icon: "attendance", tartib: 39, rollar: BOSHQARUVCHILAR },
+      { href: "/app/hr", label: "Xodimlar", icon: "hr", tartib: 40, rollar: BOSHQARUVCHILAR },
+      { href: "/app/hr/davomat", label: "Davomat jadvali", icon: "attendance", tartib: 41, rollar: BOSHQARUVCHILAR },
+      { href: "/app/hr/jadval", label: "Ish jadvali", icon: "rule", tartib: 42, rollar: BOSHQARUVCHILAR },
+      { href: "/app/hr/oylik", label: "Oylik", icon: "wallet", tartib: 43, rollar: BOSHQARUVCHILAR },
+      { href: "/app/hr/jarima", label: "Jarima & Bonus", icon: "budget", tartib: 44, rollar: BOSHQARUVCHILAR },
+      { href: "/app/hr/sozlamalar", label: "Davomat sozlamalari", icon: "rule", tartib: 74, rollar: BOSHQARUVCHILAR, guruh: "sozlamalar" },
     ],
   },
   {
