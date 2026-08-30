@@ -61,6 +61,11 @@ export function DetailSheet({
             />
           )}
           <Qator yorliq="Izoh" qiymat={t.izoh ?? "—"} />
+          {/* Sotuvchi — savdo kimning hisobiga yozilgani (xodim statistikasi).
+              Kirituvchi bilan bir xil bo'lsa alohida qator shart emas. */}
+          {t.sotuvchi && t.sotuvchi.id !== t.user.id && (
+            <Qator yorliq="Sotuvchi" qiymat={t.sotuvchi.ism} />
+          )}
           <Qator yorliq="Kim kiritdi" qiymat={t.user.ism} />
           {t.account && <Qator yorliq="Kassa" qiymat={t.account.nomi} />}
           {t.filial && <Qator yorliq="Filial" qiymat={t.filial} />}

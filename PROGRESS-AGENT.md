@@ -5256,3 +5256,42 @@ radius rad, selfie/GPS siyosati, dublikat check-in/out, tenant izolyatsiyasi,
 admin tuzatish, jarima tasdiqlash/rad/oylik, kelmaganlar cron, qoida kesishuvi).
 `test:izolyatsiya-royxati`, `test:backup`, `test:hr`, `test:isolation`, `test:dialect`
 (pg init migratsiya qayta yaratildi — 61 jadval) — yashil. `npm run build` o'tdi.
+
+### 2026-08-30 — Kirimda sotuvchi/xodim + "Xodimlar" analitika bo'limi (tugadi)
+
+**Branch:** `claude/kirim-xodimlar-tracking-cbtxzr`
+
+**Nima qilindi**
+- Migratsiya `20260830090000_kirim_sotuvchi` — FAQAT qo'shuvchi:
+  `Transaction.sotuvchiId` (TEXT NULL, FK User ON DELETE SET NULL) + 2 indeks
+  (`businessId+sotuvchiId+sana`, `sotuvchiId`). Jadval qayta qurilmaydi, eski
+  yozuvlar tegilmaydi. Postgres init qayta generatsiya qilindi.
+- `userId` (kim kiritgan, audit) va `sotuvchiId` (savdo kimniki) AJRATILDI.
+  Kirim formasida "Sotuvchi / Xodim" tanlovi: standart — yozuvchining o'zi;
+  boshqa xodimni tanlash faqat boshqaruvchiga (server ham majburlaydi —
+  `lib/services/sotuvchi.ts`); tanlov ro'yxati biznes chegarasida
+  (`UserBusiness` qoidasi, boshqa biznes xodimi ko'rinmaydi). Chiqimda yozilmaydi.
+- CRM → Kirim ko'chirishda sotuvchi = buyurtma MAS'ULI (`Deal.masulId`),
+  ko'chirishni kim bosgani emas. Deal ↔ Transaction 1-1 UNIQUE bo'lgani uchun
+  bitta zakaz statistikada BIR marta sanaladi.
+- "Xodimlar" bo'limi (`/app/tranzaksiyalar/xodimlar`): davr filtri
+  (Bugun/Bu hafta/Bu oy/Sana, standart "Bu oy"), KPI (jami zakaz, jami sotuv,
+  eng ko'p zakaz/summa), reyting (zakaz soni, summa, o'rtacha, ulush %).
+  Xodim detali (`/xodimlar/[id]`): davr + kategoriya + to'lov filtrlari,
+  yozuvlar lentasi. Mobile-first, karta-qatorlar, jadval yo'q.
+- Statistika manbai — kirim tranzaksiyalari: biriktirish `sotuvchiId ?? userId`
+  (eski yozuvlar yo'qolmaydi); qarz TO'LOV yozuvlari (`DebtPayment.transactionId`)
+  chiqariladi — qarzga savdo faqat savdo kunida bir marta sanaladi.
+- Himoya: sahifa + API (`/api/transactions/xodimlar-statistika[/id]`) mavjud
+  `hisobot.korish` huquqi bilan (davr yakuni qoidasi) — OWNER/ADMIN da bor,
+  sotuvchi/kassirda yo'q, maxsus rolga direktor o'zi beradi.
+- Kirim/Chiqim sahifasidagi qarz mas'uli/"kim kiritdi" ro'yxati endi biznes
+  chegarali (`listBiznesXodimlari`) — ilgari tenantning barcha userlari chiqardi.
+
+**Testlar:** `tests/xodim-statistika.test.ts` (12 test: default sotuvchi, huquq,
+biznes/tenant izolyatsiyasi, chiqimda null, CRM 1-marta sanash, KPI/reyting/ulush,
+davr filtri, qarz to'lovi chiqarilishi, detal filtrlari, eski yozuvlar,
+hisobot.korish matritsasi, jami kirim/chiqim o'zgarmagani). `test:crm`,
+`test:isolation`, `test:agregat`, `test:atomik`, `test:kirim-chiqim`, `test:qarz`,
+`test:visibility`, `test:soft-delete`, `test:tasdiqlash`, `test:kunlik`,
+`test:izolyatsiya-royxati`, `test:postgres` — yashil. `npm run build` o'tdi.

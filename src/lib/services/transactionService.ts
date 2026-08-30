@@ -24,6 +24,12 @@ export interface CreateTransactionData {
    */
   miqdorKg?: number | null;
   kgNarxi?: number | null;
+  /**
+   * SOTUVCHI/XODIM — savdo kimning hisobiga yozilishi (xodim statistikasi).
+   * Chaqiruvchi (route) huquq va biznes tegishliligini oldindan tekshiradi
+   * (lib/services/sotuvchi.ts). Kirimda berilmasa — yozuvchi o'zi.
+   */
+  sotuvchiId?: string | null;
 }
 
 /**
@@ -99,11 +105,15 @@ export async function createTransaction(userId: string, businessId: string, data
       izoh: data.izoh ?? undefined,
       filial: data.filial ?? undefined,
       userId,
+      // Kirim savdosi HAR DOIM kimgadir yoziladi — berilmasa yozuvchining o'ziga
+      // (bot va tez qo'shish shu yo'ldan yuradi). Chiqimda sotuvchi bo'lmaydi.
+      sotuvchiId: data.turi === "kirim" ? data.sotuvchiId ?? userId : null,
     },
     include: {
       category: true,
       user: { select: { id: true, ism: true } },
       account: { select: { id: true, nomi: true, turi: true } },
+      sotuvchi: { select: { id: true, ism: true } },
     },
   });
 
@@ -193,6 +203,9 @@ export async function createTransactionTx(
       izoh: data.izoh ?? undefined,
       filial: data.filial ?? undefined,
       userId,
+      // TIZIM yozuvlari (qarz to'lovi, oylik, xarid) sotuvchisiz qoladi —
+      // savdo emas. CRM ko'chirishi esa buyurtma mas'ulini OCHIQ uzatadi.
+      sotuvchiId: data.turi === "kirim" ? data.sotuvchiId ?? null : null,
     },
   });
 }

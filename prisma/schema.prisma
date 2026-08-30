@@ -251,6 +251,8 @@ model User {
   /// bo'lgani uchun "sessiyani bekor qilish"ning yagona ishonchli yo'li shu.
   sessionEpoch       Int               @default(0)
   transactions       Transaction[]
+  /// Sotuvchi sifatida biriktirilgan kirim yozuvlari (xodim statistikasi).
+  sotuvYozuvlari     Transaction[]     @relation("SotuvchiYozuvlari")
   employees          Employee[]
   approvalRequests   ApprovalRequest[] @relation("TasdiqSorovchi")
   approvalDecisions  ApprovalRequest[] @relation("TasdiqQaror")
@@ -559,6 +561,13 @@ model Transaction {
   izoh            String?
   userId          String
   user            User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  /// SOTUVCHI/XODIM — savdo kimning hisobiga yozilishi. `userId` dan farqi:
+  /// `userId` — yozuvni KIM KIRITGANI (audit), `sotuvchiId` — savdo KIMNIKI
+  /// (xodim statistikasi). Null — eski yozuvlar va sotuvsiz tizim yozuvlari
+  /// (qarz to'lovi, oylik); statistika ular uchun `userId` ga tayanadi
+  /// (lib/queries/xodimStatistika.ts). Faqat kirim uchun ma'noga ega.
+  sotuvchiId      String?
+  sotuvchi        User?            @relation("SotuvchiYozuvlari", fields: [sotuvchiId], references: [id], onDelete: SetNull)
   filial          String?
   createdAt       DateTime         @default(now())
   // Soft delete — o'chirilgan yozuv shu vaqt bilan belgilanadi (undo/savat uchun).
@@ -586,6 +595,9 @@ model Transaction {
   @@index([categoryId])
   @@index([userId])
   @@index([businessId, accountId, sana])
+  /// Xodim statistikasi kesimi (biznes + sotuvchi + davr) va `SetNull` tekshiruvi.
+  @@index([businessId, sotuvchiId, sana])
+  @@index([sotuvchiId])
 }
 
 /// Audit izi — har bir muhim o'zgarish (kim, nima, oldin→keyin) yoziladi.

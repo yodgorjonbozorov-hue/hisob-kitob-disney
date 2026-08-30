@@ -69,6 +69,16 @@ export async function kirimgaKochirish(params: KirimgaKochirishParams) {
   // Kirim sanasi — BUYURTMA sanasi (kiritilmagan eski buyurtmalarda bugun).
   const sana = deal.sana ? utcDateToDateOnlyString(deal.sana) : todayDateOnlyString();
 
+  // SOTUVCHI = buyurtma MAS'ULI (xodim statistikasi zakazni kim olgan bo'lsa
+  // o'shanga yozadi), ko'chirishni kim bosgani emas. Mas'ul hisobi o'chirilgan
+  // bo'lsa (FK bo'sh qolmasin) — ko'chiruvchining o'ziga tushadi. Buyurtma ↔
+  // kirim BIR-BIRGA bog'langani uchun zakaz statistikada bir marta sanaladi.
+  const masul = await prisma.user.findFirst({
+    where: { id: deal.masulId },
+    select: { id: true },
+  });
+  const sotuvchiId = masul?.id ?? params.userId;
+
   const txn = await runBusinessTx(params.businessId, async (tx) => {
     // Tranzaksiya ichida xom `tx` — HAR so'rovga `businessId` sharti QO'LDA
     // yoziladi (lib/db/businessTx.ts).
@@ -83,6 +93,7 @@ export async function kirimgaKochirish(params: KirimgaKochirishParams) {
       izoh,
       accountId: params.accountId ?? null,
       tolovTuri: params.tolovTuri ?? null,
+      sotuvchiId,
     });
 
     // ATOMIK BOG'LASH: `transactionId: null` sharti — poyga himoyasi.

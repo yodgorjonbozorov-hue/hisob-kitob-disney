@@ -10,6 +10,7 @@ import { resolveActiveBusinessId } from "@/lib/business";
 import { resolveAccountId } from "@/lib/services/accounts";
 import { dashboardYangilandi } from "@/lib/cache";
 import { kunlikSinxron } from "@/lib/services/kunlik";
+import { tekshirilganSotuvchi } from "@/lib/services/sotuvchi";
 
 export const PATCH = withTenant<{ params: { id: string } }>(async (request, { params }, { session: user }) => {
   const businessId = await resolveActiveBusinessId(user);
@@ -113,6 +114,27 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
     }
   }
 
+  // SOTUVCHI tuzatish: faqat kirimda; boshqa xodimni belgilash — boshqaruvchi
+  // yoki xodim shu biznesniki ekani tekshiriladi (lib/services/sotuvchi.ts).
+  // Kirim chiqimga aylansa sotuvchi tozalanadi (chiqimda savdo yo'q).
+  let sotuvchiYangilash: { sotuvchiId: string | null } | Record<string, never> = {};
+  if (data.sotuvchiId !== undefined) {
+    if (data.sotuvchiId && yakuniyTuri !== "kirim") {
+      return NextResponse.json({ error: "Sotuvchi faqat kirim uchun belgilanadi" }, { status: 400 });
+    }
+    if (data.sotuvchiId === null || data.sotuvchiId === user.userId) {
+      sotuvchiYangilash = { sotuvchiId: data.sotuvchiId };
+    } else {
+      if (!isManager(user.rol)) {
+        throw new ForbiddenError("Boshqa xodim nomiga yozish faqat boshqaruvchiga ruxsat etilgan");
+      }
+      sotuvchiYangilash = { sotuvchiId: await tekshirilganSotuvchi(businessId!, data.sotuvchiId) };
+    }
+  }
+  if (yakuniyTuri === "chiqim" && existing.sotuvchiId) {
+    sotuvchiYangilash = { sotuvchiId: null };
+  }
+
   const updated = await prisma.transaction.update({
     where: { id: params.id },
     data: {
@@ -126,11 +148,13 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
       ...accountYangilash,
       ...(data.izoh !== undefined ? { izoh: data.izoh } : {}),
       ...(data.filial !== undefined ? { filial: data.filial } : {}),
+      ...sotuvchiYangilash,
     },
     include: {
       category: true,
       user: { select: { id: true, ism: true } },
       account: { select: { id: true, nomi: true, turi: true } },
+      sotuvchi: { select: { id: true, ism: true } },
     },
   });
 

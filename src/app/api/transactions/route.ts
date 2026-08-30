@@ -9,6 +9,7 @@ import { resolveActiveBusinessId } from "@/lib/business";
 import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { dashboardYangilandi } from "@/lib/cache";
 import { hasPermission } from "@/lib/permissions/tekshir";
+import { sotuvchiniHalQil } from "@/lib/services/sotuvchi";
 
 export const GET = withTenant(async (request, _ctx, { session: user }) => {
 
@@ -72,6 +73,14 @@ export const POST = withTenant(async (request, _ctx, tenantCtx) => {
     return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
   }
 
+  // SOTUVCHI/XODIM: kirimda har doim to'ldiriladi (berilmasa — yozuvchi o'zi);
+  // boshqa xodimni tanlash faqat boshqaruvchiga, xodim shu biznesniki bo'lishi
+  // shart (lib/services/sotuvchi.ts).
+  parsed.data.sotuvchiId = await sotuvchiniHalQil(
+    { userId: user.userId, rol: user.rol },
+    businessId,
+    parsed.data
+  );
 
   // Chiqim tasdiqlash qoidasidan oshsa — yozuv emas, so'rov yaratiladi.
   const modullar = parsed.data.turi === "chiqim" ? await getEnabledModules(tenantCtx) : null;

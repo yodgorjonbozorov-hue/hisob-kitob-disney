@@ -233,6 +233,7 @@ CREATE TABLE "Transaction" (
     "sana" TIMESTAMP(3) NOT NULL,
     "izoh" TEXT,
     "userId" TEXT NOT NULL,
+    "sotuvchiId" TEXT,
     "filial" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "deletedAt" TIMESTAMP(3),
@@ -1221,6 +1222,12 @@ CREATE INDEX "Transaction_userId_idx" ON "Transaction"("userId");
 CREATE INDEX "Transaction_businessId_accountId_sana_idx" ON "Transaction"("businessId", "accountId", "sana");
 
 -- CreateIndex
+CREATE INDEX "Transaction_businessId_sotuvchiId_sana_idx" ON "Transaction"("businessId", "sotuvchiId", "sana");
+
+-- CreateIndex
+CREATE INDEX "Transaction_sotuvchiId_idx" ON "Transaction"("sotuvchiId");
+
+-- CreateIndex
 CREATE INDEX "AuditLog_tenantId_createdAt_idx" ON "AuditLog"("tenantId", "createdAt");
 
 -- CreateIndex
@@ -1681,6 +1688,9 @@ ALTER TABLE "Transaction" ADD CONSTRAINT "Transaction_accountId_fkey" FOREIGN KE
 
 -- AddForeignKey
 ALTER TABLE "Transaction" ADD CONSTRAINT "Transaction_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Transaction" ADD CONSTRAINT "Transaction_sotuvchiId_fkey" FOREIGN KEY ("sotuvchiId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "AuditLog" ADD CONSTRAINT "AuditLog_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE SET NULL ON UPDATE CASCADE;
