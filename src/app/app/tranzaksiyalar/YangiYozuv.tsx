@@ -6,7 +6,7 @@ import { Modal } from "@/components/ui/Modal";
 import { TransactionForm } from "./TransactionForm";
 import type { TransactionDTO } from "@/lib/queries/transactions";
 import type { QarzMasul } from "./QarzForm";
-import type { CategoryOption } from "./turlar";
+import type { CategoryOption, XodimOption } from "./turlar";
 import type { TezKategoriyalar } from "@/lib/queries/tezKategoriyalar";
 
 /**
@@ -26,6 +26,9 @@ export function YangiYozuv({
   categories,
   accounts,
   masullar,
+  sotuvchilar = [],
+  currentUserId = "",
+  sotuvchiTanlash = false,
   tezKategoriyalar,
   onCreated,
   onQarzCreated,
@@ -34,6 +37,10 @@ export function YangiYozuv({
   categories: CategoryOption[];
   accounts: { id: string; nomi: string }[];
   masullar: QarzMasul[];
+  /** Kirim formasidagi "Sotuvchi / Xodim" tanlovi uchun. */
+  sotuvchilar?: XodimOption[];
+  currentUserId?: string;
+  sotuvchiTanlash?: boolean;
   tezKategoriyalar?: TezKategoriyalar;
   onCreated: (t: TransactionDTO | null, xabar: string) => void;
   onQarzCreated: () => void;
@@ -134,6 +141,9 @@ export function YangiYozuv({
             categories={categories}
             accounts={accounts}
             masullar={masullar}
+            sotuvchilar={sotuvchilar}
+            currentUserId={currentUserId}
+            sotuvchiTanlash={sotuvchiTanlash}
             tezKategoriyalar={tezKategoriyalar}
             boshTuri={ochiq}
             onCreated={(t, xabar) => {

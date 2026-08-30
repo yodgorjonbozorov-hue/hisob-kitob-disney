@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { XodimlarHavola } from "./XodimlarHavola";
 import { TransactionFilters } from "./TransactionFilters";
 import { TransactionList } from "./TransactionList";
 import { SummaryBar } from "./SummaryBar";
@@ -36,6 +37,7 @@ export function TransactionsClient({
   accounts,
   masullar = [],
   xodimlar = [],
+  xodimlarStat = false,
   tezKategoriyalar,
   currentUserId,
   currentUserRol,
@@ -54,6 +56,8 @@ export function TransactionsClient({
   masullar?: { id: string; ism: string }[];
   /** "Kim kiritdi" filtri uchun — faqat direktorga to'ldirilgan holda keladi. */
   xodimlar?: XodimOption[];
+  /** "Xodimlar" statistika havolasi ko'rsatilsinmi (`hisobot.korish` huquqi). */
+  xodimlarStat?: boolean;
   tezKategoriyalar?: TezKategoriyalar;
   currentUserId: string;
   currentUserRol: Rol;
@@ -125,6 +129,9 @@ export function TransactionsClient({
             categories={categories}
             accounts={accounts}
             masullar={masullar}
+            sotuvchilar={masullar}
+            currentUserId={currentUserId}
+            sotuvchiTanlash={manager}
             tezKategoriyalar={tezKategoriyalar}
             onCreated={handleCreated}
             onQarzCreated={() => {
@@ -152,6 +159,10 @@ export function TransactionsClient({
           sof={totals.sof}
         />
       )}
+
+      {/* Xodimlar analitikasi havolasi — faqat `hisobot.korish` huquqi
+          borlarga: oddiy sotuvchiga butun biznes reytingi ochilmaydi. */}
+      {xodimlarStat && <XodimlarHavola />}
 
       <TransactionFilters
         categories={categories}

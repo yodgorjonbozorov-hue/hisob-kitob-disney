@@ -13,6 +13,7 @@ import { todayTashkentDateOnlyString } from "@/lib/date";
 import { isModuleOnForTenant } from "@/lib/modules/guard";
 import { TransactionsClient } from "./TransactionsClient";
 import { listAccounts, getMeningKassam } from "@/lib/queries/accounts";
+import { listBiznesXodimlari } from "@/lib/services/sotuvchi";
 import { toshkentBugunBoshi } from "@/lib/services/kassirKassa";
 import { KassamKartasi } from "@/components/kassa/KassamKartasi";
 import { SotilganMahsulotlar } from "./SotilganMahsulotlar";
@@ -99,13 +100,10 @@ export default async function TranzaksiyalarPage({
     }),
     // Faol kassalar — formada tanlash uchun (bitta bo'lsa qadam yashiriladi).
     listAccounts(businessId, true),
-    // Qarzga mas'ul sotuvchi/operator tanlash uchun (bitta bo'lsa yashiriladi).
-    prisma.user.findMany({
-      where: { isActive: true },
-      select: { id: true, ism: true },
-      orderBy: { ism: "asc" },
-      take: 100,
-    }),
+    // Biznes xodimlari: qarz mas'uli, "Kim kiritdi" filtri va kirimdagi
+    // "Sotuvchi / Xodim" tanlovi uchun BITTA ro'yxat. Boshqa biznesga
+    // biriktirilgan xodimlar ko'rinmaydi (lib/services/sotuvchi.ts).
+    listBiznesXodimlari(businessId),
     // MENING KASSAM: foydalanuvchining shaxsiy kassasi (ledgerdan). Yuqoridagi
     // Naqd/Click/Qarz/Sof raqamlariga hech qanday ta'siri yo'q.
     getMeningKassam(businessId, session.userId, toshkentBugunBoshi()),
@@ -157,6 +155,8 @@ export default async function TranzaksiyalarPage({
         // "Kim kiritdi" filtri faqat direktorga: xodim baribir o'z
         // yozuvlarinigina ko'radi, ro'yxat unga faqat yolg'on tanlov berardi.
         xodimlar={canMove ? masullar : []}
+        // Xodimlar statistikasi havolasi — davr yakuni bilan bir xil huquq.
+        xodimlarStat={jamiKorish}
         tezKategoriyalar={tezKategoriyalar}
         currentUserId={session.userId}
         currentUserRol={session.rol}

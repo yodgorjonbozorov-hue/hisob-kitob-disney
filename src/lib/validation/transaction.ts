@@ -62,6 +62,15 @@ export const createTransactionSchema = z
      */
     miqdorKg: miqdorKgSchema.optional().nullable(),
     kgNarxi: kgNarxiSchema.optional().nullable(),
+    /**
+     * SOTUVCHI/XODIM — savdo kimning hisobiga yozilishi (xodim statistikasi).
+     * Berilmasa kirimda server joriy foydalanuvchini oladi. Boshqa xodimni
+     * tanlash faqat boshqaruvchiga (server tekshiradi — lib/services/sotuvchi.ts).
+     */
+    sotuvchiId: z.string().min(1).optional().nullable(),
+  })
+  .refine((d) => !(d.sotuvchiId && d.turi === "chiqim"), {
+    message: "Sotuvchi faqat kirim uchun belgilanadi",
   })
   .refine((d) => !(d.tolovTuri === "qarz" && d.turi === "chiqim"), {
     message: "Qarz to'lov turi faqat kirim uchun",
@@ -88,6 +97,8 @@ export const updateTransactionSchema = z
     /** Kg savdosini tuzatish: ikkalasi birga yuboriladi, summa qayta hisoblanadi. */
     miqdorKg: miqdorKgSchema.optional().nullable(),
     kgNarxi: kgNarxiSchema.optional().nullable(),
+    /** Sotuvchini tuzatish (null — olib tashlash). Faqat boshqaruvchi (route tekshiradi). */
+    sotuvchiId: z.string().min(1).optional().nullable(),
   })
   .refine(kgJuftligiToliq, {
     message: "Kg savdosida miqdor ham, 1 kg narxi ham kiritilishi shart",

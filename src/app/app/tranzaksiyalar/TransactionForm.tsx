@@ -10,8 +10,9 @@ import { QarzForm, type QarzMasul } from "./QarzForm";
 import { KG_BOSH, KgMaydonlari, type KgQiymat } from "./KgMaydonlari";
 import { SummaMaydoni } from "./SummaMaydoni";
 import { KategoriyaTanlov } from "./KategoriyaTanlov";
+import { QoshimchaMaydonlar } from "./QoshimchaMaydonlar";
 import type { TransactionDTO } from "@/lib/queries/transactions";
-import type { CategoryOption } from "./turlar";
+import type { CategoryOption, XodimOption } from "./turlar";
 import type { TezKategoriyalar } from "@/lib/queries/tezKategoriyalar";
 
 interface AccountOption {
@@ -35,6 +36,9 @@ export function TransactionForm({
   categories,
   accounts,
   masullar = [],
+  sotuvchilar = [],
+  currentUserId = "",
+  sotuvchiTanlash = false,
   tezKategoriyalar,
   boshTuri = "kirim",
   onCreated,
@@ -45,6 +49,12 @@ export function TransactionForm({
   accounts: AccountOption[];
   /** Qarzga mas'ul qilib belgilash mumkin bo'lgan xodimlar. */
   masullar?: QarzMasul[];
+  /** Kirimda "Sotuvchi / Xodim" tanlovi uchun biznes xodimlari. */
+  sotuvchilar?: XodimOption[];
+  /** Sotuvchi tanlovining standart qiymati — joriy foydalanuvchi. */
+  currentUserId?: string;
+  /** Boshqa xodimni tanlashga ruxsat (boshqaruvchi). Aks holda maydon chiqmaydi. */
+  sotuvchiTanlash?: boolean;
   /** Ko'p ishlatiladigan kategoriyalar — faqat tartib uchun. */
   tezKategoriyalar?: TezKategoriyalar;
   boshTuri?: "kirim" | "chiqim";
@@ -60,6 +70,7 @@ export function TransactionForm({
   const [sana, setSana] = useState(todayDateOnlyString());
   const [izoh, setIzoh] = useState("");
   const [accountId, setAccountId] = useState("");
+  const [sotuvchiId, setSotuvchiId] = useState(currentUserId);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const yuborilmoqda = useRef(false);
@@ -126,6 +137,8 @@ export function TransactionForm({
           // Bitta kassali biznesda accountId yuborilmaydi — server birinchi
           // faol kassani o'zi tanlaydi.
           ...(accountId ? { accountId } : {}),
+          // Sotuvchi faqat kirimda; yuborilmasa server yozuvchining o'zini oladi.
+          ...(turi === "kirim" && sotuvchiId ? { sotuvchiId } : {}),
         }),
       });
       const data = await res.json();
@@ -179,54 +192,21 @@ export function TransactionForm({
             disabled={loading}
           />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-fg mb-1.5" htmlFor="tx-sana">
-                Sana
-              </label>
-              <input
-                id="tx-sana"
-                type="date"
-                value={sana}
-                disabled={loading}
-                onChange={(e) => setSana(e.target.value)}
-                className="w-full rounded-lg border border-line bg-surface text-fg px-3 py-2.5 text-base min-h-[44px]"
-              />
-            </div>
-            {accounts.length > 1 && (
-              <div>
-                <label className="block text-sm font-medium text-fg mb-1.5" htmlFor="tx-kassa">
-                  Kassa
-                </label>
-                <select
-                  id="tx-kassa"
-                  value={accountId}
-                  disabled={loading}
-                  onChange={(e) => setAccountId(e.target.value)}
-                  className="w-full rounded-lg border border-line bg-surface text-fg px-3 py-2.5 text-base min-h-[44px]"
-                >
-                  {accounts.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.nomi}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-            <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-fg mb-1.5" htmlFor="tx-izoh">
-                Izoh (ixtiyoriy)
-              </label>
-              <input
-                id="tx-izoh"
-                type="text"
-                value={izoh}
-                disabled={loading}
-                onChange={(e) => setIzoh(e.target.value)}
-                className="w-full rounded-lg border border-line bg-surface text-fg px-3 py-2.5 text-base min-h-[44px]"
-              />
-            </div>
-          </div>
+          <QoshimchaMaydonlar
+            sana={sana}
+            onSana={setSana}
+            accounts={accounts}
+            accountId={accountId}
+            onAccount={setAccountId}
+            izoh={izoh}
+            onIzoh={setIzoh}
+            loading={loading}
+            kirim={turi === "kirim"}
+            sotuvchilar={sotuvchilar}
+            sotuvchiId={sotuvchiId}
+            onSotuvchi={setSotuvchiId}
+            sotuvchiTanlash={sotuvchiTanlash}
+          />
 
           {error && (
             <p role="alert" className="text-expense text-sm">

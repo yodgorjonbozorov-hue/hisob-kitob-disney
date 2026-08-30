@@ -121,6 +121,8 @@ export async function listTransactions(params: TransactionListParams) {
       include: {
         category: true,
         user: { select: { id: true, ism: true } },
+        // Sotuvchi/xodim — tafsilot oynasida "Sotuvchi" qatori uchun.
+        sotuvchi: { select: { id: true, ism: true } },
         account: { select: { id: true, nomi: true, turi: true } },
         // MANBA: CRM — yozuv CRM buyurtmasidan ko'chirilganmi. Ro'yxatda
         // belgi sifatida ko'rsatiladi; boshqa hech nima o'zgarmaydi
