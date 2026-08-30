@@ -3,8 +3,10 @@
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { STAVKA_TURLARI, STAVKA_NOMI, type StavkaTuri } from "@/lib/validation/hr";
+import { PLAN_TURLARI, PLAN_NOMI, type PlanTuri, type StavkaTuri } from "@/lib/validation/hr";
+import { currentMonthString } from "@/lib/date";
 import type { XodimDTO } from "@/lib/queries/hr";
+import { XodimFormaMaydonlari, XODIM_INPUT } from "./XodimFormaMaydonlari";
 
 export function XodimModal({
   xodim,
@@ -19,6 +21,7 @@ export function XodimModal({
   const [ism, setIsm] = useState(xodim?.ism ?? "");
   const [lavozim, setLavozim] = useState(xodim?.lavozim ?? "");
   const [tel, setTel] = useState(xodim?.tel ?? "");
+  const [rasmUrl, setRasmUrl] = useState<string | null>(xodim?.rasmUrl ?? null);
   const [stavka, setStavka] = useState(xodim ? String(xodim.stavka) : "");
   const [stavkaTuri, setStavkaTuri] = useState<StavkaTuri>(
     (xodim?.stavkaTuri as StavkaTuri) ?? "oylik"
@@ -28,6 +31,9 @@ export function XodimModal({
   );
   const [izoh, setIzoh] = useState(xodim?.izoh ?? "");
   const [isActive, setIsActive] = useState(xodim?.isActive ?? true);
+  // Plan — faqat YANGI xodimda shu yerdan belgilanadi (tahrirda "Plan" tugmasi bor).
+  const [planTuri, setPlanTuri] = useState<PlanTuri>("zakaz");
+  const [planMaqsad, setPlanMaqsad] = useState("");
   const [loading, setLoading] = useState(false);
   const [xato, setXato] = useState<string | null>(null);
 
@@ -36,6 +42,11 @@ export function XodimModal({
     const son = Number(stavka || 0);
     if (!Number.isInteger(son) || son < 0) {
       setXato("Stavka manfiy bo'lmagan butun son bo'lishi kerak");
+      return;
+    }
+    const plan = Number(planMaqsad || 0);
+    if (!tahrir && planMaqsad && (!Number.isInteger(plan) || plan <= 0)) {
+      setXato("Oylik plan musbat butun son bo'lishi kerak");
       return;
     }
 
@@ -49,6 +60,7 @@ export function XodimModal({
           ism,
           lavozim: lavozim || null,
           tel: tel || null,
+          rasmUrl,
           stavka: son,
           stavkaTuri,
           ishBoshlagan: ishBoshlagan || null,
@@ -60,6 +72,27 @@ export function XodimModal({
       if (!res.ok) {
         setXato(data.error ?? "Xatolik yuz berdi");
         return;
+      }
+
+      // Yangi xodimga plan kiritilgan bo'lsa — joriy oy plani darhol yoziladi.
+      if (!tahrir && plan > 0 && data.id) {
+        const planRes = await fetch("/api/hr/plan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            employeeId: data.id,
+            oy: currentMonthString(),
+            planTuri,
+            maqsad: plan,
+          }),
+        });
+        if (!planRes.ok) {
+          const planData = await planRes.json().catch(() => ({}));
+          setXato(
+            `Xodim yaratildi, lekin plan yozilmadi: ${planData.error ?? "xatolik"}. Kartochkadagi "Plan" tugmasidan qayta belgilang.`
+          );
+          return;
+        }
       }
       onDone();
     } catch {
@@ -87,70 +120,61 @@ export function XodimModal({
     }
   }
 
-  const input = "w-full px-3 py-2 rounded-lg bg-surface-2 border border-line text-fg";
-
   return (
     <Modal open onClose={onClose} title={tahrir ? "Xodimni tahrirlash" : "Yangi xodim"}>
       <form onSubmit={submit} className="space-y-3">
-        <div>
-          <label className="block text-sm text-muted mb-1" htmlFor="x-ism">
-            Ism
-          </label>
-          <input id="x-ism" value={ism} onChange={(e) => setIsm(e.target.value)} required maxLength={120} className={input} />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm text-muted mb-1" htmlFor="x-lavozim">
-              Lavozim
-            </label>
-            <input id="x-lavozim" value={lavozim} onChange={(e) => setLavozim(e.target.value)} maxLength={100} className={input} />
-          </div>
-          <div>
-            <label className="block text-sm text-muted mb-1" htmlFor="x-tel">
-              Telefon
-            </label>
-            <input id="x-tel" value={tel} onChange={(e) => setTel(e.target.value)} maxLength={50} className={input} />
-          </div>
-        </div>
+        <XodimFormaMaydonlari
+          ism={ism}
+          setIsm={setIsm}
+          lavozim={lavozim}
+          setLavozim={setLavozim}
+          tel={tel}
+          setTel={setTel}
+          rasmUrl={rasmUrl}
+          setRasmUrl={setRasmUrl}
+          stavka={stavka}
+          setStavka={setStavka}
+          stavkaTuri={stavkaTuri}
+          setStavkaTuri={setStavkaTuri}
+        />
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm text-muted mb-1" htmlFor="x-stavka">
-              Stavka (so&apos;m)
-            </label>
-            <input
-              id="x-stavka"
-              type="number"
-              min={0}
-              step={1}
-              inputMode="numeric"
-              value={stavka}
-              onChange={(e) => setStavka(e.target.value)}
-              className={input}
-            />
+        {!tahrir && (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm text-muted mb-1" htmlFor="x-plan-turi">
+                Plan turi
+              </label>
+              <select
+                id="x-plan-turi"
+                value={planTuri}
+                onChange={(e) => setPlanTuri(e.target.value as PlanTuri)}
+                className={XODIM_INPUT}
+              >
+                {PLAN_TURLARI.map((t) => (
+                  <option key={t} value={t}>
+                    {PLAN_NOMI[t]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm text-muted mb-1" htmlFor="x-plan">
+                Oylik plan (ixtiyoriy)
+              </label>
+              <input
+                id="x-plan"
+                type="number"
+                min={1}
+                step={1}
+                inputMode="numeric"
+                value={planMaqsad}
+                onChange={(e) => setPlanMaqsad(e.target.value)}
+                className={XODIM_INPUT}
+                placeholder={planTuri === "savdo" || planTuri === "kirim" ? "40000000" : "50"}
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-sm text-muted mb-1" htmlFor="x-turi">
-              Stavka turi
-            </label>
-            <select
-              id="x-turi"
-              value={stavkaTuri}
-              onChange={(e) => setStavkaTuri(e.target.value as StavkaTuri)}
-              className={input}
-            >
-              {STAVKA_TURLARI.map((t) => (
-                <option key={t} value={t}>
-                  {STAVKA_NOMI[t]}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <p className="text-2xs text-faint">
-          Kunlik stavkada oylik davomat jadvalidan hisoblanadi; oylik stavkada esa to&apos;liq
-          stavka olinadi va kam ishlagani &laquo;ushlab qolish&raquo; bilan hisobga olinadi.
-        </p>
+        )}
 
         <div>
           <label className="block text-sm text-muted mb-1" htmlFor="x-ish">
@@ -161,7 +185,7 @@ export function XodimModal({
             type="date"
             value={ishBoshlagan}
             onChange={(e) => setIshBoshlagan(e.target.value)}
-            className={input}
+            className={XODIM_INPUT}
           />
         </div>
 
@@ -169,7 +193,7 @@ export function XodimModal({
           <label className="block text-sm text-muted mb-1" htmlFor="x-izoh">
             Izoh
           </label>
-          <input id="x-izoh" value={izoh} onChange={(e) => setIzoh(e.target.value)} maxLength={500} className={input} />
+          <input id="x-izoh" value={izoh} onChange={(e) => setIzoh(e.target.value)} maxLength={500} className={XODIM_INPUT} />
         </div>
 
         {tahrir && (

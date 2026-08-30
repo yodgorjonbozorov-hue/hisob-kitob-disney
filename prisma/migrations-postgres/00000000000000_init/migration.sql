@@ -544,6 +544,9 @@ CREATE TABLE "Task" (
     "izoh" TEXT,
     "holat" TEXT NOT NULL DEFAULT 'OCHIQ',
     "masulId" TEXT NOT NULL,
+    "employeeId" TEXT,
+    "muhimlik" TEXT NOT NULL DEFAULT 'orta',
+    "boshlanish" TIMESTAMP(3),
     "muddat" TIMESTAMP(3),
     "dealId" TEXT,
     "createdBy" TEXT NOT NULL,
@@ -631,6 +634,7 @@ CREATE TABLE "Employee" (
     "ism" TEXT NOT NULL,
     "lavozim" TEXT,
     "tel" TEXT,
+    "rasmUrl" TEXT,
     "stavka" INTEGER NOT NULL DEFAULT 0,
     "stavkaTuri" TEXT NOT NULL DEFAULT 'oylik',
     "ishBoshlagan" TIMESTAMP(3),
@@ -847,6 +851,22 @@ CREATE TABLE "EmployeeBonus" (
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "EmployeeBonus_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "EmployeePlan" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "employeeId" TEXT NOT NULL,
+    "oy" TEXT NOT NULL,
+    "planTuri" TEXT NOT NULL DEFAULT 'zakaz',
+    "maqsad" INTEGER NOT NULL,
+    "izoh" TEXT,
+    "userId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "EmployeePlan_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -1393,6 +1413,12 @@ CREATE INDEX "Task_businessId_masulId_idx" ON "Task"("businessId", "masulId");
 CREATE INDEX "Task_businessId_muddat_idx" ON "Task"("businessId", "muddat");
 
 -- CreateIndex
+CREATE INDEX "Task_businessId_employeeId_holat_idx" ON "Task"("businessId", "employeeId", "holat");
+
+-- CreateIndex
+CREATE INDEX "Task_employeeId_idx" ON "Task"("employeeId");
+
+-- CreateIndex
 CREATE INDEX "Activity_businessId_dealId_idx" ON "Activity"("businessId", "dealId");
 
 -- CreateIndex
@@ -1535,6 +1561,12 @@ CREATE INDEX "EmployeeBonus_businessId_sana_idx" ON "EmployeeBonus"("businessId"
 
 -- CreateIndex
 CREATE INDEX "EmployeeBonus_employeeId_sana_idx" ON "EmployeeBonus"("employeeId", "sana");
+
+-- CreateIndex
+CREATE INDEX "EmployeePlan_businessId_oy_idx" ON "EmployeePlan"("businessId", "oy");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "EmployeePlan_employeeId_oy_key" ON "EmployeePlan"("employeeId", "oy");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "HrSetting_businessId_key" ON "HrSetting"("businessId");
@@ -1804,6 +1836,9 @@ ALTER TABLE "Deal" ADD CONSTRAINT "Deal_transactionId_fkey" FOREIGN KEY ("transa
 ALTER TABLE "Task" ADD CONSTRAINT "Task_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Task" ADD CONSTRAINT "Task_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Task" ADD CONSTRAINT "Task_dealId_fkey" FOREIGN KEY ("dealId") REFERENCES "Deal"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -1937,6 +1972,12 @@ ALTER TABLE "EmployeeBonus" ADD CONSTRAINT "EmployeeBonus_businessId_fkey" FOREI
 
 -- AddForeignKey
 ALTER TABLE "EmployeeBonus" ADD CONSTRAINT "EmployeeBonus_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EmployeePlan" ADD CONSTRAINT "EmployeePlan_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EmployeePlan" ADD CONSTRAINT "EmployeePlan_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "HrSetting" ADD CONSTRAINT "HrSetting_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;

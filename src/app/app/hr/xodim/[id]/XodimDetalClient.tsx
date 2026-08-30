@@ -2,166 +2,194 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Money } from "@/components/ui/Money";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { daqiqaMatn } from "@/lib/davomat/vaqt";
+import { shiftMonthString } from "@/lib/date";
 import type { TarixYozuvDTO, JarimaDTO, BonusDTO } from "@/lib/queries/davomat";
-import { JARIMA_HOLAT_NOMI, type JarimaHolat } from "@/lib/validation/davomat";
-import { SelfieModal } from "../../SelfieModal";
-import { TuzatishModal } from "../../TuzatishModal";
-import { SiyosatKarta, type XodimSiyosatDTO } from "./SiyosatKarta";
+import type {
+  XodimPerformanceDTO,
+  PlanDTO,
+  XodimZakazDTO,
+  XodimOylikDTO,
+} from "@/lib/queries/xodimPlan";
+import type { XodimVazifaDTO } from "@/lib/services/xodimVazifa";
+import { XodimAvatar } from "../../XodimAvatar";
+import { PlanProgress } from "../../PlanProgress";
+import { PlanModal } from "../../PlanModal";
+import type { XodimSiyosatDTO } from "./SiyosatKarta";
+import { UmumiyTab } from "./UmumiyTab";
+import { ZakazlarTab } from "./ZakazlarTab";
+import { VazifalarTab } from "./VazifalarTab";
+import { DavomatTab } from "./DavomatTab";
+import { OylikTab } from "./OylikTab";
 
-const HOLAT_BELGI: Record<string, { matn: string; tone: "kirim" | "chiqim" | "neutral" | "warning" }> = {
-  keldi: { matn: "Keldi", tone: "kirim" },
-  yarim: { matn: "Yarim kun", tone: "warning" },
-  kelmadi: { matn: "Kelmadi", tone: "chiqim" },
-  tatil: { matn: "Ta'til", tone: "neutral" },
+const TABLAR = ["umumiy", "zakazlar", "vazifalar", "davomat", "oylik"] as const;
+type Tab = (typeof TABLAR)[number];
+
+const TAB_NOMI: Record<Tab, string> = {
+  umumiy: "Umumiy",
+  zakazlar: "Zakazlar",
+  vazifalar: "Vazifalar",
+  davomat: "Davomat",
+  oylik: "Oylik",
+};
+
+export type XodimBosh = XodimSiyosatDTO & {
+  ism: string;
+  lavozim: string | null;
+  tel: string | null;
+  rasmUrl: string | null;
+  isActive: boolean;
+  userId: string | null;
 };
 
 export function XodimDetalClient({
   xodim,
+  oy,
   bugun,
+  performance,
+  planTarixi,
+  vazifalar,
+  oyliklar,
+  zakazlar,
   tarix,
   jarimalar,
   bonuslar,
   jadvallar,
   joylar,
 }: {
-  xodim: XodimSiyosatDTO & { ism: string; lavozim: string | null; tel: string | null; isActive: boolean };
+  xodim: XodimBosh;
+  oy: string;
   bugun: string;
+  performance: XodimPerformanceDTO | null;
+  planTarixi: PlanDTO[];
+  vazifalar: XodimVazifaDTO[];
+  oyliklar: XodimOylikDTO[];
+  zakazlar: XodimZakazDTO[];
   tarix: TarixYozuvDTO[];
   jarimalar: JarimaDTO[];
   bonuslar: BonusDTO[];
   jadvallar: { id: string; nomi: string; standart: boolean }[];
   joylar: { id: string; nomi: string; standart: boolean }[];
 }) {
-  const [selfie, setSelfie] = useState<string | null>(null);
-  const [tuzatishSana, setTuzatishSana] = useState<string | null>(null);
+  const router = useRouter();
+  const [tab, setTab] = useState<Tab>("umumiy");
+  const [planModal, setPlanModal] = useState(false);
+
+  const holat = performance?.holat ?? (xodim.isActive ? "faol" : "ketgan");
+  const holatBelgi =
+    holat === "ketgan"
+      ? { matn: "Ishdan chiqqan", tone: "neutral" as const }
+      : holat === "tatil"
+        ? { matn: "Ta'tilda", tone: "warning" as const }
+        : { matn: "Faol", tone: "kirim" as const };
+
+  function oyniOzgart(delta: number) {
+    router.push(`/app/hr/xodim/${xodim.id}?oy=${shiftMonthString(oy, delta)}`);
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <p className="text-2xs text-muted">
-            <Link href="/app/hr" className="hover:text-fg">Xodimlar</Link> / davomat
-          </p>
-          <h1 className="text-xl sm:text-2xl font-bold text-fg">
-            {xodim.ism} {!xodim.isActive && <Badge tone="neutral">Ishlamaydi</Badge>}
-          </h1>
-          <p className="text-sm text-muted mt-1">
-            {xodim.lavozim ?? "—"}
-            {xodim.tel && ` · ${xodim.tel}`}
-          </p>
+        <div className="flex items-center gap-3">
+          <XodimAvatar ism={xodim.ism} rasmUrl={xodim.rasmUrl} size="lg" />
+          <div>
+            <p className="text-2xs text-muted">
+              <Link href="/app/hr" className="hover:text-fg">
+                Xodimlar
+              </Link>{" "}
+              / {xodim.ism}
+            </p>
+            <h1 className="text-xl sm:text-2xl font-bold text-fg flex items-center gap-2">
+              {xodim.ism} <Badge tone={holatBelgi.tone}>{holatBelgi.matn}</Badge>
+            </h1>
+            <p className="text-sm text-muted mt-0.5">
+              {xodim.lavozim ?? "—"}
+              {xodim.tel && ` · ${xodim.tel}`}
+            </p>
+          </div>
         </div>
-        <Button variant="secondary" size="sm" onClick={() => setTuzatishSana(bugun)}>
-          Davomatni tuzatish
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="ghost" onClick={() => oyniOzgart(-1)}>
+            ←
+          </Button>
+          <span className="text-sm text-fg tnum">{oy}</span>
+          <Button size="sm" variant="ghost" onClick={() => oyniOzgart(1)}>
+            →
+          </Button>
+        </div>
       </div>
 
-      <SiyosatKarta xodim={xodim} jadvallar={jadvallar} joylar={joylar} />
-
-      <Card>
-        <p className="font-bold text-fg mb-2">Oxirgi 30 kun — davomat</p>
-        {tarix.length === 0 ? (
-          <EmptyState title="Hali davomat yozuvi yo'q" />
+      <div className="rounded-2xl border border-line bg-surface p-4">
+        {performance?.plan ? (
+          <PlanProgress plan={performance.plan} />
         ) : (
-          <div className="space-y-2">
-            {tarix.map((t) => {
-              const b = HOLAT_BELGI[t.holat] ?? HOLAT_BELGI.keldi;
-              return (
-                <div key={t.id} className="border-b border-line last:border-0 pb-2 last:pb-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <p className="text-sm text-fg tnum font-medium">{t.sana}</p>
-                      <p className="text-2xs text-muted tnum">
-                        {t.kelgan
-                          ? `${t.kelgan}${t.ketgan ? ` → ${t.ketgan} · ${daqiqaMatn(t.ishlanganDaqiqa)}` : " → hozir ishda"}`
-                          : "—"}
-                        {t.jarimaDaqiqa > 0 && (
-                          <span className="text-expense"> · ⚠️ {t.kechikishDaqiqa} daqiqa kechikdi</span>
-                        )}
-                        {t.rejaBoshlanish && ` · reja ${t.rejaBoshlanish}—${t.rejaTugash}`}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Badge tone={b.tone}>{b.matn}</Badge>
-                      <button
-                        className="text-2xs text-muted hover:text-fg"
-                        onClick={() => setTuzatishSana(t.sana)}
-                      >
-                        Tuzatish
-                      </button>
-                    </div>
-                  </div>
-                  {t.checks.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      {t.checks.map((c, i) => (
-                        <span key={i} className="text-2xs text-muted bg-surface-2 rounded-lg px-2 py-0.5">
-                          {c.turi === "kelish" ? "Kelish" : "Ketish"} {c.vaqt}
-                          {c.manba === "admin" ? ` · admin${c.sabab ? `: ${c.sabab}` : ""}` : ""}
-                          {c.masofaM != null && ` · 📍${c.masofaM} m`}
-                          {c.selfieId && (
-                            <button
-                              className="text-brand ml-1 underline-offset-2 hover:underline"
-                              onClick={() => setSelfie(c.selfieId)}
-                            >
-                              selfie
-                            </button>
-                          )}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-sm text-muted">Bu oy uchun plan belgilanmagan.</p>
+            <Button size="sm" variant="secondary" onClick={() => setPlanModal(true)}>
+              Plan belgilash
+            </Button>
           </div>
         )}
-      </Card>
-
-      {(jarimalar.length > 0 || bonuslar.length > 0) && (
-        <Card>
-          <p className="font-bold text-fg mb-2">Jarima va bonuslar (30 kun)</p>
-          <div className="space-y-2">
-            {jarimalar.map((j) => (
-              <div key={j.id} className="flex items-center justify-between text-sm">
-                <div>
-                  <p className="text-fg">{j.sabab}</p>
-                  <p className="text-2xs text-muted">
-                    {j.sana} · {JARIMA_HOLAT_NOMI[j.holat as JarimaHolat] ?? j.holat}
-                  </p>
-                </div>
-                <Money value={-j.summa} signed size="sm" />
-              </div>
-            ))}
-            {bonuslar.map((b) => (
-              <div key={b.id} className="flex items-center justify-between text-sm">
-                <div>
-                  <p className="text-fg">{b.sabab}</p>
-                  <p className="text-2xs text-muted">{b.sana} · Bonus</p>
-                </div>
-                <Money value={b.summa} signed size="sm" />
-              </div>
-            ))}
+        {performance?.plan && (
+          <div className="mt-2 text-right">
+            <button
+              type="button"
+              onClick={() => setPlanModal(true)}
+              className="text-2xs text-brand hover:underline"
+            >
+              Planni o&apos;zgartirish
+            </button>
           </div>
-        </Card>
-      )}
+        )}
+      </div>
 
-      <SelfieModal
-        selfieId={selfie}
-        sarlavha={`${xodim.ism} — selfie`}
-        onYopish={() => setSelfie(null)}
-      />
-      {tuzatishSana && (
-        <TuzatishModal
-          ochiq
+      <div className="flex flex-wrap gap-2">
+        {TABLAR.map((t) => (
+          <Button
+            key={t}
+            size="sm"
+            variant={tab === t ? "primary" : "secondary"}
+            onClick={() => setTab(t)}
+          >
+            {TAB_NOMI[t]}
+          </Button>
+        ))}
+      </div>
+
+      {tab === "umumiy" && (
+        <UmumiyTab performance={performance} planTarixi={planTarixi} vazifalar={vazifalar} />
+      )}
+      {tab === "zakazlar" && <ZakazlarTab zakazlar={zakazlar} userIdBor={Boolean(xodim.userId)} />}
+      {tab === "vazifalar" && (
+        <VazifalarTab employeeId={xodim.id} ism={xodim.ism} vazifalar={vazifalar} boshqaruvchi />
+      )}
+      {tab === "davomat" && (
+        <DavomatTab
+          xodim={xodim}
+          bugun={bugun}
+          tarix={tarix}
+          jarimalar={jarimalar}
+          bonuslar={bonuslar}
+          jadvallar={jadvallar}
+          joylar={joylar}
+        />
+      )}
+      {tab === "oylik" && <OylikTab oyliklar={oyliklar} />}
+
+      {planModal && (
+        <PlanModal
           employeeId={xodim.id}
           ism={xodim.ism}
-          sana={tuzatishSana}
-          onYopish={() => setTuzatishSana(null)}
+          oy={oy}
+          plan={performance?.plan ?? null}
+          userIdBor={Boolean(xodim.userId)}
+          onClose={() => setPlanModal(false)}
+          onDone={() => {
+            setPlanModal(false);
+            router.refresh();
+          }}
         />
       )}
     </div>

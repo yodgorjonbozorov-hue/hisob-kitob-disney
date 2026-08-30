@@ -21,9 +21,14 @@ import { rasmniSiqish } from "./rasmSiqish";
 export function RasmTanlash({
   qiymat,
   onChange,
+  endpoint = "/api/ombor/rasm",
+  yorliq = "Mahsulot rasmi",
 }: {
   qiymat: string | null;
   onChange: (url: string | null) => void;
+  /** Yuklash API manzili — xodim avatari ham AYNAN shu komponentdan foydalanadi. */
+  endpoint?: string;
+  yorliq?: string;
 }) {
   const [yuklashMumkin, setYuklashMumkin] = useState<boolean | null>(null);
   const [yuklanmoqda, setYuklanmoqda] = useState(false);
@@ -33,14 +38,14 @@ export function RasmTanlash({
 
   useEffect(() => {
     let bekor = false;
-    fetch("/api/ombor/rasm")
+    fetch(endpoint)
       .then((r) => (r.ok ? r.json() : { yuklashMumkin: false }))
       .then((d) => !bekor && setYuklashMumkin(Boolean(d.yuklashMumkin)))
       .catch(() => !bekor && setYuklashMumkin(false));
     return () => {
       bekor = true;
     };
-  }, []);
+  }, [endpoint]);
 
   async function yukla(fayl: File) {
     setXato(null);
@@ -58,7 +63,7 @@ export function RasmTanlash({
       }
       const form = new FormData();
       form.append("rasm", jonatma);
-      const res = await fetch("/api/ombor/rasm", { method: "POST", body: form });
+      const res = await fetch(endpoint, { method: "POST", body: form });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setXato(data.error ?? "Rasmni yuklab bo'lmadi");
@@ -78,7 +83,7 @@ export function RasmTanlash({
         <div className="w-20 h-20 shrink-0 rounded-xl bg-surface-2 border border-line overflow-hidden flex items-center justify-center">
           {qiymat ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={qiymat} alt="Mahsulot rasmi" className="w-full h-full object-cover" />
+            <img src={qiymat} alt={yorliq} className="w-full h-full object-cover" />
           ) : (
             <span className="text-2xl text-faint" aria-hidden>
               &#128247;

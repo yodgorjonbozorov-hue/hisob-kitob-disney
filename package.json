@@ -81,6 +81,7 @@
     "test:magazin-postgres": "node scripts/pg-sinov.mjs tests/magazin-postgres.test.ts",
     "test:crm": "node -r ts-node/register tests/crm.test.ts",
     "test:xodim-statistika": "node -r ts-node/register tests/xodim-statistika.test.ts",
+    "test:xodim-plan": "node -r ts-node/register tests/xodim-plan.test.ts",
     "test:tasks": "node -r ts-node/register tests/tasks.test.ts",
     "test:ai": "node -r ts-node/register tests/ai.test.ts",
     "test:automation": "node -r ts-node/register tests/automation.test.ts",

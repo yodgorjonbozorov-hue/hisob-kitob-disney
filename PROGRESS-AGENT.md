@@ -5295,3 +5295,49 @@ hisobot.korish matritsasi, jami kirim/chiqim o'zgarmagani). `test:crm`,
 `test:isolation`, `test:agregat`, `test:atomik`, `test:kirim-chiqim`, `test:qarz`,
 `test:visibility`, `test:soft-delete`, `test:tasdiqlash`, `test:kunlik`,
 `test:izolyatsiya-royxati`, `test:postgres` — yashil. `npm run build` o'tdi.
+
+### 2026-08-30 — Xodimlar bo'limi kengaytmasi: rasm, plan, vazifalar, performance (tugadi)
+
+**Branch:** `claude/expand-employees-section-bduqqf`
+
+**Nima qilindi**
+- Migratsiya `20260830120000_xodim_plan_vazifa` — FAQAT qo'shuvchi:
+  `Employee.rasmUrl`; `Task.employeeId` (FK Employee, SET NULL) + `muhimlik`
+  + `boshlanish` + 2 indeks; yangi `EmployeePlan` jadvali
+  (`@@unique([employeeId, oy])` — bir xodim + bir oy = bitta yozuv).
+  Postgres init qayta generatsiya (62 jadval). Dublikat tizim YO'Q:
+  vazifalar mavjud `Task` ustida (`employeeId` null = oddiy CRM vazifasi),
+  rasm mavjud saqlagich (`lib/storage/driver`) va ombor rasm oqimi bilan.
+- PLAN: turi "zakaz" | "savdo" | "kirim" | "vazifa"; natija (actual) bazada
+  SAQLANMAYDI — har o'qishda manbadan hisoblanadi (`lib/queries/xodimPlan.ts`).
+  Zakaz/savdo — kirim tranzaksiyalari `sotuvchiId ?? userId` kesimida
+  (xodimStatistika qoidasi: CRM zakaz 1-1 bog'langani uchun BIR marta, qarz
+  to'lovi chiqariladi); "kirim" — haqiqatda kelgan pul (qarzga savdo emas,
+  to'lovlar bilan); "vazifa" — oy ichida BAJARILDI bo'lganlar. Foiz 100% dan
+  osha oladi. Har oy plani alohida — o'tgan oy statistikasi buzilmaydi.
+- Vazifa holatlari: OCHIQ/JARAYONDA/BAJARILDI + yangi BEKOR; "Kechikdi"
+  holat EMAS — muddatdan hisoblanadi. Cron eslatma BEKOR'ni o'tkazib yuboradi.
+  masulId ko'prigi: userli xodim → o'sha user (kanban/Telegram ishlaydi).
+- UI: `/app/hr` endi kartochkalar (avatar/initials, holat Faol/Ta'tilda/
+  Ishdan chiqqan, plan progress bar + foiz, zakaz/savdo, vazifa 8/10,
+  kechikkan) + direktor dashboard (faol, o'rtacha %, 100%+, ortda, eng
+  yaxshi) + saralash/reyting (medal). Xodim detail — 5 tab: Umumiy (KPI +
+  plan tarixi), Zakazlar, Vazifalar (+ Vazifa modal, muhimlik/deadline),
+  Davomat (avvalgi mazmun), Oylik (vedomost tarixi). "Davomatim"da xodim
+  o'z plani/natijasi/vazifalarini ko'radi va holatini o'zgartiradi.
+- API: `/api/hr/plan` (GET performance, POST upsert), `/api/hr/plan/[id]`
+  (DELETE), `/api/hr/vazifalar` (+`/[id]`), `/api/hr/rasm` (ombor rasm
+  oqimining nusxasi, `xodim-` prefiksi). Boshqaruv `requireManager`;
+  oddiy xodim faqat o'z vazifalarini ko'radi/holatini o'zgartiradi
+  (server `Employee.userId` orqali tekshiradi, mijoz id'siga ishonilmaydi).
+- `tenantDb.BUSINESS_SCOPED` += EmployeePlan; `ZAXIRA_JADVALLARI`da `task`
+  CRM blokidan `employee`dan keyinga ko'chirildi (endi Employee'ga FK) va
+  `employeePlan` qo'shildi.
+
+**Testlar:** `tests/xodim-plan.test.ts` (18 test: rasm URL validatsiyasi,
+upsert/oy tarixi, foiz 75%/150%, zakaz-savdo-kirim manbalari + qarz to'lovi
+chiqarilishi, vazifa plani, kechikkan/BEKOR, faqatHolat rejimi, egalik,
+tenant izolyatsiyasi, dashboard, pul yozilmasligi). `test:izolyatsiya-royxati`,
+`test:isolation`, `test:backup`, `test:hr`, `test:tasks`,
+`test:xodim-statistika`, `test:migratsiya`, `test:postgres`, `test:davomat`,
+`test:crm` — yashil. `npm run build` o'tdi.

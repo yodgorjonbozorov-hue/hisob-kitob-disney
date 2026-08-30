@@ -10,8 +10,9 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { STAVKA_NOMI, type StavkaTuri } from "@/lib/validation/hr";
 import { shiftMonthString } from "@/lib/date";
 import type { XodimDTO, OylikDTO, HrStats } from "@/lib/queries/hr";
+import type { XodimlarPerformanceDTO } from "@/lib/queries/xodimPlan";
 import { XodimModal } from "./XodimModal";
-import { XodimlarJadvali } from "./XodimlarJadvali";
+import { PerformancePanel } from "./PerformancePanel";
 import { OylikModal, AvansModal } from "./OylikModal";
 
 const HOLAT_TONE: Record<string, "kirim" | "chiqim" | "neutral"> = {
@@ -19,7 +20,6 @@ const HOLAT_TONE: Record<string, "kirim" | "chiqim" | "neutral"> = {
   qoralama: "neutral",
   tolangan: "kirim",
 };
-
 const HOLAT_NOMI: Record<string, string> = {
   hisoblanmagan: "Hisoblanmagan",
   qoralama: "Qoralama",
@@ -30,6 +30,7 @@ export function HrClient({
   xodimlar,
   oyliklar,
   stats,
+  performance,
   oy,
   initialTab = "oylik",
   basePath = "/app/hr",
@@ -37,6 +38,7 @@ export function HrClient({
   xodimlar: XodimDTO[];
   oyliklar: OylikDTO[];
   stats: HrStats;
+  performance: XodimlarPerformanceDTO;
   oy: string;
   initialTab?: "oylik" | "xodimlar";
   basePath?: string;
@@ -103,17 +105,13 @@ export function HrClient({
           </Button>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
-          {tab === "oylik" && (
-            <>
-              <Button size="sm" variant="ghost" onClick={() => oyniOzgart(-1)}>
-                ←
-              </Button>
-              <span className="text-sm text-fg tnum">{oy}</span>
-              <Button size="sm" variant="ghost" onClick={() => oyniOzgart(1)}>
-                →
-              </Button>
-            </>
-          )}
+          <Button size="sm" variant="ghost" onClick={() => oyniOzgart(-1)}>
+            ←
+          </Button>
+          <span className="text-sm text-fg tnum">{oy}</span>
+          <Button size="sm" variant="ghost" onClick={() => oyniOzgart(1)}>
+            →
+          </Button>
           <Button size="sm" onClick={() => setXodimModal("yangi")}>
             Yangi xodim
           </Button>
@@ -122,9 +120,18 @@ export function HrClient({
 
       {xato && <p className="text-sm text-expense">{xato}</p>}
 
-      <Card>
-        {tab === "oylik" ? (
-          oyliklar.length === 0 ? (
+      {tab === "xodimlar" && (
+        <PerformancePanel
+          performance={performance}
+          xodimlar={xodimlar}
+          onTahrir={(x) => setXodimModal(x)}
+          onYangi={() => setXodimModal("yangi")}
+        />
+      )}
+
+      {tab === "oylik" && (
+        <Card>
+          {oyliklar.length === 0 ? (
             <EmptyState
               icon="👷"
               title="Faol xodim yo'q"
@@ -202,15 +209,9 @@ export function HrClient({
                 </tbody>
               </table>
             </div>
-          )
-        ) : (
-          <XodimlarJadvali
-            xodimlar={xodimlar}
-            onTahrir={(x) => setXodimModal(x)}
-            onYangi={() => setXodimModal("yangi")}
-          />
-        )}
-      </Card>
+          )}
+        </Card>
+      )}
 
       {xodimModal && (
         <XodimModal

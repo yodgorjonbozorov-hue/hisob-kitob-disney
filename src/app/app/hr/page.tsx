@@ -5,6 +5,7 @@ import { runWithTenant } from "@/lib/db/tenantContext";
 import { isManager } from "@/lib/auth/roles";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import { listXodimlar, listOyliklar, getHrStats } from "@/lib/queries/hr";
+import { getXodimlarPerformance } from "@/lib/queries/xodimPlan";
 import { currentMonthString } from "@/lib/date";
 import { HrClient } from "./HrClient";
 
@@ -35,10 +36,11 @@ export default async function HrPage({
       ? searchParams.oy!
       : currentMonthString();
 
-    const [xodimlar, oyliklar, stats] = await Promise.all([
+    const [xodimlar, oyliklar, stats, performance] = await Promise.all([
       listXodimlar(businessId),
       listOyliklar(businessId, oy),
       getHrStats(businessId, oy),
+      getXodimlarPerformance(businessId, oy),
     ]);
 
     return (
@@ -50,7 +52,14 @@ export default async function HrPage({
             Oylik to&apos;langanda chiqim tranzaksiya avtomatik yoziladi
           </p>
         </div>
-        <HrClient xodimlar={xodimlar} oyliklar={oyliklar} stats={stats} oy={oy} />
+        <HrClient
+          xodimlar={xodimlar}
+          oyliklar={oyliklar}
+          stats={stats}
+          performance={performance}
+          oy={oy}
+          initialTab="xodimlar"
+        />
       </div>
     );
   });

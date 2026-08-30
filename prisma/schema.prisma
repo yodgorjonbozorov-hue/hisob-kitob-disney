@@ -219,6 +219,7 @@ model Business {
   penaltyRules       PenaltyRule[]
   penalties          EmployeePenalty[]
   bonuses            EmployeeBonus[]
+  employeePlans      EmployeePlan[]
   hrSetting          HrSetting?
 
   @@index([tenantId])
@@ -1121,7 +1122,10 @@ model Deal {
 
 // ==== Vazifalar moduli (BOS-3) ====
 
-/// Vazifa. holat: "OCHIQ" | "JARAYONDA" | "BAJARILDI" (sobit 3 ustun — sodda kanban).
+/// Vazifa. holat: "OCHIQ" | "JARAYONDA" | "BAJARILDI" (sobit 3 ustun — sodda kanban)
+/// + "BEKOR" (xodim vazifalarida bekor qilingan; kanban ustunlariga tushmaydi).
+/// "Kechikdi" ALOHIDA holat EMAS — u `muddat < bugun` va yopilmaganlikdan
+/// hisoblab chiqariladi (ikkinchi haqiqat manbai bo'lmasin).
 model Task {
   id          String    @id @default(cuid())
   businessId  String
@@ -1130,6 +1134,16 @@ model Task {
   izoh        String?
   holat       String    @default("OCHIQ")
   masulId     String // mas'ul foydalanuvchi
+  /// XODIM VAZIFASI (HR moduli): vazifa qaysi xodim kartochkasiga tegishli.
+  /// `masulId` (User) dan farqi: xodim tizimga kirmasligi mumkin — bunda
+  /// `masulId` vazifani bergan boshqaruvchida qoladi, `employeeId` esa
+  /// xodim statistikasi va plan hisobining kaliti. Null — oddiy CRM vazifasi.
+  employeeId  String?
+  employee    Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  /// Muhimlik: "past" | "orta" | "yuqori".
+  muhimlik    String    @default("orta")
+  /// Boshlanish sanasi (UTC-yarim tun). Null — darhol (createdAt).
+  boshlanish  DateTime?
   muddat      DateTime?
   dealId      String? // CRM bitimiga bog'lash (ixtiyoriy)
   deal        Deal?     @relation(fields: [dealId], references: [id], onDelete: SetNull)
@@ -1141,6 +1155,9 @@ model Task {
   @@index([businessId, holat])
   @@index([businessId, masulId])
   @@index([businessId, muddat])
+  /// Xodim vazifalari kesimi (kartochka/plan hisobi) va `SetNull` tekshiruvi.
+  @@index([businessId, employeeId, holat])
+  @@index([employeeId])
 }
 
 /// CRM faoliyati (timeline): izoh, qo'ng'iroq, uchrashuv, tizim yozuvi.
@@ -1281,6 +1298,9 @@ model Employee {
   ism          String
   lavozim      String?
   tel          String?
+  /// Profil rasmi (blob URL yoki tashqi havola). Null — UI bosh harfli
+  /// avatar ko'rsatadi. Selfie EMAS: bu ochiq ko'rinadigan profil surati.
+  rasmUrl      String?
   /// Stavka (so'm). `stavkaTuri` ga qarab oylik yoki bir kunlik.
   stavka       Int       @default(0)
   /// "oylik" | "kunlik"
@@ -1311,6 +1331,8 @@ model Employee {
   selfies     AttendanceSelfie[]
   penalties   EmployeePenalty[]
   bonuses     EmployeeBonus[]
+  plans       EmployeePlan[]
+  vazifalar   Task[]
 
   @@index([businessId, isActive, deletedAt])
   @@index([userId])
@@ -1632,6 +1654,40 @@ model EmployeeBonus {
 
   @@index([businessId, sana])
   @@index([employeeId, sana])
+}
+
+/// XODIM OYLIK PLANI — bir xodim, bir oy, bitta yozuv (Payroll uslubi).
+///
+/// Har oy ALOHIDA saqlanadi: keyingi oy plan o'zgarsa o'tgan oy statistikasi
+/// buzilmaydi. NATIJA (actual) bazada SAQLANMAYDI — u har o'qishda manbadan
+/// hisoblanadi (lib/queries/xodimPlan.ts), aks holda ikkita haqiqat manbai
+/// paydo bo'lardi:
+///   "zakaz"  — kirim tranzaksiyalari soni (sotuvchi kesimi, qarz to'lovisiz;
+///              CRM zakazi kirimga 1-1 bog'langani uchun BIR marta sanaladi);
+///   "savdo"  — o'sha tranzaksiyalar summasi;
+///   "kirim"  — haqiqatda kelib tushgan pul (qarzga savdo emas, to'lovlar bilan);
+///   "vazifa" — oy ichida bajarilgan xodim vazifalari soni (Task.employeeId).
+model EmployeePlan {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  /// "YYYY-MM"
+  oy         String
+  /// "zakaz" | "savdo" | "kirim" | "vazifa"
+  planTuri   String   @default("zakaz")
+  /// Maqsad: zakaz/vazifa — dona; savdo/kirim — so'm (Int).
+  maqsad     Int
+  izoh       String?
+  /// Kim belgilagan (User.id). FK ataylab yo'q (EmployeeBonus.userId uslubi) —
+  /// foydalanuvchi o'chirilsa plan tarixi buzilmasin.
+  userId     String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([employeeId, oy])
+  @@index([businessId, oy])
 }
 
 /// HR SOZLAMALARI — bir biznesga bitta yozuv (DailyReportSetting uslubi).

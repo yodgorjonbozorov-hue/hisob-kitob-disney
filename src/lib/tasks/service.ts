@@ -104,7 +104,8 @@ export async function sendTaskReminders(botApi: {
 
   const endOfToday = new Date(bugun + "T23:59:59Z");
   const tasks = await rawPrisma.task.findMany({
-    where: { deletedAt: null, holat: { not: "BAJARILDI" }, muddat: { lte: endOfToday } },
+    // BEKOR — xodim vazifalarida bekor qilingan holat: unga eslatma yuborilmaydi.
+    where: { deletedAt: null, holat: { notIn: ["BAJARILDI", "BEKOR"] }, muddat: { lte: endOfToday } },
     select: { nomi: true, muddat: true, masulId: true },
   });
 

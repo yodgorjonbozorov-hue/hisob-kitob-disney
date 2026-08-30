@@ -6,11 +6,14 @@ export interface XodimDTO {
   ism: string;
   lavozim: string | null;
   tel: string | null;
+  rasmUrl: string | null;
   stavka: number;
   stavkaTuri: string;
   ishBoshlagan: string | null;
   isActive: boolean;
   izoh: string | null;
+  /** Tizim hisobi bilan bog'lanish (zakaz/savdo planlari shunga tayanadi). */
+  userId: string | null;
 }
 
 export async function listXodimlar(businessId: string, faqatFaol = false): Promise<XodimDTO[]> {
@@ -23,11 +26,13 @@ export async function listXodimlar(businessId: string, faqatFaol = false): Promi
     ism: e.ism,
     lavozim: e.lavozim,
     tel: e.tel,
+    rasmUrl: e.rasmUrl,
     stavka: e.stavka,
     stavkaTuri: e.stavkaTuri,
     ishBoshlagan: e.ishBoshlagan ? e.ishBoshlagan.toISOString() : null,
     isActive: e.isActive,
     izoh: e.izoh,
+    userId: e.userId,
   }));
 }
 

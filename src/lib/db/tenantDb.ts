@@ -116,6 +116,7 @@ const BUSINESS_SCOPED = new Set([
   "PenaltyRule",
   "EmployeePenalty",
   "EmployeeBonus",
+  "EmployeePlan",
   "HrSetting",
   // Hujjatlar (Faza 6.6)
   "Contract",

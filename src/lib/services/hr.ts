@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
+import { havolaniTekshir } from "@/lib/storage/driver";
 import { runBusinessTx, type BusinessTx } from "@/lib/db/businessTx";
 import { createTransactionTx } from "@/lib/services/transactionService";
 import { ensureCategoryTx } from "@/lib/services/inventory";
@@ -22,6 +23,17 @@ const AVANS_KATEGORIYA = "Avans";
 // Xodimlar
 // ---------------------------------------------------------------------------
 
+/** Rasm havolasini tekshiradi (http/https). Bo'sh/null — rasm yo'q. */
+function rasmUrlTayyorla(rasmUrl: string | null | undefined): string | null {
+  const url = rasmUrl?.trim();
+  if (!url) return null;
+  try {
+    return havolaniTekshir(url);
+  } catch (e) {
+    throw new BadRequestError(e instanceof Error ? e.message : "Rasm havolasi noto'g'ri");
+  }
+}
+
 export async function createEmployee(businessId: string, data: CreateEmployeeInput) {
   const mavjud = await prisma.employee.findFirst({
     where: { businessId, ism: data.ism, deletedAt: null },
@@ -35,6 +47,7 @@ export async function createEmployee(businessId: string, data: CreateEmployeeInp
       ism: data.ism,
       lavozim: data.lavozim?.trim() || undefined,
       tel: data.tel?.trim() || undefined,
+      rasmUrl: rasmUrlTayyorla(data.rasmUrl) ?? undefined,
       stavka: data.stavka,
       stavkaTuri: data.stavkaTuri,
       ishBoshlagan: data.ishBoshlagan ? dateOnlyStringToUTCDate(data.ishBoshlagan) : undefined,
@@ -54,6 +67,7 @@ export async function updateEmployee(businessId: string, id: string, data: Updat
       ...(data.ism ? { ism: data.ism } : {}),
       ...(data.lavozim !== undefined ? { lavozim: data.lavozim?.trim() || null } : {}),
       ...(data.tel !== undefined ? { tel: data.tel?.trim() || null } : {}),
+      ...(data.rasmUrl !== undefined ? { rasmUrl: rasmUrlTayyorla(data.rasmUrl) } : {}),
       ...(data.stavka !== undefined ? { stavka: data.stavka } : {}),
       ...(data.stavkaTuri ? { stavkaTuri: data.stavkaTuri } : {}),
       ...(data.ishBoshlagan !== undefined

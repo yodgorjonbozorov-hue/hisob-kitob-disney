@@ -3,7 +3,11 @@ import { requireModulePage } from "@/lib/modules/guard";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { getMenHolati } from "@/lib/queries/davomat";
+import { getMenPerformance } from "@/lib/queries/xodimPlan";
+import { listXodimVazifalari } from "@/lib/services/xodimVazifa";
+import { currentMonthString } from "@/lib/date";
 import { MenClient } from "./MenClient";
+import { MenNatijalarim } from "./MenNatijalarim";
 
 /** DAVOMATIM — xodimning o'z check-in/check-out sahifasi (mobil ustuvor). */
 export default async function MenPage() {
@@ -22,7 +26,23 @@ export default async function MenPage() {
       );
     }
 
-    const holat = await getMenHolati(businessId, session.userId);
-    return <MenClient boshlangich={holat} ism={session.ism} />;
+    const oy = currentMonthString();
+    const [holat, performance] = await Promise.all([
+      getMenHolati(businessId, session.userId),
+      getMenPerformance(businessId, session.userId, oy),
+    ]);
+    // Vazifalar faqat xodim kartochkasi topilganda o'qiladi (o'z vazifalari).
+    const vazifalar = performance
+      ? await listXodimVazifalari(businessId, performance.id, oy)
+      : [];
+
+    return (
+      <div className="space-y-6">
+        <MenClient boshlangich={holat} ism={session.ism} />
+        {performance && (
+          <MenNatijalarim oy={oy} performance={performance} vazifalar={vazifalar} />
+        )}
+      </div>
+    );
   });
 }

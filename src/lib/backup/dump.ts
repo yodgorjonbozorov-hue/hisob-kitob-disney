@@ -69,7 +69,6 @@ export const ZAXIRA_JADVALLARI = [
   "debtPayment",
   "stage",
   "deal",
-  "task",
   "activity",
   "accountTransfer",
   "stockAdjustment",
@@ -85,6 +84,11 @@ export const ZAXIRA_JADVALLARI = [
   "workSchedule",
   "workScheduleDay",
   "employee",
+  // DIQQAT: `task` `deal` VA `employee`dan KEYIN turishi SHART — Task ikkalasiga
+  // FK bilan murojaat qiladi (dealId/employeeId). Shu sabab u CRM blokidan
+  // shu yerga ko'chirilgan. `employeePlan` esa `employee`dan keyin.
+  "task",
+  "employeePlan",
   "attendance",
   // `attendanceSelfie` `attendanceCheck`dan OLDIN — Check.selfieId unga FK.
   "attendanceSelfie",
