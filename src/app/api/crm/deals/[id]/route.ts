@@ -7,6 +7,12 @@ import { moveDeal, biznesXodimi } from "@/lib/crm/service";
 import { buyurtmaPatchSchema } from "@/lib/validation/crm";
 import { dashboardYangilandi } from "@/lib/cache";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
+import {
+  sotuvchiUserIdTop,
+  zakazXodimlari,
+  zakazXodimlariniSaqlash,
+} from "@/lib/services/xodimKategoriya";
+import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
 import type { Prisma } from "@prisma/client";
 
 /** Buyurtma tafsiloti + faoliyat tarixi (timeline) + bog'langan kirim. */
@@ -24,7 +30,9 @@ export const GET = withTenant<{ params: { id: string } }>(
       },
     });
     if (!deal) return NextResponse.json({ error: "Buyurtma topilmadi" }, { status: 404 });
-    return NextResponse.json(deal);
+    // Zakazdagi xodimlar (kategoriya kesimida) — tafsilot oynasi ko'rsatadi.
+    const xodimlar = await zakazXodimlari(businessId ?? "-", deal.id);
+    return NextResponse.json({ ...deal, xodimlar });
   },
   { module: "CRM" }
 );
@@ -90,6 +98,24 @@ export const PATCH = withTenant<{ params: { id: string } }>(
         patch.category = data.categoryId ? { connect: { id: data.categoryId } } : { disconnect: true };
       }
       await prisma.deal.update({ where: { id: params.id }, data: patch });
+    }
+
+    // Zakaz xodimlarini almashtirish — kirim yozilgan buyurtmada xizmat
+    // qatlami o'zi qulflaydi. Sotuvchi biriktiruvi mas'ulni yetaklaydi
+    // (createDeal bilan bir xil qoida): keyin kirim yozilsa `sotuvchiId`
+    // ayni sotuvchiga tushadi.
+    if (data.xodimlar !== undefined) {
+      await zakazXodimlariniSaqlash(businessId, params.id, data.xodimlar);
+      const sotuvchiUserId = await sotuvchiUserIdTop(businessId, data.xodimlar);
+      if (sotuvchiUserId) {
+        const sotuvchi = await prisma.user.findFirst({
+          where: { id: sotuvchiUserId, isActive: true, ...biznesXodimlariWhere(businessId) },
+          select: { id: true },
+        });
+        if (sotuvchi) {
+          await prisma.deal.update({ where: { id: params.id }, data: { masulId: sotuvchi.id } });
+        }
+      }
     }
 
     // Holat ko'chirish maydonlardan KEYIN: WON + kirimYoz bo'lsa kirim yangi

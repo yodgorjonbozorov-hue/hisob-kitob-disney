@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { zakazXodimlariSchema } from "./xodimKategoriya";
 
 /** CRM kunlik buyurtmalari uchun validatsiya sxemalari. */
 
@@ -20,6 +21,8 @@ export const buyurtmaSchema = z.object({
   izoh: z.string().trim().max(1000).optional().nullable(),
   masulId: z.string().trim().optional().nullable(),
   stageId: z.string().trim().optional().nullable(),
+  /** Zakazdagi xodimlar (kategoriya kesimida). Berilmasa — biriktiruvsiz. */
+  xodimlar: zakazXodimlariSchema.optional(),
 });
 
 /**
@@ -35,6 +38,8 @@ export const buyurtmaPatchSchema = z.object({
   sana: z.string().regex(sanaRegex).optional().nullable(),
   izoh: z.string().trim().max(1000).optional().nullable(),
   masulId: z.string().trim().optional(),
+  /** Zakaz xodimlarini TO'LIQ almashtirish (kirim yozilgach qulflanadi). */
+  xodimlar: zakazXodimlariSchema.optional(),
 });
 
 /** Kirimga o'tkazish: kassa va to'lov turi ixtiyoriy. */

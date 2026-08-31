@@ -117,6 +117,10 @@ const BUSINESS_SCOPED = new Set([
   "EmployeePenalty",
   "EmployeeBonus",
   "EmployeePlan",
+  // Xodim kategoriyalari va zakaz-xodim biriktiruvi (CRM samaradorlik)
+  "EmployeeCategory",
+  "EmployeeCategoryMember",
+  "DealEmployee",
   "HrSetting",
   // Hujjatlar (Faza 6.6)
   "Contract",

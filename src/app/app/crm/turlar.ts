@@ -17,6 +17,34 @@ export interface XodimDTO {
   ism: string;
 }
 
+/** Kategoriya a'zosi (Employee) — zakaz formasining selektorlari uchun. */
+export interface XodimAzoDTO {
+  id: string;
+  ism: string;
+  /** Tizim hisobi (User.id) — o'z-o'zini oldindan tanlash uchun. */
+  userId: string | null;
+}
+
+/** Xodim kategoriyasi (Sotuvchi/Diktor/...) — faol a'zolari bilan. */
+export interface XodimKategoriyaDTO {
+  id: string;
+  nomi: string;
+  /** "sotuvchi" | "ijrochi" — sotuvchi selektorida joriy xodim oldindan tanlanadi. */
+  turi: string;
+  azolar: XodimAzoDTO[];
+}
+
+/** Zakazga biriktirilgan xodim (tafsilot oynasi ko'rsatadi). */
+export interface ZakazXodimDTO {
+  id: string;
+  categoryId: string;
+  kategoriyaNomi: string;
+  kategoriyaTuri: string;
+  employeeId: string;
+  ism: string;
+  rasmUrl: string | null;
+}
+
 export interface BuyurtmaDTO {
   id: string;
   /** Xizmat/buyurtma nomi. */

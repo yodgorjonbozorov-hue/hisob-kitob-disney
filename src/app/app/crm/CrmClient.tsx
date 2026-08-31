@@ -7,7 +7,7 @@ import { BuyurtmaKarta } from "./BuyurtmaKarta";
 import { BuyurtmaModal } from "./BuyurtmaModal";
 import { BuyurtmaSheet } from "./BuyurtmaSheet";
 import { KirimTasdiq } from "./KirimTasdiq";
-import type { BuyurtmaDTO, KategoriyaDTO, StageDTO, XodimDTO } from "./turlar";
+import type { BuyurtmaDTO, KategoriyaDTO, StageDTO, XodimDTO, XodimKategoriyaDTO } from "./turlar";
 
 const STAGE_RANG: Record<string, string> = {
   OPEN: "border-line",
@@ -24,6 +24,7 @@ export function CrmClient({
   buyurtmalar,
   kategoriyalar,
   xodimlar,
+  xodimKategoriyalari,
   meId,
   bugun,
 }: {
@@ -31,15 +32,22 @@ export function CrmClient({
   buyurtmalar: BuyurtmaDTO[];
   kategoriyalar: KategoriyaDTO[];
   xodimlar: XodimDTO[];
+  /** Xodim kategoriyalari (Sotuvchi/Diktor/...) — zakaz-xodim biriktiruvi uchun. */
+  xodimKategoriyalari: XodimKategoriyaDTO[];
   meId: string;
   bugun: string;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   // Bosh sahifadagi "+ Yangi → Buyurtma" shu havola bilan keladi: forma
   // shu yerda qoladi, dashboard uni QAYTA yozmaydi.
-  const yangiSoralgan = useSearchParams().get("yangi") === "1";
+  const yangiSoralgan = searchParams.get("yangi") === "1";
+  // Xodim samaradorligi sahifasidan "zakazni ochish" havolasi (?buyurtma=ID).
+  const buyurtmaId = searchParams.get("buyurtma");
   const [yangiOchiq, setYangiOchiq] = useState(yangiSoralgan);
-  const [tanlangan, setTanlangan] = useState<BuyurtmaDTO | null>(null);
+  const [tanlangan, setTanlangan] = useState<BuyurtmaDTO | null>(
+    () => buyurtmalar.find((x) => x.id === buyurtmaId) ?? null
+  );
   const [kirimTasdiq, setKirimTasdiq] = useState<BuyurtmaDTO | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [xato, setXato] = useState<string | null>(null);
@@ -125,6 +133,7 @@ export function CrmClient({
           kategoriyalar={kategoriyalar}
           stages={stages}
           xodimlar={xodimlar}
+          xodimKategoriyalari={xodimKategoriyalari}
           meId={meId}
           bugun={bugun}
           onClose={() => setYangiOchiq(false)}
@@ -135,6 +144,7 @@ export function CrmClient({
           b={tanlangan}
           stages={stages}
           kategoriyalar={kategoriyalar}
+          xodimKategoriyalari={xodimKategoriyalari}
           onKochirish={(s) => kochirish(tanlangan.id, s)}
           onTahrirlandi={(yangi) => {
             // Ochiq oyna serverdan kelgan snapshot ustida ishlaydi — yangi
