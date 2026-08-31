@@ -221,6 +221,10 @@ model Business {
   bonuses            EmployeeBonus[]
   employeePlans      EmployeePlan[]
   hrSetting          HrSetting?
+  // Xodim kategoriyalari (CRM zakaz-xodim biriktiruvi)
+  employeeCategories EmployeeCategory[]
+  categoryAzolar     EmployeeCategoryMember[]
+  dealEmployees      DealEmployee[]
 
   @@index([tenantId])
 }
@@ -1112,6 +1116,8 @@ model Deal {
   deletedAt     DateTime?
   activities    Activity[]
   tasks         Task[]
+  /// Zakazda qatnashgan xodimlar (kategoriya kesimida).
+  xodimlar      DealEmployee[]
 
   @@index([businessId, stageId])
   @@index([businessId, masulId])
@@ -1333,6 +1339,10 @@ model Employee {
   bonuses     EmployeeBonus[]
   plans       EmployeePlan[]
   vazifalar   Task[]
+  /// Kategoriya a'zoliklari (Sotuvchi/Diktor/... — bir xodim bir nechtasida bo'la oladi).
+  kategoriyalar EmployeeCategoryMember[]
+  /// Zakazlarda qatnashuvlari (CRM buyurtma biriktiruvlari).
+  zakazlari     DealEmployee[]
 
   @@index([businessId, isActive, deletedAt])
   @@index([userId])
@@ -1688,6 +1698,78 @@ model EmployeePlan {
 
   @@unique([employeeId, oy])
   @@index([businessId, oy])
+}
+
+// ==== Xodim kategoriyalari va zakaz-xodim biriktiruvi ====
+
+/// XODIM KATEGORIYASI (yo'nalish) — biznes o'zi sozlaydi (Sotuvchi, Diktor,
+/// Dekoratsiyachi, Shofer, Animator, ...). Qattiq kodlangan ro'yxat YO'Q.
+/// `turi` KPI uslubini belgilaydi (nomga bog'lanmaydi):
+///   "sotuvchi" — savdo KPI (summa, konversiya, plan) — zakaz kimniki;
+///   "ijrochi"  — bajarilgan ish soni KPI (Diktor/Shofer/Videochi kabi).
+/// O'CHIRISH YO'Q — faqat `aktiv=false` (tarixiy biriktiruvlar saqlansin).
+model EmployeeCategory {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  nomi       String
+  turi       String   @default("ijrochi")
+  aktiv      Boolean  @default(true)
+  tartib     Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  azolar        EmployeeCategoryMember[]
+  biriktiruvlar DealEmployee[]
+
+  @@unique([businessId, nomi])
+  @@index([businessId, aktiv, tartib])
+}
+
+/// Kategoriya a'zoligi — bir xodim bir nechta kategoriyada bo'la oladi.
+/// A'zolikdan chiqarish tarixga TA'SIR QILMAYDI: zakaz biriktiruvlari
+/// (DealEmployee) alohida jadvalda turadi va o'chirilmaydi.
+model EmployeeCategoryMember {
+  id         String           @id @default(cuid())
+  businessId String
+  business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  categoryId String
+  category   EmployeeCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  createdAt  DateTime         @default(now())
+
+  @@unique([categoryId, employeeId])
+  @@index([businessId, employeeId])
+  @@index([employeeId])
+}
+
+/// ZAKAZDAGI XODIM — buyurtmada qaysi xodim qaysi yo'nalishda qatnashgani.
+/// MOLIYAVIY YOZUV EMAS: pul faqat Deal.transactionId (CRM→Kirim) orqali,
+/// bu jadval faqat samaradorlik statistikasi uchun o'qiladi.
+/// UNIQUE(dealId, categoryId, employeeId) — kelajakda bir kategoriyaga bir
+/// nechta xodim ham katta o'zgarishsiz sig'adi.
+/// Kategoriya/xodimga `Restrict` — tarixiy biriktiruv tasodifan yo'qolmasin
+/// (ikkalasi ham amalda soft o'chiriladi, hard delete bloklanadi).
+model DealEmployee {
+  id         String           @id @default(cuid())
+  businessId String
+  business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  dealId     String
+  deal       Deal             @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  categoryId String
+  category   EmployeeCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  employeeId String
+  employee   Employee         @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  createdAt  DateTime         @default(now())
+
+  @@unique([dealId, categoryId, employeeId])
+  /// Kategoriya analitikasi (davr kesimida xodim reytingi) — asosiy o'qish.
+  @@index([businessId, categoryId, employeeId])
+  @@index([businessId, employeeId])
+  @@index([dealId])
+  @@index([categoryId])
+  @@index([employeeId])
 }
 
 /// HR SOZLAMALARI — bir biznesga bitta yozuv (DailyReportSetting uslubi).

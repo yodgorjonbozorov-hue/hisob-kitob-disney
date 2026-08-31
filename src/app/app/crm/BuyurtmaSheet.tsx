@@ -7,7 +7,15 @@ import { formatMoney, formatDateUZ } from "@/lib/format";
 import { Badge } from "@/components/ui/Badge";
 import { KirimTasdiq } from "./KirimTasdiq";
 import { BuyurtmaTahrir } from "./BuyurtmaTahrir";
-import { kirimHavolasi, type BuyurtmaDTO, type KategoriyaDTO, type StageDTO } from "./turlar";
+import { ZakazXodimlariBlok } from "./ZakazXodimlari";
+import {
+  kirimHavolasi,
+  type BuyurtmaDTO,
+  type KategoriyaDTO,
+  type StageDTO,
+  type XodimKategoriyaDTO,
+  type ZakazXodimDTO,
+} from "./turlar";
 
 interface ActivityDTO {
   id: string;
@@ -24,6 +32,7 @@ export function BuyurtmaSheet({
   b,
   stages,
   kategoriyalar,
+  xodimKategoriyalari,
   onKochirish,
   onTahrirlandi,
   onClose,
@@ -32,19 +41,26 @@ export function BuyurtmaSheet({
   stages: StageDTO[];
   /** Kirim modulining kategoriyalari — tahrirlash uchun (CRM alohida ro'yxat yuritmaydi). */
   kategoriyalar: KategoriyaDTO[];
+  /** Xodim kategoriyalari (Sotuvchi/Diktor/...) — biriktiruv tahriri uchun. */
+  xodimKategoriyalari: XodimKategoriyaDTO[];
   onKochirish: (s: StageDTO) => void;
   onTahrirlandi: (yangi: { categoryId: string; kategoriya: string; summa: number }) => void;
   onClose: () => void;
 }) {
   const router = useRouter();
   const [activities, setActivities] = useState<ActivityDTO[] | null>(null);
+  const [zakazXodimlar, setZakazXodimlar] = useState<ZakazXodimDTO[] | null>(null);
   const [izoh, setIzoh] = useState("");
   const [tasdiq, setTasdiq] = useState(false);
   const kirimBor = Boolean(b.transactionId);
 
   const yuklash = useCallback(async () => {
     const res = await fetch(`/api/crm/deals/${b.id}`);
-    if (res.ok) setActivities((await res.json()).activities ?? []);
+    if (res.ok) {
+      const data = await res.json();
+      setActivities(data.activities ?? []);
+      setZakazXodimlar(data.xodimlar ?? []);
+    }
   }, [b.id]);
 
   useEffect(() => {
@@ -107,6 +123,18 @@ export function BuyurtmaSheet({
         {!kirimBor && (
           <BuyurtmaTahrir b={b} kategoriyalar={kategoriyalar} onSaqlandi={onTahrirlandi} />
         )}
+
+        {/* Zakazdagi xodimlar (4-talab): ro'yxat + kirim yozilmaguncha tahrir. */}
+        <ZakazXodimlariBlok
+          dealId={b.id}
+          kirimBor={kirimBor}
+          kategoriyalar={xodimKategoriyalari}
+          xodimlar={zakazXodimlar}
+          onSaqlandi={() => {
+            void yuklash();
+            router.refresh();
+          }}
+        />
 
         {/* KIRIMGA O'TKAZISH (4- va 5-talab) */}
         <div className="rounded-xl border border-line bg-surface-2/50 p-3 space-y-2">

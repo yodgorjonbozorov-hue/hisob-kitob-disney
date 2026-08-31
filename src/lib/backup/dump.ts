@@ -89,6 +89,13 @@ export const ZAXIRA_JADVALLARI = [
   // shu yerga ko'chirilgan. `employeePlan` esa `employee`dan keyin.
   "task",
   "employeePlan",
+  // Xodim kategoriyalari: `employeeCategory` `business`dan keyin yetarli;
+  // `employeeCategoryMember` employee VA employeeCategory'dan KEYIN;
+  // `dealEmployee` esa deal (CRM bloki) VA shu ikkalasidan KEYIN turishi SHART —
+  // uchalasiga FK bilan murojaat qiladi. Tartib buzilsa zaxira tiklanmaydi.
+  "employeeCategory",
+  "employeeCategoryMember",
+  "dealEmployee",
   "attendance",
   // `attendanceSelfie` `attendanceCheck`dan OLDIN — Check.selfieId unga FK.
   "attendanceSelfie",

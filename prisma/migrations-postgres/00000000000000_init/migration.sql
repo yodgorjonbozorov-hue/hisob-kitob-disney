@@ -870,6 +870,43 @@ CREATE TABLE "EmployeePlan" (
 );
 
 -- CreateTable
+CREATE TABLE "EmployeeCategory" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "nomi" TEXT NOT NULL,
+    "turi" TEXT NOT NULL DEFAULT 'ijrochi',
+    "aktiv" BOOLEAN NOT NULL DEFAULT true,
+    "tartib" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "EmployeeCategory_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "EmployeeCategoryMember" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "categoryId" TEXT NOT NULL,
+    "employeeId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "EmployeeCategoryMember_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "DealEmployee" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "dealId" TEXT NOT NULL,
+    "categoryId" TEXT NOT NULL,
+    "employeeId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "DealEmployee_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "HrSetting" (
     "id" TEXT NOT NULL,
     "businessId" TEXT NOT NULL,
@@ -1569,6 +1606,39 @@ CREATE INDEX "EmployeePlan_businessId_oy_idx" ON "EmployeePlan"("businessId", "o
 CREATE UNIQUE INDEX "EmployeePlan_employeeId_oy_key" ON "EmployeePlan"("employeeId", "oy");
 
 -- CreateIndex
+CREATE INDEX "EmployeeCategory_businessId_aktiv_tartib_idx" ON "EmployeeCategory"("businessId", "aktiv", "tartib");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "EmployeeCategory_businessId_nomi_key" ON "EmployeeCategory"("businessId", "nomi");
+
+-- CreateIndex
+CREATE INDEX "EmployeeCategoryMember_businessId_employeeId_idx" ON "EmployeeCategoryMember"("businessId", "employeeId");
+
+-- CreateIndex
+CREATE INDEX "EmployeeCategoryMember_employeeId_idx" ON "EmployeeCategoryMember"("employeeId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "EmployeeCategoryMember_categoryId_employeeId_key" ON "EmployeeCategoryMember"("categoryId", "employeeId");
+
+-- CreateIndex
+CREATE INDEX "DealEmployee_businessId_categoryId_employeeId_idx" ON "DealEmployee"("businessId", "categoryId", "employeeId");
+
+-- CreateIndex
+CREATE INDEX "DealEmployee_businessId_employeeId_idx" ON "DealEmployee"("businessId", "employeeId");
+
+-- CreateIndex
+CREATE INDEX "DealEmployee_dealId_idx" ON "DealEmployee"("dealId");
+
+-- CreateIndex
+CREATE INDEX "DealEmployee_categoryId_idx" ON "DealEmployee"("categoryId");
+
+-- CreateIndex
+CREATE INDEX "DealEmployee_employeeId_idx" ON "DealEmployee"("employeeId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "DealEmployee_dealId_categoryId_employeeId_key" ON "DealEmployee"("dealId", "categoryId", "employeeId");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "HrSetting_businessId_key" ON "HrSetting"("businessId");
 
 -- CreateIndex
@@ -1978,6 +2048,30 @@ ALTER TABLE "EmployeePlan" ADD CONSTRAINT "EmployeePlan_businessId_fkey" FOREIGN
 
 -- AddForeignKey
 ALTER TABLE "EmployeePlan" ADD CONSTRAINT "EmployeePlan_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EmployeeCategory" ADD CONSTRAINT "EmployeeCategory_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EmployeeCategoryMember" ADD CONSTRAINT "EmployeeCategoryMember_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EmployeeCategoryMember" ADD CONSTRAINT "EmployeeCategoryMember_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "EmployeeCategory"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EmployeeCategoryMember" ADD CONSTRAINT "EmployeeCategoryMember_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "DealEmployee" ADD CONSTRAINT "DealEmployee_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "DealEmployee" ADD CONSTRAINT "DealEmployee_dealId_fkey" FOREIGN KEY ("dealId") REFERENCES "Deal"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "DealEmployee" ADD CONSTRAINT "DealEmployee_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "EmployeeCategory"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "DealEmployee" ADD CONSTRAINT "DealEmployee_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "HrSetting" ADD CONSTRAINT "HrSetting_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;

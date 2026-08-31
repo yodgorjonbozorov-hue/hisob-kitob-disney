@@ -1,0 +1,212 @@
+"use client";
+
+import { useState } from "react";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { INPUT_CLASS } from "@/components/ui/fieldStyles";
+import { KATEGORIYA_TURLARI, KATEGORIYA_TURI_NOMI, type KategoriyaTuri } from "@/lib/validation/xodimKategoriya";
+import type { KategoriyaDTO } from "@/lib/services/xodimKategoriya";
+import { XodimAvatar } from "../XodimAvatar";
+
+/**
+ * Tez to'ldirish uchun TAKLIFLAR — bazaga yozilmaydi, faqat nom maydonini
+ * to'ldiradi. Har biznes o'zi xohlagan nomni yozadi (Animator, Fotograf...).
+ */
+const TAKLIFLAR: { nomi: string; turi: KategoriyaTuri }[] = [
+  { nomi: "Sotuvchi", turi: "sotuvchi" },
+  { nomi: "Diktor", turi: "ijrochi" },
+  { nomi: "Dekoratsiyachi", turi: "ijrochi" },
+  { nomi: "Videochi", turi: "ijrochi" },
+  { nomi: "Shofer", turi: "ijrochi" },
+  { nomi: "Animator", turi: "ijrochi" },
+  { nomi: "Fotograf", turi: "ijrochi" },
+  { nomi: "Montajchi", turi: "ijrochi" },
+  { nomi: "Operator", turi: "ijrochi" },
+];
+
+export function KategoriyaModal({
+  kategoriya,
+  onClose,
+  onDone,
+}: {
+  /** null — yangi kategoriya. */
+  kategoriya: KategoriyaDTO | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [nomi, setNomi] = useState(kategoriya?.nomi ?? "");
+  const [turi, setTuri] = useState<KategoriyaTuri>(
+    (kategoriya?.turi as KategoriyaTuri) ?? "ijrochi"
+  );
+  const [xato, setXato] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function saqlash(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setXato(null);
+    const res = await fetch(
+      kategoriya ? `/api/hr/kategoriyalar/${kategoriya.id}` : "/api/hr/kategoriyalar",
+      {
+        method: kategoriya ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nomi, turi }),
+      }
+    );
+    setLoading(false);
+    if (!res.ok) {
+      setXato((await res.json()).error ?? "Xatolik yuz berdi");
+      return;
+    }
+    onDone();
+  }
+
+  return (
+    <Modal open onClose={onClose} title={kategoriya ? "Kategoriyani tahrirlash" : "Yangi kategoriya"}>
+      <form onSubmit={saqlash} className="space-y-3">
+        {!kategoriya && (
+          <div className="flex flex-wrap gap-1.5">
+            {TAKLIFLAR.map((t) => (
+              <button
+                key={t.nomi}
+                type="button"
+                onClick={() => {
+                  setNomi(t.nomi);
+                  setTuri(t.turi);
+                }}
+                className="px-2.5 py-1 rounded-full text-xs border border-line text-muted hover:border-brand/50 hover:text-fg transition"
+              >
+                {t.nomi}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <label className="block space-y-1">
+          <span className="text-xs text-muted">Kategoriya nomi</span>
+          <input
+            autoFocus
+            value={nomi}
+            onChange={(e) => setNomi(e.target.value)}
+            placeholder="Masalan: Sotuvchi"
+            className={INPUT_CLASS}
+            required
+            maxLength={60}
+          />
+        </label>
+
+        <label className="block space-y-1">
+          <span className="text-xs text-muted">KPI turi</span>
+          <select value={turi} onChange={(e) => setTuri(e.target.value as KategoriyaTuri)} className={INPUT_CLASS}>
+            {KATEGORIYA_TURLARI.map((t) => (
+              <option key={t} value={t}>
+                {KATEGORIYA_TURI_NOMI[t]}
+              </option>
+            ))}
+          </select>
+          <span className="block text-2xs text-faint">
+            Sotuv KPI — summa/konversiya (zakaz kimniki); Ijro KPI — bajarilgan ish soni.
+          </span>
+        </label>
+
+        {xato && <p className="text-expense text-sm">{xato}</p>}
+        <div className="flex gap-2 justify-end pt-1">
+          <Button variant="secondary" onClick={onClose}>
+            Bekor
+          </Button>
+          <Button type="submit" loading={loading}>
+            Saqlash
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+export interface XodimTanlovDTO {
+  id: string;
+  ism: string;
+  rasmUrl: string | null;
+}
+
+/** Kategoriya a'zoligini tanlash — checkbox ro'yxati (to'liq almashtiradi). */
+export function AzolarModal({
+  kategoriya,
+  xodimlar,
+  onClose,
+  onDone,
+}: {
+  kategoriya: KategoriyaDTO;
+  xodimlar: XodimTanlovDTO[];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [tanlangan, setTanlangan] = useState<Set<string>>(
+    () => new Set(kategoriya.azolar.map((a) => a.id))
+  );
+  const [xato, setXato] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  function almash(id: string) {
+    setTanlangan((old) => {
+      const yangi = new Set(old);
+      if (yangi.has(id)) yangi.delete(id);
+      else yangi.add(id);
+      return yangi;
+    });
+  }
+
+  async function saqlash() {
+    setLoading(true);
+    setXato(null);
+    const res = await fetch(`/api/hr/kategoriyalar/${kategoriya.id}/azolar`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ employeeIds: [...tanlangan] }),
+    });
+    setLoading(false);
+    if (!res.ok) {
+      setXato((await res.json()).error ?? "Xatolik yuz berdi");
+      return;
+    }
+    onDone();
+  }
+
+  return (
+    <Modal open onClose={onClose} title={`${kategoriya.nomi} — a'zolar`} size="lg">
+      <div className="space-y-3">
+        {xodimlar.length === 0 ? (
+          <p className="text-sm text-muted">
+            Faol xodim yo&apos;q. Avval Xodimlar bo&apos;limida xodim qo&apos;shing.
+          </p>
+        ) : (
+          <ul className="divide-y divide-line max-h-[50vh] overflow-y-auto">
+            {xodimlar.map((x) => (
+              <li key={x.id}>
+                <label className="flex items-center gap-3 py-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={tanlangan.has(x.id)}
+                    onChange={() => almash(x.id)}
+                    className="accent-brand w-4 h-4"
+                  />
+                  <XodimAvatar ism={x.ism} rasmUrl={x.rasmUrl} size="sm" />
+                  <span className="text-sm text-fg">{x.ism}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        )}
+        {xato && <p className="text-expense text-sm">{xato}</p>}
+        <div className="flex gap-2 justify-end">
+          <Button variant="secondary" onClick={onClose}>
+            Bekor
+          </Button>
+          <Button onClick={saqlash} loading={loading} disabled={xodimlar.length === 0}>
+            Saqlash ({tanlangan.size})
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}

@@ -7,6 +7,7 @@ import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import { listXodimlar, listOyliklar, getHrStats } from "@/lib/queries/hr";
 import { getXodimlarPerformance } from "@/lib/queries/xodimPlan";
 import { currentMonthString } from "@/lib/date";
+import { LinkButton } from "@/components/ui/LinkButton";
 import { HrClient } from "./HrClient";
 
 /** HR-LITE — xodimlar, avans va oylik vedomosti. */
@@ -45,12 +46,22 @@ export default async function HrPage({
 
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-fg">Xodimlar</h1>
-          <p className="text-sm text-muted mt-1">
-            Biznes: <span className="font-medium text-fg">{business?.nomi ?? "—"}</span> ·
-            Oylik to&apos;langanda chiqim tranzaksiya avtomatik yoziladi
-          </p>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-fg">Xodimlar</h1>
+            <p className="text-sm text-muted mt-1">
+              Biznes: <span className="font-medium text-fg">{business?.nomi ?? "—"}</span> ·
+              Oylik to&apos;langanda chiqim tranzaksiya avtomatik yoziladi
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <LinkButton href="/app/hr/samaradorlik" variant="secondary" size="sm">
+              Samaradorlik
+            </LinkButton>
+            <LinkButton href="/app/hr/kategoriyalar" variant="secondary" size="sm">
+              Kategoriyalar
+            </LinkButton>
+          </div>
         </div>
         <HrClient
           xodimlar={xodimlar}

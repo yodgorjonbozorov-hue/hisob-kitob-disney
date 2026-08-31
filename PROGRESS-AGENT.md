@@ -5341,3 +5341,63 @@ tenant izolyatsiyasi, dashboard, pul yozilmasligi). `test:izolyatsiya-royxati`,
 `test:isolation`, `test:backup`, `test:hr`, `test:tasks`,
 `test:xodim-statistika`, `test:migratsiya`, `test:postgres`, `test:davomat`,
 `test:crm` — yashil. `npm run build` o'tdi.
+
+### 2026-08-31 — CRM zakaz-xodim biriktiruvi va kategoriya samaradorligi (tugadi)
+
+**Branch:** `claude/crm-employee-analytics-qxj46u`
+
+**Nima qilindi**
+- Migratsiya `20260831090000_xodim_kategoriya` — FAQAT qo'shuvchi: 3 yangi jadval.
+  `EmployeeCategory` (biznes darajasida sozlanadigan yo'nalishlar — Sotuvchi,
+  Diktor, Shofer...; `turi`: "sotuvchi" (savdo KPI) | "ijrochi" (bajarilgan ish
+  KPI) — KPI uslubi NOMGA emas, shu maydonga bog'lanadi; o'chirish YO'Q, faqat
+  `aktiv=false`), `EmployeeCategoryMember` (xodim↔kategoriya ko'p-ko'p,
+  UNIQUE(categoryId, employeeId)), `DealEmployee` (zakaz↔kategoriya↔xodim,
+  UNIQUE(dealId, categoryId, employeeId) — kelajakda bir kategoriyaga bir necha
+  xodim ham sig'adi; kategoriya/xodimga RESTRICT — tarixiy biriktiruv tasodifan
+  yo'qolmasin). Postgres init qayta generatsiya (65 jadval).
+- CRM "Yangi buyurtma" formasida "Zakazdagi xodimlar" bo'limi: har faol
+  kategoriya uchun bitta selektor, ro'yxatda faqat o'sha kategoriya a'zolari
+  (server `zakazXodimlariniTekshir` bilan majburlaydi — xato ro'yxatda buyurtma
+  UMUMAN ochilmaydi). Sotuvchi-turidagi kategoriyada joriy foydalanuvchining
+  xodim yozuvi bo'lsa o'zi oldindan tanlanadi; sotuvchi selektori bor bo'lsa
+  eski "Mas'ul xodim" maydoni yashiriladi — MAS'UL SOTUVCHIDAN SINXRONLANADI
+  (`Deal.masulId` = sotuvchi xodimning `userId`si). Shu tufayli CRM→Kirim
+  ko'chirilganda `Transaction.sotuvchiId` (mavjud xodim statistikasi) ham AYNI
+  sotuvchiga yoziladi — ikkita hisob bitta haqiqat manbaida.
+- Buyurtma tafsilotida (BuyurtmaSheet) biriktiruvlar ro'yxati + tahrir; kirim
+  yozilgach server qulflaydi (summa/kategoriya qulfi bilan bir qoida) — yakunlangan
+  zakaz statistikasi keyin o'zgarmaydi. CRM→KIRIM OQIMI TEGILMADI: pul avvalgidek
+  `lib/crm/kirim.ts` orqali BIR marta (Deal.transactionId UNIQUE, baza darajasida);
+  DealEmployee moliyaviy yozuv EMAS.
+- `/app/hr/kategoriyalar` (faqat boshqaruvchi): yaratish (tez to'ldirish
+  takliflari — bazaga yozilmaydi), nomlash, KPI turi, tartib (↑/↓),
+  aktiv/noaktiv, a'zolik (checkbox, to'liq almashtirish). O'chirish ATAYLAB yo'q.
+- `/app/hr/samaradorlik` (`hisobot.korish`): davr filtri (Bugun/Bu hafta/
+  Bu oy/Sana, standart "Bu oy" — DavrFiltri qayta ishlatildi), kategoriya
+  tablari, KPI turi bo'yicha: sotuvchi — jami sotuv/jami zakaz/yutilgan/
+  konversiya/eng yaxshi; ijrochi — jami bajarilgan/faol xodimlar/eng ko'p
+  bajargan/o'rtacha zakaz-xodim (ma'nosiz KPI ko'rsatilmaydi). Reyting:
+  sotuvchi — yutilgan summa (teng bo'lsa soni), ijrochi — bajarilgan soni;
+  🥇🥈🥉 medallar. Xodim detali (`/samaradorlik/[id]`): KPI, plan, reyting
+  o'rni, zakazlar lentasi → `/app/crm?buyurtma=ID` (doska o'sha buyurtmani ochadi).
+- STATISTIKA MANBAI: Deal + DealEmployee + Stage.turi (WON/LOST) — hisoblagich
+  SAQLANMAYDI, har o'qishda manbadan. Davr: `Deal.sana` (eskilarda createdAt).
+  A'zolikdan chiqarilgan/noaktiv kategoriya tarixi analitikada qoladi. PLAN —
+  mavjud `EmployeePlan` dvigateli (`getXodimlarPerformance`), yangi jadval YO'Q:
+  HR sahifasi bilan bir xil foiz, davr oxiri oyi bo'yicha.
+- `tenantDb.BUSINESS_SCOPED` += EmployeeCategory, EmployeeCategoryMember,
+  DealEmployee; `ZAXIRA_JADVALLARI`ga uchalasi bog'liqlik tartibida
+  (`employeePlan`dan keyin — dealEmployee deal/employee/employeeCategory'dan KEYIN).
+
+**Testlar:** `tests/xodim-kategoriya.test.ts` (19 test: kategoriya CRUD +
+dublikat nom + tartib, tenant izolyatsiyasi (ro'yxat, tahrir, biriktiruv,
+analitika), a'zolik almashtirish + begona xodim rad, forma selektorlari,
+createDeal biriktiruv + sotuvchi→mas'ul sinxroni, a'zo bo'lmagan xodim bilan
+buyurtma ochilmasligi, WON+kirim BIR marta + dublikat rad (500 000 bir marta),
+kirim yozilgach biriktiruv qulfi, sotuvchi/ijrochi KPI-reyting, davr filtri,
+savdo plani foizi, xodim detali, noaktiv kategoriya tarixi, eski biriktiruvsiz
+buyurtma mosligi, hisobot.korish matritsasi). `test:izolyatsiya-royxati`,
+`test:backup`, `test:crm`, `test:xodim-statistika`, `test:xodim-plan`,
+`test:isolation`, `test:hr`, `test:tasks`, `test:migratsiya`, `test:davomat`,
+`test:kirim-chiqim`, `test:dialect`, `test:postgres` — yashil. `npm run build` o'tdi.

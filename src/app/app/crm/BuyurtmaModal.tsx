@@ -3,7 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { parseSomInput } from "@/lib/format";
-import type { KategoriyaDTO, StageDTO, XodimDTO } from "./turlar";
+import type { KategoriyaDTO, StageDTO, XodimDTO, XodimKategoriyaDTO } from "./turlar";
+import {
+  ZakazXodimlariTanlash,
+  boshlangichTanlov,
+  tanlovdanRoyxat,
+  type ZakazXodimTanlov,
+} from "./ZakazXodimlari";
 
 const INPUT =
   "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand";
@@ -19,6 +25,7 @@ export function BuyurtmaModal({
   kategoriyalar,
   stages,
   xodimlar,
+  xodimKategoriyalari,
   meId,
   bugun,
   onClose,
@@ -26,6 +33,8 @@ export function BuyurtmaModal({
   kategoriyalar: KategoriyaDTO[];
   stages: StageDTO[];
   xodimlar: XodimDTO[];
+  /** Xodim kategoriyalari (Sotuvchi/Diktor/...) — "Zakazdagi xodimlar" bo'limi. */
+  xodimKategoriyalari: XodimKategoriyaDTO[];
   meId: string;
   /** Bugungi sana "YYYY-MM-DD" (server tomondan — brauzer vaqt mintaqasi emas). */
   bugun: string;
@@ -41,8 +50,19 @@ export function BuyurtmaModal({
   const [izoh, setIzoh] = useState("");
   const [masulId, setMasulId] = useState(meId);
   const [stageId, setStageId] = useState(stages.find((s) => s.turi === "OPEN")?.id ?? "");
+  // Sotuvchi turidagi kategoriyada joriy foydalanuvchi a'zo bo'lsa — o'zi
+  // oldindan tanlanadi (3-talab: o'zini har safar qidirmasin).
+  const [xodimTanlov, setXodimTanlov] = useState<ZakazXodimTanlov>(() =>
+    boshlangichTanlov(xodimKategoriyalari, meId)
+  );
   const [xato, setXato] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Sotuvchi kategoriya-selektori bor bo'lsa mas'ul o'sha tanlovdan chiqadi
+  // (server sinxronlaydi) — ikkita "kim sotdi" maydoni ko'rsatilmaydi.
+  const sotuvchiSelektorBor = xodimKategoriyalari.some(
+    (k) => k.turi === "sotuvchi" && k.azolar.length > 0
+  );
 
   async function saqlash(e: React.FormEvent) {
     e.preventDefault();
@@ -65,6 +85,7 @@ export function BuyurtmaModal({
         izoh: izoh || null,
         masulId,
         stageId: stageId || null,
+        xodimlar: tanlovdanRoyxat(xodimTanlov),
       }),
     });
     setLoading(false);
@@ -147,16 +168,19 @@ export function BuyurtmaModal({
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <label className="block space-y-1">
-            <span className="text-xs text-muted">Mas&apos;ul xodim</span>
-            <select value={masulId} onChange={(e) => setMasulId(e.target.value)} className={INPUT}>
-              {xodimlar.map((x) => (
-                <option key={x.id} value={x.id}>
-                  {x.ism}
-                </option>
-              ))}
-            </select>
-          </label>
+          {/* Sotuvchi kategoriya-selektori bo'lsa mas'ul o'sha yerdan chiqadi. */}
+          {!sotuvchiSelektorBor && (
+            <label className="block space-y-1">
+              <span className="text-xs text-muted">Mas&apos;ul xodim</span>
+              <select value={masulId} onChange={(e) => setMasulId(e.target.value)} className={INPUT}>
+                {xodimlar.map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.ism}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="block space-y-1">
             <span className="text-xs text-muted">Holat</span>
             <select value={stageId} onChange={(e) => setStageId(e.target.value)} className={INPUT}>
@@ -168,6 +192,12 @@ export function BuyurtmaModal({
             </select>
           </label>
         </div>
+
+        <ZakazXodimlariTanlash
+          kategoriyalar={xodimKategoriyalari}
+          tanlov={xodimTanlov}
+          onChange={setXodimTanlov}
+        />
 
         <label className="block space-y-1">
           <span className="text-xs text-muted">Izoh</span>

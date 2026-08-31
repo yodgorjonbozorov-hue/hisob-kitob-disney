@@ -3,6 +3,12 @@ import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { kirimgaKochirish } from "@/lib/crm/kirim";
 import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
+import {
+  sotuvchiUserIdTop,
+  zakazXodimlariniSaqlash,
+  zakazXodimlariniTekshir,
+} from "@/lib/services/xodimKategoriya";
+import type { ZakazXodimInput } from "@/lib/validation/xodimKategoriya";
 
 /**
  * CRM xizmat qatlami. Barcha funksiyalar tenant kontekstida chaqiriladi —
@@ -72,6 +78,8 @@ export interface YangiBuyurtma {
   masulId?: string | null;
   /** Boshlang'ich holat (bosqich). Berilmasa — birinchi OPEN bosqich. */
   stageId?: string | null;
+  /** Zakazdagi xodimlar (kategoriya kesimida). Berilmasa — biriktiruvsiz. */
+  xodimlar?: ZakazXodimInput[];
   userId: string;
 }
 
@@ -156,6 +164,22 @@ export async function createDeal(params: YangiBuyurtma) {
   if (params.masulId && params.masulId !== params.userId) {
     masulId = await biznesXodimi(params.businessId, params.masulId);
   }
+  // SOTUVCHI biriktiruvi mas'ulni YETAKLAYDI: "sotuvchi" turidagi kategoriyaga
+  // tayinlangan, tizim hisobi bog'langan xodim — zakaz o'shaniki. Shunda
+  // CRM→Kirim `sotuvchiId` (mavjud xodim statistikasi) ham ayni sotuvchiga
+  // yoziladi — ikki hisob bitta haqiqat manbaida qoladi.
+  if (params.xodimlar?.length) {
+    // Tekshiruv YARATISHDAN OLDIN — xato ro'yxat bilan buyurtma umuman ochilmasin.
+    await zakazXodimlariniTekshir(params.businessId, params.xodimlar);
+    const sotuvchiUserId = await sotuvchiUserIdTop(params.businessId, params.xodimlar);
+    if (sotuvchiUserId) {
+      const sotuvchi = await prisma.user.findFirst({
+        where: { id: sotuvchiUserId, isActive: true, ...biznesXodimlariWhere(params.businessId) },
+        select: { id: true },
+      });
+      if (sotuvchi) masulId = sotuvchi.id;
+    }
+  }
 
   const deal = await prisma.deal.create({
     data: {
@@ -176,6 +200,11 @@ export async function createDeal(params: YangiBuyurtma) {
       category: { select: { id: true, nomi: true } },
     },
   });
+
+  // Zakaz xodimlari — kategoriya/a'zolik tekshiruvi bilan (xizmat qatlami).
+  if (params.xodimlar?.length) {
+    await zakazXodimlariniSaqlash(params.businessId, deal.id, params.xodimlar);
+  }
 
   await prisma.activity.create({
     data: {

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import { getBoard } from "@/lib/crm/service";
 import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
+import { crmFormaKategoriyalari } from "@/lib/services/xodimKategoriya";
 import { kunlikBuyurtmalar, kategoriyaStatistikasi } from "@/lib/crm/statistika";
 import { todayTashkentDateOnlyString, utcDateToDateOnlyString } from "@/lib/date";
 import { CrmClient } from "./CrmClient";
@@ -29,7 +30,7 @@ export default async function CrmPage() {
       );
     }
 
-    const [board, kategoriyalar, xodimlar, kunlik, kategoriyaStat] = await Promise.all([
+    const [board, kategoriyalar, xodimlar, kunlik, kategoriyaStat, xodimKategoriyalari] = await Promise.all([
       getBoard(businessId),
       // KATEGORIYA MANBAI BITTA: Kirim modulining kategoriyalari.
       prisma.category.findMany({
@@ -47,6 +48,8 @@ export default async function CrmPage() {
       }),
       kunlikBuyurtmalar(businessId, bugun),
       kategoriyaStatistikasi(businessId),
+      // Xodim kategoriyalari (Sotuvchi/Diktor/...) — zakaz-xodim biriktiruvi.
+      crmFormaKategoriyalari(businessId),
     ]);
 
     const ismlar = new Map(xodimlar.map((x) => [x.id, x.ism]));
@@ -84,6 +87,12 @@ export default async function CrmPage() {
           stages={stages}
           kategoriyalar={kategoriyalar}
           xodimlar={xodimlar}
+          xodimKategoriyalari={xodimKategoriyalari.map((k) => ({
+            id: k.id,
+            nomi: k.nomi,
+            turi: k.turi,
+            azolar: k.azolar.map((a) => ({ id: a.id, ism: a.ism, userId: a.userId })),
+          }))}
           meId={session.userId}
           bugun={bugun}
           buyurtmalar={board.deals.map((d) => ({
