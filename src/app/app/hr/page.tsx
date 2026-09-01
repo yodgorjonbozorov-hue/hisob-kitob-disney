@@ -55,6 +55,9 @@ export default async function HrPage({
             </p>
           </div>
           <div className="flex gap-2 flex-wrap">
+            <LinkButton href="/app/hr/kpi" size="sm">
+              KPI va oylik
+            </LinkButton>
             <LinkButton href="/app/hr/sotuvchilar" variant="secondary" size="sm">
               Sotuvchilar
             </LinkButton>

@@ -117,6 +117,12 @@ export function XodimDetalClient({
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href={`/app/hr/kpi/${xodim.id}?oy=${oy}`}
+            className="text-2xs text-brand hover:underline mr-1"
+          >
+            KPI va oylik
+          </Link>
           <Button size="sm" variant="ghost" onClick={() => oyniOzgart(-1)}>
             ←
           </Button>

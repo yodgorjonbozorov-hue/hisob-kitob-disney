@@ -1,3 +1,37 @@
+# Xodimlar KPI / ball / oylik moduli (2026-09-01)
+
+Rahbar xodim kartochkasini bosadi va "bu xodimga hozir qancha oylik chiqdi"
+savolining javobi ekranda turadi. CRM → sotuv → xodim → KPI → ball → bonus →
+oylik zanjiri bitta avtomatik tizimga ulandi.
+
+## Uchta invariant (ular buzilsa modul ishonchsiz bo'ladi)
+
+1. SOTUV takrorlanmaydi — mavjud kirim tranzaksiyalaridan o'qiladi
+   (`lib/kpi/sotuv.ts`), biriktirish qoidasi `sotuvchiId ?? userId`, ya'ni
+   mavjud "Xodimlar statistikasi" bilan bir xil raqam chiqadi.
+2. BALL takrorlanmaydi — joriy ball = boshlang'ich + shu oydagi
+   `KpiPointLog` yig'indisi. Alohida "joriy ball" ustuni YO'Q, shuning uchun
+   jurnal bilan ball ajralib qolmaydi va jimgina tahrirlash imkonsiz.
+3. OYLIK saqlanmaydi — har o'qishda qayta hisoblanadi ("Hozirgi hisob").
+   Oy yopilganda `KpiPayroll` snapshot yoziladi va o'sha oy muzlaydi
+   ("Yakuniy hisob"). Shu sababli alohida "recalc" mexanizmi kerak emas.
+
+## Ish paytida topilgan va tuzatilgan xatolar
+
+- `NOT: { tolovTuri: "qarz" }` filtri `tolovTuri` BO'SH bo'lgan eski
+  yozuvlarni jimgina tashlab ketardi (SQL'da NULL taqqoslash ROST bermaydi),
+  natijada bonus kam hisoblanardi. NULL endi ochiq ro'yxatga olinadi.
+- Qaytarilgan jarima kunlik limitni band qilib turardi: xato kiritilgan
+  jarimani qaytarib, to'g'risini o'sha kuni qayta yozib bo'lmasdi.
+- Yopilgan oyda bonus tafsiloti joriy sozlamadan chizilardi; sozlama keyin
+  o'zgargan bo'lsa qatorlar yig'indisi snapshot jami bilan to'g'ri kelmasdi.
+
+## Testlar
+
+`npm run test:kpi-hisob` (16 ta, sof hisob) va `npm run test:kpi` (25 ta,
+baza bilan: sotuv qoidalari, kunlik limit, qaytarish, oy yopish, tenant
+izolyatsiyasi).
+
 # PROGRESS-AGENT.md — avtonom tuzatish agenti jurnali
 
 Bu fayl agent sessiyalari o'rtasidagi yagona xotira. Sessiya uzilsa —

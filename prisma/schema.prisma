@@ -225,6 +225,18 @@ model Business {
   employeeCategories EmployeeCategory[]
   categoryAzolar     EmployeeCategoryMember[]
   dealEmployees      DealEmployee[]
+  // Xodimlar KPI / ball / oylik moduli
+  kpiSetting         KpiSetting?
+  kpiBracketlar      KpiSalesBracket[]
+  kpiBallQoidalari   KpiScoreRule[]
+  kpiVazifalar       KpiTask[]
+  kpiBiriktiruvlar   KpiTaskAssignment[]
+  kpiPresetlar       KpiPenaltyPreset[]
+  kpiBallLoglari     KpiPointLog[]
+  kpiSotuvPlanlari   KpiSalesTarget[]
+  kpiOyliklar        KpiPayroll[]
+  kpiOylikQatorlari  KpiPayrollItem[]
+  kpiTuzatishlar     KpiPayrollAdjustment[]
 
   @@index([tenantId])
 }
@@ -1379,6 +1391,11 @@ model Employee {
   kategoriyalar EmployeeCategoryMember[]
   /// Zakazlarda qatnashuvlari (CRM buyurtma biriktiruvlari).
   zakazlari     DealEmployee[]
+  /// KPI moduli: biriktirilgan vazifalar, ball tarixi, sotuv plani, oyliklar.
+  kpiBiriktiruvlar KpiTaskAssignment[]
+  kpiBallLoglari   KpiPointLog[]
+  kpiSotuvPlanlari KpiSalesTarget[]
+  kpiOyliklar      KpiPayroll[]
 
   @@index([businessId, isActive, deletedAt])
   @@index([userId])
@@ -2279,4 +2296,324 @@ model SupportMessage {
   createdAt  DateTime      @default(now())
 
   @@index([ticketId, createdAt])
+}
+
+// ==== XODIMLAR KPI / BALL / OYLIK moduli ====
+//
+// MAQSAD: CRM → SOTUV → XODIM → KPI → BALL → BONUS → OYLIK zanjiri bitta
+// avtomatik tizimga ulanadi. Rahbar kalkulyator ochmaydi — xodim kartochkasini
+// bosadi va "hozir qancha oylik chiqdi" savolining javobi ekranda turadi.
+//
+// HAQIQAT MANBAI QOIDASI — bu modulning eng muhim invarianti:
+//   · SOTUV bazada TAKRORLANMAYDI. U mavjud kirim tranzaksiyalaridan
+//     hisoblanadi (lib/kpi/sotuv.ts) — CRM zakazi kirimga 1-1 bog'langan
+//     (Deal.transactionId UNIQUE), ya'ni bir zakaz bir marta sanaladi.
+//   · BALL bazada TAKRORLANMAYDI. Joriy ball = boshlang'ich ball + shu oydagi
+//     `KpiPointLog` yozuvlari yig'indisi. Alohida "joriy ball" ustuni YO'Q,
+//     shuning uchun jurnal bilan ball hech qachon ajralib qolmaydi va
+//     "jimgina tahrirlash" imkonsiz (tuzatish faqat qaytarish yozuvi bilan).
+//   · Shu ikkisidan kelib chiqib OYLIK ham saqlanmaydi: u har o'qishda qayta
+//     hisoblanadi ("Hozirgi hisob"). Oy YOPILGANDA esa `KpiPayroll` snapshot
+//     yoziladi va o'sha oy endi manba o'zgarsa ham o'zgarmaydi ("Yakuniy hisob").
+
+/// KPI SOZLAMALARI — bir biznesga bitta yozuv (HrSetting uslubi).
+/// Qattiq kodlangan qiymat YO'Q: har biznes o'z planini va qoidasini sozlaydi.
+model KpiSetting {
+  id         String   @id @default(cuid())
+  businessId String   @unique
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  /// MAVSUM oylari — vergul bilan ajratilgan oy raqamlari (1-12).
+  /// Default: mart, may–dekabr (aprel va yanvar-fevral mavsumsiz).
+  mavsumOylar     String @default("3,5,6,7,8,9,10,11,12")
+  /// Mavsum oyidagi standart sotuv plani (so'm).
+  mavsumPlan      Int    @default(100000000)
+  /// Mavsumsiz oydagi standart sotuv plani (so'm).
+  mavsumsizPlan   Int    @default(80000000)
+  /// Plan bajarilsa beriladigan qo'shimcha (so'm).
+  planBonus       Int    @default(1000000)
+  /// Har vazifa har oy shu balldan boshlanadi.
+  boshlangichBall Int    @default(100)
+  /// ODDIY jarimalarda bir vazifa uchun BIR KUNDA maksimal ayirish (ball).
+  /// KRITIK (ishonch) holatlari bu limitga KIRMAYDI.
+  kunlikLimit     Int    @default(5)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+/// PROGRESSIV SOTUV BONUSI INTERVALI.
+///
+/// Umumiy summaga BITTA foiz qo'llanmaydi — har interval o'z foizi bilan
+/// hisoblanadi (lib/kpi/hisob.ts). `gacha` null — yuqori chegara yo'q.
+/// `foiz` — YUZDAN BIR aniqlikda butun son (2% → 200), chunki loyihada
+/// float taqiqlangan; hisob `summa × foiz / 10000` ko'rinishida butun qoladi.
+model KpiSalesBracket {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  dan        Int
+  gacha      Int?
+  foiz       Int
+  tartib     Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([businessId, tartib])
+}
+
+/// BALL → VAZIFA HAQI FOIZI jadvali (100 ball → 110%, 39 → 0% ...).
+/// Chegaralar INCLUSIVE: minBall ≤ ball ≤ maxBall.
+model KpiScoreRule {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  minBall    Int
+  maxBall    Int
+  /// Yuzdan bir aniqlikda (110% → 11000).
+  foiz       Int
+  tartib     Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([businessId, tartib])
+}
+
+/// KPI VAZIFASI — oylik haqi biriktirilgan doimiy majburiyat
+/// ("Mijoz bilan aloqa", "Baza va hisob yuritish", ...).
+///
+/// CRM `Task` bilan ARALASHTIRILMAYDI: `Task` — bir martalik topshiriq
+/// (muddat, holat, bajarildi); bu esa HAR OY takrorlanadigan majburiyat,
+/// bajarilishi ball bilan o'lchanadi va pulga aylanadi.
+/// O'chirish YUMSHOQ (`deletedAt`) — ball tarixi va yopilgan oylik
+/// snapshotlari havolasiz qolmasin.
+model KpiTask {
+  id         String    @id @default(cuid())
+  businessId String
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  nomi       String
+  izoh       String?
+  /// Vazifa uchun to'liq bajarilgandagi OYLIK haq (so'm).
+  oylikHaq   Int       @default(0)
+  aktiv      Boolean   @default(true)
+  tartib     Int       @default(0)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  biriktiruvlar KpiTaskAssignment[]
+  presetlar     KpiPenaltyPreset[]
+  ballLoglari   KpiPointLog[]
+  oylikQatorlar KpiPayrollItem[]
+
+  @@index([businessId, aktiv, tartib])
+}
+
+/// VAZIFA BIRIKTIRUVI — qaysi xodim qaysi vazifani bajaradi.
+/// `aktiv=false` — biriktiruv olib tashlangan, LEKIN yozuv qoladi: o'tgan
+/// oylardagi ball tarixi va oylik hisobi havolasiz qolmasligi kerak.
+model KpiTaskAssignment {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  taskId     String
+  task       KpiTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  aktiv      Boolean  @default(true)
+  /// Kim biriktirgan (User.id). FK ataylab yo'q (EmployeeBonus.userId uslubi).
+  userId     String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([taskId, employeeId])
+  @@index([businessId, employeeId, aktiv])
+  @@index([employeeId])
+  @@index([taskId])
+}
+
+/// TAYYOR JARIMA SABABI (preset) — modalda bir bosishda tanlanadi.
+/// `taskId` null — GLOBAL sabab (masalan "Yolg'on ma'lumot berish").
+/// `kritik=true` — ISHONCH buzilishi: kunlik limitga KIRMAYDI.
+model KpiPenaltyPreset {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  taskId     String?
+  task       KpiTask? @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  sabab      String
+  /// Ayiriladigan ball — MUSBAT son sifatida saqlanadi (UI "-4" ko'rsatadi).
+  ball       Int
+  kritik     Boolean  @default(false)
+  aktiv      Boolean  @default(true)
+  tartib     Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([businessId, aktiv, tartib])
+  @@index([taskId])
+}
+
+/// BALL TRANZAKSIYASI — audit jurnali va AYNI PAYTDA ballning yagona manbai.
+///
+/// Yozuv TAHRIRLANMAYDI va O'CHIRILMAYDI. Xato kiritilgan bo'lsa "qaytarish"
+/// yozuvi yaratiladi (`turi="qaytarish"`, `ball` musbat, `bekorQilinganId`
+/// asl yozuvga ishora qiladi) — asl yozuv tarixda ko'rinib turadi.
+///
+/// `oy` — ball qaysi oyga tegishli ("YYYY-MM"). Ball keyingi oyga
+/// KO'CHMAYDI: yangi oy yana boshlang'ich balldan boshlanadi.
+model KpiPointLog {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  taskId     String
+  task       KpiTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  /// "YYYY-MM" — `sana` dan kelib chiqadi, lekin so'rovlar shu ustun bo'yicha
+  /// kesiladi (indeks bilan bitta o'qishda butun oy ko'tariladi).
+  oy         String
+  sana       DateTime
+  /// Manfiy — ayirish, musbat — qaytarish. Nol bo'lmaydi.
+  ball       Int
+  /// Yozuv yozilgan paytdagi ball (audit ko'rinishi: 100 → 97).
+  ballOldin  Int
+  ballKeyin  Int
+  sabab      String
+  izoh       String?
+  /// "jarima" | "qaytarish"
+  turi       String   @default("jarima")
+  /// Ishonch/kritik holat — kunlik limitga kirmaydi.
+  kritik     Boolean  @default(false)
+  /// Qaysi presetdan olingan (qo'lda kiritilgan bo'lsa null).
+  presetId   String?
+  /// Qaytarish yozuvi bo'lsa — qaysi yozuvni bekor qiladi.
+  /// @unique — bitta yozuv IKKI marta qaytarilmaydi (baza darajasidagi kafolat).
+  bekorQilinganId String? @unique
+  /// Kim yozdi (User.id). FK ataylab yo'q — foydalanuvchi o'chirilsa ham
+  /// audit tarixi buzilmasin.
+  userId     String
+  /// Kim yozgani — snapshot ism (tarixda "Rahbar: Umar" ko'rinadi).
+  userIsm    String?
+  createdAt  DateTime @default(now())
+
+  /// Asosiy o'qish: bitta xodimning bitta oydagi barcha ball harakati.
+  @@index([businessId, employeeId, oy])
+  /// Dashboard: butun biznesning oy kesimi (barcha xodim ballari bir o'qishda).
+  @@index([businessId, oy])
+  /// Kunlik limit tekshiruvi: (xodim, vazifa, sana).
+  @@index([employeeId, taskId, sana])
+  @@index([taskId])
+}
+
+/// XODIMNING OYLIK SOTUV PLANI — standart plandan FARQ qilsa yoziladi.
+/// Yozuv bo'lmasa `KpiSetting` dagi mavsum/mavsumsiz plan qo'llanadi.
+/// Har oy alohida: keyingi oy plan o'zgarsa o'tgan oy statistikasi buzilmaydi.
+model KpiSalesTarget {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  /// "YYYY-MM"
+  oy         String
+  maqsad     Int
+  /// Shu oyga xos plan bonusi. Null — sozlamadagi umumiy qiymat.
+  planBonus  Int?
+  izoh       String?
+  userId     String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([employeeId, oy])
+  @@index([businessId, oy])
+}
+
+/// OY YOPILGANDAGI OYLIK SNAPSHOT'i — bir xodim, bir oy.
+///
+/// Yozuv YO'Q bo'lsa oy hali ochiq: hisob real vaqtda manbadan chiqadi
+/// ("Hozirgi hisob", DTO'da holat = "QORALAMA"). Yozuv paydo bo'lgach CRM
+/// yoki zakaz keyin o'zgarsa ham bu raqamlar O'ZGARMAYDI — tuzatish faqat
+/// `KpiPayrollAdjustment` orqali, ko'rinadigan qatordek yoziladi.
+///
+/// Mavjud `Payroll` (stavka + davomat vedomosti) bilan ALMASHTIRILMAYDI:
+/// u boshqa hisob sxemasi (kunlik/oylik stavka, avans, davomat jarimasi).
+/// Bu esa KPI sxemasi (vazifa haqi + sotuv bonusi + plan bonusi).
+model KpiPayroll {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  /// "YYYY-MM"
+  oy         String
+  /// Snapshot paytidagi hisoblangan sotuv (so'm).
+  sotuv       Int @default(0)
+  /// Snapshot paytidagi sotuv plani (so'm).
+  plan        Int @default(0)
+  vazifaHaqi  Int @default(0)
+  sotuvBonusi Int @default(0)
+  planBonusi  Int @default(0)
+  /// Tasdiqdan keyingi tuzatishlar yig'indisi (KpiPayrollAdjustment).
+  tuzatish    Int @default(0)
+  /// vazifaHaqi + sotuvBonusi + planBonusi + tuzatish.
+  jami        Int @default(0)
+  /// "HISOBLANDI" | "TASDIQLANDI" | "TOLANDI".
+  /// Yozuv umuman bo'lmasa — "QORALAMA" (DTO darajasida).
+  holat          String    @default("HISOBLANDI")
+  hisoblanganAt  DateTime  @default(now())
+  tasdiqlaganId  String?
+  tasdiqlanganAt DateTime?
+  tolaganId      String?
+  tolanganAt     DateTime?
+  tolanganSumma  Int?
+  izoh           String?
+  /// Kim yopgan (User.id) — FK ataylab yo'q.
+  userId     String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  qatorlar    KpiPayrollItem[]
+  tuzatishlar KpiPayrollAdjustment[]
+
+  @@unique([employeeId, oy])
+  @@index([businessId, oy, holat])
+}
+
+/// OYLIK SNAPSHOT QATORI — har vazifa bo'yicha ball va hisoblangan haq.
+/// Vazifa nomi va oylik haqi SNAPSHOT sifatida ko'chiriladi: keyin vazifa
+/// nomi yoki narxi o'zgarsa yopilgan oy hisoboti o'zgarmaydi.
+model KpiPayrollItem {
+  id         String     @id @default(cuid())
+  businessId String
+  business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  payrollId  String
+  payroll    KpiPayroll @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+  /// Vazifa yumshoq o'chirilsa ham havola qoladi; hard delete'da null.
+  taskId      String?
+  task        KpiTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  taskNomi    String
+  oylikHaq    Int
+  ball        Int
+  /// Yuzdan bir aniqlikda qo'llangan foiz (85% → 8500).
+  foiz        Int
+  hisoblangan Int
+
+  @@index([payrollId])
+  @@index([taskId])
+}
+
+/// YOPILGAN OYLIKKA TUZATISH — snapshot RAQAMI o'zgartirilmaydi, tuzatish
+/// ALOHIDA qator bo'lib qo'shiladi (kim, qachon, nega — ko'rinib turadi).
+model KpiPayrollAdjustment {
+  id         String     @id @default(cuid())
+  businessId String
+  business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  payrollId  String
+  payroll    KpiPayroll @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+  /// Musbat — qo'shimcha, manfiy — ushlab qolish.
+  summa      Int
+  sabab      String
+  userId     String
+  userIsm    String?
+  createdAt  DateTime   @default(now())
+
+  @@index([payrollId])
+  @@index([businessId, createdAt])
 }
