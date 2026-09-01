@@ -21,6 +21,14 @@ export const buyurtmaSchema = z.object({
   izoh: z.string().trim().max(1000).optional().nullable(),
   masulId: z.string().trim().optional().nullable(),
   stageId: z.string().trim().optional().nullable(),
+  /**
+   * ZAKAZNI OLGAN SOTUVCHI (Employee.id) — birinchi darajali maydon.
+   * `masulId` (User) va `xodimlar` (ijrochilar) BILAN ARALASHTIRILMAYDI:
+   * bu "mijoz bilan gaplashib zakazni kim oldi" degan javob (38-talab).
+   * Berilmasa server foydalanuvchining o'z sotuvchi profilini qo'yadi
+   * (avto-tanlash), u ham bo'lmasa — biznes sozlamasiga qarab rad etadi.
+   */
+  sotuvchiId: z.string().trim().min(1).optional().nullable(),
   /** Zakazdagi xodimlar (kategoriya kesimida). Berilmasa — biriktiruvsiz. */
   xodimlar: zakazXodimlariSchema.optional(),
 });
@@ -38,6 +46,11 @@ export const buyurtmaPatchSchema = z.object({
   sana: z.string().regex(sanaRegex).optional().nullable(),
   izoh: z.string().trim().max(1000).optional().nullable(),
   masulId: z.string().trim().optional(),
+  /**
+   * SOTUVCHINI ALMASHTIRISH (Employee.id) — `crm.sotuvchi` huquqi talab
+   * qilinadi va o'zgarish audit jurnaliga yoziladi (10/27-talab).
+   */
+  sotuvchiId: z.string().trim().min(1).optional(),
   /** Zakaz xodimlarini TO'LIQ almashtirish (kirim yozilgach qulflanadi). */
   xodimlar: zakazXodimlariSchema.optional(),
 });

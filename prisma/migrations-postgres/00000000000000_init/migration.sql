@@ -913,6 +913,7 @@ CREATE TABLE "HrSetting" (
     "id" TEXT NOT NULL,
     "businessId" TEXT NOT NULL,
     "xodimOylikKoradi" BOOLEAN NOT NULL DEFAULT false,
+    "crmSotuvchiMajburiy" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 

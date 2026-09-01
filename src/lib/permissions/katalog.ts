@@ -41,6 +41,11 @@ export const HUQUQLAR: Huquq[] = [
   // Xarid
   { code: "xarid.korish", label: "Xarid buyurtmalarini ko'rish", guruh: "Xarid" },
   { code: "xarid.qabul", label: "Xarid qabul qilish va to'lash", guruh: "Xarid" },
+  // CRM
+  // DIQQAT: bu huquq zakaz SOTUVCHISINI tanlash/almashtirishga tegishli.
+  // Usiz ham sotuvchi zakaz yarata oladi — lekin faqat O'Z nomiga
+  // (sotuvni boshqa xodimga yozib qo'yish boshqaruvchi qarori).
+  { code: "crm.sotuvchi", label: "Zakaz sotuvchisini tanlash/o'zgartirish", guruh: "CRM" },
   // Boshqaruv
   { code: "hisobot.korish", label: "Hisobotlarni ko'rish", guruh: "Boshqaruv" },
   { code: "foydalanuvchi.boshqarish", label: "Foydalanuvchilarni boshqarish", guruh: "Boshqaruv" },

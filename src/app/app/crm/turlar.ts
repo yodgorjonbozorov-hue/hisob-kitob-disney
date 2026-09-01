@@ -34,6 +34,28 @@ export interface XodimKategoriyaDTO {
   azolar: XodimAzoDTO[];
 }
 
+/**
+ * ZAKAZNI OLGAN SOTUVCHI. Ijrochilardan (ZakazXodimDTO) ATAYLAB alohida
+ * tur: sotuvchi — birinchi darajali maydon, statistika va bonus shunga
+ * bog'lanadi (38-talab).
+ */
+export interface SotuvchiDTO {
+  /** Employee.id */
+  id: string;
+  ism: string;
+  rasmUrl: string | null;
+  isActive: boolean;
+  /** Tizim hisobi (User.id) — avto-tanlash uchun. */
+  userId: string | null;
+}
+
+/** Zakazga biriktirilgan sotuvchi (doskada va tafsilotda ko'rinadi). */
+export interface ZakazSotuvchiDTO {
+  employeeId: string;
+  ism: string;
+  isActive: boolean;
+}
+
 /** Zakazga biriktirilgan xodim (tafsilot oynasi ko'rsatadi). */
 export interface ZakazXodimDTO {
   id: string;
@@ -62,6 +84,8 @@ export interface BuyurtmaDTO {
   masulIsm: string | null;
   /** Bog'langan kirim tranzaksiyasi — null bo'lsa kirim hali yozilmagan. */
   transactionId: string | null;
+  /** Zakazni olgan sotuvchi (biriktirilmagan bo'lsa null). */
+  sotuvchi: ZakazSotuvchiDTO | null;
 }
 
 export interface KunlikXulosaDTO {

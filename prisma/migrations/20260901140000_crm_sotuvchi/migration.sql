@@ -1,0 +1,12 @@
+-- CRM ZAKAZ SOTUVCHISI — sozlama ustuni.
+--
+-- FAQAT QO'SHUVCHI migratsiya: mavjud jadvallar qayta qurilmaydi, birorta
+-- yozuv o'zgarmaydi. Sotuvchi ↔ zakaz bog'lanishi uchun YANGI jadval
+-- YARATILMAYDI — mavjud `DealEmployee` (zakazdagi xodim) va
+-- `EmployeeCategory.turi = 'sotuvchi'` juftligi qayta ishlatiladi
+-- (ikkinchi "kim sotdi" haqiqat manbai paydo bo'lmasin).
+--
+-- `crmSotuvchiMajburiy` — biznes darajasidagi bayroq: yangi CRM zakazida
+-- sotuvchi majburiymi. DEFAULT `false` — mavjud bizneslarda hech narsa
+-- qattiqlashmaydi; Disney Navoiy uchun HR sozlamalaridan yoqiladi.
+ALTER TABLE "HrSetting" ADD COLUMN "crmSotuvchiMajburiy" BOOLEAN NOT NULL DEFAULT false;

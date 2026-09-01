@@ -6,6 +6,8 @@ import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import { getBoard } from "@/lib/crm/service";
 import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
 import { crmFormaKategoriyalari } from "@/lib/services/xodimKategoriya";
+import { avtoSotuvchi, sotuvchilarRoyxati, sotuvchiMajburiymi } from "@/lib/services/zakazSotuvchi";
+import { hasPermission } from "@/lib/permissions/tekshir";
 import { kunlikBuyurtmalar, kategoriyaStatistikasi } from "@/lib/crm/statistika";
 import { todayTashkentDateOnlyString, utcDateToDateOnlyString } from "@/lib/date";
 import { CrmClient } from "./CrmClient";
@@ -30,7 +32,18 @@ export default async function CrmPage() {
       );
     }
 
-    const [board, kategoriyalar, xodimlar, kunlik, kategoriyaStat, xodimKategoriyalari] = await Promise.all([
+    const [
+      board,
+      kategoriyalar,
+      xodimlar,
+      kunlik,
+      kategoriyaStat,
+      xodimKategoriyalari,
+      sotuvchilar,
+      ozim,
+      sotuvchiMajburiy,
+      sotuvchiOzgartira,
+    ] = await Promise.all([
       getBoard(businessId),
       // KATEGORIYA MANBAI BITTA: Kirim modulining kategoriyalari.
       prisma.category.findMany({
@@ -50,6 +63,12 @@ export default async function CrmPage() {
       kategoriyaStatistikasi(businessId),
       // Xodim kategoriyalari (Sotuvchi/Diktor/...) — zakaz-xodim biriktiruvi.
       crmFormaKategoriyalari(businessId),
+      // SOTUVCHI (1/2-talab): faqat shu biznesning faol sotuvchilari.
+      sotuvchilarRoyxati(businessId),
+      // Avto-tanlash (4-talab) — foydalanuvchining o'z sotuvchi profili.
+      avtoSotuvchi(businessId, session.userId),
+      sotuvchiMajburiymi(businessId),
+      hasPermission(session.userId, "crm.sotuvchi"),
     ]);
 
     const ismlar = new Map(xodimlar.map((x) => [x.id, x.ism]));
@@ -93,6 +112,10 @@ export default async function CrmPage() {
             turi: k.turi,
             azolar: k.azolar.map((a) => ({ id: a.id, ism: a.ism, userId: a.userId })),
           }))}
+          sotuvchilar={sotuvchilar}
+          ozimSotuvchi={ozim?.id ?? null}
+          sotuvchiMajburiy={sotuvchiMajburiy}
+          sotuvchiOzgartira={sotuvchiOzgartira}
           meId={session.userId}
           bugun={bugun}
           buyurtmalar={board.deals.map((d) => ({
@@ -109,6 +132,13 @@ export default async function CrmPage() {
             masulId: d.masulId,
             masulIsm: ismlar.get(d.masulId) ?? null,
             transactionId: d.transactionId,
+            sotuvchi: board.sotuvchilar.get(d.id)
+              ? {
+                  employeeId: board.sotuvchilar.get(d.id)!.employeeId,
+                  ism: board.sotuvchilar.get(d.id)!.ism,
+                  isActive: board.sotuvchilar.get(d.id)!.isActive,
+                }
+              : null,
           }))}
         />
       </div>

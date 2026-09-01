@@ -5455,3 +5455,46 @@ statistikasi; umumiy biznes regressiyasi; dublikat kartochka yo'q.
 Regressiya: isolation 22, izolyatsiya-royxati 9, qarz-mijoz 18, sotuv-bekor
 11, mijozlar 15, qarz 16, qarzdorlik 16, migratsiya 12, atomik 6,
 kirim-chiqim 19, crm 24, tolov-taqsimoti 11 — hammasi yashil. Build o'tdi.
+
+---
+
+## CRM zakaz SOTUVCHISI + sotuvchi statistikasi (2026-09-01)
+
+**Nega yangi model YO'Q.** Audit ko'rsatdiki "kim sotdi" savoliga javob
+beradigan tuzilma allaqachon bor: `EmployeeCategory.turi = "sotuvchi"` +
+`DealEmployee` (zakaz ↔ xodim biriktiruvi). Yangi `sellerId` ustuni yoki
+ikkinchi Employee modeli qo'shilsa ikkita haqiqat manbai paydo bo'lardi.
+Shuning uchun sotuvchi SHU tuzilmada qoldi, ustiga birinchi darajali
+maydon va statistika qurildi. Ekrandagi eski dropdown — `Deal.masulId`
+(User, "mas'ul"), u sotuvchi bilan ARALASHTIRILMADI.
+
+**Migratsiya:** `20260901140000_crm_sotuvchi` — FAQAT QO'SHUVCHI, bitta
+ustun: `HrSetting.crmSotuvchiMajburiy` (default `false`, ya'ni mavjud
+bizneslarda hech narsa qattiqlashmaydi). Postgres init `pg:migratsiya`
+bilan qayta generatsiya qilindi.
+
+**Yangi modullar:**
+- `lib/crm/tolovHolati.ts` — "puli kelgan sotuv" YAGONA hisobi:
+  kirimsiz → 0; naqd/click → to'liq; `tolovTuri="qarz"` → qarz yozuvidan
+  (`Debt.manbaTransactionId` ko'prigi). Qisman to'langan zakaz bonusga
+  KIRMAYDI, qarz yopilgach butun summa qo'shiladi.
+- `lib/services/zakazSotuvchi.ts` — ro'yxat, tekshiruv (biznes + faollik +
+  a'zolik), avto-tanlash, majburiylik, almashtirish (atomik + audit).
+- `lib/queries/sotuvchiKpi.ts` — KPI/reyting/tafsilot; butun davr UCHTA
+  so'rovda (N+1 yo'q), konversiya = WON/(WON+LOST).
+
+**Oqim:** CRM zakaz → sotuvchi → WON → kirim → to'liq to'lov → "puli
+kelgan sotuv" → sotuv bonusi (mavjud `EmployeeBonus`) → oylik vedomosti.
+Bonus summasi qo'lda yozilmaydi — foiz kiritiladi, baza avtomatik.
+
+**Huquq:** yangi kod `crm.sotuvchi` (OWNER/ADMIN'da bor). Usiz zakaz
+faqat O'Z nomiga yoziladi; mavjud zakazning sotuvchisini almashtirish
+ham shu huquq bilan (amal audit jurnaliga va zakaz lentasiga yoziladi).
+
+**Testlar:** YANGI `tests/crm-sotuvchi.test.ts` (`test:crm-sotuvchi`, 19
+test) — prompt 36-bo'limidagi 9 stsenariy + majburiylik sozlamasi,
+o'chirilgan zakaz, reyting tartibi, tenant/biznes izolyatsiyasi, audit izi.
+Regressiya: crm 24, xodim-kategoriya 19, hr 19, xodim-plan 18,
+xodim-statistika 12, qarz 16, tasks 7, kop-biznes 18, isolation 22,
+izolyatsiya-royxati 9, audit-qoldiq 10, backup 6, migratsiya 12,
+postgres 9 — hammasi yashil. `npm run build` o'tdi.

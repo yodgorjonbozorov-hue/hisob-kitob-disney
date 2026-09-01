@@ -1,19 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatMoney, formatDateUZ } from "@/lib/format";
-import { Badge } from "@/components/ui/Badge";
 import { KirimTasdiq } from "./KirimTasdiq";
+import { KirimBlok } from "./KirimBlok";
 import { BuyurtmaTahrir } from "./BuyurtmaTahrir";
-import { ZakazXodimlariBlok } from "./ZakazXodimlari";
+import { ZakazXodimlariBlok, ijroKategoriyalari } from "./ZakazXodimlari";
+import { ZakazSotuvchisiBlok } from "./ZakazSotuvchisi";
 import {
-  kirimHavolasi,
   type BuyurtmaDTO,
   type KategoriyaDTO,
+  type SotuvchiDTO,
   type StageDTO,
   type XodimKategoriyaDTO,
+  type ZakazSotuvchiDTO,
   type ZakazXodimDTO,
 } from "./turlar";
 
@@ -33,6 +34,8 @@ export function BuyurtmaSheet({
   stages,
   kategoriyalar,
   xodimKategoriyalari,
+  sotuvchilar,
+  sotuvchiOzgartira,
   onKochirish,
   onTahrirlandi,
   onClose,
@@ -41,8 +44,12 @@ export function BuyurtmaSheet({
   stages: StageDTO[];
   /** Kirim modulining kategoriyalari — tahrirlash uchun (CRM alohida ro'yxat yuritmaydi). */
   kategoriyalar: KategoriyaDTO[];
-  /** Xodim kategoriyalari (Sotuvchi/Diktor/...) — biriktiruv tahriri uchun. */
+  /** Xodim kategoriyalari (Diktor/Dekorator/...) — bajaruvchi tahriri uchun. */
   xodimKategoriyalari: XodimKategoriyaDTO[];
+  /** Sotuvchilar ro'yxati — sotuvchini almashtirish uchun. */
+  sotuvchilar: SotuvchiDTO[];
+  /** `crm.sotuvchi` huquqi (27-talab). */
+  sotuvchiOzgartira: boolean;
   onKochirish: (s: StageDTO) => void;
   onTahrirlandi: (yangi: { categoryId: string; kategoriya: string; summa: number }) => void;
   onClose: () => void;
@@ -50,6 +57,7 @@ export function BuyurtmaSheet({
   const router = useRouter();
   const [activities, setActivities] = useState<ActivityDTO[] | null>(null);
   const [zakazXodimlar, setZakazXodimlar] = useState<ZakazXodimDTO[] | null>(null);
+  const [sotuvchi, setSotuvchi] = useState<ZakazSotuvchiDTO | null>(b.sotuvchi);
   const [izoh, setIzoh] = useState("");
   const [tasdiq, setTasdiq] = useState(false);
   const kirimBor = Boolean(b.transactionId);
@@ -60,6 +68,7 @@ export function BuyurtmaSheet({
       const data = await res.json();
       setActivities(data.activities ?? []);
       setZakazXodimlar(data.xodimlar ?? []);
+      setSotuvchi(data.sotuvchi ?? null);
     }
   }, [b.id]);
 
@@ -124,11 +133,23 @@ export function BuyurtmaSheet({
           <BuyurtmaTahrir b={b} kategoriyalar={kategoriyalar} onSaqlandi={onTahrirlandi} />
         )}
 
-        {/* Zakazdagi xodimlar (4-talab): ro'yxat + kirim yozilmaguncha tahrir. */}
+        {/* SOTUVCHI (10-talab) — ijrochilardan alohida, birinchi o'rinda. */}
+        <ZakazSotuvchisiBlok
+          dealId={b.id}
+          sotuvchi={sotuvchi}
+          sotuvchilar={sotuvchilar}
+          ozgartira={sotuvchiOzgartira}
+          onSaqlandi={() => {
+            void yuklash();
+            router.refresh();
+          }}
+        />
+
+        {/* Zakazni bajaruvchilar: ro'yxat + kirim yozilmaguncha tahrir. */}
         <ZakazXodimlariBlok
           dealId={b.id}
           kirimBor={kirimBor}
-          kategoriyalar={xodimKategoriyalari}
+          kategoriyalar={ijroKategoriyalari(xodimKategoriyalari)}
           xodimlar={zakazXodimlar}
           onSaqlandi={() => {
             void yuklash();
@@ -137,39 +158,7 @@ export function BuyurtmaSheet({
         />
 
         {/* KIRIMGA O'TKAZISH (4- va 5-talab) */}
-        <div className="rounded-xl border border-line bg-surface-2/50 p-3 space-y-2">
-          {kirimBor ? (
-            <>
-              <Badge tone="kirim">🟢 Kirim yozilgan</Badge>
-              <p className="text-xs text-muted">
-                Bu buyurtma bo&apos;yicha kirim allaqachon yozilgan — takroriy yozib bo&apos;lmaydi.
-              </p>
-              <Link
-                href={kirimHavolasi(b)}
-                className="inline-block text-brand text-sm font-medium"
-                onClick={onClose}
-              >
-                Kirim yozuvini ochish →
-              </Link>
-            </>
-          ) : (
-            <>
-              <Badge tone="warning">🟠 Kirim kutilmoqda</Badge>
-              <p className="text-xs text-muted">
-                To&apos;lov olingach kirimga o&apos;tkazing — Kirim bo&apos;limida oddiy yozuv sifatida
-                paydo bo&apos;ladi.
-              </p>
-              <button
-                onClick={() => setTasdiq(true)}
-                disabled={b.summa <= 0}
-                className="w-full rounded-lg bg-income text-white text-sm font-medium py-2 disabled:opacity-50"
-              >
-                Kirimga o&apos;tkazish
-              </button>
-              {b.summa <= 0 && <p className="text-2xs text-faint">Avval buyurtma narxini kiriting.</p>}
-            </>
-          )}
-        </div>
+        <KirimBlok b={b} kirimBor={kirimBor} onOtkazish={() => setTasdiq(true)} onClose={onClose} />
 
         {/* Holat ko'chirish (drag'ga mobil muqobil) */}
         <div className="flex gap-1.5 flex-wrap">

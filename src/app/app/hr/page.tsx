@@ -54,7 +54,10 @@ export default async function HrPage({
               Oylik to&apos;langanda chiqim tranzaksiya avtomatik yoziladi
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            <LinkButton href="/app/hr/sotuvchilar" variant="secondary" size="sm">
+              Sotuvchilar
+            </LinkButton>
             <LinkButton href="/app/hr/samaradorlik" variant="secondary" size="sm">
               Samaradorlik
             </LinkButton>

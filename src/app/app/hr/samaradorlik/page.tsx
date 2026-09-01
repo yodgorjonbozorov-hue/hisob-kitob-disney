@@ -61,6 +61,9 @@ export default async function SamaradorlikPage() {
             <h1 className="text-xl sm:text-2xl font-bold text-fg">Xodimlar samaradorligi</h1>
             <p className="text-sm text-muted">Kategoriya kesimida zakaz natijalari va reyting</p>
           </div>
+          <LinkButton href="/app/hr/sotuvchilar" variant="secondary" size="sm">
+            Sotuvchilar reytingi
+          </LinkButton>
           {isManager(session.rol) && (
             <LinkButton href="/app/hr/kategoriyalar" variant="secondary" size="sm">
               Kategoriyalar
