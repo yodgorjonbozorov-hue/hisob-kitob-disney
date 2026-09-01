@@ -4,7 +4,9 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { soro } from "./soro";
+import { BIZNES_TURLARI, type BiznesTuri } from "@/lib/biznesTuri";
 
 interface Tarif {
   code: string;
@@ -29,7 +31,7 @@ export function YangiMijoz({ tariflar }: { tariflar: Tarif[] }) {
     parol: "",
     ism: "",
     tarif: tariflar[0]?.code ?? "STANDARD",
-    turi: "umumiy" as "umumiy" | "avto",
+    turi: "umumiy" as BiznesTuri,
     kunlar: 0,
   });
 
@@ -109,22 +111,27 @@ export function YangiMijoz({ tariflar }: { tariflar: Tarif[] }) {
                 <label htmlFor="ym-tarif" className="block text-sm font-medium text-fg mb-1">
                   Tarif
                 </label>
-                <select id="ym-tarif" className={maydon} value={f.tarif} onChange={(e) => setF({ ...f, tarif: e.target.value })}>
-                  {tariflar.map((t) => (
-                    <option key={t.code} value={t.code}>
-                      {t.nomi}
-                    </option>
-                  ))}
-                </select>
+                <Select
+                  id="ym-tarif"
+                  value={f.tarif}
+                  onChange={(v) => setF({ ...f, tarif: v })}
+                  options={tariflar.map((t) => ({ value: t.code, label: t.nomi }))}
+                />
               </div>
               <div>
                 <label htmlFor="ym-turi" className="block text-sm font-medium text-fg mb-1">
                   Biznes turi
                 </label>
-                <select id="ym-turi" className={maydon} value={f.turi} onChange={(e) => setF({ ...f, turi: e.target.value as "umumiy" | "avto" })}>
-                  <option value="umumiy">Umumiy</option>
-                  <option value="avto">Avto</option>
-                </select>
+                <Select
+                  id="ym-turi"
+                  value={f.turi}
+                  onChange={(v) => setF({ ...f, turi: v as BiznesTuri })}
+                  options={BIZNES_TURLARI.map((t) => ({
+                    value: t.code,
+                    label: t.nomi,
+                    tavsif: t.tavsif,
+                  }))}
+                />
               </div>
               <div>
                 <label htmlFor="ym-kunlar" className="block text-sm font-medium text-fg mb-1">

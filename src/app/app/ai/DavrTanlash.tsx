@@ -1,5 +1,6 @@
 "use client";
 
+import { Select } from "@/components/ui/Select";
 import { DAVR_VARIANTLARI } from "./turlar";
 
 /**
@@ -10,8 +11,8 @@ import { DAVR_VARIANTLARI } from "./turlar";
  * avgust bilan solishtir"), server tomonda savoldagi davr USTUN turadi
  * (`lib/ai/tools.ts` — `input.davr`).
  *
- * Tor ekranda ro'yxat sig'maydi, shuning uchun `select` — u yerda operatsion
- * tizimning o'z tanlagichi ochiladi (teginish zonasi katta, gorizontal siljish
+ * Tor ekranda segment qatori sig'maydi, shuning uchun dizayn-tizim `Select`
+ * ochiladigan ro'yxati ishlatiladi (teginish zonasi katta, gorizontal siljish
  * yo'q). Segment tugmalari faqat `lg` dan boshlab: 768-1023px oralig'ida
  * asosiy maydon tor bo'ladi (yon menyu hali yo'q, mobil panel esa yonda
  * turadi) va segmentlar sarlavhani siqib qo'yardi.
@@ -25,18 +26,16 @@ export function DavrTanlash({
 }) {
   return (
     <>
-      <select
+      <label className="sr-only" htmlFor="davr-tanlash">
+        Davr
+      </label>
+      <Select
+        id="davr-tanlash"
         value={qiymat}
-        onChange={(e) => onOzgarish(e.target.value)}
-        aria-label="Davr"
-        className="lg:hidden shrink-0 h-9 rounded-lg border border-line bg-surface px-2 text-xs text-muted focus:outline-none focus:ring-2 focus:ring-brand"
-      >
-        {DAVR_VARIANTLARI.map((d) => (
-          <option key={d.kod} value={d.kod}>
-            {d.yorliq}
-          </option>
-        ))}
-      </select>
+        onChange={onOzgarish}
+        className="lg:hidden shrink-0"
+        options={DAVR_VARIANTLARI.map((d) => ({ value: d.kod, label: d.yorliq }))}
+      />
 
       <div className="hidden lg:inline-flex shrink-0 p-0.5 rounded-lg bg-surface-2 gap-0.5" role="tablist">
         {DAVR_VARIANTLARI.map((d) => {

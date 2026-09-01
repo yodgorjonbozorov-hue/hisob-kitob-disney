@@ -4,6 +4,7 @@ import { useState } from "react";
 import { formatSom, formatSomLabel, parseSomInput } from "@/lib/format";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { Select } from "@/components/ui/Select";
 import { TOLOV_TURLARI, TOLOV_NOMI, TOLOV_BELGI, type TolovTuri } from "@/lib/validation/transaction";
 import { formatKg, kgSumma, kgToGram, parseKgInput } from "@/lib/kg";
 import type { TransactionDTO } from "@/lib/queries/transactions";
@@ -138,17 +139,12 @@ export function EditModal({
             </button>
           ))}
         </div>
-        <select
+        <Select
           value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
-          className="w-full rounded-lg border border-line px-3 py-2 text-sm"
-        >
-          {filteredCategories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.nomi}
-            </option>
-          ))}
-        </select>
+          onChange={setCategoryId}
+          searchable={filteredCategories.length > 7}
+          options={filteredCategories.map((c) => ({ value: c.id, label: c.nomi }))}
+        />
         {kgYozuvi ? (
           <div className="space-y-2">
             <div className="grid grid-cols-2 gap-2">

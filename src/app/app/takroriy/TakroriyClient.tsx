@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { Select } from "@/components/ui/Select";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatSom, formatSomLabel, parseSomInput } from "@/lib/format";
 import { useToast } from "@/components/ui/Toast";
@@ -95,10 +96,16 @@ export function TakroriyClient({ categories, initial }: { categories: Cat[]; ini
             <button type="button" onClick={() => { setTuri("chiqim"); setCategoryId(""); }}
               className={`flex-1 py-2 rounded-lg text-sm font-medium ${turi === "chiqim" ? "bg-expense text-white" : "bg-expense-soft text-expense-fg"}`}>Chiqim</button>
           </div>
-          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="rounded-lg border border-line bg-surface px-3 py-2 text-sm">
-            <option value="">Kategoriya...</option>
-            {cats.map((c) => <option key={c.id} value={c.id}>{c.nomi}</option>)}
-          </select>
+          <Select
+            value={categoryId}
+            onChange={setCategoryId}
+            placeholder="Kategoriya..."
+            searchable={cats.length > 7}
+            options={[
+              { value: "", label: "Kategoriya..." },
+              ...cats.map((c) => ({ value: c.id, label: c.nomi })),
+            ]}
+          />
           <input type="text" inputMode="numeric" value={summa} onChange={(e) => setSumma(e.target.value ? formatSom(parseSomInput(e.target.value)) : "")} placeholder="Summa" className="rounded-lg border border-line bg-surface px-3 py-2 text-sm tnum" />
           <div>
             <label className="block text-xs text-muted mb-1">Oyning kuni (1-28)</label>

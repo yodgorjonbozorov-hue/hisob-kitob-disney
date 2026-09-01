@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Money } from "@/components/ui/Money";
+import { Select } from "@/components/ui/Select";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ROL_LABEL, type Rol } from "@/lib/auth/roles";
 import { TASDIQLOVCHI_ROLLAR } from "@/lib/validation/approval";
@@ -184,19 +185,16 @@ function QoidaModal({
           <label className="block text-sm text-muted mb-1" htmlFor="q-kat">
             Qamrov
           </label>
-          <select
+          <Select
             id="q-kat"
             value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            className={input}
-          >
-            <option value="">Barcha chiqim kategoriyalari</option>
-            {kategoriyalar.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.nomi}
-              </option>
-            ))}
-          </select>
+            onChange={setCategoryId}
+            searchable={kategoriyalar.length > 7}
+            options={[
+              { value: "", label: "Barcha chiqim kategoriyalari" },
+              ...kategoriyalar.map((k) => ({ value: k.id, label: k.nomi })),
+            ]}
+          />
         </div>
 
         <div>
@@ -221,18 +219,12 @@ function QoidaModal({
           <label className="block text-sm text-muted mb-1" htmlFor="q-rol">
             Kim tasdiqlaydi
           </label>
-          <select
+          <Select
             id="q-rol"
             value={tasdiqlovchiRol}
-            onChange={(e) => setTasdiqlovchiRol(e.target.value)}
-            className={input}
-          >
-            {TASDIQLOVCHI_ROLLAR.map((r) => (
-              <option key={r} value={r}>
-                {ROL_LABEL[r]}
-              </option>
-            ))}
-          </select>
+            onChange={setTasdiqlovchiRol}
+            options={TASDIQLOVCHI_ROLLAR.map((r) => ({ value: r, label: ROL_LABEL[r] }))}
+          />
         </div>
 
         <div>

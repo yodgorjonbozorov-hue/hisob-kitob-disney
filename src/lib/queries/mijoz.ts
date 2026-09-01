@@ -5,6 +5,9 @@ export interface MijozDTO {
   ism: string;
   tel: string | null;
   telegram: string | null;
+  /** Optom kartochka maydonlari (null — to'ldirilmagan). */
+  manzil: string | null;
+  masulShaxs: string | null;
   izoh: string | null;
   qarzLimit: number | null;
   /** Bekor qilinmagan sotuvlar summasi. */
@@ -59,6 +62,8 @@ export async function listMijozlar(businessId: string): Promise<MijozDTO[]> {
       ism: c.ism,
       tel: c.tel,
       telegram: c.telegram,
+      manzil: c.manzil,
+      masulShaxs: c.masulShaxs,
       izoh: c.izoh,
       qarzLimit: c.qarzLimit,
       jamiSotuv: sotuv?.summa ?? 0,
@@ -99,6 +104,10 @@ export interface KartochkaBitim {
 
 export interface MijozKartochka {
   mijoz: MijozDTO;
+  /** Mijozdan kelgan jami pul: naqd sotuvlar + qarz to'lovlari. */
+  jamiTolov: number;
+  /** Oxirgi (bekor qilinmagan) sotuv sanasi. */
+  oxirgiSotuv: string | null;
   sotuvlar: KartochkaSotuv[];
   qarzlar: KartochkaQarz[];
   bitimlar: KartochkaBitim[];
@@ -114,40 +123,64 @@ export async function getMijozKartochka(
   });
   if (!contact) return null;
 
-  const [sotuvlar, qarzlar, bitimlar] = await Promise.all([
-    prisma.sale.findMany({
-      where: { businessId, contactId },
-      include: { product: { select: { nomi: true } } },
-      orderBy: { sana: "desc" },
-      take: 50,
-    }),
-    prisma.debt.findMany({
-      where: { businessId, contactId },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-    }),
-    prisma.deal.findMany({
-      where: { businessId, contactId },
-      include: { stage: { select: { nomi: true } } },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-    }),
-  ]);
+  // Jamlanmalar SOURCE-OF-TRUTH'dan (Sale/Debt/DebtPayment agregatlari) —
+  // quyidagi 50 talik ro'yxat kesimidan EMAS, aks holda ko'p sotuvli mijozda
+  // "Jami xarid" kam ko'rinardi.
+  const [sotuvlar, qarzlar, bitimlar, sotuvJam, naqdJam, ochiqQarzJam, tolovJam] =
+    await Promise.all([
+      prisma.sale.findMany({
+        where: { businessId, contactId },
+        include: { product: { select: { nomi: true } } },
+        orderBy: { sana: "desc" },
+        take: 50,
+      }),
+      prisma.debt.findMany({
+        where: { businessId, contactId },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+      }),
+      prisma.deal.findMany({
+        where: { businessId, contactId },
+        include: { stage: { select: { nomi: true } } },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
+      prisma.sale.aggregate({
+        where: { businessId, contactId, deletedAt: null },
+        _sum: { jamiSumma: true },
+        _count: { _all: true },
+        _max: { sana: true },
+      }),
+      prisma.sale.aggregate({
+        where: { businessId, contactId, deletedAt: null, tolovTuri: "naqd" },
+        _sum: { jamiSumma: true },
+      }),
+      prisma.debt.aggregate({
+        where: { businessId, contactId, turi: "olinadigan", isYopilgan: false },
+        _sum: { jamiSumma: true, tolangan: true },
+      }),
+      // Qarz to'lovlari — mijozning barcha "olinadigan" qarzlariga tushgan pul.
+      prisma.debtPayment.aggregate({
+        where: { businessId, debt: { contactId, turi: "olinadigan" } },
+        _sum: { summa: true },
+      }),
+    ]);
 
-  const jamiSotuv = sotuvlar
-    .filter((s) => s.deletedAt === null)
-    .reduce((a, s) => a + s.jamiSumma, 0);
-  const sotuvSoni = sotuvlar.filter((s) => s.deletedAt === null).length;
-  const ochiqQarz = qarzlar
-    .filter((d) => !d.isYopilgan && d.turi === "olinadigan")
-    .reduce((a, d) => a + (d.jamiSumma - d.tolangan), 0);
+  const jamiSotuv = sotuvJam._sum.jamiSumma ?? 0;
+  const sotuvSoni = sotuvJam._count._all;
+  const ochiqQarz = (ochiqQarzJam._sum.jamiSumma ?? 0) - (ochiqQarzJam._sum.tolangan ?? 0);
+  const jamiTolov = (naqdJam._sum.jamiSumma ?? 0) + (tolovJam._sum.summa ?? 0);
 
   return {
+    jamiTolov,
+    oxirgiSotuv: sotuvJam._max.sana ? sotuvJam._max.sana.toISOString() : null,
     mijoz: {
       id: contact.id,
       ism: contact.ism,
       tel: contact.tel,
       telegram: contact.telegram,
+      manzil: contact.manzil,
+      masulShaxs: contact.masulShaxs,
       izoh: contact.izoh,
       qarzLimit: contact.qarzLimit,
       jamiSotuv,

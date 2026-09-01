@@ -1,6 +1,7 @@
 "use client";
 
 import { INPUT_CLASS, LABEL_CLASS } from "@/components/ui/fieldStyles";
+import { Select } from "@/components/ui/Select";
 import type { XodimOption } from "./turlar";
 
 /**
@@ -64,19 +65,14 @@ export function QoshimchaMaydonlar({
           <label className={LABEL_CLASS} htmlFor="tx-kassa">
             Kassa
           </label>
-          <select
+          <Select
             id="tx-kassa"
             value={accountId}
             disabled={loading}
-            onChange={(e) => onAccount(e.target.value)}
-            className={INPUT_CLASS}
-          >
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.nomi}
-              </option>
-            ))}
-          </select>
+            onChange={onAccount}
+            searchable={accounts.length > 7}
+            options={accounts.map((a) => ({ value: a.id, label: a.nomi }))}
+          />
         </div>
       )}
       {sotuvchiKorinadi && (
@@ -84,19 +80,14 @@ export function QoshimchaMaydonlar({
           <label className={LABEL_CLASS} htmlFor="tx-sotuvchi">
             Sotuvchi / Xodim
           </label>
-          <select
+          <Select
             id="tx-sotuvchi"
             value={sotuvchiId}
             disabled={loading}
-            onChange={(e) => onSotuvchi(e.target.value)}
-            className={INPUT_CLASS}
-          >
-            {sotuvchilar.map((x) => (
-              <option key={x.id} value={x.id}>
-                {x.ism}
-              </option>
-            ))}
-          </select>
+            onChange={onSotuvchi}
+            searchable={sotuvchilar.length > 7}
+            options={sotuvchilar.map((x) => ({ value: x.id, label: x.ism }))}
+          />
         </div>
       )}
       <div className="sm:col-span-2">

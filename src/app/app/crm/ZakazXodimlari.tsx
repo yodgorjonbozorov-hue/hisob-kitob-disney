@@ -1,10 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { Select } from "@/components/ui/Select";
 import type { XodimKategoriyaDTO, ZakazXodimDTO } from "./turlar";
-
-const INPUT =
-  "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand";
 
 /**
  * ZAKAZDAGI XODIMLAR — kategoriya-selektorlar (Sotuvchi, Diktor, Shofer...).
@@ -58,21 +56,21 @@ export function ZakazXodimlariTanlash({
       <p className="text-2xs uppercase tracking-wide text-faint">Zakazdagi xodimlar</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {kategoriyalar.map((k) => (
-          <label key={k.id} className="block space-y-1">
-            <span className="text-xs text-muted">{k.nomi}</span>
-            <select
+          <div key={k.id} className="space-y-1">
+            <label className="block text-xs text-muted" htmlFor={`zakaz-xodim-${k.id}`}>
+              {k.nomi}
+            </label>
+            <Select
+              id={`zakaz-xodim-${k.id}`}
               value={tanlov[k.id] ?? ""}
-              onChange={(e) => onChange({ ...tanlov, [k.id]: e.target.value })}
-              className={INPUT}
-            >
-              <option value="">Tanlanmagan</option>
-              {k.azolar.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.ism}
-                </option>
-              ))}
-            </select>
-          </label>
+              onChange={(v) => onChange({ ...tanlov, [k.id]: v })}
+              searchable={k.azolar.length > 7}
+              options={[
+                { value: "", label: "Tanlanmagan" },
+                ...k.azolar.map((a) => ({ value: a.id, label: a.ism })),
+              ]}
+            />
+          </div>
         ))}
       </div>
     </div>

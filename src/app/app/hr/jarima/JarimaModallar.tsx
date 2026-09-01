@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { INPUT_CLASS, LABEL_CLASS } from "@/components/ui/fieldStyles";
 import type { JarimaDTO } from "@/lib/queries/davomat";
 
@@ -18,20 +19,14 @@ function XodimTanlash({
   return (
     <div>
       <label className={LABEL_CLASS} htmlFor="xodim-tanlash">Xodim</label>
-      <select
+      <Select
         id="xodim-tanlash"
-        className={INPUT_CLASS}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
-        required
-      >
-        <option value="">Tanlang...</option>
-        {xodimlar.map((x) => (
-          <option key={x.id} value={x.id}>
-            {x.ism}
-          </option>
-        ))}
-      </select>
+        onChange={onChange}
+        placeholder="Tanlang..."
+        searchable={xodimlar.length > 7}
+        options={xodimlar.map((x) => ({ value: x.id, label: x.ism }))}
+      />
     </div>
   );
 }

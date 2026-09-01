@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { ACCOUNT_TURLARI, ACCOUNT_TURI_NOMI } from "@/lib/validation/account";
 import type { AccountQoldiq } from "@/lib/queries/accounts";
 
@@ -105,18 +106,12 @@ export function KassaModal({
           <label className="block text-sm text-muted mb-1" htmlFor="kassa-turi">
             Turi
           </label>
-          <select
+          <Select
             id="kassa-turi"
             value={turi}
-            onChange={(e) => setTuri(e.target.value)}
-            className={input}
-          >
-            {ACCOUNT_TURLARI.map((t) => (
-              <option key={t} value={t}>
-                {ACCOUNT_TURI_NOMI[t]}
-              </option>
-            ))}
-          </select>
+            onChange={setTuri}
+            options={ACCOUNT_TURLARI.map((t) => ({ value: t, label: ACCOUNT_TURI_NOMI[t] }))}
+          />
           <p className="text-2xs text-faint mt-1">
             Naqd — qo&apos;ldagi pul, Plastik — terminal, Bank — hisob-raqam. Yangi yozuv
             to&apos;lov turiga mos kassaga tushadi.

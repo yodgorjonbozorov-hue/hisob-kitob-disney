@@ -1046,6 +1046,10 @@ model Contact {
   ism        String
   tel        String?
   telegram   String?
+  /// Optom mijoz kartochkasi maydonlari: manzil va mas'ul shaxs.
+  /// null — eski yozuvlar va chakana mijozlar (ixtiyoriy).
+  manzil     String?
+  masulShaxs String?
   izoh       String?
   createdBy  String
   /// Ochiq qarz shu chegaradan oshsa yangi qarzga sotuv rad etiladi.

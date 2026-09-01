@@ -4,6 +4,7 @@ import { useState, FormEvent } from "react";
 import { formatSom, parseSomInput } from "@/lib/format";
 import { todayDateOnlyString } from "@/lib/date";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { MijozTanlash, type MijozTanlov } from "@/components/qarz/MijozTanlash";
 
 export interface QarzKategoriya {
@@ -143,19 +144,16 @@ export function QarzForm({
           <label className="block text-xs font-medium text-muted mb-1" htmlFor="qarz-kategoriya">
             Kategoriya
           </label>
-          <select
+          <Select
             id="qarz-kategoriya"
             value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            className="w-full rounded-lg border border-line px-3 py-2 text-sm bg-surface"
-          >
-            <option value="">Tanlang...</option>
-            {kategoriyalar.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nomi}
-              </option>
-            ))}
-          </select>
+            onChange={setCategoryId}
+            searchable={kategoriyalar.length > 7}
+            options={[
+              { value: "", label: "Tanlang..." },
+              ...kategoriyalar.map((c) => ({ value: c.id, label: c.nomi })),
+            ]}
+          />
         </div>
         <div>
           <label className="block text-xs font-medium text-muted mb-1" htmlFor="qarz-sana">
@@ -186,19 +184,16 @@ export function QarzForm({
             <label className="block text-xs font-medium text-muted mb-1" htmlFor="qarz-masul">
               Mas&apos;ul
             </label>
-            <select
+            <Select
               id="qarz-masul"
               value={masulId}
-              onChange={(e) => setMasulId(e.target.value)}
-              className="w-full rounded-lg border border-line px-3 py-2 text-sm bg-surface"
-            >
-              <option value="">Men</option>
-              {masullar.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.ism}
-                </option>
-              ))}
-            </select>
+              onChange={setMasulId}
+              searchable={masullar.length > 7}
+              options={[
+                { value: "", label: "Men" },
+                ...masullar.map((m) => ({ value: m.id, label: m.ism })),
+              ]}
+            />
           </div>
         )}
         <div>

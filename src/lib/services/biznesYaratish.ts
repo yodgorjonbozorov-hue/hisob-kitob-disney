@@ -19,7 +19,7 @@ import { modulByCode } from "@/lib/modules/registry";
 export interface BiznesKirim {
   nomi: string;
   faoliyat?: string | null;
-  turi?: "umumiy" | "avto";
+  turi?: "umumiy" | "avto" | "optom";
   omborli?: boolean;
   magazin?: boolean;
   shaxsiyKassa?: boolean;

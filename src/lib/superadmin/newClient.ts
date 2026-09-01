@@ -15,8 +15,8 @@ export interface YangiMijozParams {
   ism?: string | null;
   /** Tarif kodi: STANDARD | AVTO | PRO. */
   tarif: string;
-  /** Biznes turi: "umumiy" | "avto". */
-  turi: "umumiy" | "avto";
+  /** Biznes turi: "umumiy" | "avto" | "optom". */
+  turi: "umumiy" | "avto" | "optom";
   /** Obuna kunlari. 0 → 14 kunlik TRIAL holida qoladi. */
   kunlar: number;
 }
@@ -34,8 +34,8 @@ export async function createClientTenant(params: YangiMijozParams) {
   if (!nom) throw new BadRequestError("Kompaniya nomi kiritilishi shart");
   if (!login) throw new BadRequestError("Login kiritilishi shart");
   if (params.parol.length < 8) throw new BadRequestError("Parol kamida 8 belgi bo'lishi kerak");
-  if (params.turi !== "umumiy" && params.turi !== "avto") {
-    throw new BadRequestError("Biznes turi 'umumiy' yoki 'avto' bo'lishi kerak");
+  if (params.turi !== "umumiy" && params.turi !== "avto" && params.turi !== "optom") {
+    throw new BadRequestError("Biznes turi 'umumiy', 'avto' yoki 'optom' bo'lishi kerak");
   }
   const plan = planByCode(params.tarif);
   if (!plan) throw new BadRequestError(`'${params.tarif}' tarifi mavjud emas`);

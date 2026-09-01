@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { Select } from "@/components/ui/Select";
 import { MUHIMLIK_TURLARI, MUHIMLIK_NOMI, type Muhimlik } from "@/lib/validation/hr";
 import type { XodimVazifaDTO } from "@/lib/services/xodimVazifa";
 
@@ -112,18 +113,12 @@ export function VazifaModal({
           <label className="block text-sm text-muted mb-1" htmlFor="v-muhim">
             Muhimlik
           </label>
-          <select
+          <Select
             id="v-muhim"
             value={muhimlik}
-            onChange={(e) => setMuhimlik(e.target.value as Muhimlik)}
-            className={INPUT}
-          >
-            {MUHIMLIK_TURLARI.map((m) => (
-              <option key={m} value={m}>
-                {MUHIMLIK_NOMI[m]}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setMuhimlik(v as Muhimlik)}
+            options={MUHIMLIK_TURLARI.map((m) => ({ value: m, label: MUHIMLIK_NOMI[m] }))}
+          />
         </div>
 
         {xato && <p className="text-sm text-expense">{xato}</p>}

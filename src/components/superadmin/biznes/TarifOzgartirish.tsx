@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { soro } from "../soro";
 
 interface Tarif {
@@ -64,18 +65,12 @@ export function TarifOzgartirish({
           <label htmlFor="tarif-tanlov" className="block text-sm font-medium text-fg mb-1">
             Yangi tarif
           </label>
-          <select
+          <Select
             id="tarif-tanlov"
-            className={MAYDON}
             value={yangi}
-            onChange={(e) => setYangi(e.target.value)}
-          >
-            {tariflar.map((t) => (
-              <option key={t.code} value={t.code}>
-                {t.nomi}
-              </option>
-            ))}
-          </select>
+            onChange={setYangi}
+            options={tariflar.map((t) => ({ value: t.code, label: t.nomi }))}
+          />
         </div>
 
         <div className="rounded-lg bg-surface-2 border border-line p-3 text-sm">

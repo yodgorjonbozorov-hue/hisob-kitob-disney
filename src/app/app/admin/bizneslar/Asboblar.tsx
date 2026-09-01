@@ -2,6 +2,7 @@
 
 import { Search } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { Select } from "@/components/ui/Select";
 import { SARALASH_NOMLARI, type Filtr, type Saralash } from "./turlar";
 
 const FILTRLAR: { kod: Filtr; nomi: string }[] = [
@@ -80,18 +81,13 @@ export function Asboblar({
         <label className="sr-only" htmlFor="biznes-saralash">
           Saralash
         </label>
-        <select
+        <Select
           id="biznes-saralash"
           value={saralash}
-          onChange={(e) => onSaralash(e.target.value as Saralash)}
-          className="h-11 shrink-0 max-w-[8.5rem] sm:max-w-none rounded-xl bg-surface border border-line px-2 sm:px-3 text-sm text-fg focus:outline-none focus:border-brand"
-        >
-          {SARALASH_NOMLARI.map((s) => (
-            <option key={s.kod} value={s.kod}>
-              {s.nomi}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => onSaralash(v as Saralash)}
+          className="shrink-0 max-w-[8.5rem] sm:max-w-none"
+          options={SARALASH_NOMLARI.map((s) => ({ value: s.kod, label: s.nomi }))}
+        />
       </div>
     </div>
   );

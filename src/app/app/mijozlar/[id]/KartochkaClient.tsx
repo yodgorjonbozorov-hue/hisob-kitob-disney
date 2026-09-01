@@ -23,7 +23,7 @@ export function KartochkaClient({
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("sotuv");
   const [tahrirOpen, setTahrirOpen] = useState(false);
-  const { mijoz, sotuvlar, qarzlar, bitimlar } = kartochka;
+  const { mijoz, jamiTolov, oxirgiSotuv, sotuvlar, qarzlar, bitimlar } = kartochka;
 
   const tablar: { key: Tab; label: string; soni: number }[] = [
     { key: "sotuv", label: "Sotuvlar", soni: sotuvlar.length },
@@ -33,15 +33,23 @@ export function KartochkaClient({
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
-          <p className="text-muted text-sm mb-1">Jami sotuv</p>
+          <p className="text-muted text-sm mb-1">Jami xarid</p>
           <Money value={mijoz.jamiSotuv} size="xl" tone="income" />
-          <p className="text-2xs text-faint mt-1">{mijoz.sotuvSoni} ta sotuv</p>
+          <p className="text-2xs text-faint mt-1">
+            {mijoz.sotuvSoni} ta sotuv
+            {oxirgiSotuv && ` · oxirgisi ${formatDateUZ(new Date(oxirgiSotuv))}`}
+          </p>
         </Card>
         <Card>
-          <p className="text-muted text-sm mb-1">Ochiq qarz</p>
-          <Money value={mijoz.ochiqQarz} size="xl" tone="expense" />
+          <p className="text-muted text-sm mb-1">Jami to&apos;lov</p>
+          <Money value={jamiTolov} size="xl" tone="brand" />
+          <p className="text-2xs text-faint mt-1">naqd sotuvlar + qarz to&apos;lovlari</p>
+        </Card>
+        <Card>
+          <p className="text-muted text-sm mb-1">Hozirgi qarz</p>
+          <Money value={mijoz.ochiqQarz} size="xl" tone={mijoz.ochiqQarz > 0 ? "debt" : "neutral"} />
         </Card>
         <Card>
           <p className="text-muted text-sm mb-1">Qarz limiti</p>

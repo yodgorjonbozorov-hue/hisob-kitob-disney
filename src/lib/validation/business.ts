@@ -3,7 +3,7 @@ import { z } from "zod";
 export const createBusinessSchema = z.object({
   nomi: z.string().min(1, "Nomi kiritilishi shart").max(100),
   // "avto" tanlansa ombor tizimi avtomatik yoqiladi (route'da).
-  turi: z.enum(["umumiy", "avto"]).optional(),
+  turi: z.enum(["umumiy", "avto", "optom"]).optional(),
   /**
    * Ombor va sotuv shu bizneste yuritiladimi. OMBOR moduli tenant darajasida
    * yoqiladi, bu bayroq esa BIZNES darajasida — bir tenantda tovar sotadigan
@@ -38,7 +38,7 @@ export const createBusinessSchema = z.object({
 export const updateBusinessSchema = z.object({
   nomi: z.string().min(1).max(100).optional(),
   isActive: z.boolean().optional(),
-  turi: z.enum(["umumiy", "avto"]).optional(),
+  turi: z.enum(["umumiy", "avto", "optom"]).optional(),
   omborli: z.boolean().optional(),
   /** Do'kon kassasi (POS) shu bizneste yuritiladimi. */
   magazin: z.boolean().optional(),

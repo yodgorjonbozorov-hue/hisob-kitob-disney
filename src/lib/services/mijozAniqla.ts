@@ -183,6 +183,9 @@ export async function qarzMijozYarat(params: {
   userId: string;
   ism: string;
   tel: string | null;
+  /** Optom kartochka maydonlari (ixtiyoriy). */
+  manzil?: string | null;
+  masulShaxs?: string | null;
   izoh?: string | null;
 }): Promise<{
   contactId: string;
@@ -216,19 +219,35 @@ export async function qarzMijozYarat(params: {
           businessId: params.businessId,
           ism: mijoz.ism,
           tel: mijoz.tel ?? undefined,
+          manzil: params.manzil?.trim() || undefined,
+          masulShaxs: params.masulShaxs?.trim() || undefined,
           izoh: params.izoh?.trim() || undefined,
           createdBy: params.userId,
         },
         select: { id: true },
       });
       contactId = yangi.id;
-    } else if (params.izoh?.trim()) {
-      // Mavjud kartochka topildi — izoh bo'sh bo'lsagina to'ldiriladi,
-      // aks holda operatorning eski eslatmasi ustidan yozilardi.
-      await tx.contact.updateMany({
-        where: { id: contactId, businessId: params.businessId, izoh: null },
-        data: { izoh: params.izoh.trim() },
-      });
+    } else {
+      // Mavjud kartochka topildi — maydonlar BO'SH bo'lsagina to'ldiriladi,
+      // aks holda operatorning eski yozuvlari ustidan yozilardi.
+      if (params.izoh?.trim()) {
+        await tx.contact.updateMany({
+          where: { id: contactId, businessId: params.businessId, izoh: null },
+          data: { izoh: params.izoh.trim() },
+        });
+      }
+      if (params.manzil?.trim()) {
+        await tx.contact.updateMany({
+          where: { id: contactId, businessId: params.businessId, manzil: null },
+          data: { manzil: params.manzil.trim() },
+        });
+      }
+      if (params.masulShaxs?.trim()) {
+        await tx.contact.updateMany({
+          where: { id: contactId, businessId: params.businessId, masulShaxs: null },
+          data: { masulShaxs: params.masulShaxs.trim() },
+        });
+      }
     }
 
     // Joriy ochiq qarz — kartochka tanlangach oynada darhol ko'rsatiladi.

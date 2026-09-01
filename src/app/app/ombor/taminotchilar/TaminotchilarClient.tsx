@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Money } from "@/components/ui/Money";
+import { Select } from "@/components/ui/Select";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Jadval, type Ustun } from "@/components/ui/Jadval";
 import type { SupplierDTO } from "@/lib/queries/xarid";
@@ -204,14 +205,16 @@ function SupplierModal({
             <label className="block text-sm text-muted mb-1" htmlFor="tm-user">
               Tizim foydalanuvchisi (PRO)
             </label>
-            <select id="tm-user" value={userId} onChange={(e) => setUserId(e.target.value)} className={input}>
-              <option value="">Bog&apos;lanmagan (tashqi ta&apos;minotchi)</option>
-              {userlar.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.ism}
-                </option>
-              ))}
-            </select>
+            <Select
+              id="tm-user"
+              value={userId}
+              onChange={setUserId}
+              searchable={userlar.length > 7}
+              options={[
+                { value: "", label: "Bog'lanmagan (tashqi ta'minotchi)" },
+                ...userlar.map((u) => ({ value: u.id, label: u.ism })),
+              ]}
+            />
             <p className="text-2xs text-faint mt-1">
               Bog&apos;lansa, xarid to&apos;lovlari chiqim o&apos;rniga shu foydalanuvchining shaxsiy
               kassasiga o&apos;tkazma bo&apos;lib tushadi.

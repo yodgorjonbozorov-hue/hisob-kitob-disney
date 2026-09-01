@@ -1,6 +1,7 @@
 "use client";
 
 import { RasmTanlash } from "../ombor/RasmTanlash";
+import { Select } from "@/components/ui/Select";
 import { STAVKA_TURLARI, STAVKA_NOMI, type StavkaTuri } from "@/lib/validation/hr";
 
 export const XODIM_INPUT = "w-full px-3 py-2 rounded-lg bg-surface-2 border border-line text-fg";
@@ -83,18 +84,12 @@ export function XodimFormaMaydonlari({
           <label className="block text-sm text-muted mb-1" htmlFor="x-turi">
             Stavka turi
           </label>
-          <select
+          <Select
             id="x-turi"
             value={stavkaTuri}
-            onChange={(e) => setStavkaTuri(e.target.value as StavkaTuri)}
-            className={XODIM_INPUT}
-          >
-            {STAVKA_TURLARI.map((t) => (
-              <option key={t} value={t}>
-                {STAVKA_NOMI[t]}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setStavkaTuri(v as StavkaTuri)}
+            options={STAVKA_TURLARI.map((t) => ({ value: t, label: STAVKA_NOMI[t] }))}
+          />
         </div>
       </div>
       <p className="text-2xs text-faint">

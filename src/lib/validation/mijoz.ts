@@ -4,6 +4,9 @@ export const createMijozSchema = z.object({
   ism: z.string().trim().min(1, "Mijoz ismi kiritilishi shart").max(120),
   tel: z.string().trim().max(50).optional().nullable(),
   telegram: z.string().trim().max(80).optional().nullable(),
+  /** Optom kartochka maydonlari — manzil va mas'ul shaxs (ixtiyoriy). */
+  manzil: z.string().trim().max(300).optional().nullable(),
+  masulShaxs: z.string().trim().max(120).optional().nullable(),
   izoh: z.string().trim().max(500).optional().nullable(),
   /** null — chegara yo'q. 0 — umuman qarzga sotilmaydi. */
   qarzLimit: z.number().int().min(0).max(100_000_000_000).optional().nullable(),

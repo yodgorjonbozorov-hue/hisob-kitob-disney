@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { parseSomInput, formatSom, formatMoney } from "@/lib/format";
 import type { KassaNazoratKarta } from "@/lib/queries/kassaNazorat";
 
@@ -138,34 +139,33 @@ export function TransferModal({
           <label className="block text-sm text-muted mb-1" htmlFor="tr-from">
             Qaysi kassadan
           </label>
-          <select
+          <Select
             id="tr-from"
             value={fromId}
-            onChange={(e) => manbaAlmash(e.target.value)}
-            className={input}
-          >
-            {kassalar.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.nomi} · {formatSom(k.mavjud)}
-              </option>
-            ))}
-          </select>
+            onChange={manbaAlmash}
+            searchable={kassalar.length > 7}
+            options={kassalar.map((k) => ({
+              value: k.id,
+              label: k.nomi,
+              tavsif: formatSom(k.mavjud),
+            }))}
+          />
         </div>
 
         <div>
           <label className="block text-sm text-muted mb-1" htmlFor="tr-to">
             Qaysi kassaga
           </label>
-          <select id="tr-to" value={toId} onChange={(e) => setTo(e.target.value)} className={input}>
-            <option value="">— tanlang —</option>
-            {kassalar
+          <Select
+            id="tr-to"
+            value={toId}
+            onChange={setTo}
+            placeholder="— tanlang —"
+            searchable={kassalar.length > 7}
+            options={kassalar
               .filter((k) => k.id !== fromId)
-              .map((k) => (
-                <option key={k.id} value={k.id}>
-                  {k.nomi} · {formatSom(k.mavjud)}
-                </option>
-              ))}
-          </select>
+              .map((k) => ({ value: k.id, label: k.nomi, tavsif: formatSom(k.mavjud) }))}
+          />
         </div>
 
         <div>

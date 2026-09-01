@@ -5,7 +5,7 @@ import { runBusinessTx, type BusinessTx } from "@/lib/db/businessTx";
 import { currentTenantId } from "@/lib/db/tenantContext";
 import { ensureUserKassaTx } from "@/lib/services/userKassa";
 import { todayDateOnlyString, dateOnlyStringToUTCDate } from "@/lib/date";
-import { isAvto } from "@/lib/biznesTuri";
+import { isAvto, isOptom } from "@/lib/biznesTuri";
 import { logAudit } from "@/lib/services/audit";
 import { qarzLimitTekshirTx } from "@/lib/services/mijoz";
 import { mijozniAniqlaTx } from "@/lib/services/mijozAniqla";
@@ -166,28 +166,37 @@ export async function createSale(params: {
     if (!kelishilganNarx && product.sotuvNarx <= 0) {
       throw new BadRequestError("Sotuv narxi kiritilmagan");
     }
-    if (params.tolovTuri === "qarz" && !params.mijozNomi?.trim()) {
+    if (params.tolovTuri === "qarz" && !params.contactId && !params.mijozNomi?.trim()) {
       throw new BadRequestError("Qarzga sotishda mijoz nomi kiritilishi shart");
     }
 
-    // MIJOZ — qarzga sotuvda kartochka MAJBURAN aniqlanadi (yoki yaratiladi),
-    // aks holda bir mijozning har bir qarzi alohida qarzdor bo'lib ko'rinardi
-    // (lib/services/mijozAniqla.ts). Naqd sotuvda kartochka yaratilmaydi.
-    const mijoz =
-      params.tolovTuri === "qarz"
-        ? await mijozniAniqlaTx(tx, {
-            businessId: params.businessId,
-            userId: params.userId,
-            contactId: params.contactId,
-            mijozNomi: params.mijozNomi,
-            mijozTel: params.mijozTel,
-            mijozSaqla: params.mijozSaqla,
-          })
-        : {
-            contactId: params.contactId ?? null,
-            ism: params.mijozNomi?.trim() || null,
-            tel: params.mijozTel?.trim() || null,
-          };
+    // Biznes turi bu yerda o'qiladi: "avto" — narx kartochkaga yoziladi (quyida),
+    // "optom" — mijozsiz sotuv o'tmaydi (server qoidasi, frontendga ishonilmaydi).
+    const biznes = await tx.business.findFirst({
+      where: { id: params.businessId },
+      select: { turi: true },
+    });
+    const mijozBerilgan = Boolean(params.contactId || params.mijozNomi?.trim());
+    if (isOptom(biznes?.turi) && !mijozBerilgan) {
+      throw new BadRequestError(
+        "Optom sotuvda mijoz tanlanishi shart — kim xarid qilganini yozing"
+      );
+    }
+
+    // MIJOZ — mijoz berilgan har qanday sotuvda kartochka BITTA joyda
+    // aniqlanadi (lib/services/mijozAniqla.ts): egalik tekshiriladi, dublikat
+    // yaratilmaydi. Qarzda majburiy (yuqorida tekshirildi), naqdda ixtiyoriy —
+    // berilmasa sotuv mijozsiz yoziladi.
+    const mijoz = mijozBerilgan
+      ? await mijozniAniqlaTx(tx, {
+          businessId: params.businessId,
+          userId: params.userId,
+          contactId: params.contactId,
+          mijozNomi: params.mijozNomi,
+          mijozTel: params.mijozTel,
+          mijozSaqla: params.mijozSaqla,
+        })
+      : { contactId: null, ism: null, tel: null };
 
     // Qarz limiti — qoldiq kamaytirilishidan OLDIN tekshiriladi, shu bilan
     // limitdan oshgan sotuv omborga umuman tegmaydi (tranzaksiya orqaga
@@ -217,10 +226,6 @@ export async function createSale(params: {
     // Oddiy omborda esa BU HALOKATLI edi (H-1): 500 dona tovardan bittasini
     // chegirma bilan sotsangiz butun katalog narxi o'zgarib ketardi va keyingi
     // barcha sotuvlar chegirma narxida ketardi. Shuning uchun endi faqat avto.
-    const biznes = await tx.business.findFirst({
-      where: { id: params.businessId },
-      select: { turi: true },
-    });
     if (isAvto(biznes?.turi) && kelishilganNarx && kelishilganNarx !== product.sotuvNarx) {
       await tx.product.update({
         where: { id: product.id },

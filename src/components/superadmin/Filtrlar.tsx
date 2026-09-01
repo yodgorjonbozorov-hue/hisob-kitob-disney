@@ -2,6 +2,7 @@
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useState, useEffect, type FormEvent } from "react";
+import { Select } from "@/components/ui/Select";
 
 /**
  * FILTR PANELI — holat URL'da.
@@ -75,23 +76,19 @@ export function Filtrlar({
       </form>
 
       {tanlovlar.map((t) => (
-        <div key={t.kalit}>
+        <div key={t.kalit} className="min-w-[150px]">
           <label className="sr-only" htmlFor={`filtr-${t.kalit}`}>
             {t.label}
           </label>
-          <select
+          <Select
             id={`filtr-${t.kalit}`}
             value={params.get(t.kalit) ?? ""}
-            onChange={(e) => yangila(t.kalit, e.target.value)}
-            className={maydon}
-          >
-            <option value="">{t.label}: hammasi</option>
-            {t.variantlar.map((v) => (
-              <option key={v.qiymat} value={v.qiymat}>
-                {v.label}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => yangila(t.kalit, v)}
+            options={[
+              { value: "", label: `${t.label}: hammasi` },
+              ...t.variantlar.map((v) => ({ value: v.qiymat, label: v.label })),
+            ]}
+          />
         </div>
       ))}
 

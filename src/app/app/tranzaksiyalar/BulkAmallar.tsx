@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/Toast";
+import { Select } from "@/components/ui/Select";
 
 /**
  * OMMAVIY AMALLAR — belgilangan yozuvlarni o'chirish yoki boshqa biznesga
@@ -73,23 +74,19 @@ export function BulkAmallar({
       {selected.size > 0 && (
         <div className="flex items-center gap-3">
           {moveTargets.length > 0 && (
-            <select
+            // Qiymat doim bo'sh qoladi — tanlov amal (ko'chirish) sifatida
+            // ishlaydi, tugma matni yana "Ko'chirish →" ga qaytadi.
+            <Select
+              className="w-44 shrink-0"
+              aria-label="Boshqa biznesga ko'chirish"
               value=""
-              onChange={(e) => {
-                const v = e.target.value;
-                e.target.value = "";
+              onChange={(v) => {
                 if (v) kochirish(v);
               }}
-              className="text-sm rounded-lg border border-line bg-surface px-2 py-1 text-brand font-medium"
-              aria-label="Boshqa biznesga ko'chirish"
-            >
-              <option value="">Ko&apos;chirish →</option>
-              {moveTargets.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.nomi}
-                </option>
-              ))}
-            </select>
+              placeholder="Ko'chirish →"
+              searchable={moveTargets.length > 7}
+              options={moveTargets.map((b) => ({ value: b.id, label: b.nomi }))}
+            />
           )}
           <button onClick={ochirish} className="text-sm font-medium text-expense hover:underline">
             O&apos;chirish ({selected.size})

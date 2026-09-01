@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { ROL_LABEL, type Rol } from "@/lib/auth/roles";
 import type { KunlikNomzodDTO } from "@/lib/queries/kunlik";
 
@@ -76,19 +77,21 @@ export function DirektorModal({ onClose, onDone }: { onClose: () => void; onDone
             <label className="block text-sm text-muted mb-1" htmlFor="kunlik-direktor">
               Direktor
             </label>
-            <select
+            <Select
               id="kunlik-direktor"
               value={tanlangan}
-              onChange={(e) => setTanlangan(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-line text-fg"
-            >
-              <option value="">— Tayinlanmagan —</option>
-              {nomzodlar.map((n) => (
-                <option key={n.id} value={n.id}>
-                  {n.ism} ({ROL_LABEL[n.rol as Rol] ?? n.rol})
-                </option>
-              ))}
-            </select>
+              onChange={setTanlangan}
+              searchable={nomzodlar.length > 7}
+              options={[
+                // Bo'sh qiymat — direktorni bekor qilish, shuning uchun oddiy variant.
+                { value: "", label: "— Tayinlanmagan —" },
+                ...nomzodlar.map((n) => ({
+                  value: n.id,
+                  label: n.ism,
+                  tavsif: ROL_LABEL[n.rol as Rol] ?? n.rol,
+                })),
+              ]}
+            />
           </div>
         )}
 

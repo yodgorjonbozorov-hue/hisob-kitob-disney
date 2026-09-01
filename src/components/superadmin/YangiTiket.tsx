@@ -4,6 +4,7 @@ import { useState, useEffect, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { soro } from "./soro";
 
 const MAYDON =
@@ -160,17 +161,17 @@ export function YangiTiket() {
             <label htmlFor="tk-muhimlik" className="block text-sm font-medium text-fg mb-1">
               Muhimlik
             </label>
-            <select
+            <Select
               id="tk-muhimlik"
-              className={MAYDON}
               value={f.muhimlik}
-              onChange={(e) => setF({ ...f, muhimlik: e.target.value })}
-            >
-              <option value="PAST">Past</option>
-              <option value="ORTA">O&apos;rta</option>
-              <option value="YUQORI">Yuqori</option>
-              <option value="KRITIK">Kritik</option>
-            </select>
+              onChange={(v) => setF({ ...f, muhimlik: v })}
+              options={[
+                { value: "PAST", label: "Past" },
+                { value: "ORTA", label: "O'rta" },
+                { value: "YUQORI", label: "Yuqori" },
+                { value: "KRITIK", label: "Kritik" },
+              ]}
+            />
           </div>
 
           {xato && (

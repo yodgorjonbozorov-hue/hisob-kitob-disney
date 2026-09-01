@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { soro } from "./soro";
 import { SUPER_ROL_TAVSIF, type SuperRol } from "@/lib/superadmin/rbac";
 
@@ -62,18 +63,12 @@ export function SuperadminRolTanlov({
             <label htmlFor="sa-rol" className="block text-sm font-medium text-fg mb-1">
               Yangi rol
             </label>
-            <select
+            <Select
               id="sa-rol"
-              className={maydon}
               value={rol}
-              onChange={(e) => setRol(e.target.value as SuperRol)}
-            >
-              {rollar.map((x) => (
-                <option key={x.kod} value={x.kod}>
-                  {x.label}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setRol(v as SuperRol)}
+              options={rollar.map((x) => ({ value: x.kod, label: x.label }))}
+            />
             <p className="text-2xs text-muted mt-1">{SUPER_ROL_TAVSIF[rol]}</p>
           </div>
 

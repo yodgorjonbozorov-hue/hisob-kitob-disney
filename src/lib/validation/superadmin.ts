@@ -43,7 +43,7 @@ export const yangiMijozSchema = z.object({
   parol: z.string().min(8, "Parol kamida 8 belgi bo'lishi kerak").max(100),
   ism: z.string().trim().max(100).optional().nullable(),
   tarif: z.string().min(1),
-  turi: z.enum(["umumiy", "avto"]),
+  turi: z.enum(["umumiy", "avto", "optom"]),
   kunlar: z.number().int().min(0).max(366),
 });
 

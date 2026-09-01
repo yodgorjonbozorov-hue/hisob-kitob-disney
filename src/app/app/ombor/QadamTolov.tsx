@@ -1,6 +1,7 @@
 "use client";
 
-import { INPUT_CLASS, LABEL_CLASS } from "@/components/ui/fieldStyles";
+import { LABEL_CLASS } from "@/components/ui/fieldStyles";
+import { Select } from "@/components/ui/Select";
 import { TAMINOT_TOLOV_BELGI, TAMINOT_TOLOV_NOMI, type TaminotTolovUsuli } from "@/lib/validation/taminot";
 import type { AccountDTO } from "@/lib/queries/accounts";
 
@@ -85,19 +86,16 @@ export function QadamTolov({
           <label className={LABEL_CLASS} htmlFor="qt-kassa">
             Qaysi kassadan?
           </label>
-          <select
+          <Select
             id="qt-kassa"
             value={accountId ?? ""}
-            onChange={(e) => onAccount(e.target.value || null)}
-            className={INPUT_CLASS}
-          >
-            <option value="">Avtomatik ({mos[0]?.nomi})</option>
-            {mos.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.nomi}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => onAccount(v || null)}
+            searchable={mos.length > 7}
+            options={[
+              { value: "", label: `Avtomatik (${mos[0]?.nomi})` },
+              ...mos.map((k) => ({ value: k.id, label: k.nomi })),
+            ]}
+          />
         </div>
       )}
 

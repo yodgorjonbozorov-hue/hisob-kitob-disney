@@ -31,7 +31,11 @@ export default async function MijozKartochkaPage({ params }: { params: { id: str
           <p className="text-sm text-muted mt-1">
             {kartochka.mijoz.tel ?? "Telefon kiritilmagan"}
             {kartochka.mijoz.telegram && ` · ${kartochka.mijoz.telegram}`}
+            {kartochka.mijoz.masulShaxs && ` · mas'ul: ${kartochka.mijoz.masulShaxs}`}
           </p>
+          {kartochka.mijoz.manzil && (
+            <p className="text-2xs text-faint mt-0.5">{kartochka.mijoz.manzil}</p>
+          )}
         </div>
         <KartochkaClient kartochka={kartochka} boshqaruvchi={isManager(session.rol)} />
       </div>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { INPUT_CLASS } from "@/components/ui/fieldStyles";
 import { KATEGORIYA_TURLARI, KATEGORIYA_TURI_NOMI, type KategoriyaTuri } from "@/lib/validation/xodimKategoriya";
 import type { KategoriyaDTO } from "@/lib/services/xodimKategoriya";
@@ -95,19 +96,18 @@ export function KategoriyaModal({
           />
         </label>
 
-        <label className="block space-y-1">
-          <span className="text-xs text-muted">KPI turi</span>
-          <select value={turi} onChange={(e) => setTuri(e.target.value as KategoriyaTuri)} className={INPUT_CLASS}>
-            {KATEGORIYA_TURLARI.map((t) => (
-              <option key={t} value={t}>
-                {KATEGORIYA_TURI_NOMI[t]}
-              </option>
-            ))}
-          </select>
+        <div className="space-y-1">
+          <label className="block text-xs text-muted" htmlFor="kat-turi">KPI turi</label>
+          <Select
+            id="kat-turi"
+            value={turi}
+            onChange={(v) => setTuri(v as KategoriyaTuri)}
+            options={KATEGORIYA_TURLARI.map((t) => ({ value: t, label: KATEGORIYA_TURI_NOMI[t] }))}
+          />
           <span className="block text-2xs text-faint">
             Sotuv KPI — summa/konversiya (zakaz kimniki); Ijro KPI — bajarilgan ish soni.
           </span>
-        </label>
+        </div>
 
         {xato && <p className="text-expense text-sm">{xato}</p>}
         <div className="flex gap-2 justify-end pt-1">

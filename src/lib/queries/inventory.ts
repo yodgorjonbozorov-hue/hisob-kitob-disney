@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { businessQueryRaw, businessScope, songa } from "@/lib/db/businessRaw";
+import { dateOnlyStringToUTCDate, todayDateOnlyString } from "@/lib/date";
 
 export interface ProductAdminDTO {
   id: string;
@@ -396,6 +397,8 @@ export interface SaleDTO {
   tolovTuri: string;
   mijozNomi: string | null;
   sana: string;
+  /** Yozilgan vaqt (createdAt) — "Bugungi sotuvlar" ro'yxatida soat ko'rinadi. */
+  vaqt: string;
   /** Bekor qilingan sotuv — ro'yxatda chizilgan holda ko'rsatiladi. */
   bekorQilingan: boolean;
   bekorSabab: string | null;
@@ -421,9 +424,42 @@ export async function listRecentSales(businessId: string, limit = 20): Promise<S
     tolovTuri: s.tolovTuri,
     mijozNomi: s.mijozNomi,
     sana: s.sana.toISOString(),
+    vaqt: s.createdAt.toISOString(),
     bekorQilingan: s.deletedAt !== null,
     bekorSabab: s.cancelReason,
   }));
+}
+
+export interface BugungiSotuvStat {
+  /** Bugungi jami savdo (bekor qilinganlarsiz). */
+  savdo: number;
+  soni: number;
+  naqd: number;
+  qarz: number;
+}
+
+/**
+ * BUGUNGI SOTUV STATISTIKASI — sotuv sahifasining o'ng paneli uchun.
+ * `sana` (kun aniqligidagi sotuv sanasi) bo'yicha, bekor qilinganlar
+ * hisobga olinmaydi. Bitta groupBy so'rov — sahifani sekinlashtirmaydi.
+ */
+export async function getBugungiSotuvStat(businessId: string): Promise<BugungiSotuvStat> {
+  const bugun = dateOnlyStringToUTCDate(todayDateOnlyString());
+  const rows = await prisma.sale.groupBy({
+    by: ["tolovTuri"],
+    where: { businessId, sana: bugun, deletedAt: null },
+    _sum: { jamiSumma: true },
+    _count: { _all: true },
+  });
+  const stat: BugungiSotuvStat = { savdo: 0, soni: 0, naqd: 0, qarz: 0 };
+  for (const r of rows) {
+    const summa = r._sum.jamiSumma ?? 0;
+    stat.savdo += summa;
+    stat.soni += r._count._all;
+    if (r.tolovTuri === "naqd") stat.naqd += summa;
+    else stat.qarz += summa;
+  }
+  return stat;
 }
 
 export interface StockAdjustmentDTO {

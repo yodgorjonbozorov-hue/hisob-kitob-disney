@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Select } from "@/components/ui/Select";
 
 interface UserDTO {
   id: string;
@@ -192,13 +193,15 @@ function YangiVazifaModal({ users, meId, onClose }: { users: UserDTO[]; meId: st
         <h2 className="font-semibold text-fg text-lg">Yangi vazifa</h2>
         <input autoFocus value={nomi} onChange={(e) => setNomi(e.target.value)} placeholder="Nima qilish kerak?" className={input} required />
         <div className="grid grid-cols-2 gap-2">
-          <select value={masulId} onChange={(e) => setMasulId(e.target.value)} className={input}>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.id === meId ? `${u.ism} (men)` : u.ism}
-              </option>
-            ))}
-          </select>
+          <Select
+            value={masulId}
+            onChange={setMasulId}
+            searchable={users.length > 7}
+            options={users.map((u) => ({
+              value: u.id,
+              label: u.id === meId ? `${u.ism} (men)` : u.ism,
+            }))}
+          />
           <input type="date" value={muddat} onChange={(e) => setMuddat(e.target.value)} className={input} />
         </div>
         <input value={izoh} onChange={(e) => setIzoh(e.target.value)} placeholder="Izoh (ixtiyoriy)" className={input} />
