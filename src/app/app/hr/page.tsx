@@ -58,6 +58,9 @@ export default async function HrPage({
             <LinkButton href="/app/hr/kpi" size="sm">
               KPI va oylik
             </LinkButton>
+            <LinkButton href="/app/hr/sotuvchilar" variant="secondary" size="sm">
+              Sotuvchilar
+            </LinkButton>
             <LinkButton href="/app/hr/samaradorlik" variant="secondary" size="sm">
               Samaradorlik
             </LinkButton>

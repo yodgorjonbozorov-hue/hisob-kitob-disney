@@ -5,10 +5,21 @@ import { Select } from "@/components/ui/Select";
 import type { XodimKategoriyaDTO, ZakazXodimDTO } from "./turlar";
 
 /**
- * ZAKAZDAGI XODIMLAR — kategoriya-selektorlar (Sotuvchi, Diktor, Shofer...).
+ * ZAKAZDAGI IJROCHILAR — kategoriya-selektorlar (Diktor, Dekorator, Shofer...).
  * Har faol kategoriya uchun bitta selektor; ro'yxatda FAQAT o'sha kategoriya
  * a'zolari (server ham a'zolikni majburlaydi). Hech biri majburiy emas.
+ *
+ * SOTUVCHI BU YERDA CHIQMAYDI: u alohida birinchi darajali maydonga ko'chdi
+ * (`SotuvchiTanlash`) — "zakazni kim oldi" va "zakazni kim bajaradi" ikki
+ * boshqa savol (38-talab), ikkita joyda so'ralsa qarama-qarshi javob paydo
+ * bo'lardi.
  */
+
+/** Ijrochi kategoriyalari — sotuvchi turidagilar chiqarib tashlanadi. */
+export function ijroKategoriyalari(kategoriyalar: XodimKategoriyaDTO[]): XodimKategoriyaDTO[] {
+  return kategoriyalar.filter((k) => k.turi !== "sotuvchi");
+}
+
 
 /** categoryId → employeeId ("" — tanlanmagan). */
 export type ZakazXodimTanlov = Record<string, string>;
@@ -21,23 +32,15 @@ export function tanlovdanRoyxat(t: ZakazXodimTanlov): { categoryId: string; empl
 }
 
 /**
- * Boshlang'ich tanlov: "sotuvchi" turidagi kategoriyada joriy foydalanuvchining
- * xodim yozuvi bo'lsa — o'zi oldindan tanlanadi (har safar qidirmasin).
+ * Mavjud biriktiruvlardan tanlov (tahrirlash oynasi uchun). Sotuvchi
+ * qatorlari chiqariladi — u alohida maydondan boshqariladi.
  */
-export function boshlangichTanlov(kategoriyalar: XodimKategoriyaDTO[], meId: string): ZakazXodimTanlov {
-  const t: ZakazXodimTanlov = {};
-  for (const k of kategoriyalar) {
-    if (k.turi !== "sotuvchi") continue;
-    const men = k.azolar.find((a) => a.userId === meId);
-    if (men) t[k.id] = men.id;
-  }
-  return t;
-}
-
-/** Mavjud biriktiruvlardan tanlov (tahrirlash oynasi uchun). */
 export function biriktiruvdanTanlov(xodimlar: ZakazXodimDTO[]): ZakazXodimTanlov {
   const t: ZakazXodimTanlov = {};
-  for (const x of xodimlar) t[x.categoryId] = x.employeeId;
+  for (const x of xodimlar) {
+    if (x.kategoriyaTuri === "sotuvchi") continue;
+    t[x.categoryId] = x.employeeId;
+  }
   return t;
 }
 
@@ -53,7 +56,7 @@ export function ZakazXodimlariTanlash({
   if (kategoriyalar.length === 0) return null;
   return (
     <div className="space-y-2">
-      <p className="text-2xs uppercase tracking-wide text-faint">Zakazdagi xodimlar</p>
+      <p className="text-2xs uppercase tracking-wide text-faint">Zakazni bajaruvchilar</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {kategoriyalar.map((k) => (
           <div key={k.id} className="space-y-1">
@@ -101,7 +104,9 @@ export function ZakazXodimlariBlok({
   const [loading, setLoading] = useState(false);
   const [xato, setXato] = useState<string | null>(null);
 
-  if (kategoriyalar.length === 0 && (!xodimlar || xodimlar.length === 0)) return null;
+  // Sotuvchi bu blokda ko'rsatilmaydi — u yuqorida alohida qatorda.
+  const ijrochilar = xodimlar?.filter((x) => x.kategoriyaTuri !== "sotuvchi") ?? null;
+  if (kategoriyalar.length === 0 && (!ijrochilar || ijrochilar.length === 0)) return null;
 
   async function saqlash() {
     setLoading(true);
@@ -109,6 +114,8 @@ export function ZakazXodimlariBlok({
     const res = await fetch(`/api/crm/deals/${dealId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
+      // Faqat IJROCHILAR yuboriladi: server sotuvchi biriktiruvini alohida
+      // yo'ldan boshqaradi, shuning uchun u bu ro'yxatda tegilmaydi.
       body: JSON.stringify({ xodimlar: tanlovdanRoyxat(tanlov) }),
     });
     setLoading(false);
@@ -123,7 +130,7 @@ export function ZakazXodimlariBlok({
   return (
     <div className="rounded-xl border border-line bg-surface-2/30 p-3 space-y-2">
       <div className="flex items-center justify-between">
-        <p className="text-2xs uppercase tracking-wide text-faint">Zakazdagi xodimlar</p>
+        <p className="text-2xs uppercase tracking-wide text-faint">Zakazni bajaruvchilar</p>
         {!kirimBor && kategoriyalar.length > 0 && !tahrir && (
           <button
             onClick={() => {
@@ -154,13 +161,13 @@ export function ZakazXodimlariBlok({
             </button>
           </div>
         </div>
-      ) : xodimlar === null ? (
+      ) : ijrochilar === null ? (
         <p className="text-sm text-faint">Yuklanmoqda...</p>
-      ) : xodimlar.length === 0 ? (
-        <p className="text-sm text-faint">Xodim biriktirilmagan.</p>
+      ) : ijrochilar.length === 0 ? (
+        <p className="text-sm text-faint">Bajaruvchi biriktirilmagan.</p>
       ) : (
         <ul className="space-y-1">
-          {xodimlar.map((x) => (
+          {ijrochilar.map((x) => (
             <li key={x.id} className="flex items-center justify-between text-sm">
               <span className="text-muted">{x.kategoriyaNomi}</span>
               <span className="font-medium text-fg">{x.ism}</span>

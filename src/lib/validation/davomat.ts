@@ -216,6 +216,8 @@ export type XodimSiyosatInput = z.infer<typeof xodimSiyosatSchema>;
 
 export const hrSettingSchema = z.object({
   xodimOylikKoradi: z.boolean().optional(),
+  /** CRM: yangi zakazda sotuvchi majburiymi (6-talab, biznesga sozlanadi). */
+  crmSotuvchiMajburiy: z.boolean().optional(),
 });
 
 export type CreateWorkLocationInput = z.infer<typeof createWorkLocationSchema>;

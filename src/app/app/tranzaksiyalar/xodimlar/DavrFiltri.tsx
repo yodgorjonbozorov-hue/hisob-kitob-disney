@@ -11,7 +11,7 @@ import { INPUT_CLASS } from "@/components/ui/fieldStyles";
  * chegaralar bilan ishlaydi (lib/xodimDavr.ts).
  */
 
-export type DavrTuri = "bugun" | "hafta" | "oy" | "sana";
+export type DavrTuri = "bugun" | "hafta" | "oy" | "otganOy" | "sana";
 
 export interface Davr {
   turi: DavrTuri;
@@ -38,12 +38,32 @@ export function davrChegara(turi: Exclude<DavrTuri, "sana">): { from: string; to
     dushanba.setDate(bugun.getDate() - kun);
     return { from: lokalSana(dushanba), to };
   }
+  if (turi === "otganOy") {
+    // O'tgan oyning TO'LIQ oralig'i: 1-kundan oxirgi kunigacha.
+    const oyBoshi = new Date(bugun.getFullYear(), bugun.getMonth(), 1);
+    const otganOxiri = new Date(oyBoshi.getTime() - 24 * 60 * 60 * 1000);
+    const oxiri = lokalSana(otganOxiri);
+    return { from: `${oxiri.slice(0, 7)}-01`, to: oxiri };
+  }
   return { from: `${to.slice(0, 7)}-01`, to };
 }
 
 export const BOSH_DAVR: Davr = { turi: "oy", ...davrChegara("oy") };
 
-export function DavrFiltri({ davr, onChange }: { davr: Davr; onChange: (d: Davr) => void }) {
+/**
+ * `otganOyBilan` — "O'tgan oy" tugmasini qo'shadi (sotuvchi statistikasi
+ * uchun, 22-talab). Standart `false`: mavjud sahifalarda filtr qatorlari
+ * o'zgarmasin.
+ */
+export function DavrFiltri({
+  davr,
+  onChange,
+  otganOyBilan = false,
+}: {
+  davr: Davr;
+  onChange: (d: Davr) => void;
+  otganOyBilan?: boolean;
+}) {
   // "Sana" rejimidagi qo'lda kiritilgan chegaralar (tasdiqlangunga qadar lokal).
   const [qolda, setQolda] = useState({ from: davr.from, to: davr.to });
 
@@ -68,6 +88,7 @@ export function DavrFiltri({ davr, onChange }: { davr: Davr; onChange: (d: Davr)
           { value: "bugun", label: "Bugun" },
           { value: "hafta", label: "Bu hafta" },
           { value: "oy", label: "Bu oy" },
+          ...(otganOyBilan ? [{ value: "otganOy" as DavrTuri, label: "O'tgan oy" }] : []),
           { value: "sana", label: "Sana" },
         ]}
         value={davr.turi}

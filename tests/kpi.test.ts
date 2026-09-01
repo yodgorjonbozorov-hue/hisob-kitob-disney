@@ -196,6 +196,60 @@ test("SOTUV: qisman to'langan qarz KIRMAYDI, to'liq yopilgach KIRADI", async () 
   assert.equal(jam.get(aziz.id)?.summa, mln(70), "qarz to'liq yopilgach to'lovlar kiradi");
 });
 
+test("SOTUV: QISMAN to'langan CRM zakazining to'langan qismi ham bonusga kirmaydi", async () => {
+  // lib/crm/yakunlash.ts qisman to'langan zakazda to'langan qismini KIRIM,
+  // qolganini QARZDORLIK qilib yozadi. O'sha kirim bonusga kirib ketsa,
+  // yarim to'langan zakaz uchun bonus berilgan bo'lardi — qolgan qismi esa
+  // hech qachon kelmasligi mumkin.
+  //
+  // Test o'zidan keyin TOZALAB ketadi: keyingi testlar jami sotuvga tayanadi.
+  const jami = async () =>
+    (await A(() => sotuvSvc.sotuvJamlari(tA.business.id, OY))).get(aziz.id)?.summa ?? 0;
+  const oldin = await jami();
+
+  const qarz = await A(() =>
+    qarzSvc.createQarz({
+      businessId: tA.business.id, userId: aziz.id, turi: "olinadigan",
+      mijozNomi: "Qisman mijoz", jamiSumma: mln(30), sana: SANA, masulId: aziz.id,
+    })
+  );
+  const kirimYozuvi = await kirim(mln(20), "naqd");
+  const stage = await rawPrisma.stage.create({
+    data: { businessId: tA.business.id, nomi: "KPI sinov bosqichi", tartib: 99 },
+  });
+  const zakaz = await rawPrisma.deal.create({
+    data: {
+      businessId: tA.business.id, nomi: "Qisman to'langan zakaz", summa: mln(50),
+      stageId: stage.id, masulId: aziz.id, sana: new Date(`${SANA}T00:00:00.000Z`),
+      transactionId: kirimYozuvi.id, debtId: qarz.id, tolangan: mln(20),
+    },
+  });
+
+  assert.equal(await jami(), oldin, "qarzi ochiq zakazning to'langan qismi bonusga kirmaydi");
+
+  // Qarz to'liq yopilgach — o'sha kirim ham, to'lov yozuvi ham bonusga kiradi.
+  await A(() =>
+    qarzSvc.qarzTolov({
+      businessId: tA.business.id, debtId: qarz.id, userId: aziz.id,
+      summa: mln(30), sana: SANA, tolovTuri: "naqd",
+    })
+  );
+  assert.equal(await jami(), oldin + mln(50), "zakaz yopilgach to'liq summa kiradi");
+
+  // ---- tozalash ----
+  const tolovlar = await rawPrisma.debtPayment.findMany({ where: { debtId: qarz.id } });
+  await rawPrisma.deal.delete({ where: { id: zakaz.id } });
+  await rawPrisma.debtPayment.deleteMany({ where: { debtId: qarz.id } });
+  await rawPrisma.debt.delete({ where: { id: qarz.id } });
+  await rawPrisma.transaction.deleteMany({
+    where: {
+      id: { in: [kirimYozuvi.id, ...tolovlar.map((t: any) => t.transactionId).filter(Boolean)] },
+    },
+  });
+  await rawPrisma.stage.delete({ where: { id: stage.id } });
+  assert.equal(await jami(), oldin, "tozalashdan keyin jami avvalgi holatga qaytadi");
+});
+
 test("SOTUV: to'lov turi BO'SH eski yozuv ham hisobga kiradi (NULL tuzog'i)", async () => {
   // `tolovTuri` null — sxemada "eski yozuvlar" holati. SQL'da NULL bilan
   // taqqoslash ROST bermagani uchun sodda `NOT` filtri bunday yozuvni

@@ -58,7 +58,9 @@ export type AuditEntity =
   // Davomat 2.0
   | "attendance"
   | "employeePenalty"
-  | "employeeBonus";
+  | "employeeBonus"
+  // CRM: zakaz sotuvchisini almashtirish (kim → kimga, kim o'zgartirdi)
+  | "deal";
 
 interface AuditInput {
   businessId?: string | null;

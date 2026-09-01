@@ -4,15 +4,37 @@ import { requireModulePage } from "@/lib/modules/guard";
 import { prisma } from "@/lib/prisma";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import { getBoard } from "@/lib/crm/service";
+import { tolovHolati, type TolovHolat } from "@/lib/crm/pipeline";
+import { doskaFiltrSchema } from "@/lib/validation/crm";
 import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
 import { crmFormaKategoriyalari } from "@/lib/services/xodimKategoriya";
+import { avtoSotuvchi, sotuvchilarRoyxati, sotuvchiMajburiymi } from "@/lib/services/zakazSotuvchi";
+import { hasPermission } from "@/lib/permissions/tekshir";
 import { kunlikBuyurtmalar, kategoriyaStatistikasi } from "@/lib/crm/statistika";
 import { todayTashkentDateOnlyString, utcDateToDateOnlyString } from "@/lib/date";
 import { CrmClient } from "./CrmClient";
 import { BugungiPanel } from "./BugungiPanel";
 
-/** CRM — Disney Navoiy kunlik buyurtmalari doskasi. */
-export default async function CrmPage() {
+/**
+ * CRM — ZAKAZ DOSKASI.
+ *
+ * Ustunlar: Kutilayotgan → Bugungi → Jarayonda → Yutildi (+ arxiv:
+ * Yo'qotildi). Ustun BAZADA saqlanmaydi: u `Deal.holat` va `Deal.sana`
+ * dan Toshkent kunini asos qilib hisoblanadi (`lib/crm/pipeline.ts`),
+ * shuning uchun kun almashganda hech qanday cron ishlashi shart emas.
+ */
+export default async function CrmPage({
+  searchParams,
+}: {
+  searchParams: {
+    from?: string;
+    to?: string;
+    masulId?: string;
+    sotuvchiId?: string;
+    categoryId?: string;
+    tolov?: string;
+  };
+}) {
   const ctx = await requireTenantPage();
   const { tenantId, session } = ctx;
   return runWithTenant(tenantId, async () => {
@@ -30,8 +52,31 @@ export default async function CrmPage() {
       );
     }
 
-    const [board, kategoriyalar, xodimlar, kunlik, kategoriyaStat, xodimKategoriyalari] = await Promise.all([
-      getBoard(businessId),
+    // FILTR (12-talab) — URL'dan. Xato qiymat butun sahifani sindirmaydi:
+    // tekshiruvdan o'tmagani jimgina e'tiborsiz qoladi (filtrsiz doska).
+    const filtrParsed = doskaFiltrSchema.safeParse({
+      from: searchParams.from ?? null,
+      to: searchParams.to ?? null,
+      masulId: searchParams.masulId ?? null,
+      sotuvchiId: searchParams.sotuvchiId ?? null,
+      categoryId: searchParams.categoryId ?? null,
+      tolov: searchParams.tolov ?? null,
+    });
+    const filtr = filtrParsed.success ? filtrParsed.data : {};
+
+    const [
+      board,
+      kategoriyalar,
+      xodimlar,
+      kunlik,
+      kategoriyaStat,
+      xodimKategoriyalari,
+      sotuvchilar,
+      ozim,
+      sotuvchiMajburiy,
+      sotuvchiOzgartira,
+    ] = await Promise.all([
+      getBoard(businessId, filtr),
       // KATEGORIYA MANBAI BITTA: Kirim modulining kategoriyalari.
       prisma.category.findMany({
         where: { businessId, turi: "kirim", isActive: true },
@@ -50,10 +95,21 @@ export default async function CrmPage() {
       kategoriyaStatistikasi(businessId),
       // Xodim kategoriyalari (Sotuvchi/Diktor/...) — zakaz-xodim biriktiruvi.
       crmFormaKategoriyalari(businessId),
+      // SOTUVCHI: faqat shu biznesning faol sotuvchilari (forma va filtr).
+      sotuvchilarRoyxati(businessId),
+      // Avto-tanlash — foydalanuvchining o'z sotuvchi profili.
+      avtoSotuvchi(businessId, session.userId),
+      sotuvchiMajburiymi(businessId),
+      hasPermission(session.userId, "crm.sotuvchi"),
     ]);
 
     const ismlar = new Map(xodimlar.map((x) => [x.id, x.ism]));
-    const stages = board.stages.map((s) => ({ id: s.id, nomi: s.nomi, turi: s.turi }));
+
+    // TO'LOV HOLATI bazada ustun emas (summa va tolangan'dan hisoblanadi),
+    // shuning uchun bu filtr o'qishdan keyin qo'llanadi.
+    const zakazlar = filtr.tolov
+      ? board.deals.filter((d) => tolovHolati(d.summa, d.tolangan) === (filtr.tolov as TolovHolat))
+      : board.deals;
 
     return (
       <div className="space-y-4">
@@ -84,21 +140,35 @@ export default async function CrmPage() {
         />
 
         <CrmClient
-          stages={stages}
           kategoriyalar={kategoriyalar}
           xodimlar={xodimlar}
+          filtr={{
+            from: filtr.from ?? "",
+            to: filtr.to ?? "",
+            masulId: filtr.masulId ?? "",
+            sotuvchiId: filtr.sotuvchiId ?? "",
+            categoryId: filtr.categoryId ?? "",
+            tolov: filtr.tolov ?? "",
+          }}
           xodimKategoriyalari={xodimKategoriyalari.map((k) => ({
             id: k.id,
             nomi: k.nomi,
             turi: k.turi,
             azolar: k.azolar.map((a) => ({ id: a.id, ism: a.ism, userId: a.userId })),
           }))}
+          sotuvchilar={sotuvchilar}
+          ozimSotuvchi={ozim?.id ?? null}
+          sotuvchiMajburiy={sotuvchiMajburiy}
+          sotuvchiOzgartira={sotuvchiOzgartira}
           meId={session.userId}
           bugun={bugun}
-          buyurtmalar={board.deals.map((d) => ({
+          buyurtmalar={zakazlar.map((d) => ({
             id: d.id,
             nomi: d.nomi,
             summa: d.summa,
+            tolangan: d.tolangan,
+            tolovTuri: d.tolovTuri,
+            holat: d.holat,
             stageId: d.stageId,
             categoryId: d.categoryId,
             kategoriya: d.category?.nomi ?? null,
@@ -109,6 +179,18 @@ export default async function CrmPage() {
             masulId: d.masulId,
             masulIsm: ismlar.get(d.masulId) ?? null,
             transactionId: d.transactionId,
+            debtId: d.debtId,
+            // Kirim/qarz raqami YOZUVNING O'ZIDAN: o'chirilgan tranzaksiya
+            // doskada eski summa bo'lib qolmasin.
+            kirimSumma: d.transaction && !d.transaction.deletedAt ? d.transaction.summa : 0,
+            qarzQoldiq: d.debt ? Math.max(0, d.debt.jamiSumma - d.debt.tolangan) : 0,
+            sotuvchi: board.sotuvchilar.get(d.id)
+              ? {
+                  employeeId: board.sotuvchilar.get(d.id)!.employeeId,
+                  ism: board.sotuvchilar.get(d.id)!.ism,
+                  isActive: board.sotuvchilar.get(d.id)!.isActive,
+                }
+              : null,
           }))}
         />
       </div>

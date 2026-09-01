@@ -18,17 +18,20 @@ import { XodimAvatar } from "../../XodimAvatar";
 import { PlanProgress } from "../../PlanProgress";
 import { PlanModal } from "../../PlanModal";
 import type { XodimSiyosatDTO } from "./SiyosatKarta";
+import type { SotuvchiKpiDTO } from "@/lib/queries/sotuvchiKpi";
 import { UmumiyTab } from "./UmumiyTab";
+import { SotuvTab } from "./SotuvTab";
 import { ZakazlarTab } from "./ZakazlarTab";
 import { VazifalarTab } from "./VazifalarTab";
 import { DavomatTab } from "./DavomatTab";
 import { OylikTab } from "./OylikTab";
 
-const TABLAR = ["umumiy", "zakazlar", "vazifalar", "davomat", "oylik"] as const;
+const TABLAR = ["umumiy", "sotuv", "zakazlar", "vazifalar", "davomat", "oylik"] as const;
 type Tab = (typeof TABLAR)[number];
 
 const TAB_NOMI: Record<Tab, string> = {
   umumiy: "Umumiy",
+  sotuv: "Sotuv",
   zakazlar: "Zakazlar",
   vazifalar: "Vazifalar",
   davomat: "Davomat",
@@ -53,6 +56,7 @@ export function XodimDetalClient({
   vazifalar,
   oyliklar,
   zakazlar,
+  sotuvKpi,
   tarix,
   jarimalar,
   bonuslar,
@@ -67,6 +71,8 @@ export function XodimDetalClient({
   vazifalar: XodimVazifaDTO[];
   oyliklar: XodimOylikDTO[];
   zakazlar: XodimZakazDTO[];
+  /** CRM sotuvchi KPI'si — xodim sotuvchi bo'lmasa null (24-talab). */
+  sotuvKpi: SotuvchiKpiDTO | null;
   tarix: TarixYozuvDTO[];
   jarimalar: JarimaDTO[];
   bonuslar: BonusDTO[];
@@ -152,7 +158,8 @@ export function XodimDetalClient({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {TABLAR.map((t) => (
+        {/* "Sotuv" tabi faqat sotuvchi kategoriyasidagi xodimda ko'rinadi. */}
+        {TABLAR.filter((t) => t !== "sotuv" || sotuvKpi).map((t) => (
           <Button
             key={t}
             size="sm"
@@ -167,6 +174,7 @@ export function XodimDetalClient({
       {tab === "umumiy" && (
         <UmumiyTab performance={performance} planTarixi={planTarixi} vazifalar={vazifalar} />
       )}
+      {tab === "sotuv" && <SotuvTab kpi={sotuvKpi} employeeId={xodim.id} oy={oy} />}
       {tab === "zakazlar" && <ZakazlarTab zakazlar={zakazlar} userIdBor={Boolean(xodim.userId)} />}
       {tab === "vazifalar" && (
         <VazifalarTab employeeId={xodim.id} ism={xodim.ism} vazifalar={vazifalar} boshqaruvchi />

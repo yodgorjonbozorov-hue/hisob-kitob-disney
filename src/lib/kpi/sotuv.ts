@@ -25,6 +25,11 @@ import { monthRangeUTC } from "@/lib/date";
  *   · Qarz TO'LOVI yozuvi — qarz TO'LIQ yopilgan bo'lsa (status "PAID")
  *     kiradi, qisman to'langan bo'lsa (OPEN/PARTIALLY_PAID) KIRMAYDI.
  *     Ya'ni qisman to'langan zakaz to'liq yopilmaguncha bonus bermaydi.
+ *   · QISMAN to'langan CRM zakazi (lib/crm/yakunlash.ts) to'langan qismini
+ *     kirim, qolganini qarzdorlik qilib yozadi. O'sha kirim yozuvi ham
+ *     zakaz TO'LIQ to'lanmaguncha bonusga KIRMAYDI: aks holda yarim
+ *     to'langan zakaz uchun bonus berilib, qolgan qismi hech qachon
+ *     kelmasligi mumkin edi. Bog'lanish `Deal.debtId` orqali topiladi.
  *   · Bekor qilingan (yumshoq o'chirilgan) yozuv — hech qachon kirmaydi;
  *     bekor qilingan qarz (CANCELLED) ham "PAID" emas, demak kirmaydi.
  *
@@ -65,7 +70,7 @@ interface XomYozuv {
   sotuvchiId: string | null;
   userId: string;
   category: { nomi: string } | null;
-  crmBuyurtma: { nomi: string } | null;
+  crmBuyurtma: { nomi: string; debt: { status: string } | null } | null;
 }
 
 /**
@@ -107,7 +112,9 @@ async function oyYozuvlari(
       sotuvchiId: true,
       userId: true,
       category: { select: { nomi: true } },
-      crmBuyurtma: { select: { nomi: true } },
+      // Zakazning qarz qoldig'i: qisman to'langan zakazning to'langan qismi
+      // ham bonusga kirmasligi kerak (yuqoridagi izoh).
+      crmBuyurtma: { select: { nomi: true, debt: { select: { status: true } } } },
     },
     orderBy: [{ sana: "desc" }, { createdAt: "desc" }],
   })) as XomYozuv[];
@@ -126,6 +133,11 @@ async function oyYozuvlari(
 
   return rows
     .filter((r) => {
+      // Qisman to'langan CRM zakazi: qarzi hali yopilmagan bo'lsa, uning
+      // to'langan qismi ham bonusga kirmaydi.
+      const zakazQarzi = r.crmBuyurtma?.debt?.status;
+      if (zakazQarzi !== undefined && zakazQarzi !== "PAID") return false;
+
       const holat = tolovHolati.get(r.id);
       // Oddiy savdo (qarz to'lovi emas) — pul kelgan, kiradi.
       if (holat === undefined) return true;

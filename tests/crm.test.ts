@@ -78,18 +78,22 @@ after(async () => {
   await rawPrisma?.$disconnect();
 });
 
-test("ensureStages: 5 ta standart bosqich yaratiladi (idempotent)", async () => {
+test("ensureStages: standart bosqichlar yaratiladi (idempotent)", async () => {
   await A(() => crm.ensureStages(tA.business.id));
   await A(() => crm.ensureStages(tA.business.id));
   const stages = await A(() =>
     prisma.stage.findMany({ where: { businessId: tA.business.id }, orderBy: { tartib: "asc" } })
   );
-  assert.equal(stages.length, 5);
+  // Bosqichlar endi ZAKAZ OQIMIga mos: kutilayotgan → jarayonda → yutildi
+  // → yo'qotildi. Doska ustunlari esa ulardan EMAS, `Deal.holat` va
+  // `Deal.sana` dan hisoblanadi (lib/crm/pipeline.ts).
+  assert.equal(stages.length, 4);
   assert.deepEqual(
     stages.map((s: any) => s.nomi),
-    ["Yangi", "Aloqa qilindi", "Taklif yuborildi", "Yutildi", "Yo'qotildi"]
+    ["Kutilayotgan zakazlar", "Jarayonda", "Yutildi", "Yo'qotildi"]
   );
   assert.equal(stages.filter((s: any) => s.turi === "WON").length, 1);
+  assert.equal(stages.filter((s: any) => s.turi === "LOST").length, 1);
 });
 
 test("createDeal: kategoriya, mijoz va sana bilan buyurtma yaratiladi", async () => {
@@ -111,7 +115,8 @@ test("createDeal: kategoriya, mijoz va sana bilan buyurtma yaratiladi", async ()
   assert.equal(deal.summa, 500_000);
   assert.equal(deal.sana.toISOString(), "2026-08-25T00:00:00.000Z");
   const stage = await rawPrisma.stage.findUnique({ where: { id: deal.stageId } });
-  assert.equal(stage.nomi, "Yangi", "birinchi OPEN bosqichga tushadi");
+  assert.equal(stage.nomi, "Kutilayotgan zakazlar", "yangi zakaz kutilayotganlarda tug'iladi");
+  assert.equal(deal.holat, "KUTILMOQDA");
   const acts = await A(() => prisma.activity.findMany({ where: { dealId: deal.id } }));
   assert.equal(acts.length, 1);
 });

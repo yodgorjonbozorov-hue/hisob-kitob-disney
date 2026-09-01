@@ -14,6 +14,8 @@ import {
   listXodimOyliklari,
 } from "@/lib/queries/xodimPlan";
 import { listXodimVazifalari } from "@/lib/services/xodimVazifa";
+import { getSotuvchilarKpi } from "@/lib/queries/sotuvchiKpi";
+import { oyOraligi } from "@/lib/xodimDavr";
 import { toshkentSana } from "@/lib/davomat/vaqt";
 import { utcDateToDateOnlyString, currentMonthString } from "@/lib/date";
 import { XodimDetalClient } from "./XodimDetalClient";
@@ -46,8 +48,19 @@ export default async function XodimDetalPage({
 
     const bugun = toshkentSana(new Date());
     const from = utcDateToDateOnlyString(new Date(Date.now() - 30 * 24 * 3600_000));
-    const [tarix, jarimalar, bonuslar, jadvallar, joylar, hammasi, planTarixi, vazifalar, oyliklar, zakazlar] =
-      await Promise.all([
+    const [
+      tarix,
+      jarimalar,
+      bonuslar,
+      jadvallar,
+      joylar,
+      hammasi,
+      planTarixi,
+      vazifalar,
+      oyliklar,
+      zakazlar,
+      sotuvchilar,
+    ] = await Promise.all([
         getDavomatTarixi(businessId, { from, to: bugun, employeeId: xodim.id }),
         listJarimalar(businessId, { employeeId: xodim.id, from }),
         listBonuslar(businessId, { employeeId: xodim.id, from }),
@@ -58,9 +71,13 @@ export default async function XodimDetalPage({
         listXodimVazifalari(businessId, xodim.id, oy),
         listXodimOyliklari(businessId, xodim.id),
         xodim.userId ? getXodimZakazlari(businessId, xodim.userId, oy) : Promise.resolve([]),
+        // CRM sotuvchi KPI'si (24-talab) — bitta o'qish, xodim boshiga emas.
+        getSotuvchilarKpi({ businessId, ...oyOraligi(oy) }),
       ]);
 
     const performance = hammasi.xodimlar.find((x) => x.id === xodim.id) ?? null;
+    // Sotuvchi bo'lmasa null — "Sotuv" tabi umuman ko'rsatilmaydi.
+    const sotuvKpi = sotuvchilar.sotuvchilar.find((s) => s.employeeId === xodim.id) ?? null;
 
     return (
       <XodimDetalClient
@@ -85,6 +102,7 @@ export default async function XodimDetalPage({
         vazifalar={vazifalar}
         oyliklar={oyliklar}
         zakazlar={zakazlar}
+        sotuvKpi={sotuvKpi}
         tarix={tarix}
         jarimalar={jarimalar}
         bonuslar={bonuslar}

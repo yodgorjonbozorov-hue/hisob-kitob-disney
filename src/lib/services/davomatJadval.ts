@@ -231,7 +231,7 @@ export async function updateXodimSiyosati(
 
 export async function getHrSozlama(businessId: string) {
   const mavjud = await prisma.hrSetting.findFirst({ where: { businessId } });
-  return mavjud ?? { businessId, xodimOylikKoradi: false };
+  return mavjud ?? { businessId, xodimOylikKoradi: false, crmSotuvchiMajburiy: false };
 }
 
 export async function updateHrSozlama(businessId: string, data: HrSettingInput) {
@@ -239,10 +239,19 @@ export async function updateHrSozlama(businessId: string, data: HrSettingInput) 
   if (mavjud) {
     return prisma.hrSetting.update({
       where: { id: mavjud.id },
-      data: { ...(data.xodimOylikKoradi !== undefined ? { xodimOylikKoradi: data.xodimOylikKoradi } : {}) },
+      data: {
+        ...(data.xodimOylikKoradi !== undefined ? { xodimOylikKoradi: data.xodimOylikKoradi } : {}),
+        ...(data.crmSotuvchiMajburiy !== undefined
+          ? { crmSotuvchiMajburiy: data.crmSotuvchiMajburiy }
+          : {}),
+      },
     });
   }
   return prisma.hrSetting.create({
-    data: { businessId, xodimOylikKoradi: data.xodimOylikKoradi ?? false },
+    data: {
+      businessId,
+      xodimOylikKoradi: data.xodimOylikKoradi ?? false,
+      crmSotuvchiMajburiy: data.crmSotuvchiMajburiy ?? false,
+    },
   });
 }
