@@ -3,13 +3,21 @@
 import { useState } from "react";
 import { Select } from "@/components/ui/Select";
 import { parseSomInput } from "@/lib/format";
+import { TolovMaydonlari, tolanganHisobla, type PulKanali, type TolovTanlov } from "./TolovMaydonlari";
 import type { BuyurtmaDTO, KategoriyaDTO } from "./turlar";
+
+/** Saqlangan `tolangan`/`summa` dan forma tanlovini tiklaydi. */
+function boshlangichTanlov(b: BuyurtmaDTO): TolovTanlov {
+  if (b.summa > 0 && b.tolangan >= b.summa) return "toliq";
+  if (b.tolangan > 0) return "qisman";
+  return "qarz";
+}
 
 const INPUT =
   "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand";
 
 /**
- * BUYURTMA KATEGORIYASI VA NARXINI TUZATISH.
+ * ZAKAZ KATEGORIYASI, NARXI VA TO'LOVINI TUZATISH.
  *
  * Nima uchun kerak: CRM'gacha (kategoriya maydoni qo'shilgunga qadar)
  * yaratilgan buyurtmalarda `categoryId` NULL. Ular kirimga o'tkazilsa
@@ -17,9 +25,10 @@ const INPUT =
  * boshqa nom ko'rinadi. Bu yerda sotuvchi buyurtmani KIRIMGA
  * O'TKAZISHDAN OLDIN to'g'ri kategoriyani tanlab qo'yadi.
  *
- * Kirim yozilgandan keyin bu blok umuman ko'rsatilmaydi — server ham
- * (api/crm/deals/[id]) o'sha paytdan boshlab summa va kategoriyani
- * qulflaydi, aks holda CRM bir raqamni, Kirim boshqasini ko'rsatardi.
+ * Kirim yoki qarz yozilgandan keyin bu blok umuman ko'rsatilmaydi — server
+ * ham (api/crm/deals/[id]) o'sha paytdan boshlab summa, kategoriya va
+ * to'lovni qulflaydi, aks holda CRM bir raqamni, Kirim/Qarzdorlik
+ * boshqasini ko'rsatardi.
  */
 export function BuyurtmaTahrir({
   b,
@@ -28,19 +37,34 @@ export function BuyurtmaTahrir({
 }: {
   b: BuyurtmaDTO;
   kategoriyalar: KategoriyaDTO[];
-  onSaqlandi: (yangi: { categoryId: string; kategoriya: string; summa: number }) => void;
+  onSaqlandi: (yangi: {
+    categoryId: string;
+    kategoriya: string;
+    summa: number;
+    tolangan: number;
+    tolovTuri: string;
+  }) => void;
 }) {
   const [categoryId, setCategoryId] = useState(b.categoryId ?? "");
   const [summa, setSumma] = useState(b.summa > 0 ? String(b.summa) : "");
+  const [tolovTanlov, setTolovTanlov] = useState<TolovTanlov>(() => boshlangichTanlov(b));
+  const [qisman, setQisman] = useState(b.tolangan > 0 ? String(b.tolangan) : "");
+  const [kanal, setKanal] = useState<PulKanali>(b.tolovTuri === "click" ? "click" : "naqd");
   const [loading, setLoading] = useState(false);
   const [xato, setXato] = useState<string | null>(null);
 
   const yangiSumma = summa ? parseSomInput(summa) : 0;
-  const ozgardi = categoryId !== (b.categoryId ?? "") || yangiSumma !== b.summa;
+  const yangiTolangan = tolanganHisobla(tolovTanlov, yangiSumma, qisman ? parseSomInput(qisman) : 0);
+  const ozgardi =
+    categoryId !== (b.categoryId ?? "") || yangiSumma !== b.summa || yangiTolangan !== b.tolangan;
 
   async function saqlash() {
     if (!categoryId) {
       setXato("Kategoriya tanlansin");
+      return;
+    }
+    if (yangiTolangan > yangiSumma) {
+      setXato("To'langan summa zakaz narxidan ko'p bo'lmasligi kerak");
       return;
     }
     setLoading(true);
@@ -48,7 +72,12 @@ export function BuyurtmaTahrir({
     const res = await fetch(`/api/crm/deals/${b.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ categoryId, summa: yangiSumma }),
+      body: JSON.stringify({
+        categoryId,
+        summa: yangiSumma,
+        tolangan: yangiTolangan,
+        tolovTuri: tolovTanlov === "qarz" ? "qarz" : kanal,
+      }),
     });
     setLoading(false);
     if (!res.ok) {
@@ -59,12 +88,14 @@ export function BuyurtmaTahrir({
       categoryId,
       kategoriya: kategoriyalar.find((k) => k.id === categoryId)?.nomi ?? "",
       summa: yangiSumma,
+      tolangan: yangiTolangan,
+      tolovTuri: tolovTanlov === "qarz" ? "qarz" : kanal,
     });
   }
 
   return (
     <div className="rounded-xl border border-line bg-surface-2/30 p-3 space-y-2">
-      <p className="text-2xs uppercase tracking-wide text-faint">Kategoriya va narx</p>
+      <p className="text-2xs uppercase tracking-wide text-faint">Kategoriya, narx va to&apos;lov</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div className="space-y-1">
           <label className="block text-xs text-muted" htmlFor="bt-kategoriya">Kirim kategoriyasi</label>
@@ -90,6 +121,17 @@ export function BuyurtmaTahrir({
           />
         </label>
       </div>
+      <TolovMaydonlari
+        tanlov={tolovTanlov}
+        onTanlov={setTolovTanlov}
+        qisman={qisman}
+        onQisman={setQisman}
+        kanal={kanal}
+        onKanal={setKanal}
+        narx={yangiSumma}
+        tolangan={yangiTolangan}
+      />
+
       {xato && <p className="text-expense text-sm">{xato}</p>}
       <button
         onClick={saqlash}

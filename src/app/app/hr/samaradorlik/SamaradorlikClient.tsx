@@ -1,23 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { formatSom } from "@/lib/format";
-import type {
-  KategoriyaAnalitikaDTO,
-  KategoriyaTabDTO,
-  KategoriyaXodimStatDTO,
-} from "@/lib/queries/kategoriyaAnalitika";
-import { XodimAvatar } from "../XodimAvatar";
-import { PlanProgress } from "../PlanProgress";
+import type { KategoriyaAnalitikaDTO, KategoriyaTabDTO } from "@/lib/queries/kategoriyaAnalitika";
 import { DavrFiltri, BOSH_DAVR, type Davr } from "@/app/app/tranzaksiyalar/xodimlar/DavrFiltri";
-
-/** Reyting medallari — dastlabki uch o'rin. */
-const MEDALLAR = ["🥇", "🥈", "🥉"];
+import { XodimQator } from "./XodimQator";
 
 /**
  * SAMARADORLIK (klient): davr filtri + kategoriya tablari + KPI + reyting.
@@ -88,10 +78,16 @@ export function SamaradorlikClient({
       ) : (
         <>
           {/* KPI — kategoriya turiga mos to'plam */}
-          <div className={`grid grid-cols-2 gap-3 ${sotuvchimi ? "lg:grid-cols-5 sm:grid-cols-3" : "sm:grid-cols-4"}`}>
+          <div className={`grid grid-cols-2 gap-3 ${sotuvchimi ? "lg:grid-cols-6 sm:grid-cols-3" : "sm:grid-cols-4"}`}>
             {sotuvchimi ? (
               <>
                 <Kpi label="Jami sotuv" qiymat={`${formatSom(data.kpi.jamiSotuv)} so'm`} loading={loading} />
+                {/* Bonus hisobi shu raqamga tayanadi: qarzga ketgan sotuv kirmaydi. */}
+                <Kpi
+                  label="Bonusga tushgan sotuv"
+                  qiymat={`${formatSom(data.kpi.tolanganSotuv)} so'm`}
+                  loading={loading}
+                />
                 <Kpi label="Jami zakaz" qiymat={`${data.kpi.jamiZakaz} ta`} loading={loading} />
                 <Kpi label="Yutilgan zakaz" qiymat={`${data.kpi.yutilganZakaz} ta`} loading={loading} />
                 <Kpi label="Konversiya" qiymat={`${data.kpi.konversiya}%`} loading={loading} />
@@ -126,58 +122,6 @@ export function SamaradorlikClient({
         </>
       )}
     </div>
-  );
-}
-
-function XodimQator({
-  x,
-  sotuvchimi,
-  havolaQuery,
-}: {
-  x: KategoriyaXodimStatDTO;
-  sotuvchimi: boolean;
-  havolaQuery: string;
-}) {
-  return (
-    <li>
-      <Link
-        href={`/app/hr/samaradorlik/${x.employeeId}${havolaQuery}`}
-        className="flex items-center gap-3 px-4 py-3 min-h-[64px] hover:bg-surface-2 transition"
-      >
-        <span className="w-7 text-center text-sm shrink-0" aria-label={`${x.orin}-o'rin`}>
-          {MEDALLAR[x.orin - 1] ?? <span className="text-faint tnum">{x.orin}</span>}
-        </span>
-        <XodimAvatar ism={x.ism} rasmUrl={x.rasmUrl} size="sm" />
-        <span className="flex-1 min-w-0">
-          <span className="block font-medium text-fg truncate">
-            {x.ism}
-            {!x.isActive && <span className="text-2xs text-faint"> · nofaol</span>}
-            {!x.azo && <span className="text-2xs text-faint"> · a&apos;zolikdan chiqqan</span>}
-          </span>
-          <span className="block text-xs text-muted">
-            {x.jami} ta zakaz · {x.yutilgan} {sotuvchimi ? "yutilgan" : "bajarilgan"}
-            {x.yutqazilgan > 0 ? ` · ${x.yutqazilgan} yutqazilgan` : ""}
-          </span>
-          {x.plan && (
-            <span className="block mt-1 max-w-xs">
-              <PlanProgress plan={x.plan} compact />
-            </span>
-          )}
-        </span>
-        {sotuvchimi ? (
-          <span className="text-right shrink-0">
-            <span className="block font-display tnum font-semibold text-fg">{formatSom(x.summa)}</span>
-            <span className="block text-xs text-muted">so&apos;m sotuv</span>
-          </span>
-        ) : (
-          <span className="text-right shrink-0">
-            <span className="block font-display tnum font-semibold text-fg">{x.yutilgan}</span>
-            <span className="block text-xs text-muted">bajarilgan</span>
-          </span>
-        )}
-        <ChevronRight className="w-4 h-4 text-faint shrink-0" aria-hidden="true" />
-      </Link>
-    </li>
   );
 }
 
