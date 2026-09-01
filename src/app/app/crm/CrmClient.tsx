@@ -7,7 +7,15 @@ import { BuyurtmaKarta } from "./BuyurtmaKarta";
 import { BuyurtmaModal } from "./BuyurtmaModal";
 import { BuyurtmaSheet } from "./BuyurtmaSheet";
 import { KirimTasdiq } from "./KirimTasdiq";
-import type { BuyurtmaDTO, KategoriyaDTO, StageDTO, XodimDTO, XodimKategoriyaDTO } from "./turlar";
+import { Select } from "@/components/ui/Select";
+import type {
+  BuyurtmaDTO,
+  KategoriyaDTO,
+  SotuvchiDTO,
+  StageDTO,
+  XodimDTO,
+  XodimKategoriyaDTO,
+} from "./turlar";
 
 const STAGE_RANG: Record<string, string> = {
   OPEN: "border-line",
@@ -25,6 +33,10 @@ export function CrmClient({
   kategoriyalar,
   xodimlar,
   xodimKategoriyalari,
+  sotuvchilar,
+  ozimSotuvchi,
+  sotuvchiMajburiy,
+  sotuvchiOzgartira,
   meId,
   bugun,
 }: {
@@ -32,8 +44,14 @@ export function CrmClient({
   buyurtmalar: BuyurtmaDTO[];
   kategoriyalar: KategoriyaDTO[];
   xodimlar: XodimDTO[];
-  /** Xodim kategoriyalari (Sotuvchi/Diktor/...) — zakaz-xodim biriktiruvi uchun. */
+  /** Xodim kategoriyalari (Diktor/Dekorator/...) — bajaruvchi biriktiruvi uchun. */
   xodimKategoriyalari: XodimKategoriyaDTO[];
+  /** Sotuvchilar — forma selektori va doska filtri uchun. */
+  sotuvchilar: SotuvchiDTO[];
+  /** Joriy foydalanuvchining sotuvchi profili (avto-tanlash). */
+  ozimSotuvchi: string | null;
+  sotuvchiMajburiy: boolean;
+  sotuvchiOzgartira: boolean;
   meId: string;
   bugun: string;
 }) {
@@ -51,6 +69,13 @@ export function CrmClient({
   const [kirimTasdiq, setKirimTasdiq] = useState<BuyurtmaDTO | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [xato, setXato] = useState<string | null>(null);
+  // SOTUVCHI FILTRI (25-talab). Doska bir marta yuklangani uchun saralash
+  // shu yerda — qo'shimcha so'rov yubormaydi; server ham `?sotuvchiId=`
+  // orqali ayni filtrni qo'llay oladi (API foydalanuvchilari uchun).
+  const [filtrSotuvchi, setFiltrSotuvchi] = useState("");
+  const korinadigan = filtrSotuvchi
+    ? buyurtmalar.filter((b) => b.sotuvchi?.employeeId === filtrSotuvchi)
+    : buyurtmalar;
 
   /**
    * Holatni o'zgartirish. "Yutildi" ga o'tkazishda kirim AVTOMATIK
@@ -88,13 +113,27 @@ export function CrmClient({
         >
           + Yangi buyurtma
         </button>
+        {sotuvchilar.length > 0 && (
+          <div className="w-full sm:w-56">
+            <Select
+              value={filtrSotuvchi}
+              onChange={setFiltrSotuvchi}
+              searchable={sotuvchilar.length > 7}
+              aria-label="Sotuvchi bo'yicha filtr"
+              options={[
+                { value: "", label: "Sotuvchi: barchasi" },
+                ...sotuvchilar.map((s) => ({ value: s.id, label: s.ism })),
+              ]}
+            />
+          </div>
+        )}
         {xato && <p className="text-expense text-sm">{xato}</p>}
       </div>
 
       {/* Kanban — mobil/planshetda gorizontal siljiydi */}
       <div className="flex gap-3 overflow-x-auto pb-3 -mx-1 px-1">
         {stages.map((s) => {
-          const ustun = buyurtmalar.filter((b) => b.stageId === s.id);
+          const ustun = korinadigan.filter((b) => b.stageId === s.id);
           const jami = ustun.reduce((a, b) => a + b.summa, 0);
           return (
             <div
@@ -134,6 +173,10 @@ export function CrmClient({
           stages={stages}
           xodimlar={xodimlar}
           xodimKategoriyalari={xodimKategoriyalari}
+          sotuvchilar={sotuvchilar}
+          ozimSotuvchi={ozimSotuvchi}
+          sotuvchiMajburiy={sotuvchiMajburiy}
+          sotuvchiOzgartira={sotuvchiOzgartira}
           meId={meId}
           bugun={bugun}
           onClose={() => setYangiOchiq(false)}
@@ -145,6 +188,8 @@ export function CrmClient({
           stages={stages}
           kategoriyalar={kategoriyalar}
           xodimKategoriyalari={xodimKategoriyalari}
+          sotuvchilar={sotuvchilar}
+          sotuvchiOzgartira={sotuvchiOzgartira}
           onKochirish={(s) => kochirish(tanlangan.id, s)}
           onTahrirlandi={(yangi) => {
             // Ochiq oyna serverdan kelgan snapshot ustida ishlaydi — yangi

@@ -53,6 +53,14 @@ export function BuyurtmaKarta({
         )}
       </div>
 
+      {/* SOTUVCHI (9-talab): bir qatorlik, ko'p joy egallamaydi. */}
+      {b.sotuvchi && (
+        <p className="text-2xs text-muted truncate">
+          <span className="text-faint">Sotuvchi:</span>{" "}
+          <span className="font-medium text-fg">{b.sotuvchi.ism}</span>
+        </p>
+      )}
+
       <div className="flex items-center gap-1.5 flex-wrap pt-1">
         <Badge tone={kirimBor ? "kirim" : "warning"}>
           {kirimBor ? "🟢 Kirim yozilgan" : "🟠 Kirim kutilmoqda"}

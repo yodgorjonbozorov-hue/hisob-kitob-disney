@@ -59,6 +59,7 @@ export default async function HrSozlamalarPage() {
             isActive: q.isActive,
           }))}
           xodimOylikKoradi={sozlama.xodimOylikKoradi}
+          crmSotuvchiMajburiy={sozlama.crmSotuvchiMajburiy}
         />
       </div>
     );

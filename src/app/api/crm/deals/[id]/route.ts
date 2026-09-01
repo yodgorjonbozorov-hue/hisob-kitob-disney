@@ -12,6 +12,8 @@ import {
   zakazXodimlari,
   zakazXodimlariniSaqlash,
 } from "@/lib/services/xodimKategoriya";
+import { sotuvchiniOzgartirish, zakazSotuvchisi } from "@/lib/services/zakazSotuvchi";
+import { requirePermission } from "@/lib/permissions/tekshir";
 import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
 import type { Prisma } from "@prisma/client";
 
@@ -31,8 +33,12 @@ export const GET = withTenant<{ params: { id: string } }>(
     });
     if (!deal) return NextResponse.json({ error: "Buyurtma topilmadi" }, { status: 404 });
     // Zakazdagi xodimlar (kategoriya kesimida) — tafsilot oynasi ko'rsatadi.
-    const xodimlar = await zakazXodimlari(businessId ?? "-", deal.id);
-    return NextResponse.json({ ...deal, xodimlar });
+    // `sotuvchi` alohida qaytadi: u ijrochilardan boshqa tushuncha (38-talab).
+    const [xodimlar, sotuvchi] = await Promise.all([
+      zakazXodimlari(businessId ?? "-", deal.id),
+      zakazSotuvchisi(businessId ?? "-", deal.id),
+    ]);
+    return NextResponse.json({ ...deal, xodimlar, sotuvchi });
   },
   { module: "CRM" }
 );
@@ -98,6 +104,19 @@ export const PATCH = withTenant<{ params: { id: string } }>(
         patch.category = data.categoryId ? { connect: { id: data.categoryId } } : { disconnect: true };
       }
       await prisma.deal.update({ where: { id: params.id }, data: patch });
+    }
+
+    // SOTUVCHINI ALMASHTIRISH (10/27-talab) — faqat `crm.sotuvchi` huquqi
+    // bilan. Oddiy sotuvchi zakazni boshqa sotuvchiga o'tkaza olmaydi.
+    // Amal atomik va audit jurnaliga yoziladi (xizmat qatlami).
+    if (data.sotuvchiId !== undefined) {
+      await requirePermission(user.userId, "crm.sotuvchi");
+      await sotuvchiniOzgartirish({
+        businessId,
+        dealId: params.id,
+        employeeId: data.sotuvchiId,
+        userId: user.userId,
+      });
     }
 
     // Zakaz xodimlarini almashtirish — kirim yozilgan buyurtmada xizmat

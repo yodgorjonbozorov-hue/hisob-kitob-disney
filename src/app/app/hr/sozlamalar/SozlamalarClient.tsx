@@ -14,10 +14,13 @@ export function SozlamalarClient({
   joylar,
   qoidalar,
   xodimOylikKoradi,
+  crmSotuvchiMajburiy,
 }: {
   joylar: IshJoyiDTO[];
   qoidalar: QoidaDTO[];
   xodimOylikKoradi: boolean;
+  /** CRM: yangi zakazda sotuvchi majburiymi (6-talab). */
+  crmSotuvchiMajburiy: boolean;
 }) {
   const router = useRouter();
   const [joyModal, setJoyModal] = useState<IshJoyiDTO | "yangi" | null>(null);
@@ -185,6 +188,27 @@ export function SozlamalarClient({
             defaultChecked={xodimOylikKoradi}
             onChange={(e) =>
               void sorov("/api/hr/sozlamalar", "PATCH", { xodimOylikKoradi: e.target.checked })
+            }
+          />
+        </label>
+      </Card>
+
+      <Card>
+        <p className="font-bold text-fg mb-2">CRM sotuvchisi</p>
+        <label className="flex items-center justify-between gap-3 text-sm text-fg min-h-[44px] cursor-pointer">
+          <span>
+            Sotuvchi majburiy
+            <span className="block text-2xs text-muted">
+              Yoqilsa yangi zakaz sotuvchi tanlanmasdan saqlanmaydi. Sotuvchilar ro&apos;yxati
+              &quot;Sotuvchi&quot; turidagi kategoriya a&apos;zolaridan olinadi.
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            className="w-5 h-5"
+            defaultChecked={crmSotuvchiMajburiy}
+            onChange={(e) =>
+              void sorov("/api/hr/sozlamalar", "PATCH", { crmSotuvchiMajburiy: e.target.checked })
             }
           />
         </label>

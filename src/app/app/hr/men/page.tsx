@@ -6,6 +6,8 @@ import { getMenHolati } from "@/lib/queries/davomat";
 import { getMenPerformance } from "@/lib/queries/xodimPlan";
 import { listXodimVazifalari } from "@/lib/services/xodimVazifa";
 import { currentMonthString } from "@/lib/date";
+import { avtoSotuvchi } from "@/lib/services/zakazSotuvchi";
+import { LinkButton } from "@/components/ui/LinkButton";
 import { MenClient } from "./MenClient";
 import { MenNatijalarim } from "./MenNatijalarim";
 
@@ -27,9 +29,12 @@ export default async function MenPage() {
     }
 
     const oy = currentMonthString();
-    const [holat, performance] = await Promise.all([
+    const [holat, performance, ozSotuvchi] = await Promise.all([
       getMenHolati(businessId, session.userId),
       getMenPerformance(businessId, session.userId, oy),
+      // Sotuvchi bo'lsa O'Z sotuv statistikasiga havola (28-talab) —
+      // boshqalarning natijasi bu yerdan ko'rinmaydi.
+      avtoSotuvchi(businessId, session.userId),
     ]);
     // Vazifalar faqat xodim kartochkasi topilganda o'qiladi (o'z vazifalari).
     const vazifalar = performance
@@ -39,6 +44,11 @@ export default async function MenPage() {
     return (
       <div className="space-y-6">
         <MenClient boshlangich={holat} ism={session.ism} />
+        {ozSotuvchi && (
+          <LinkButton href={`/app/hr/sotuvchilar/${ozSotuvchi.id}`} variant="secondary" size="sm">
+            Sotuv statistikam
+          </LinkButton>
+        )}
         {performance && (
           <MenNatijalarim oy={oy} performance={performance} vazifalar={vazifalar} />
         )}

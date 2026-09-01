@@ -8,6 +8,14 @@ import {
   zakazXodimlariniSaqlash,
   zakazXodimlariniTekshir,
 } from "@/lib/services/xodimKategoriya";
+import {
+  avtoSotuvchi,
+  sotuvchiKategoriyaIdlari,
+  sotuvchiMajburiymi,
+  sotuvchiTekshir,
+  zakazSotuvchilari,
+  SOTUVCHI_TURI,
+} from "@/lib/services/zakazSotuvchi";
 import type { ZakazXodimInput } from "@/lib/validation/xodimKategoriya";
 
 /**
@@ -39,15 +47,27 @@ export async function ensureStages(businessId: string) {
 }
 
 /**
- * Kanban ma'lumoti: bosqichlar + buyurtmalar (kontakt, kategoriya va
- * bog'langan kirim bilan).
+ * Kanban ma'lumoti: bosqichlar + buyurtmalar (kontakt, kategoriya, sotuvchi
+ * va bog'langan kirim bilan).
+ *
+ * `sotuvchiId` berilsa (25-talab, CRM sotuvchi filtri) saralash BAZADA
+ * bo'ladi — `DealEmployee(businessId, employeeId)` indeksi bo'yicha, ya'ni
+ * 500 ta zakazni olib kelib brauzerda saralash emas.
+ *
+ * Sotuvchi nomlari BITTA qo'shimcha so'rovda o'qiladi (N+1 yo'q).
  */
-export async function getBoard(businessId: string) {
+export async function getBoard(businessId: string, sotuvchiId?: string | null) {
   await ensureStages(businessId);
   const [stages, deals] = await Promise.all([
     prisma.stage.findMany({ where: { businessId }, orderBy: { tartib: "asc" } }),
     prisma.deal.findMany({
-      where: { businessId, deletedAt: null },
+      where: {
+        businessId,
+        deletedAt: null,
+        ...(sotuvchiId
+          ? { xodimlar: { some: { businessId, employeeId: sotuvchiId, category: { turi: SOTUVCHI_TURI } } } }
+          : {}),
+      },
       include: {
         contact: { select: { id: true, ism: true, tel: true } },
         category: { select: { id: true, nomi: true } },
@@ -56,7 +76,8 @@ export async function getBoard(businessId: string) {
       take: 500, // sog'lom chegara; arxiv keyingi bosqichda
     }),
   ]);
-  return { stages, deals };
+  const sotuvchilar = await zakazSotuvchilari(businessId, deals.map((d) => d.id));
+  return { stages, deals, sotuvchilar };
 }
 
 export interface YangiBuyurtma {
@@ -80,6 +101,18 @@ export interface YangiBuyurtma {
   stageId?: string | null;
   /** Zakazdagi xodimlar (kategoriya kesimida). Berilmasa — biriktiruvsiz. */
   xodimlar?: ZakazXodimInput[];
+  /**
+   * ZAKAZNI OLGAN SOTUVCHI (Employee.id). Berilmasa — foydalanuvchining
+   * o'z sotuvchi profili (avto-tanlash).
+   */
+  sotuvchiId?: string | null;
+  /**
+   * `crm.sotuvchi` huquqi bor-yo'qligi — HTTP route HAR DOIM ochiq uzatadi.
+   * `false` bo'lsa foydalanuvchi zakazni faqat O'Z nomiga yoza oladi
+   * (5/27-talab). `undefined` — sessiyasiz ichki chaqiruv (test, skript,
+   * bot): u yerda foydalanuvchi tanlovi emas, server mantig'i ishlaydi.
+   */
+  sotuvchiTanlashHuquqi?: boolean;
   userId: string;
 }
 
@@ -142,6 +175,55 @@ async function kontaktTop(params: YangiBuyurtma): Promise<string | null> {
 }
 
 /**
+ * ZAKAZ SOTUVCHISINI ANIQLASH (4/5/6/27-talab) va uni biriktiruvlar
+ * ro'yxatiga qo'shish.
+ *
+ * TANLASH TARTIBI:
+ *  1. `sotuvchiId` — yangi, birinchi darajali maydon (forma shuni yuboradi);
+ *  2. `xodimlar` ro'yxatidagi SOTUVCHI turidagi kategoriya qatori — ESKI
+ *     yo'l, buzilmasin (bot/eski integratsiyalar shu ko'rinishda yuboradi);
+ *  3. AVTO-TANLASH: foydalanuvchining o'z sotuvchi profili (4-talab).
+ * Hech biri bo'lmasa va biznes sozlamasi majburiy qilsa — aniq xato.
+ *
+ * Har holatda server xodimni to'liq tekshiradi (biznes, faollik, sotuvchi
+ * kategoriyasi a'zoligi) — mijoz yuborgan qiymatga ISHONILMAYDI.
+ */
+async function sotuvchiniQosh(params: YangiBuyurtma): Promise<ZakazXodimInput[]> {
+  const boshqalar = params.xodimlar ?? [];
+  const sotuvKategoriyalar = new Set(await sotuvchiKategoriyaIdlari(params.businessId));
+  // Sotuvchi endi ALOHIDA maydonda — ro'yxatdagi sotuvchi qatorlari shu
+  // yerda ajratib olinadi va oxirida bittasi qaytariladi (ikkita sotuvchi
+  // biriktirilib qolmasin).
+  const ijrochilar = boshqalar.filter((x) => !sotuvKategoriyalar.has(x.categoryId));
+  const royxatdagi = boshqalar.find((x) => sotuvKategoriyalar.has(x.categoryId));
+
+  const ozi = await avtoSotuvchi(params.businessId, params.userId);
+  const soralgan = params.sotuvchiId ?? royxatdagi?.employeeId ?? null;
+
+  let tanlangan: { id: string; categoryId: string } | null = null;
+  if (soralgan) {
+    // HUQUQ: `false` — huquq TEKSHIRILDI va yo'q (route shuni uzatadi);
+    // `undefined` — sessiyasiz ichki chaqiruv (test/skript), cheklanmaydi.
+    if (params.sotuvchiTanlashHuquqi === false && soralgan !== ozi?.id) {
+      throw new ForbiddenError("Boshqa sotuvchini tanlash uchun sizda huquq yo'q");
+    }
+    const s = await sotuvchiTekshir(params.businessId, soralgan);
+    tanlangan = { id: s.id, categoryId: s.categoryId };
+  } else if (ozi) {
+    const s = await sotuvchiTekshir(params.businessId, ozi.id);
+    tanlangan = { id: s.id, categoryId: s.categoryId };
+  }
+
+  if (!tanlangan && (await sotuvchiMajburiymi(params.businessId))) {
+    throw new BadRequestError("Buyurtmani olgan sotuvchini tanlang");
+  }
+
+  return tanlangan
+    ? [...ijrochilar, { categoryId: tanlangan.categoryId, employeeId: tanlangan.id }]
+    : ijrochilar;
+}
+
+/**
  * Yangi buyurtma: kerak bo'lsa mijoz ham yaratiladi.
  * Holat berilmasa birinchi OPEN bosqichga tushadi.
  */
@@ -157,6 +239,11 @@ export async function createDeal(params: YangiBuyurtma) {
   if (!stage) throw new BadRequestError("Bosqichlar topilmadi");
 
   const categoryId = params.categoryId ? await kirimKategoriyasi(params.businessId, params.categoryId) : null;
+
+  // SOTUVCHI — mijoz yaratilishidan OLDIN hal qilinadi: xato bo'lsa yon
+  // ta'sir (yangi kontakt) qolib ketmasin.
+  const xodimlar = await sotuvchiniQosh(params);
+
   const contactId = await kontaktTop(params);
 
   // Mas'ul xodim shu BIZNESning faol foydalanuvchisi bo'lishi shart.
@@ -168,10 +255,10 @@ export async function createDeal(params: YangiBuyurtma) {
   // tayinlangan, tizim hisobi bog'langan xodim — zakaz o'shaniki. Shunda
   // CRM→Kirim `sotuvchiId` (mavjud xodim statistikasi) ham ayni sotuvchiga
   // yoziladi — ikki hisob bitta haqiqat manbaida qoladi.
-  if (params.xodimlar?.length) {
+  if (xodimlar.length) {
     // Tekshiruv YARATISHDAN OLDIN — xato ro'yxat bilan buyurtma umuman ochilmasin.
-    await zakazXodimlariniTekshir(params.businessId, params.xodimlar);
-    const sotuvchiUserId = await sotuvchiUserIdTop(params.businessId, params.xodimlar);
+    await zakazXodimlariniTekshir(params.businessId, xodimlar);
+    const sotuvchiUserId = await sotuvchiUserIdTop(params.businessId, xodimlar);
     if (sotuvchiUserId) {
       const sotuvchi = await prisma.user.findFirst({
         where: { id: sotuvchiUserId, isActive: true, ...biznesXodimlariWhere(params.businessId) },
@@ -202,8 +289,8 @@ export async function createDeal(params: YangiBuyurtma) {
   });
 
   // Zakaz xodimlari — kategoriya/a'zolik tekshiruvi bilan (xizmat qatlami).
-  if (params.xodimlar?.length) {
-    await zakazXodimlariniSaqlash(params.businessId, deal.id, params.xodimlar);
+  if (xodimlar.length) {
+    await zakazXodimlariniSaqlash(params.businessId, deal.id, xodimlar);
   }
 
   await prisma.activity.create({

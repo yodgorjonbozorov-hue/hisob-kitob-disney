@@ -1783,6 +1783,12 @@ model HrSetting {
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   /// Xodim o'z oyligini (vedomost) ko'ra oladimi.
   xodimOylikKoradi Boolean @default(false)
+  /// CRM: yangi zakazda SOTUVCHI majburiymi (Disney Navoiy uchun yoqiladi).
+  /// Biznesga sozlanadi — boshqa Balansa bizneslarida xulq o'zgarmasin:
+  /// default `false` (mavjud bizneslarda hech narsa qattiqlashmaydi).
+  /// Faqat biznesda FAOL "sotuvchi" turidagi kategoriya bo'lsa kuchga kiradi,
+  /// aks holda zakaz umuman yaratib bo'lmasdi.
+  crmSotuvchiMajburiy Boolean @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }

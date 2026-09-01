@@ -4,20 +4,22 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Select } from "@/components/ui/Select";
 import { parseSomInput } from "@/lib/format";
-import type { KategoriyaDTO, StageDTO, XodimDTO, XodimKategoriyaDTO } from "./turlar";
+import type { KategoriyaDTO, SotuvchiDTO, StageDTO, XodimDTO, XodimKategoriyaDTO } from "./turlar";
+import { SotuvchiTanlash } from "./SotuvchiTanlash";
+import { BuyurtmaMijozMaydonlari } from "./BuyurtmaMijozMaydonlari";
+import { INPUT_KLASS } from "./formaUslub";
 import {
   ZakazXodimlariTanlash,
-  boshlangichTanlov,
+  ijroKategoriyalari,
   tanlovdanRoyxat,
   type ZakazXodimTanlov,
 } from "./ZakazXodimlari";
 
-const INPUT =
-  "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand";
+const INPUT = INPUT_KLASS;
 
 /**
- * Yangi buyurtma (2-talab): kategoriya, xizmat nomi, mijoz, telefon, narx,
- * sana, izoh, mas'ul xodim, holat.
+ * Yangi buyurtma (1/2-talab): kategoriya, xizmat nomi, SOTUVCHI, mijoz,
+ * telefon, narx, sana, izoh, holat.
  *
  * Kategoriya ro'yxati KIRIM modulining kategoriyalari — CRM o'zining
  * alohida ro'yxatini yuritmaydi.
@@ -27,6 +29,10 @@ export function BuyurtmaModal({
   stages,
   xodimlar,
   xodimKategoriyalari,
+  sotuvchilar,
+  ozimSotuvchi,
+  sotuvchiMajburiy,
+  sotuvchiOzgartira,
   meId,
   bugun,
   onClose,
@@ -34,8 +40,16 @@ export function BuyurtmaModal({
   kategoriyalar: KategoriyaDTO[];
   stages: StageDTO[];
   xodimlar: XodimDTO[];
-  /** Xodim kategoriyalari (Sotuvchi/Diktor/...) — "Zakazdagi xodimlar" bo'limi. */
+  /** Xodim kategoriyalari (Diktor/Dekorator/...) — "Zakazni bajaruvchilar". */
   xodimKategoriyalari: XodimKategoriyaDTO[];
+  /** Sotuvchilar (faol, sotuvchi kategoriyasi a'zolari). */
+  sotuvchilar: SotuvchiDTO[];
+  /** Joriy foydalanuvchining sotuvchi profili (avto-tanlash, 4-talab). */
+  ozimSotuvchi: string | null;
+  /** Biznes sozlamasi: sotuvchi majburiymi (6-talab). */
+  sotuvchiMajburiy: boolean;
+  /** Boshqa sotuvchini tanlash huquqi (5/27-talab). */
+  sotuvchiOzgartira: boolean;
   meId: string;
   /** Bugungi sana "YYYY-MM-DD" (server tomondan — brauzer vaqt mintaqasi emas). */
   bugun: string;
@@ -51,24 +65,27 @@ export function BuyurtmaModal({
   const [izoh, setIzoh] = useState("");
   const [masulId, setMasulId] = useState(meId);
   const [stageId, setStageId] = useState(stages.find((s) => s.turi === "OPEN")?.id ?? "");
-  // Sotuvchi turidagi kategoriyada joriy foydalanuvchi a'zo bo'lsa — o'zi
-  // oldindan tanlanadi (3-talab: o'zini har safar qidirmasin).
-  const [xodimTanlov, setXodimTanlov] = useState<ZakazXodimTanlov>(() =>
-    boshlangichTanlov(xodimKategoriyalari, meId)
-  );
+  // AVTO-TANLASH (4-talab): sotuvchi o'z accountidan kirsa o'zi tanlangan
+  // holda ochiladi — har safar o'zini qidirmasin.
+  const [sotuvchiId, setSotuvchiId] = useState(ozimSotuvchi ?? "");
+  const [xodimTanlov, setXodimTanlov] = useState<ZakazXodimTanlov>({});
   const [xato, setXato] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Sotuvchi kategoriya-selektori bor bo'lsa mas'ul o'sha tanlovdan chiqadi
-  // (server sinxronlaydi) — ikkita "kim sotdi" maydoni ko'rsatilmaydi.
-  const sotuvchiSelektorBor = xodimKategoriyalari.some(
-    (k) => k.turi === "sotuvchi" && k.azolar.length > 0
-  );
+  const ijrochilar = ijroKategoriyalari(xodimKategoriyalari);
+  // Sotuvchi maydoni bor bo'lsa mas'ul o'sha tanlovdan chiqadi (server
+  // sinxronlaydi) — ikkita "kim sotdi" maydoni ko'rsatilmaydi.
+  const sotuvchiSelektorBor = sotuvchilar.length > 0;
 
   async function saqlash(e: React.FormEvent) {
     e.preventDefault();
     if (!categoryId) {
       setXato("Avval Kirim bo'limida kategoriya yarating");
+      return;
+    }
+    // Frontend tekshiruvi faqat qulaylik uchun — server ham majburlaydi.
+    if (sotuvchiMajburiy && !sotuvchiId) {
+      setXato("Buyurtmani olgan sotuvchini tanlang");
       return;
     }
     setLoading(true);
@@ -86,6 +103,7 @@ export function BuyurtmaModal({
         izoh: izoh || null,
         masulId,
         stageId: stageId || null,
+        sotuvchiId: sotuvchiId || null,
         xodimlar: tanlovdanRoyxat(xodimTanlov),
       }),
     });
@@ -134,39 +152,25 @@ export function BuyurtmaModal({
           />
         </label>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <label className="block space-y-1">
-            <span className="text-xs text-muted">Mijoz ismi</span>
-            <input value={kontaktIsm} onChange={(e) => setKontaktIsm(e.target.value)} placeholder="Ali" className={INPUT} />
-          </label>
-          <label className="block space-y-1">
-            <span className="text-xs text-muted">Telefon</span>
-            <input
-              value={kontaktTel}
-              onChange={(e) => setKontaktTel(e.target.value)}
-              placeholder="+998 90 123 45 67"
-              inputMode="tel"
-              className={INPUT}
-            />
-          </label>
-        </div>
+        <SotuvchiTanlash
+          id="bm-sotuvchi"
+          sotuvchilar={sotuvchilar}
+          value={sotuvchiId}
+          onChange={setSotuvchiId}
+          majburiy={sotuvchiMajburiy}
+          ozgartira={sotuvchiOzgartira}
+        />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <label className="block space-y-1">
-            <span className="text-xs text-muted">Narx (so&apos;m)</span>
-            <input
-              value={summa}
-              onChange={(e) => setSumma(e.target.value)}
-              placeholder="500000"
-              inputMode="numeric"
-              className={INPUT}
-            />
-          </label>
-          <label className="block space-y-1">
-            <span className="text-xs text-muted">Buyurtma sanasi</span>
-            <input type="date" value={sana} onChange={(e) => setSana(e.target.value)} className={INPUT} />
-          </label>
-        </div>
+        <BuyurtmaMijozMaydonlari
+          kontaktIsm={kontaktIsm}
+          setKontaktIsm={setKontaktIsm}
+          kontaktTel={kontaktTel}
+          setKontaktTel={setKontaktTel}
+          summa={summa}
+          setSumma={setSumma}
+          sana={sana}
+          setSana={setSana}
+        />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {/* Sotuvchi kategoriya-selektori bo'lsa mas'ul o'sha yerdan chiqadi. */}
@@ -194,7 +198,7 @@ export function BuyurtmaModal({
         </div>
 
         <ZakazXodimlariTanlash
-          kategoriyalar={xodimKategoriyalari}
+          kategoriyalar={ijrochilar}
           tanlov={xodimTanlov}
           onChange={setXodimTanlov}
         />
