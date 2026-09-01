@@ -9,6 +9,7 @@ import { PlanProgress } from "../../PlanProgress";
 import { DavrFiltri, type Davr } from "@/app/app/tranzaksiyalar/xodimlar/DavrFiltri";
 import { SotuvchiKpiKartalar, SotuvchiOqimQatori } from "../SotuvchiKpiKartalar";
 import { SotuvBonusKarta } from "./SotuvBonusKarta";
+import { USTUN_NOMI, type Ustun } from "@/lib/crm/pipeline";
 import type { SotuvchiDetalDTO, SotuvchiZakazDTO } from "@/lib/queries/sotuvchiKpi";
 
 const TOLOV_NOMI: Record<string, string> = {
@@ -114,7 +115,7 @@ function ZakazQator({ z }: { z: SotuvchiZakazDTO }) {
           <span className="block text-sm text-fg truncate">{z.nomi}</span>
           <span className="block text-2xs text-muted tnum">
             {z.sana}
-            {z.mijoz ? ` · ${z.mijoz}` : ""} · {z.stageNomi}
+            {z.mijoz ? ` · ${z.mijoz}` : ""} · {USTUN_NOMI[z.ustun as Ustun] ?? z.ustun}
           </span>
         </span>
         <span className="text-right shrink-0">

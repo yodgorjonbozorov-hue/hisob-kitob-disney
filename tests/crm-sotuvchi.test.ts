@@ -24,10 +24,11 @@ let runWithTenant: any;
 let createTenantWithOwner: any;
 let biznesYarat: any;
 let crm: any;
-let crmKirim: any;
+let yakunlash: any;
 let xk: any;
 let zs: any;
 let kpiQ: any;
+let tolovQ: any;
 let qarz: any;
 let ForbiddenError: any;
 let BadRequestError: any;
@@ -68,12 +69,17 @@ async function zakaz(opts: {
   sotuvchiId?: string | null;
   stageId?: string | null;
   huquq?: boolean;
+  /** Oldindan olingan pul (pipeline: to'lov holati shundan hisoblanadi). */
+  tolangan?: number;
+  tolovTuri?: string | null;
 }) {
   return A(() =>
     crm.createDeal({
       businessId: tA.business.id,
       nomi: opts.nomi,
       summa: opts.summa,
+      tolangan: opts.tolangan ?? 0,
+      tolovTuri: opts.tolovTuri ?? (opts.tolangan ? "naqd" : "qarz"),
       categoryId: katBantik.id,
       sana: bugun,
       userId: opts.userId,
@@ -81,6 +87,13 @@ async function zakaz(opts: {
       stageId: opts.stageId ?? undefined,
       ...(opts.huquq === undefined ? {} : { sotuvchiTanlashHuquqi: opts.huquq }),
     })
+  );
+}
+
+/** Zakazni YUTILDI qilish — moliyaviy yakun (kirim + qarzdorlik). */
+async function yakunla(dealId: string) {
+  return A(() =>
+    yakunlash.zakazniYakunlash({ businessId: tA.business.id, dealId, userId: tA.user.id })
   );
 }
 
@@ -101,10 +114,11 @@ before(async () => {
   ({ createTenantWithOwner } = await import("@/lib/services/signup"));
   ({ biznesYarat } = await import("@/lib/services/biznesYaratish"));
   crm = await import("@/lib/crm/service");
-  crmKirim = await import("@/lib/crm/kirim");
+  yakunlash = await import("@/lib/crm/yakunlash");
   xk = await import("@/lib/services/xodimKategoriya");
   zs = await import("@/lib/services/zakazSotuvchi");
   kpiQ = await import("@/lib/queries/sotuvchiKpi");
+  tolovQ = await import("@/lib/crm/tolovHolati");
   qarz = await import("@/lib/services/qarz");
   ({ ForbiddenError, BadRequestError } = await import("@/lib/auth/guard"));
   ({ todayDateOnlyString } = await import("@/lib/date"));
@@ -233,11 +247,11 @@ test("TEST 3: createdBy Direktor, sotuvchi Fayruza → zakaz Fayruzaga hisoblana
 test("TEST 4: 10 zakaz (7 yutildi, 3 yo'qotildi) → konversiya 70%", async () => {
   for (let i = 0; i < 7; i++) {
     const d = await zakaz({ nomi: `R-won-${i}`, summa: 100_000, userId: tA.user.id, sotuvchiId: rustam.id, huquq: true });
-    await A(() => prisma.deal.update({ where: { id: d.id }, data: { stageId: wonStage.id } }));
+    await A(() => prisma.deal.update({ where: { id: d.id }, data: { holat: "YUTILDI", stageId: wonStage.id } }));
   }
   for (let i = 0; i < 3; i++) {
     const d = await zakaz({ nomi: `R-lost-${i}`, summa: 100_000, userId: tA.user.id, sotuvchiId: rustam.id, huquq: true });
-    await A(() => prisma.deal.update({ where: { id: d.id }, data: { stageId: lostStage.id } }));
+    await A(() => prisma.deal.update({ where: { id: d.id }, data: { holat: "YOQOTILDI", stageId: lostStage.id } }));
   }
   const r = await kpi(rustam.id);
   assert.equal(r.olingan.soni, 10);
@@ -269,35 +283,18 @@ test("TEST 5: 700k qarzga yopildi → yutilgan 700k, puli kelgan 0, bonus 0", as
     userId: tA.user.id,
     sotuvchiId: suhrob.id,
     huquq: true,
+    tolangan: 0,
+    tolovTuri: "qarz",
   });
-  await A(() =>
-    crm.moveDeal({ businessId: tA.business.id, dealId: qarzZakaz.id, stageId: wonStage.id, userId: tA.user.id })
-  );
-  const txn = await A(() =>
-    crmKirim.kirimgaKochirish({
-      businessId: tA.business.id,
-      dealId: qarzZakaz.id,
-      userId: tA.user.id,
-      tolovTuri: "qarz",
-    })
-  );
+  // Yakunlash — to'lanmagan qism QARZDORLIKKA o'tadi (Deal.debtId).
+  const natija = await yakunla(qarzZakaz.id);
+  assert.equal(natija.kirimSumma, 0, "qarzga savdo kirim yozmaydi");
+  assert.equal(natija.qarzSumma, 700_000);
+  assert.ok(natija.debtId, "qarz yozuvi ochildi");
 
-  // Qarz ko'prigi — `Debt.manbaTransactionId` (scripts/qarz-migratsiya.ts
-  // deploy paytida aynan shu yozuvni ochadi).
-  qarzYozuv = await rawPrisma.debt.create({
-    data: {
-      businessId: tA.business.id,
-      turi: "olinadigan",
-      mijozNomi: "Zebo",
-      jamiSumma: 700_000,
-      tolangan: 0,
-      status: "OPEN",
-      isYopilgan: false,
-      sana: new Date(`${bugun}T00:00:00.000Z`),
-      manbaTransactionId: txn.id,
-      userId: tA.user.id,
-    },
-  });
+  qarzYozuv = await A(() =>
+    prisma.debt.findFirst({ where: { id: natija.debtId, businessId: tA.business.id } })
+  );
 
   const s = await kpi(suhrob.id);
   assert.equal(s.yutilgan.summa, 700_000, "yutilgan sotuv — 700 000");
@@ -341,13 +338,41 @@ test("TEST 6: qarz to'liq yopilgach puli kelgan sotuv +700 000", async () => {
 });
 
 test("naqd yopilgan zakaz darhol 'puli kelgan' bo'ladi", async () => {
-  const d = await zakaz({ nomi: "Naqd bantik", summa: 200_000, userId: tA.user.id, sotuvchiId: fayruza.id, huquq: true });
-  await A(() => crm.moveDeal({ businessId: tA.business.id, dealId: d.id, stageId: wonStage.id, userId: tA.user.id }));
-  await A(() =>
-    crmKirim.kirimgaKochirish({ businessId: tA.business.id, dealId: d.id, userId: tA.user.id, tolovTuri: "naqd" })
-  );
+  const d = await zakaz({
+    nomi: "Naqd bantik",
+    summa: 200_000,
+    userId: tA.user.id,
+    sotuvchiId: fayruza.id,
+    huquq: true,
+    tolangan: 200_000,
+    tolovTuri: "naqd",
+  });
+  const natija = await yakunla(d.id);
+  assert.equal(natija.kirimSumma, 200_000);
+  assert.equal(natija.qarzSumma, 0, "qarz ochilmaydi");
   const f = await kpi(fayruza.id);
   assert.equal(f.puliKelgan, 200_000);
+});
+
+test("qisman to'langan zakaz: kirim + qarz, bonus bazasi hali 0", async () => {
+  const d = await zakaz({
+    nomi: "Qisman bantik",
+    summa: 500_000,
+    userId: tA.user.id,
+    sotuvchiId: rustam.id,
+    huquq: true,
+    tolangan: 200_000,
+    tolovTuri: "naqd",
+  });
+  const natija = await yakunla(d.id);
+  assert.equal(natija.kirimSumma, 200_000, "olingan qism kirimga");
+  assert.equal(natija.qarzSumma, 300_000, "qolgani qarzdorlikka");
+
+  const tolovlar = await A(() => tolovQ.zakazTolovlari(tA.business.id, [d.id]));
+  const t = tolovlar.get(d.id);
+  assert.equal(t.holati, "QISMAN");
+  assert.equal(t.tolangan, 200_000);
+  assert.equal(t.puliKelgan, 0, "qisman to'lov bonusni ochmaydi (18-talab)");
 });
 
 // ---------- TEST 7: biznesler aro ----------
@@ -402,10 +427,18 @@ test("TEST 9: huquqsiz foydalanuvchi boshqa sotuvchini tanlay olmaydi", async ()
 });
 
 test("sotuvchini almashtirish: audit izi va kirim sotuvchisi sinxronlanadi", async () => {
-  const d = await zakaz({ nomi: "Almashtiriladigan", summa: 500_000, userId: tA.user.id, sotuvchiId: fayruza.id, huquq: true });
-  await A(() => crm.moveDeal({ businessId: tA.business.id, dealId: d.id, stageId: wonStage.id, userId: tA.user.id }));
+  const d = await zakaz({
+    nomi: "Almashtiriladigan",
+    summa: 500_000,
+    userId: tA.user.id,
+    sotuvchiId: fayruza.id,
+    huquq: true,
+    tolangan: 500_000,
+    tolovTuri: "naqd",
+  });
+  const natija = await yakunla(d.id);
   const txn = await A(() =>
-    crmKirim.kirimgaKochirish({ businessId: tA.business.id, dealId: d.id, userId: tA.user.id, tolovTuri: "naqd" })
+    prisma.transaction.findFirst({ where: { id: natija.transactionId, businessId: tA.business.id } })
   );
   assert.equal(txn.sotuvchiId, fayruzaUser.id);
 
@@ -504,8 +537,9 @@ test("sotuvchi tafsiloti: KPI, reyting o'rni va zakazlar lentasi", async () => {
     kpiQ.getSotuvchiDetal({ businessId: tA.business.id, employeeId: rustam.id, ...davr() })
   );
   assert.equal(detal.sotuvchi.ism, "Rustam");
-  assert.equal(detal.kpi.yutilgan.soni, 7);
-  assert.equal(detal.kpi.konversiya, 70);
+  // 7 ta (TEST 4) + 1 ta qisman to'langan zakaz = 8 yutilgan, 3 yo'qotilgan.
+  assert.equal(detal.kpi.yutilgan.soni, 8);
+  assert.equal(detal.kpi.konversiya, kpiQ.konversiyaHisobla(8, 3));
   assert.ok(detal.orin !== 0 || detal.kpi.orin > 0);
   assert.ok(detal.zakazlar.length >= 10, "zakazlar lentasi to'ldi");
   assert.ok(detal.zakazlar.every((z: any) => ["TOLIQ", "QISMAN", "TOLANMAGAN"].includes(z.tolovHolati)));

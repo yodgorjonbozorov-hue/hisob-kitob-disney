@@ -139,14 +139,14 @@ model Payment {
 
 /// Biznes (kompaniya bo'limi). Har bir biznesning o'z kategoriyalari, tranzaksiyalari va dashboard'i.
 model Business {
-  id                 String                 @id @default(cuid())
+  id                 String                   @id @default(cuid())
   nomi               String
-  isActive           Boolean                @default(true)
+  isActive           Boolean                  @default(true)
   // Ombor (inventar) tizimi yoqilganmi — tovar sotadigan bizneslar uchun (masalan Salyut).
-  omborli            Boolean                @default(false)
+  omborli            Boolean                  @default(false)
   // Biznes turi: "umumiy" | "avto". Avto — olib-sotarlar uchun (ombor → avtopark).
   // Faqat UI matnlari va sotuv qoidalariga ta'sir qiladi (lib/biznesTuri.ts).
-  turi               String                 @default("umumiy")
+  turi               String                   @default("umumiy")
   /// BIZNES YO'NALISHI (sanoat) — tariflar sahifasida tanlangan soha
   /// (lib/pricing/profil.ts: "food" | "service" | "agro" ...). FAQAT
   /// shaxsiylashtirish uchun: onboarding qadamlari va tavsiyalar shu
@@ -159,15 +159,15 @@ model Business {
   ///
   /// Bayroq ATAYLAB opt-in: yoqilmagan bizneslarda kassa tanlash mantig'i
   /// avvalgidek qoladi (lib/services/accounts.ts → resolveAccountId).
-  shaxsiyKassa       Boolean                @default(false)
+  shaxsiyKassa       Boolean                  @default(false)
   /// MAGAZIN (POS) shu bizneste yuritiladimi. MAGAZIN moduli TENANT darajasida
   /// yoqiladi, bu bayroq esa BIZNES darajasida — bir tenantda do'kon ham,
   /// do'kon bo'lmagan biznes ham yonma-yon tura oladi (`omborli` bilan bir xil
   /// qoida). Mavjud bizneslarda `false` — ular uchun hech narsa o'zgarmaydi.
-  magazin            Boolean                @default(false)
-  createdAt          DateTime               @default(now())
+  magazin            Boolean                  @default(false)
+  createdAt          DateTime                 @default(now())
   tenantId           String
-  tenant             Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant             Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   categories         Category[]
   transactions       Transaction[]
   users              User[]
@@ -915,6 +915,8 @@ model Debt {
   cancelledBy        String?
   cancelReason       String?
   payments           DebtPayment[]
+  /// CRM zakazi shu qarzni ochgan bo'lsa — teskari bog'lanish (1:1).
+  crmZakaz           Deal?         @relation("CrmBuyurtmaQarzi")
 
   @@index([businessId, isYopilgan, turi])
   @@index([businessId, turi])
@@ -966,32 +968,32 @@ model Supplier {
 /// Qoralama va tasdiqlangan buyurtma hech narsaga ta'sir qilmaydi — bu
 /// ataylab: reja bilan haqiqat aralashmasligi kerak.
 model PurchaseOrder {
-  id            String              @id @default(cuid())
-  businessId    String
-  business      Business            @relation(fields: [businessId], references: [id], onDelete: Restrict)
-  supplierId    String
-  supplier      Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  id             String              @id @default(cuid())
+  businessId     String
+  business       Business            @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  supplierId     String
+  supplier       Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   /// "qoralama" | "tasdiqlangan" | "qabul_qilingan" | "bekor"
-  holat         String              @default("qoralama")
+  holat          String              @default("qoralama")
   /// Buyurtma sanasi (reja).
-  sana          DateTime
+  sana           DateTime
   /// Haqiqiy qabul qilingan payt.
-  qabulSana     DateTime?
+  qabulSana      DateTime?
   /// "naqd" | "qarz" — qabul qilishda pul harakati shunga qarab yoziladi.
-  tolovTuri     String              @default("naqd")
+  tolovTuri      String              @default("naqd")
   /// Satrlar yig'indisi (qabul paytida qayta hisoblanadi).
-  jamiSumma     Int                 @default(0)
-  izoh          String?
-  userId        String
+  jamiSumma      Int                 @default(0)
+  izoh           String?
+  userId         String
   /// Qabul qilinganda yozilgan chiqim tranzaksiyasi (naqd bo'lsa).
-  transactionId String?
+  transactionId  String?
   /// Qabul qilinganda ochilgan "beriladigan" qarz (qarzga bo'lsa).
-  debtId        String?
+  debtId         String?
   /// QISMAN TO'LOV (PRO): qabul paytida to'langan qism (0..jamiSumma).
   /// Qolgani `debtId` dagi qarzga tushadi va DebtPayment bilan yopiladi.
-  tolanganSumma Int                 @default(0)
+  tolanganSumma  Int                 @default(0)
   /// Ta'minotchi tizim useri bo'lsa — qabul paytidagi kassa transferi.
-  transferId    String?
+  transferId     String?
   /// TAKROR YUBORISHDAN HIMOYA (idempotentlik kaliti).
   ///
   /// "Ta'minotni saqlash" tugmasi ikki marta bosilsa (yoki tarmoq javobni
@@ -1004,13 +1006,13 @@ model PurchaseOrder {
   /// (yoki ikki so'rov bir vaqtda kelsa) baza ikkinchisini o'tkazmaydi.
   idempotencyKey String?
   /// Bekor qilingan payt (holat = "bekor" bo'lganda to'ldiriladi).
-  bekorSana     DateTime?
+  bekorSana      DateTime?
   /// Bekor qilish sababi — auditda saqlanadi.
-  bekorSabab    String?
+  bekorSabab     String?
   /// Kim bekor qilgani.
-  bekorUserId   String?
-  createdAt     DateTime            @default(now())
-  items         PurchaseOrderItem[]
+  bekorUserId    String?
+  createdAt      DateTime            @default(now())
+  items          PurchaseOrderItem[]
 
   @@unique([businessId, idempotencyKey])
   @@index([businessId, holat, sana])
@@ -1084,22 +1086,22 @@ model Stage {
 /// Bitim. Alohida "Lead" modeli YO'Q — birinchi bosqichdagi bitim = lead
 /// (sodda UX, konvertatsiya bosqichi degan ortiqcha qadam yo'q).
 model Deal {
-  id            String       @id @default(cuid())
+  id            String         @id @default(cuid())
   businessId    String
-  business      Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business      Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
   contactId     String?
-  contact       Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  contact       Contact?       @relation(fields: [contactId], references: [id], onDelete: SetNull)
   nomi          String
-  summa         Int          @default(0)
+  summa         Int            @default(0)
   /// KUNLIK BUYURTMA: buyurtma kategoriyasi — KIRIM modulidagi AYNAN o'sha
   /// `Category`. CRM uchun alohida kategoriya tizimi YO'Q: buyurtma kirimga
   /// ko'chirilganda tranzaksiya shu kategoriya bilan yoziladi, shuning uchun
   /// Kirimdagi kategoriya filtri CRM yozuvlarini o'zi qamrab oladi.
   /// null — eski bitimlar (kategoriyasiz yaratilgan).
   categoryId    String?
-  category      Category?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  category      Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   stageId       String
-  stage         Stage        @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  stage         Stage          @relation(fields: [stageId], references: [id], onDelete: Restrict)
   masulId       String // mas'ul xodim (foydalanuvchi)
   manba         String? // "qolda" | "telegram" | ...
   /// Buyurtma sanasi (UTC-yarim tun, `lib/date.ts`). "Bugungi buyurtmalar"
@@ -1113,10 +1115,37 @@ model Deal {
   /// UNIQUE — bitta buyurtma hech qachon ikkita kirim yarata olmaydi.
   /// Himoya BAZA darajasida: frontend holatiga ham, faqat kod tekshiruviga
   /// ham tayanilmaydi (parallel ikki so'rovda ikkinchisi cheklovga uriladi).
-  transactionId String?      @unique
-  transaction   Transaction? @relation("CrmBuyurtmaKirimi", fields: [transactionId], references: [id], onDelete: SetNull)
+  transactionId String?        @unique
+  transaction   Transaction?   @relation("CrmBuyurtmaKirimi", fields: [transactionId], references: [id], onDelete: SetNull)
+  /// ISH JARAYONI HOLATI — CRM doskasining YAGONA haqiqat manbai.
+  /// "KUTILMOQDA" | "JARAYONDA" | "YUTILDI" | "YOQOTILDI".
+  ///
+  /// "Bugungi zakazlar" ALOHIDA holat EMAS: u `holat = KUTILMOQDA` va
+  /// `sana = bugun` (Asia/Tashkent) shartidan HISOBLANADI. Shu sabab kun
+  /// almashganda hech narsa yozilmaydi — kunlik cron ham, qo'lda ko'chirish
+  /// ham kerak emas. Kechagi bajarilmagan zakaz ham yo'qolmaydi: u
+  /// KUTILAYOTGAN ustunida "kechikkan" belgisi bilan qoladi.
+  ///
+  /// `stageId` bilan ALOQASI: bosqich shu holatdan KELIB CHIQIB sinxron
+  /// yuritiladi (`lib/crm/pipeline.ts`), chunki dashboard, AI analitikasi va
+  /// xodim reytingi hali `Stage.turi` (OPEN/WON/LOST) ni o'qiydi. Haqiqat
+  /// manbai bitta — `holat`; bosqich uning ko'zgusi.
+  holat         String         @default("KUTILMOQDA")
+  /// TO'LANGAN summa (so'm). TO'LOV HOLATI shu maydondan hisoblanadi
+  /// (`lib/crm/pipeline.ts` → `tolovHolati`): to'liq / qisman / qarzga.
+  /// Alohida `paymentStatus` ustuni ATAYLAB yo'q — u ikkinchi haqiqat
+  /// manbai bo'lib summa bilan zid holatga tushib qolardi.
+  tolangan      Int            @default(0)
+  /// Pul qaysi kanal bilan keldi: "naqd" | "click" | "qarz".
+  /// Kirim tranzaksiyasiga o'sha ko'rinishda uzatiladi.
+  tolovTuri     String?
+  /// YUTILDI bosilganda to'lanmagan qism uchun ochilgan QARZ yozuvi.
+  /// UNIQUE — bitta zakaz hech qachon ikkita qarz yarata olmaydi (kirim
+  /// bilan bir xil himoya: kafolat BAZA darajasida).
+  debtId        String?        @unique
+  debt          Debt?          @relation("CrmBuyurtmaQarzi", fields: [debtId], references: [id], onDelete: SetNull)
   izoh          String?
-  createdAt     DateTime     @default(now())
+  createdAt     DateTime       @default(now())
   deletedAt     DateTime?
   activities    Activity[]
   tasks         Task[]
@@ -1127,6 +1156,9 @@ model Deal {
   @@index([businessId, masulId])
   /// "Bugungi buyurtmalar" va kategoriya statistikasi — eng ko'p o'qiladigan kesim.
   @@index([businessId, sana])
+  /// CRM doskasining asosiy kesimi: holat + sana (ustunlar shu ikkovidan
+  /// hisoblanadi).
+  @@index([businessId, holat, sana])
   @@index([categoryId])
 }
 
@@ -1334,15 +1366,15 @@ model Employee {
   /// false — GPS yoziladi, lekin ish joyi radiusi TEKSHIRILMAYDI (dala xodimi).
   radiusTalab    Boolean       @default(true)
 
-  attendances Attendance[]
-  payrolls    Payroll[]
-  advances    PayrollAdvance[]
-  checks      AttendanceCheck[]
-  selfies     AttendanceSelfie[]
-  penalties   EmployeePenalty[]
-  bonuses     EmployeeBonus[]
-  plans       EmployeePlan[]
-  vazifalar   Task[]
+  attendances   Attendance[]
+  payrolls      Payroll[]
+  advances      PayrollAdvance[]
+  checks        AttendanceCheck[]
+  selfies       AttendanceSelfie[]
+  penalties     EmployeePenalty[]
+  bonuses       EmployeeBonus[]
+  plans         EmployeePlan[]
+  vazifalar     Task[]
   /// Kategoriya a'zoliklari (Sotuvchi/Diktor/... — bir xodim bir nechtasida bo'la oladi).
   kategoriyalar EmployeeCategoryMember[]
   /// Zakazlarda qatnashuvlari (CRM buyurtma biriktiruvlari).
@@ -1371,21 +1403,21 @@ model Attendance {
   createdAt  DateTime @default(now())
 
   // ---- Davomat 2.0: kelish/ketish vaqtlari (server soati, UTC) ----
-  kelganVaqt DateTime?
-  ketganVaqt DateTime?
+  kelganVaqt       DateTime?
+  ketganVaqt       DateTime?
   /// Xom kechikish (daqiqa): jadval boshlanishidan keyin kelgan vaqt.
-  kechikishDaqiqa  Int @default(0)
+  kechikishDaqiqa  Int       @default(0)
   /// Jarima hisobiga o'tadigan kechikish: imtiyoz (grace) ichida bo'lsa 0.
-  jarimaDaqiqa     Int @default(0)
-  ertaKetishDaqiqa Int @default(0)
-  ortiqchaDaqiqa   Int @default(0)
-  ishlanganDaqiqa  Int @default(0)
+  jarimaDaqiqa     Int       @default(0)
+  ertaKetishDaqiqa Int       @default(0)
+  ortiqchaDaqiqa   Int       @default(0)
+  ishlanganDaqiqa  Int       @default(0)
   /// Jadval SNAPSHOT'i — keyin jadval o'zgarsa ham hisob auditga ochiq qoladi.
-  rejaBoshlanish String?
-  rejaTugash     String?
-  rejaImtiyoz    Int?
+  rejaBoshlanish   String?
+  rejaTugash       String?
+  rejaImtiyoz      Int?
   /// Tekshiruv manbai: "selfie_gps" | "admin" | "kamera" (Faza 2). NULL — eski qo'lda yozuv.
-  manba String?
+  manba            String?
 
   checks    AttendanceCheck[]
   penalties EmployeePenalty[]
@@ -1535,35 +1567,35 @@ model WorkScheduleDay {
 /// Admin tuzatishi ham yangi yozuv sifatida qo'shiladi (asl dalil o'chmaydi).
 /// Faza 2 (kamera/yuz tanish) shu jadvalga "kamera" manbali yozuv qo'shadi.
 model AttendanceCheck {
-  id           String     @id @default(cuid())
-  businessId   String
-  business     Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  attendanceId String
-  attendance   Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
-  employeeId   String
-  employee     Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  id             String            @id @default(cuid())
+  businessId     String
+  business       Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  attendanceId   String
+  attendance     Attendance        @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  employeeId     String
+  employee       Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   /// "kelish" | "ketish"
-  turi         String
+  turi           String
   /// SERVER vaqti (UTC) — mijoz soatiga hech qachon ishonilmaydi.
-  vaqt         DateTime
+  vaqt           DateTime
   /// "selfie_gps" | "admin" | "kamera" (Faza 2)
-  manba        String     @default("selfie_gps")
-  lat          Float?
-  lng          Float?
+  manba          String            @default("selfie_gps")
+  lat            Float?
+  lng            Float?
   /// GPS aniqligi (metr, qurilma bergan accuracy).
-  aniqlikM     Int?
+  aniqlikM       Int?
   /// Ish joyigacha hisoblangan masofa (metr, Haversine).
-  masofaM      Int?
-  ruxsatRadiusM Int?
+  masofaM        Int?
+  ruxsatRadiusM  Int?
   workLocationId String?
-  workLocation   WorkLocation? @relation(fields: [workLocationId], references: [id], onDelete: SetNull)
-  selfieId     String?    @unique
-  selfie       AttendanceSelfie? @relation(fields: [selfieId], references: [id], onDelete: SetNull)
+  workLocation   WorkLocation?     @relation(fields: [workLocationId], references: [id], onDelete: SetNull)
+  selfieId       String?           @unique
+  selfie         AttendanceSelfie? @relation(fields: [selfieId], references: [id], onDelete: SetNull)
   /// Admin tuzatishda: kim, nima sababdan, avvalgi qiymat nima edi.
-  userId       String?
-  sabab        String?
-  oldingiVaqt  DateTime?
-  createdAt    DateTime   @default(now())
+  userId         String?
+  sabab          String?
+  oldingiVaqt    DateTime?
+  createdAt      DateTime          @default(now())
 
   @@index([businessId, vaqt])
   @@index([attendanceId])
@@ -1619,32 +1651,32 @@ model PenaltyRule {
 /// XODIM JARIMASI — avtomatik (davomatdan) yoki qo'lda. Oylikka FAQAT
 /// "tasdiqlandi" holatidagilar kiradi; "kutilmoqda"/"rad" hisobga olinmaydi.
 model EmployeePenalty {
-  id           String      @id @default(cuid())
-  businessId   String
-  business     Business    @relation(fields: [businessId], references: [id], onDelete: Restrict)
-  employeeId   String
-  employee     Employee    @relation(fields: [employeeId], references: [id], onDelete: Restrict)
-  attendanceId String?
-  attendance   Attendance? @relation(fields: [attendanceId], references: [id], onDelete: SetNull)
-  ruleId       String?
-  rule         PenaltyRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
-  sana         DateTime
-  summa        Int
+  id             String       @id @default(cuid())
+  businessId     String
+  business       Business     @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  employeeId     String
+  employee       Employee     @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  attendanceId   String?
+  attendance     Attendance?  @relation(fields: [attendanceId], references: [id], onDelete: SetNull)
+  ruleId         String?
+  rule           PenaltyRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  sana           DateTime
+  summa          Int
   /// Asl (avtomatik hisoblangan) summa — tasdiqda tahrirlangan bo'lsa farq ko'rinadi.
-  aslSumma     Int
-  sabab        String
+  aslSumma       Int
+  sabab          String
   /// "avto" | "qolda"
-  manba        String      @default("avto")
+  manba          String       @default("avto")
   /// "kutilmoqda" | "tasdiqlandi" | "rad"
-  holat        String      @default("kutilmoqda")
-  tasdiqlaganId String?
+  holat          String       @default("kutilmoqda")
+  tasdiqlaganId  String?
   tasdiqlanganAt DateTime?
-  radEtganId   String?
-  radEtilganAt DateTime?
-  izoh         String?
+  radEtganId     String?
+  radEtilganAt   DateTime?
+  izoh           String?
   /// Qo'lda yaratganda — kim.
-  userId       String?
-  createdAt    DateTime    @default(now())
+  userId         String?
+  createdAt      DateTime     @default(now())
 
   @@index([businessId, holat, sana])
   @@index([employeeId, sana])
@@ -1778,19 +1810,19 @@ model DealEmployee {
 
 /// HR SOZLAMALARI — bir biznesga bitta yozuv (DailyReportSetting uslubi).
 model HrSetting {
-  id         String   @id @default(cuid())
-  businessId String   @unique
-  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  id                  String   @id @default(cuid())
+  businessId          String   @unique
+  business            Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   /// Xodim o'z oyligini (vedomost) ko'ra oladimi.
-  xodimOylikKoradi Boolean @default(false)
+  xodimOylikKoradi    Boolean  @default(false)
   /// CRM: yangi zakazda SOTUVCHI majburiymi (Disney Navoiy uchun yoqiladi).
   /// Biznesga sozlanadi — boshqa Balansa bizneslarida xulq o'zgarmasin:
   /// default `false` (mavjud bizneslarda hech narsa qattiqlashmaydi).
   /// Faqat biznesda FAOL "sotuvchi" turidagi kategoriya bo'lsa kuchga kiradi,
   /// aks holda zakaz umuman yaratib bo'lmasdi.
-  crmSotuvchiMajburiy Boolean @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  crmSotuvchiMajburiy Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }
 
 // ==== KUNLIK HISOBOT moduli ====

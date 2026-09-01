@@ -531,6 +531,10 @@ CREATE TABLE "Deal" (
     "muddat" TIMESTAMP(3),
     "yopilganAt" TIMESTAMP(3),
     "transactionId" TEXT,
+    "holat" TEXT NOT NULL DEFAULT 'KUTILMOQDA',
+    "tolangan" INTEGER NOT NULL DEFAULT 0,
+    "tolovTuri" TEXT,
+    "debtId" TEXT,
     "izoh" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "deletedAt" TIMESTAMP(3),
@@ -1432,6 +1436,9 @@ CREATE INDEX "Stage_businessId_tartib_idx" ON "Stage"("businessId", "tartib");
 CREATE UNIQUE INDEX "Deal_transactionId_key" ON "Deal"("transactionId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Deal_debtId_key" ON "Deal"("debtId");
+
+-- CreateIndex
 CREATE INDEX "Deal_businessId_stageId_idx" ON "Deal"("businessId", "stageId");
 
 -- CreateIndex
@@ -1439,6 +1446,9 @@ CREATE INDEX "Deal_businessId_masulId_idx" ON "Deal"("businessId", "masulId");
 
 -- CreateIndex
 CREATE INDEX "Deal_businessId_sana_idx" ON "Deal"("businessId", "sana");
+
+-- CreateIndex
+CREATE INDEX "Deal_businessId_holat_sana_idx" ON "Deal"("businessId", "holat", "sana");
 
 -- CreateIndex
 CREATE INDEX "Deal_categoryId_idx" ON "Deal"("categoryId");
@@ -1904,6 +1914,9 @@ ALTER TABLE "Deal" ADD CONSTRAINT "Deal_stageId_fkey" FOREIGN KEY ("stageId") RE
 
 -- AddForeignKey
 ALTER TABLE "Deal" ADD CONSTRAINT "Deal_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Deal" ADD CONSTRAINT "Deal_debtId_fkey" FOREIGN KEY ("debtId") REFERENCES "Debt"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Task" ADD CONSTRAINT "Task_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;

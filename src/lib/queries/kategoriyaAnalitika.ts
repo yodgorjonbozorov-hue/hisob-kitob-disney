@@ -1,5 +1,10 @@
 import { prisma } from "@/lib/prisma";
-import { dateOnlyStringToUTCDate, utcDateToDateOnlyString } from "@/lib/date";
+import {
+  dateOnlyStringToUTCDate,
+  utcDateToDateOnlyString,
+  todayTashkentDateOnlyString,
+} from "@/lib/date";
+import { zakazUstuni, kirimUlushi } from "@/lib/crm/pipeline";
 import { getXodimlarPerformance, type PlanDTO } from "@/lib/queries/xodimPlan";
 import type { Prisma } from "@prisma/client";
 
@@ -32,15 +37,33 @@ export interface KategoriyaXodimStatDTO {
   isActive: boolean;
   /** Hozirgi a'zomi (tarixiy qatnashuvchi a'zolikdan chiqarilgan bo'lishi mumkin). */
   azo: boolean;
-  /** Davrdagi zakazlar (qatnashgan). */
+  /** Davrdagi zakazlar (qatnashgan) — "olingan zakazlar". */
   jami: number;
+  /** Olingan zakazlarning umumiy summasi (so'm). */
+  jamiSumma: number;
   yutilgan: number;
   yutqazilgan: number;
   ochiq: number;
+  /** Yo'qotilgan zakazlar summasi (so'm). */
+  yutqazilganSumma: number;
+  /** Bugungi (zakaz sanasi = bugun, hali yakunlanmagan) zakazlar. */
+  bugungi: number;
+  bugungiSumma: number;
+  /** Jarayondagi zakazlar. */
+  jarayonda: number;
+  jarayondaSumma: number;
   /** YUTILGAN zakazlar summasi (so'm). Ijrochi uchun — "qatnashgan zakazlar tushumi". */
   summa: number;
+  /**
+   * TO'LIQ PULI KELGAN SOTUV: yutilgan zakazlardan HAQIQATDA olingan pul
+   * (`Deal.tolangan`, summadan oshmaydi). Bonus hisobi shu raqamga tayanadi —
+   * qarzga ketgan sotuv bonusga kirmasin.
+   */
+  tolanganSotuv: number;
   /** O'rtacha yutilgan zakaz (so'm). */
   ortacha: number;
+  /** Konversiya: yutilgan / jami, % (butun). */
+  konversiya: number;
   /** Davr oxiri oyining plani (mavjud EmployeePlan dvigateli bilan hisoblangan). */
   plan: PlanDTO | null;
   /** Reyting o'rni (1 dan boshlab). */
@@ -50,6 +73,12 @@ export interface KategoriyaXodimStatDTO {
 export interface KategoriyaKpiDTO {
   /** Sotuvchi KPI: yutilgan zakazlar summasi. */
   jamiSotuv: number;
+  /**
+   * BONUSGA TUSHADIGAN SOTUV: yutilgan zakazlardan haqiqatda olingan pul.
+   * Qarzga ketgan qism bu raqamga KIRMAYDI — bonus faqat kelgan pul
+   * ustidan hisoblansin.
+   */
+  tolanganSotuv: number;
   jamiZakaz: number;
   yutilganZakaz: number;
   /** Yutilgan / jami, % (butun). */
@@ -101,13 +130,69 @@ export async function listKategoriyaTablari(businessId: string): Promise<Kategor
 
 interface XodimJam {
   jami: number;
+  jamiSumma: number;
   yutilgan: number;
   yutqazilgan: number;
+  yutqazilganSumma: number;
   ochiq: number;
+  bugungi: number;
+  bugungiSumma: number;
+  jarayonda: number;
+  jarayondaSumma: number;
   summa: number;
+  tolanganSotuv: number;
 }
 
-const BOSH_JAM: XodimJam = { jami: 0, yutilgan: 0, yutqazilgan: 0, ochiq: 0, summa: 0 };
+const BOSH_JAM: XodimJam = {
+  jami: 0,
+  jamiSumma: 0,
+  yutilgan: 0,
+  yutqazilgan: 0,
+  yutqazilganSumma: 0,
+  ochiq: 0,
+  bugungi: 0,
+  bugungiSumma: 0,
+  jarayonda: 0,
+  jarayondaSumma: 0,
+  summa: 0,
+  tolanganSotuv: 0,
+};
+
+/**
+ * BITTA ZAKAZNI XODIM JAMLARIGA QO'SHISH.
+ *
+ * Kesim CRM doskasi bilan AYNI qoidadan chiqadi (`lib/crm/pipeline.ts`):
+ * "bugungi" va "jarayonda" bazada saqlanmaydi, ular `holat` + `sana` dan
+ * hisoblanadi. Shunda statistika doskadagi ustun sarlavhalari bilan
+ * bir xil raqam beradi.
+ */
+function jamgaQosh(
+  m: XodimJam,
+  deal: { holat: string; summa: number; tolangan: number; sana: Date | null },
+  bugun: string
+): XodimJam {
+  m.jami += 1;
+  m.jamiSumma += deal.summa;
+  const ustun = zakazUstuni(deal.holat, deal.sana ? utcDateToDateOnlyString(deal.sana) : null, bugun);
+  if (ustun === "YUTILDI") {
+    m.yutilgan += 1;
+    m.summa += deal.summa;
+    m.tolanganSotuv += kirimUlushi(deal.summa, deal.tolangan);
+  } else if (ustun === "YOQOTILDI") {
+    m.yutqazilgan += 1;
+    m.yutqazilganSumma += deal.summa;
+  } else {
+    m.ochiq += 1;
+    if (ustun === "BUGUNGI") {
+      m.bugungi += 1;
+      m.bugungiSumma += deal.summa;
+    } else if (ustun === "JARAYONDA") {
+      m.jarayonda += 1;
+      m.jarayondaSumma += deal.summa;
+    }
+  }
+  return m;
+}
 
 /**
  * Bitta kategoriya bo'yicha davr analitikasi: KPI + xodim reytingi + plan.
@@ -142,7 +227,7 @@ export async function getKategoriyaAnalitika(params: {
       select: {
         employeeId: true,
         employee: { select: { id: true, ism: true, rasmUrl: true, isActive: true } },
-        deal: { select: { summa: true, stage: { select: { turi: true } } } },
+        deal: { select: { summa: true, tolangan: true, holat: true, sana: true } },
       },
     }),
     // Plan — mavjud xodim-plan dvigateli (HR sahifasi bilan BIR XIL hisob,
@@ -176,20 +261,11 @@ export async function getKategoriyaAnalitika(params: {
     }
   }
 
+  const bugun = todayTashkentDateOnlyString();
   const jamlar = new Map<string, XodimJam>();
   for (const q of qatnashuvlar) {
     const m = jamlar.get(q.employeeId) ?? { ...BOSH_JAM };
-    m.jami += 1;
-    const turi = q.deal.stage.turi;
-    if (turi === "WON") {
-      m.yutilgan += 1;
-      m.summa += q.deal.summa;
-    } else if (turi === "LOST") {
-      m.yutqazilgan += 1;
-    } else {
-      m.ochiq += 1;
-    }
-    jamlar.set(q.employeeId, m);
+    jamlar.set(q.employeeId, jamgaQosh(m, q.deal, bugun));
   }
 
   const sotuvchimi = kategoriya.turi === "sotuvchi";
@@ -203,11 +279,19 @@ export async function getKategoriyaAnalitika(params: {
       isActive: info.isActive,
       azo: info.azo,
       jami: m.jami,
+      jamiSumma: m.jamiSumma,
       yutilgan: m.yutilgan,
       yutqazilgan: m.yutqazilgan,
+      yutqazilganSumma: m.yutqazilganSumma,
       ochiq: m.ochiq,
+      bugungi: m.bugungi,
+      bugungiSumma: m.bugungiSumma,
+      jarayonda: m.jarayonda,
+      jarayondaSumma: m.jarayondaSumma,
       summa: m.summa,
+      tolanganSotuv: m.tolanganSotuv,
       ortacha: m.yutilgan > 0 ? Math.round(m.summa / m.yutilgan) : 0,
+      konversiya: m.jami > 0 ? Math.round((m.yutilgan / m.jami) * 100) : 0,
       plan: planMap.get(employeeId) ?? null,
       orin: 0,
     };
@@ -230,6 +314,7 @@ export async function getKategoriyaAnalitika(params: {
 
   const kpi: KategoriyaKpiDTO = {
     jamiSotuv,
+    tolanganSotuv: qatorlar.reduce((s2, q) => s2 + q.tolanganSotuv, 0),
     jamiZakaz,
     yutilganZakaz,
     konversiya: jamiZakaz > 0 ? Math.round((yutilganZakaz / jamiZakaz) * 100) : 0,
@@ -254,6 +339,8 @@ export interface XodimZakazQatoriDTO {
   summa: number;
   /** "YYYY-MM-DD" (sana bo'lmasa createdAt kuni). */
   sana: string;
+  /** Doska ustuni: KUTILAYOTGAN | BUGUNGI | JARAYONDA | YUTILDI | YOQOTILDI. */
+  ustun: string;
   stageNomi: string;
   stageTuri: string;
   kategoriyaNomi: string;
@@ -274,10 +361,18 @@ export interface XodimKategoriyaDetalDTO {
   kategoriya: { id: string; nomi: string; turi: string } | null;
   stat: {
     jami: number;
+    jamiSumma: number;
     yutilgan: number;
     yutqazilgan: number;
+    yutqazilganSumma: number;
     ochiq: number;
+    bugungi: number;
+    bugungiSumma: number;
+    jarayonda: number;
+    jarayondaSumma: number;
     summa: number;
+    /** To'liq puli kelgan sotuv (bonus hisobi shu raqamga tayanadi). */
+    tolanganSotuv: number;
     ortacha: number;
     konversiya: number;
   };
@@ -329,6 +424,8 @@ export async function getXodimKategoriyaDetal(params: {
           id: true,
           nomi: true,
           summa: true,
+          tolangan: true,
+          holat: true,
           sana: true,
           createdAt: true,
           transactionId: true,
@@ -342,31 +439,29 @@ export async function getXodimKategoriyaDetal(params: {
     take: 300,
   });
 
-  const stat = { jami: 0, yutilgan: 0, yutqazilgan: 0, ochiq: 0, summa: 0, ortacha: 0, konversiya: 0 };
+  const bugunKuni = todayTashkentDateOnlyString();
+  const jam = { ...BOSH_JAM };
   const zakazlar: XodimZakazQatoriDTO[] = rows.map((r) => {
-    stat.jami += 1;
-    if (r.deal.stage.turi === "WON") {
-      stat.yutilgan += 1;
-      stat.summa += r.deal.summa;
-    } else if (r.deal.stage.turi === "LOST") {
-      stat.yutqazilgan += 1;
-    } else {
-      stat.ochiq += 1;
-    }
+    jamgaQosh(jam, r.deal, bugunKuni);
+    const sana = r.deal.sana ? utcDateToDateOnlyString(r.deal.sana) : null;
     return {
       dealId: r.deal.id,
       nomi: r.deal.nomi,
       mijoz: r.deal.contact?.ism ?? null,
       summa: r.deal.summa,
-      sana: utcDateToDateOnlyString(r.deal.sana ?? r.deal.createdAt),
+      sana: sana ?? utcDateToDateOnlyString(r.deal.createdAt),
+      ustun: zakazUstuni(r.deal.holat, sana, bugunKuni),
       stageNomi: r.deal.stage.nomi,
       stageTuri: r.deal.stage.turi,
       kategoriyaNomi: r.category.nomi,
       kirimBor: Boolean(r.deal.transactionId),
     };
   });
-  stat.ortacha = stat.yutilgan > 0 ? Math.round(stat.summa / stat.yutilgan) : 0;
-  stat.konversiya = stat.jami > 0 ? Math.round((stat.yutilgan / stat.jami) * 100) : 0;
+  const stat = {
+    ...jam,
+    ortacha: jam.yutilgan > 0 ? Math.round(jam.summa / jam.yutilgan) : 0,
+    konversiya: jam.jami > 0 ? Math.round((jam.yutilgan / jam.jami) * 100) : 0,
+  };
 
   // Sana bo'yicha teskari tartib (createdAt bo'yicha kelgan, sana ustunroq).
   zakazlar.sort((a, b) => b.sana.localeCompare(a.sana));

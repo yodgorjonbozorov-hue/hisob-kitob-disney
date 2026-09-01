@@ -1,18 +1,23 @@
 import { prisma } from "@/lib/prisma";
-import { dateOnlyStringToUTCDate, utcDateToDateOnlyString } from "@/lib/date";
+import {
+  dateOnlyStringToUTCDate,
+  utcDateToDateOnlyString,
+  todayTashkentDateOnlyString,
+} from "@/lib/date";
 import { getXodimlarPerformance, type PlanDTO } from "@/lib/queries/xodimPlan";
 import { SOTUVCHI_TURI } from "@/lib/services/zakazSotuvchi";
 import { tolovHisobla, type QarzQismi, type ZakazTolovHolati } from "@/lib/crm/tolovHolati";
+import { zakazUstuni } from "@/lib/crm/pipeline";
 import type { Prisma } from "@prisma/client";
 
 /**
  * SOTUVCHI STATISTIKASI — CRM zakazlari kesimida (11-24-talablar).
  *
- * HAQIQAT MANBAI: CRM buyurtmalari + sotuvchi biriktiruvi (`DealEmployee`,
- * `EmployeeCategory.turi = "sotuvchi"`) + bosqich turi (WON/LOST/OPEN) +
- * to'lov holati (`lib/crm/tolovHolati.ts`). Hech qanday hisoblagich
- * SAQLANMAYDI — har o'qishda manbadan hisoblanadi, shuning uchun raqamlar
- * CRM'dan hech qachon siljimaydi.
+ * HAQIQAT MANBAI: CRM zakazlari + sotuvchi biriktiruvi (`DealEmployee`,
+ * `EmployeeCategory.turi = "sotuvchi"`) + zakaz holati (`Deal.holat`,
+ * `lib/crm/pipeline.ts` bilan AYNI qoida — doska va statistika bir xil
+ * raqam bersin) + to'lov holati (`lib/crm/tolovHolati.ts`). Hech qanday
+ * hisoblagich SAQLANMAYDI — har o'qishda manbadan hisoblanadi.
  *
  * IKKI SUMMA ARALASHTIRILMAYDI (16-talab):
  *   `yutilgan.summa`  — yopilgan sotuv qiymati (qarzga berilgani ham kiradi);
@@ -125,10 +130,13 @@ interface BiriktiruvQator {
     id: string;
     nomi: string;
     summa: number;
+    tolangan: number;
+    holat: string;
+    debtId: string | null;
     sana: Date | null;
     createdAt: Date;
     contact: { ism: string | null } | null;
-    stage: { nomi: string; turi: string };
+    debt: { jamiSumma: number; tolangan: number; status: string } | null;
     transaction: { id: string; summa: number; tolovTuri: string | null; deletedAt: Date | null } | null;
   };
 }
@@ -159,17 +167,23 @@ async function biriktiruvlarniOqi(params: {
           id: true,
           nomi: true,
           summa: true,
+          tolangan: true,
+          holat: true,
+          debtId: true,
           sana: true,
           createdAt: true,
           contact: { select: { ism: true } },
-          stage: { select: { nomi: true, turi: true } },
+          debt: { select: { jamiSumma: true, tolangan: true, status: true } },
           transaction: { select: { id: true, summa: true, tolovTuri: true, deletedAt: true } },
         },
       },
     },
   });
 
+  // ESKI (pipeline'gacha) zakazlar: qarz `manbaTransactionId` ko'prigi
+  // orqali topiladi. Yangi zakazlarda qarz `Deal.debtId` bilan keladi.
   const qarzTxIdlar = qatorlar
+    .filter((q) => !q.deal.debtId && q.deal.tolangan === 0)
     .map((q) => q.deal.transaction)
     .filter((t): t is NonNullable<typeof t> => Boolean(t && !t.deletedAt && t.tolovTuri === "qarz"))
     .map((t) => t.id);
@@ -187,22 +201,28 @@ async function biriktiruvlarniOqi(params: {
   };
 }
 
+/** Zakazning qarz yozuvi: yangi yo'lda `Deal.debt`, eskisida ko'prik orqali. */
+function qarzTop(q: BiriktiruvQator, qarzlar: Map<string, QarzQismi>): QarzQismi | null {
+  if (q.deal.debt) return q.deal.debt;
+  return q.deal.transaction ? qarzlar.get(q.deal.transaction.id) ?? null : null;
+}
+
 /** Bitta biriktiruvni jamga qo'shadi (KPI qoidalari shu yerda, bitta joyda). */
 function jamgaQosh(jam: Jam, q: BiriktiruvQator, qarzlar: Map<string, QarzQismi>): void {
   const d = q.deal;
   jam.olingan.soni += 1;
   jam.olingan.summa += d.summa;
 
-  if (d.stage.turi === "WON") {
+  if (d.holat === "YUTILDI") {
     jam.yutilgan.soni += 1;
     jam.yutilgan.summa += d.summa;
-    const tolov = tolovHisobla(d.transaction, d.transaction ? qarzlar.get(d.transaction.id) : null);
+    const tolov = tolovHisobla(d, qarzTop(q, qarzlar), d.transaction);
     jam.puliKelgan += tolov.puliKelgan;
     if (tolov.holati !== "TOLIQ") {
       jam.qismanTolangan += tolov.tolangan;
       jam.qarzdagi += d.summa;
     }
-  } else if (d.stage.turi === "LOST") {
+  } else if (d.holat === "YOQOTILDI") {
     jam.yoqotilgan.soni += 1;
     jam.yoqotilgan.summa += d.summa;
   } else {
@@ -307,8 +327,9 @@ export interface SotuvchiZakazDTO {
   summa: number;
   /** "YYYY-MM-DD" (sana bo'lmasa createdAt kuni). */
   sana: string;
-  stageNomi: string;
-  stageTuri: string;
+  /** Doska ustuni (`lib/crm/pipeline.ts` qoidasi bilan). */
+  ustun: string;
+  holat: string;
   tolovHolati: ZakazTolovHolati;
   /** Shu zakazdan kelib tushgan pul. */
   tolangan: number;
@@ -358,20 +379,19 @@ export async function getSotuvchiDetal(params: {
       orin: 0,
     } as SotuvchiKpiDTO);
 
+  const bugun = todayTashkentDateOnlyString();
   const zakazlar: SotuvchiZakazDTO[] = qatorlar
     .map((q) => {
-      const t = tolovHisobla(
-        q.deal.transaction,
-        q.deal.transaction ? qarzlar.get(q.deal.transaction.id) : null
-      );
+      const t = tolovHisobla(q.deal, qarzTop(q, qarzlar), q.deal.transaction);
+      const sana = utcDateToDateOnlyString(q.deal.sana ?? q.deal.createdAt);
       return {
         dealId: q.deal.id,
         nomi: q.deal.nomi,
         mijoz: q.deal.contact?.ism ?? null,
         summa: q.deal.summa,
-        sana: utcDateToDateOnlyString(q.deal.sana ?? q.deal.createdAt),
-        stageNomi: q.deal.stage.nomi,
-        stageTuri: q.deal.stage.turi,
+        sana,
+        ustun: zakazUstuni(q.deal.holat, q.deal.sana ? sana : null, bugun),
+        holat: q.deal.holat,
         tolovHolati: t.holati,
         tolangan: t.tolangan,
       };

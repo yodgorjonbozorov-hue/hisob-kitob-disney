@@ -3,7 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { withTenant } from "@/lib/auth/tenant";
 import { ForbiddenError, BadRequestError } from "@/lib/auth/guard";
 import { resolveActiveBusinessId } from "@/lib/business";
-import { moveDeal, biznesXodimi } from "@/lib/crm/service";
+import { moveDeal, biznesXodimi, holatniOzgartirish, bugungaKochirish } from "@/lib/crm/service";
+import { zakazniYakunlash } from "@/lib/crm/yakunlash";
 import { buyurtmaPatchSchema } from "@/lib/validation/crm";
 import { dashboardYangilandi } from "@/lib/cache";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
@@ -28,6 +29,7 @@ export const GET = withTenant<{ params: { id: string } }>(
         stage: true,
         category: { select: { id: true, nomi: true } },
         transaction: { select: { id: true, summa: true, sana: true, deletedAt: true } },
+        debt: { select: { id: true, jamiSumma: true, tolangan: true, status: true } },
         activities: { orderBy: { createdAt: "desc" }, take: 50 },
       },
     });
@@ -67,12 +69,14 @@ export const PATCH = withTenant<{ params: { id: string } }>(
       data.izoh !== undefined ||
       data.sana !== undefined ||
       data.categoryId !== undefined ||
-      data.masulId !== undefined;
+      data.masulId !== undefined ||
+      data.tolangan !== undefined ||
+      data.tolovTuri !== undefined;
 
     if (maydonlar) {
       const existing = await prisma.deal.findFirst({
         where: { id: params.id, businessId, deletedAt: null },
-        select: { id: true, transactionId: true },
+        select: { id: true, transactionId: true, debtId: true, summa: true, tolangan: true },
       });
       if (!existing) throw new ForbiddenError("Buyurtma topilmadi");
 
@@ -80,6 +84,22 @@ export const PATCH = withTenant<{ params: { id: string } }>(
         throw new BadRequestError(
           "Kirim yozilgan buyurtmaning summasi va kategoriyasi o'zgartirilmaydi"
         );
+      }
+      // TO'LOV moliyaga o'tgach QULFLANADI: kirim/qarz yozuvlari allaqachon
+      // shu raqamlardan chiqqan, ularni keyin surish CRM va moliyani zid
+      // holatga tushirardi (summa/kategoriya bilan bir xil qoida).
+      if (
+        (existing.transactionId || existing.debtId) &&
+        (data.tolangan !== undefined || data.tolovTuri !== undefined)
+      ) {
+        throw new BadRequestError(
+          "Moliyaga o'tgan zakazning to'lovi o'zgartirilmaydi — Kirim yoki Qarzdorlik bo'limidan tuzating"
+        );
+      }
+      const yangiSumma = data.summa ?? existing.summa;
+      const yangiTolangan = data.tolangan ?? existing.tolangan;
+      if (yangiTolangan > yangiSumma) {
+        throw new BadRequestError("To'langan summa zakaz narxidan ko'p bo'lmasligi kerak");
       }
 
       if (data.categoryId) {
@@ -100,6 +120,8 @@ export const PATCH = withTenant<{ params: { id: string } }>(
       if (data.izoh !== undefined) patch.izoh = data.izoh;
       if (data.masulId !== undefined) patch.masulId = data.masulId;
       if (data.sana !== undefined) patch.sana = data.sana ? dateOnlyStringToUTCDate(data.sana) : null;
+      if (data.tolangan !== undefined) patch.tolangan = data.tolangan;
+      if (data.tolovTuri !== undefined) patch.tolovTuri = data.tolovTuri;
       if (data.categoryId !== undefined) {
         patch.category = data.categoryId ? { connect: { id: data.categoryId } } : { disconnect: true };
       }
@@ -137,8 +159,30 @@ export const PATCH = withTenant<{ params: { id: string } }>(
       }
     }
 
-    // Holat ko'chirish maydonlardan KEYIN: WON + kirimYoz bo'lsa kirim yangi
-    // summa/kategoriya bilan yozilsin.
+    // "Bugungi zakazga o'tkazish" — sanani bugunga suradi (holat o'zgarmaydi).
+    if (data.bugungaKochir) {
+      await bugungaKochirish({ businessId, dealId: params.id, userId: user.userId });
+    }
+
+    // HOLAT o'zgarishi maydonlardan KEYIN: YUTILDI yangi summa/to'lov bilan
+    // yakunlansin.
+    if (data.holat) {
+      if (data.holat === "YUTILDI") {
+        // MOLIYAVIY YAKUN: kirim + qarzdorlik, atomik va idempotent
+        // (`lib/crm/yakunlash.ts`). Takroriy bosish yangi kirim yaratmaydi.
+        await zakazniYakunlash({ businessId, dealId: params.id, userId: user.userId });
+      } else {
+        await holatniOzgartirish({
+          businessId,
+          dealId: params.id,
+          holat: data.holat,
+          userId: user.userId,
+        });
+      }
+    }
+
+    // ESKI YO'L (bosqichga sudrash) buzilmaydi: WON + kirimYoz bo'lsa kirim
+    // yangi summa/kategoriya bilan yoziladi.
     if (data.stageId) {
       await moveDeal({
         businessId,

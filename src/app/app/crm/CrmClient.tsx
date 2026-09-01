@@ -2,33 +2,31 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { formatMoney } from "@/lib/format";
-import { BuyurtmaKarta } from "./BuyurtmaKarta";
+import { ASOSIY_USTUNLAR, zakazUstuni, type Ustun } from "@/lib/crm/pipeline";
 import { BuyurtmaModal } from "./BuyurtmaModal";
 import { BuyurtmaSheet } from "./BuyurtmaSheet";
-import { KirimTasdiq } from "./KirimTasdiq";
-import { Select } from "@/components/ui/Select";
+import { DoskaFiltr } from "./DoskaFiltr";
+import { YakunlashTasdiq } from "./YakunlashTasdiq";
+import { ZakazUstuni } from "./ZakazUstuni";
 import type {
   BuyurtmaDTO,
   KategoriyaDTO,
   SotuvchiDTO,
-  StageDTO,
   XodimDTO,
   XodimKategoriyaDTO,
 } from "./turlar";
 
-const STAGE_RANG: Record<string, string> = {
-  OPEN: "border-line",
-  WON: "border-income/50",
-  LOST: "border-expense/40",
-};
-
 /**
- * CRM kanban doskasi — kunlik buyurtmalar.
- * Yangi → Aloqa qilindi → Taklif yuborildi → Yutildi → Yo'qotildi.
+ * CRM ZAKAZ DOSKASI.
+ *
+ * Kutilayotgan → Bugungi → Jarayonda → Yutildi (+ arxiv: Yo'qotildi).
+ * Ustun BAZADAN o'qilmaydi — u `holat` va `sana` dan hisoblanadi
+ * (`lib/crm/pipeline.ts`), server bilan bir xil qoida bo'yicha.
+ *
+ * Sudrab tashlash (drag & drop) ishlashda davom etadi; mobilda esa ayni
+ * o'tishlar tafsilot oynasidagi tugmalarda (10-talab).
  */
 export function CrmClient({
-  stages,
   buyurtmalar,
   kategoriyalar,
   xodimlar,
@@ -37,14 +35,14 @@ export function CrmClient({
   ozimSotuvchi,
   sotuvchiMajburiy,
   sotuvchiOzgartira,
+  filtr,
   meId,
   bugun,
 }: {
-  stages: StageDTO[];
   buyurtmalar: BuyurtmaDTO[];
   kategoriyalar: KategoriyaDTO[];
   xodimlar: XodimDTO[];
-  /** Xodim kategoriyalari (Diktor/Dekorator/...) — bajaruvchi biriktiruvi uchun. */
+  /** Xodim kategoriyalari (Diktor/Dekorator/...) — bajaruvchi biriktiruvi. */
   xodimKategoriyalari: XodimKategoriyaDTO[];
   /** Sotuvchilar — forma selektori va doska filtri uchun. */
   sotuvchilar: SotuvchiDTO[];
@@ -52,7 +50,16 @@ export function CrmClient({
   ozimSotuvchi: string | null;
   sotuvchiMajburiy: boolean;
   sotuvchiOzgartira: boolean;
+  filtr: {
+    from: string;
+    to: string;
+    masulId: string;
+    sotuvchiId: string;
+    categoryId: string;
+    tolov: string;
+  };
   meId: string;
+  /** Bugungi sana "YYYY-MM-DD" (Asia/Tashkent, server tomondan). */
   bugun: string;
 }) {
   const router = useRouter();
@@ -66,41 +73,61 @@ export function CrmClient({
   const [tanlangan, setTanlangan] = useState<BuyurtmaDTO | null>(
     () => buyurtmalar.find((x) => x.id === buyurtmaId) ?? null
   );
-  const [kirimTasdiq, setKirimTasdiq] = useState<BuyurtmaDTO | null>(null);
+  const [yakunlanadi, setYakunlanadi] = useState<BuyurtmaDTO | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [xato, setXato] = useState<string | null>(null);
-  // SOTUVCHI FILTRI (25-talab). Doska bir marta yuklangani uchun saralash
-  // shu yerda — qo'shimcha so'rov yubormaydi; server ham `?sotuvchiId=`
-  // orqali ayni filtrni qo'llay oladi (API foydalanuvchilari uchun).
-  const [filtrSotuvchi, setFiltrSotuvchi] = useState("");
-  const korinadigan = filtrSotuvchi
-    ? buyurtmalar.filter((b) => b.sotuvchi?.employeeId === filtrSotuvchi)
-    : buyurtmalar;
+
+  const ustuni = (b: BuyurtmaDTO): Ustun => zakazUstuni(b.holat, b.sana, bugun);
 
   /**
-   * Holatni o'zgartirish. "Yutildi" ga o'tkazishda kirim AVTOMATIK
-   * yozilmaydi — tasdiq oynasi ochiladi (pul yozadigan amal hech qachon
-   * sudrab tashlash bilan bo'lmasin).
+   * USTUNGA KO'CHIRISH. "Yutildi" bu yerda darhol bajarilmaydi — pul
+   * yozadigan amal hech qachon sudrab tashlash bilan bo'lmasin: tasdiq
+   * oynasi ochiladi va u yerda kirim/qarz taqsimoti ko'rsatiladi.
    */
-  async function kochirish(id: string, stage: StageDTO) {
+  async function ustungaKochirish(id: string, ustun: Ustun) {
     setXato(null);
-    // Ochiq oynadagi snapshot ustunroq: kategoriya/narx endigina tahrirlangan
-    // bo'lsa, serverdan kelgan ro'yxat hali eski qiymatni saqlab turadi.
     const b = tanlangan?.id === id ? tanlangan : buyurtmalar.find((x) => x.id === id);
+    if (!b) return;
+    if (ustuni(b) === ustun) return;
+
+    if (ustun === "YUTILDI") {
+      setTanlangan(null);
+      setYakunlanadi(b);
+      return;
+    }
+
+    // "Bugungi" — holat emas, SANA: zakaz sanasi bugunga suriladi.
+    const tana =
+      ustun === "BUGUNGI"
+        ? { bugungaKochir: true }
+        : { holat: ustun === "JARAYONDA" ? "JARAYONDA" : "KUTILMOQDA" };
+
     const res = await fetch(`/api/crm/deals/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ stageId: stage.id }),
+      body: JSON.stringify(tana),
     });
     if (!res.ok) {
       setXato((await res.json()).error ?? "Xatolik yuz berdi");
       return;
     }
     setTanlangan(null);
-    if (stage.turi === "WON" && b && b.summa > 0 && !b.transactionId) {
-      setKirimTasdiq({ ...b, stageId: stage.id });
+    router.refresh();
+  }
+
+  /** Yo'qotildi — arxivga (asosiy ustunlardan tashqarida). */
+  async function yoqotildi(id: string) {
+    setXato(null);
+    const res = await fetch(`/api/crm/deals/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ holat: "YOQOTILDI" }),
+    });
+    if (!res.ok) {
+      setXato((await res.json()).error ?? "Xatolik yuz berdi");
       return;
     }
+    setTanlangan(null);
     router.refresh();
   }
 
@@ -111,66 +138,39 @@ export function CrmClient({
           onClick={() => setYangiOchiq(true)}
           className="bg-income text-white font-medium rounded-lg px-4 py-2 text-sm hover:brightness-110 transition"
         >
-          + Yangi buyurtma
+          + Yangi zakaz
         </button>
-        {sotuvchilar.length > 0 && (
-          <div className="w-full sm:w-56">
-            <Select
-              value={filtrSotuvchi}
-              onChange={setFiltrSotuvchi}
-              searchable={sotuvchilar.length > 7}
-              aria-label="Sotuvchi bo'yicha filtr"
-              options={[
-                { value: "", label: "Sotuvchi: barchasi" },
-                ...sotuvchilar.map((s) => ({ value: s.id, label: s.ism })),
-              ]}
-            />
-          </div>
-        )}
         {xato && <p className="text-expense text-sm">{xato}</p>}
       </div>
 
-      {/* Kanban — mobil/planshetda gorizontal siljiydi */}
-      <div className="flex gap-3 overflow-x-auto pb-3 -mx-1 px-1">
-        {stages.map((s) => {
-          const ustun = korinadigan.filter((b) => b.stageId === s.id);
-          const jami = ustun.reduce((a, b) => a + b.summa, 0);
-          return (
-            <div
-              key={s.id}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={() => dragId && kochirish(dragId, s)}
-              className={`shrink-0 w-64 sm:w-72 bg-surface-2/60 rounded-2xl border ${
-                STAGE_RANG[s.turi] ?? "border-line"
-              } p-2.5`}
-            >
-              <div className="flex items-center justify-between px-1.5 pb-2">
-                <p className="text-sm font-semibold text-fg">{s.nomi}</p>
-                <p className="text-2xs text-faint tnum">
-                  {ustun.length} ta{jami > 0 ? ` · ${formatMoney(jami)}` : ""}
-                </p>
-              </div>
-              <div className="space-y-2 min-h-[60px]">
-                {ustun.map((b) => (
-                  <BuyurtmaKarta
-                    key={b.id}
-                    b={b}
-                    holat={s.nomi}
-                    onClick={() => setTanlangan(b)}
-                    onDragStart={() => setDragId(b.id)}
-                    onDragEnd={() => setDragId(null)}
-                  />
-                ))}
-              </div>
-            </div>
-          );
-        })}
+      <DoskaFiltr
+        filtr={filtr}
+        kategoriyalar={kategoriyalar}
+        xodimlar={xodimlar}
+        sotuvchilar={sotuvchilar}
+        bugun={bugun}
+      />
+
+      {/* Kanban — mobilda gorizontal svayp bilan yuriladi (16-talab). */}
+      <div className="flex gap-3 overflow-x-auto pb-3 -mx-1 px-1 snap-x snap-mandatory">
+        {ASOSIY_USTUNLAR.map((u) => (
+          <div key={u} className="snap-start">
+            <ZakazUstuni
+              ustun={u}
+              bugun={bugun}
+              zakazlar={buyurtmalar.filter((b) => ustuni(b) === u)}
+              onDrop={() => dragId && ustungaKochirish(dragId, u)}
+              onTanlash={setTanlangan}
+              onDragStart={setDragId}
+              onDragEnd={() => setDragId(null)}
+            />
+          </div>
+        ))}
       </div>
 
       {yangiOchiq && (
         <BuyurtmaModal
           kategoriyalar={kategoriyalar}
-          stages={stages}
           xodimlar={xodimlar}
           xodimKategoriyalari={xodimKategoriyalari}
           sotuvchilar={sotuvchilar}
@@ -185,12 +185,14 @@ export function CrmClient({
       {tanlangan && (
         <BuyurtmaSheet
           b={tanlangan}
-          stages={stages}
+          ustun={ustuni(tanlangan)}
+          bugun={bugun}
           kategoriyalar={kategoriyalar}
           xodimKategoriyalari={xodimKategoriyalari}
           sotuvchilar={sotuvchilar}
           sotuvchiOzgartira={sotuvchiOzgartira}
-          onKochirish={(s) => kochirish(tanlangan.id, s)}
+          onUstunga={(u) => ustungaKochirish(tanlangan.id, u)}
+          onYoqotildi={() => yoqotildi(tanlangan.id)}
           onTahrirlandi={(yangi) => {
             // Ochiq oyna serverdan kelgan snapshot ustida ishlaydi — yangi
             // qiymatlar darhol ko'rinsin (doskaning o'zini `router.refresh()`
@@ -201,15 +203,12 @@ export function CrmClient({
           onClose={() => setTanlangan(null)}
         />
       )}
-      {kirimTasdiq && (
-        <KirimTasdiq
-          b={kirimTasdiq}
-          onClose={() => {
-            setKirimTasdiq(null);
-            router.refresh();
-          }}
+      {yakunlanadi && (
+        <YakunlashTasdiq
+          b={yakunlanadi}
+          onClose={() => setYakunlanadi(null)}
           onDone={() => {
-            setKirimTasdiq(null);
+            setYakunlanadi(null);
             router.refresh();
           }}
         />

@@ -4,29 +4,40 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Select } from "@/components/ui/Select";
 import { parseSomInput } from "@/lib/format";
-import type { KategoriyaDTO, SotuvchiDTO, StageDTO, XodimDTO, XodimKategoriyaDTO } from "./turlar";
+import type { KategoriyaDTO, SotuvchiDTO, XodimDTO, XodimKategoriyaDTO } from "./turlar";
 import { SotuvchiTanlash } from "./SotuvchiTanlash";
-import { BuyurtmaMijozMaydonlari } from "./BuyurtmaMijozMaydonlari";
-import { INPUT_KLASS } from "./formaUslub";
 import {
   ZakazXodimlariTanlash,
   ijroKategoriyalari,
   tanlovdanRoyxat,
   type ZakazXodimTanlov,
 } from "./ZakazXodimlari";
+import {
+  TolovMaydonlari,
+  tolanganHisobla,
+  type PulKanali,
+  type TolovTanlov,
+} from "./TolovMaydonlari";
+import { ZakazAsosiy } from "./ZakazAsosiy";
+import { ZakazNarxSana } from "./ZakazNarxSana";
 
-const INPUT = INPUT_KLASS;
+const INPUT =
+  "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand";
 
 /**
- * Yangi buyurtma (1/2-talab): kategoriya, xizmat nomi, SOTUVCHI, mijoz,
- * telefon, narx, sana, izoh, holat.
+ * YANGI ZAKAZ (6-talab): kategoriya, xizmat nomi, mijoz, telefon, sotuvchi,
+ * ZAKAZ SANASI (majburiy), narx, to'lov turi, izoh.
+ *
+ * ZAKAZ SANASI majburiy, chunki doskadagi o'rin aynan shundan hisoblanadi:
+ * sana bugun bo'lsa zakaz darhol "Bugungi zakazlar"da, kelajakda bo'lsa
+ * "Kutilayotgan zakazlar"da ko'rinadi. Holat tanlovi ATAYLAB olib
+ * tashlandi — yangi zakaz har doim kutilayotganlarda tug'iladi.
  *
  * Kategoriya ro'yxati KIRIM modulining kategoriyalari — CRM o'zining
  * alohida ro'yxatini yuritmaydi.
  */
 export function BuyurtmaModal({
   kategoriyalar,
-  stages,
   xodimlar,
   xodimKategoriyalari,
   sotuvchilar,
@@ -38,17 +49,16 @@ export function BuyurtmaModal({
   onClose,
 }: {
   kategoriyalar: KategoriyaDTO[];
-  stages: StageDTO[];
   xodimlar: XodimDTO[];
   /** Xodim kategoriyalari (Diktor/Dekorator/...) — "Zakazni bajaruvchilar". */
   xodimKategoriyalari: XodimKategoriyaDTO[];
   /** Sotuvchilar (faol, sotuvchi kategoriyasi a'zolari). */
   sotuvchilar: SotuvchiDTO[];
-  /** Joriy foydalanuvchining sotuvchi profili (avto-tanlash, 4-talab). */
+  /** Joriy foydalanuvchining sotuvchi profili — avto-tanlash. */
   ozimSotuvchi: string | null;
-  /** Biznes sozlamasi: sotuvchi majburiymi (6-talab). */
+  /** Biznes sozlamasi: sotuvchi majburiymi. */
   sotuvchiMajburiy: boolean;
-  /** Boshqa sotuvchini tanlash huquqi (5/27-talab). */
+  /** `crm.sotuvchi` huquqi — yo'q bo'lsa maydon qulflanadi. */
   sotuvchiOzgartira: boolean;
   meId: string;
   /** Bugungi sana "YYYY-MM-DD" (server tomondan — brauzer vaqt mintaqasi emas). */
@@ -64,18 +74,24 @@ export function BuyurtmaModal({
   const [sana, setSana] = useState(bugun);
   const [izoh, setIzoh] = useState("");
   const [masulId, setMasulId] = useState(meId);
-  const [stageId, setStageId] = useState(stages.find((s) => s.turi === "OPEN")?.id ?? "");
-  // AVTO-TANLASH (4-talab): sotuvchi o'z accountidan kirsa o'zi tanlangan
-  // holda ochiladi — har safar o'zini qidirmasin.
+  const [tolovTanlov, setTolovTanlov] = useState<TolovTanlov>("toliq");
+  const [tolangan, setTolangan] = useState("");
+  const [tolovTuri, setTolovTuri] = useState<PulKanali>("naqd");
+  // AVTO-TANLASH: sotuvchi o'z hisobidan kirsa o'zi tanlangan holda ochiladi.
   const [sotuvchiId, setSotuvchiId] = useState(ozimSotuvchi ?? "");
   const [xodimTanlov, setXodimTanlov] = useState<ZakazXodimTanlov>({});
   const [xato, setXato] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const ijrochilar = ijroKategoriyalari(xodimKategoriyalari);
   // Sotuvchi maydoni bor bo'lsa mas'ul o'sha tanlovdan chiqadi (server
   // sinxronlaydi) — ikkita "kim sotdi" maydoni ko'rsatilmaydi.
   const sotuvchiSelektorBor = sotuvchilar.length > 0;
+
+  const narx = summa ? parseSomInput(summa) : 0;
+  // TO'LANGAN SUMMA tanlovdan chiqadi: to'liq — butun narx, qarzga — 0,
+  // qisman — kiritilgan raqam. To'lov holati serverda ham AYNI shu
+  // ikkovidan (narx va to'langan) hisoblanadi.
+  const tolanganSumma = tolanganHisobla(tolovTanlov, narx, tolangan ? parseSomInput(tolangan) : 0);
 
   async function saqlash(e: React.FormEvent) {
     e.preventDefault();
@@ -83,9 +99,17 @@ export function BuyurtmaModal({
       setXato("Avval Kirim bo'limida kategoriya yarating");
       return;
     }
-    // Frontend tekshiruvi faqat qulaylik uchun — server ham majburlaydi.
+    if (!sana) {
+      setXato("Zakaz sanasi kiritilsin");
+      return;
+    }
+    // Frontend tekshiruvi qulaylik uchun — server ham majburlaydi.
     if (sotuvchiMajburiy && !sotuvchiId) {
       setXato("Buyurtmani olgan sotuvchini tanlang");
+      return;
+    }
+    if (tolanganSumma > narx) {
+      setXato("To'langan summa zakaz narxidan ko'p bo'lmasligi kerak");
       return;
     }
     setLoading(true);
@@ -96,13 +120,14 @@ export function BuyurtmaModal({
       body: JSON.stringify({
         nomi,
         categoryId,
-        summa: summa ? parseSomInput(summa) : 0,
+        summa: narx,
+        tolangan: tolanganSumma,
+        tolovTuri: tolovTanlov === "qarz" ? "qarz" : tolovTuri,
         kontaktIsm: kontaktIsm || null,
         kontaktTel: kontaktTel || null,
-        sana: sana || null,
+        sana,
         izoh: izoh || null,
         masulId,
-        stageId: stageId || null,
         sotuvchiId: sotuvchiId || null,
         xodimlar: tanlovdanRoyxat(xodimTanlov),
       }),
@@ -126,31 +151,19 @@ export function BuyurtmaModal({
         onClick={(e) => e.stopPropagation()}
         className="bg-surface w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl border border-line p-5 space-y-3 max-h-[90vh] overflow-y-auto"
       >
-        <h2 className="font-semibold text-fg text-lg">Yangi buyurtma</h2>
+        <h2 className="font-semibold text-fg text-lg">Yangi zakaz</h2>
 
-        <div className="space-y-1">
-          <label className="block text-xs text-muted" htmlFor="bm-kategoriya">Kategoriya</label>
-          <Select
-            id="bm-kategoriya"
-            value={categoryId}
-            onChange={setCategoryId}
-            searchable={kategoriyalar.length > 7}
-            placeholder="Kategoriya yo'q"
-            options={kategoriyalar.map((k) => ({ value: k.id, label: k.nomi }))}
-          />
-        </div>
-
-        <label className="block space-y-1">
-          <span className="text-xs text-muted">Xizmat / buyurtma nomi</span>
-          <input
-            autoFocus
-            value={nomi}
-            onChange={(e) => setNomi(e.target.value)}
-            placeholder="Masalan: Onajon Dekor"
-            className={INPUT}
-            required
-          />
-        </label>
+        <ZakazAsosiy
+          kategoriyalar={kategoriyalar}
+          categoryId={categoryId}
+          onCategoryId={setCategoryId}
+          nomi={nomi}
+          onNomi={setNomi}
+          kontaktIsm={kontaktIsm}
+          onKontaktIsm={setKontaktIsm}
+          kontaktTel={kontaktTel}
+          onKontaktTel={setKontaktTel}
+        />
 
         <SotuvchiTanlash
           id="bm-sotuvchi"
@@ -161,16 +174,7 @@ export function BuyurtmaModal({
           ozgartira={sotuvchiOzgartira}
         />
 
-        <BuyurtmaMijozMaydonlari
-          kontaktIsm={kontaktIsm}
-          setKontaktIsm={setKontaktIsm}
-          kontaktTel={kontaktTel}
-          setKontaktTel={setKontaktTel}
-          summa={summa}
-          setSumma={setSumma}
-          sana={sana}
-          setSana={setSana}
-        />
+        <ZakazNarxSana summa={summa} onSumma={setSumma} sana={sana} onSana={setSana} bugun={bugun} />
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {/* Sotuvchi kategoriya-selektori bo'lsa mas'ul o'sha yerdan chiqadi. */}
@@ -186,19 +190,21 @@ export function BuyurtmaModal({
               />
             </div>
           )}
-          <div className="space-y-1">
-            <label className="block text-xs text-muted" htmlFor="bm-holat">Holat</label>
-            <Select
-              id="bm-holat"
-              value={stageId}
-              onChange={setStageId}
-              options={stages.map((s) => ({ value: s.id, label: s.nomi }))}
-            />
-          </div>
         </div>
 
+        <TolovMaydonlari
+          tanlov={tolovTanlov}
+          onTanlov={setTolovTanlov}
+          qisman={tolangan}
+          onQisman={setTolangan}
+          kanal={tolovTuri}
+          onKanal={setTolovTuri}
+          narx={narx}
+          tolangan={tolanganSumma}
+        />
+
         <ZakazXodimlariTanlash
-          kategoriyalar={ijrochilar}
+          kategoriyalar={ijroKategoriyalari(xodimKategoriyalari)}
           tanlov={xodimTanlov}
           onChange={setXodimTanlov}
         />

@@ -1,7 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
-import { dateOnlyStringToUTCDate } from "@/lib/date";
+import { dateOnlyStringToUTCDate, todayTashkentDateOnlyString, utcDateToDateOnlyString } from "@/lib/date";
 import { kirimgaKochirish } from "@/lib/crm/kirim";
+import {
+  yopiqHolat,
+  zakazUstuni,
+  type Ustun,
+  type ZakazHolat,
+} from "@/lib/crm/pipeline";
 import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
 import {
   sotuvchiUserIdTop,
@@ -28,11 +34,20 @@ import type { ZakazXodimInput } from "@/lib/validation/xodimKategoriya";
  * (`lib/crm/kirim.ts`).
  */
 
-/** Yangi biznes uchun standart bosqichlar. */
+/**
+ * ZAKAZ OQIMI BOSQICHLARI.
+ *
+ * Doskaning ustunlari BOSQICHDAN emas, `Deal.holat` + `Deal.sana` dan
+ * hisoblanadi (`lib/crm/pipeline.ts`). Bosqich esa saqlanib qoldi va
+ * holatning KO'ZGUSI sifatida sinxron yuritiladi, chunki dashboard, AI
+ * analitikasi va xodim reytingi hali `Stage.turi` (OPEN/WON/LOST) ni
+ * o'qiydi — ular hech qanday o'zgarishsiz ishlashda davom etadi.
+ */
+export const JARAYON_BOSQICHI = "Jarayonda";
+
 export const DEFAULT_STAGES: { nomi: string; turi: "OPEN" | "WON" | "LOST" }[] = [
-  { nomi: "Yangi", turi: "OPEN" },
-  { nomi: "Aloqa qilindi", turi: "OPEN" },
-  { nomi: "Taklif yuborildi", turi: "OPEN" },
+  { nomi: "Kutilayotgan zakazlar", turi: "OPEN" },
+  { nomi: JARAYON_BOSQICHI, turi: "OPEN" },
   { nomi: "Yutildi", turi: "WON" },
   { nomi: "Yo'qotildi", turi: "LOST" },
 ];
@@ -47,16 +62,104 @@ export async function ensureStages(businessId: string) {
 }
 
 /**
- * Kanban ma'lumoti: bosqichlar + buyurtmalar (kontakt, kategoriya, sotuvchi
- * va bog'langan kirim bilan).
+ * HOLAT → BOSQICH XARITASI (idempotent).
  *
- * `sotuvchiId` berilsa (25-talab, CRM sotuvchi filtri) saralash BAZADA
- * bo'ladi — `DealEmployee(businessId, employeeId)` indeksi bo'yicha, ya'ni
- * 500 ta zakazni olib kelib brauzerda saralash emas.
- *
- * Sotuvchi nomlari BITTA qo'shimcha so'rovda o'qiladi (N+1 yo'q).
+ * Eski bizneslarda bosqichlar boshqacha nomlangan ("Yangi", "Aloqa
+ * qilindi", ...) — ular O'CHIRILMAYDI: eski zakazlar hali ularga
+ * bog'langan va tarix buzilmasligi kerak. Yetishmagani (masalan
+ * "Jarayonda") shu yerda qo'shiladi.
  */
-export async function getBoard(businessId: string, sotuvchiId?: string | null) {
+export async function pipelineBosqichlari(businessId: string): Promise<Record<ZakazHolat, string>> {
+  await ensureStages(businessId);
+  const stages = await prisma.stage.findMany({
+    where: { businessId },
+    orderBy: { tartib: "asc" },
+    select: { id: true, nomi: true, turi: true, tartib: true },
+  });
+
+  const oxirgiTartib = stages.reduce((m, s) => Math.max(m, s.tartib), -1);
+  let keyingiTartib = oxirgiTartib + 1;
+  const yarat = async (nomi: string, turi: "OPEN" | "WON" | "LOST") => {
+    const s = await prisma.stage.create({
+      data: { businessId, nomi, turi, tartib: keyingiTartib++ },
+      select: { id: true },
+    });
+    return s.id;
+  };
+
+  // KUTILMOQDA — birinchi OPEN bosqich (eski bizneslarda "Yangi").
+  const kutilmoqda =
+    stages.find((s) => s.turi === "OPEN")?.id ?? (await yarat("Kutilayotgan zakazlar", "OPEN"));
+  // JARAYONDA — nomi bo'yicha, chunki `Stage.turi` da "jarayon" turi yo'q
+  // (uni qo'shish barcha eski o'quvchilarni sindirardi).
+  const jarayonda =
+    stages.find((s) => s.turi === "OPEN" && s.nomi === JARAYON_BOSQICHI)?.id ??
+    (await yarat(JARAYON_BOSQICHI, "OPEN"));
+  const yutildi = stages.find((s) => s.turi === "WON")?.id ?? (await yarat("Yutildi", "WON"));
+  const yoqotildi = stages.find((s) => s.turi === "LOST")?.id ?? (await yarat("Yo'qotildi", "LOST"));
+
+  return { KUTILMOQDA: kutilmoqda, JARAYONDA: jarayonda, YUTILDI: yutildi, YOQOTILDI: yoqotildi };
+}
+
+/**
+ * BOSQICH → HOLAT. Eski yo'l (bosqich berish/sudrash) hali ishlaydi,
+ * shuning uchun teskari yo'nalish ham YAGONA joyda yoziladi: `holat`
+ * haqiqat manbai bo'lgani uchun bosqich berilganda u ham to'g'ri
+ * to'ldirilishi shart, aks holda doska va statistika bir-biriga zid
+ * bo'lib qolardi.
+ */
+export function bosqichdanHolat(stage: { turi: string; nomi: string }): ZakazHolat {
+  if (stage.turi === "WON") return "YUTILDI";
+  if (stage.turi === "LOST") return "YOQOTILDI";
+  if (stage.nomi === JARAYON_BOSQICHI) return "JARAYONDA";
+  return "KUTILMOQDA";
+}
+
+/**
+ * DOSKA FILTRI (12-talab). Sana filtri ZAKAZ SANASI bo'yicha kesadi
+ * (`sana` bo'lmagan eski zakazlarda `createdAt`), sotuvchi — mas'ul xodim,
+ * kategoriya — Kirim kategoriyasi.
+ */
+export interface DoskaFiltr {
+  /** "YYYY-MM-DD" (inclusive). */
+  from?: string | null;
+  /** "YYYY-MM-DD" (inclusive). */
+  to?: string | null;
+  masulId?: string | null;
+  categoryId?: string | null;
+  /**
+   * SOTUVCHI FILTRI (Employee.id). Saralash BAZADA bo'ladi —
+   * `DealEmployee(businessId, employeeId)` indeksi bo'yicha, ya'ni 500 ta
+   * zakazni olib kelib brauzerda saralash emas.
+   */
+  sotuvchiId?: string | null;
+  /** Arxiv (yo'qotilgan) zakazlar ham qaytsinmi. */
+  yoqotilgan?: boolean;
+}
+
+const KUN_MS = 24 * 60 * 60 * 1000;
+
+/** Sana sharti: zakaz sanasi (bo'lmasa `createdAt`) oraliq ichida. */
+function sanaShart(from?: string | null, to?: string | null) {
+  if (!from && !to) return {};
+  const gte = from ? dateOnlyStringToUTCDate(from) : undefined;
+  const lt = to ? new Date(dateOnlyStringToUTCDate(to).getTime() + KUN_MS) : undefined;
+  const oraliq = { ...(gte ? { gte } : {}), ...(lt ? { lt } : {}) };
+  return { OR: [{ sana: oraliq }, { sana: null, createdAt: oraliq }] };
+}
+
+/**
+ * Kanban ma'lumoti: bosqichlar + zakazlar (kontakt, kategoriya, kirim va
+ * qarz bog'lanishi bilan).
+ *
+ * USTUN BU YERDA TANLANMAYDI: har zakaz `holat` + `sana` bilan qaytadi,
+ * ustunni `lib/crm/pipeline.ts` dagi `zakazUstuni` hisoblaydi — server ham,
+ * brauzer ham ayni qoidadan foydalanadi.
+ *
+ * Zakaz SOTUVCHILARI bitta qo'shimcha so'rovda o'qiladi (N+1 yo'q) va
+ * `sotuvchilar` xaritasida qaytadi.
+ */
+export async function getBoard(businessId: string, filtr: DoskaFiltr = {}) {
   await ensureStages(businessId);
   const [stages, deals] = await Promise.all([
     prisma.stage.findMany({ where: { businessId }, orderBy: { tartib: "asc" } }),
@@ -64,20 +167,133 @@ export async function getBoard(businessId: string, sotuvchiId?: string | null) {
       where: {
         businessId,
         deletedAt: null,
-        ...(sotuvchiId
-          ? { xodimlar: { some: { businessId, employeeId: sotuvchiId, category: { turi: SOTUVCHI_TURI } } } }
+        ...(filtr.yoqotilgan ? {} : { holat: { not: "YOQOTILDI" } }),
+        ...(filtr.masulId ? { masulId: filtr.masulId } : {}),
+        ...(filtr.categoryId ? { categoryId: filtr.categoryId } : {}),
+        // SOTUVCHI FILTRI — biriktiruv jadvali orqali, bazada.
+        ...(filtr.sotuvchiId
+          ? {
+              xodimlar: {
+                some: { businessId, employeeId: filtr.sotuvchiId, category: { turi: SOTUVCHI_TURI } },
+              },
+            }
           : {}),
+        ...sanaShart(filtr.from, filtr.to),
       },
       include: {
         contact: { select: { id: true, ism: true, tel: true } },
         category: { select: { id: true, nomi: true } },
+        // Kirim/qarz summasi YOZUVNING O'ZIDAN o'qiladi: o'chirilgan yoki
+        // tahrirlangan tranzaksiya doskada eski raqam bo'lib qolmasin.
+        transaction: { select: { id: true, summa: true, deletedAt: true } },
+        debt: { select: { id: true, jamiSumma: true, tolangan: true, status: true } },
       },
-      orderBy: [{ sana: "desc" }, { createdAt: "desc" }],
-      take: 500, // sog'lom chegara; arxiv keyingi bosqichda
+      orderBy: [{ sana: "asc" }, { createdAt: "desc" }],
+      take: 500, // sog'lom chegara; arxiv alohida filtr bilan ochiladi
     }),
   ]);
   const sotuvchilar = await zakazSotuvchilari(businessId, deals.map((d) => d.id));
   return { stages, deals, sotuvchilar };
+}
+
+/**
+ * ZAKAZNI BOSHQA HOLATGA O'TKAZISH — PULSIZ o'tishlar uchun
+ * (KUTILMOQDA ↔ JARAYONDA ↔ YOQOTILDI).
+ *
+ * YUTILDI bu yerda EMAS: u moliyaviy yakun (kirim + qarzdorlik) va
+ * `lib/crm/yakunlash.ts` da atomik bajariladi. Shu funksiya YUTILDI
+ * so'ralsa ataylab rad etadi — pul yozadigan yo'l bitta bo'lsin.
+ */
+export async function holatniOzgartirish(params: {
+  businessId: string;
+  dealId: string;
+  holat: Exclude<ZakazHolat, "YUTILDI">;
+  userId: string;
+}) {
+  const deal = await prisma.deal.findFirst({
+    where: { id: params.dealId, businessId: params.businessId, deletedAt: null },
+    select: { id: true, contactId: true, holat: true, transactionId: true, debtId: true },
+  });
+  if (!deal) throw new ForbiddenError("Zakaz topilmadi");
+
+  // YUTILGAN zakaz ORQAGA qaytmaydi: kirim/qarz allaqachon yozilgan bo'lsa
+  // uni "jarayonda" ga surish moliyani CRM bilan zid holatga tushirardi.
+  if (deal.holat === "YUTILDI" && (deal.transactionId || deal.debtId)) {
+    throw new BadRequestError(
+      "Yutilgan va moliyaga o'tgan zakaz holati o'zgartirilmaydi — avval kirim/qarz yozuvini tuzating"
+    );
+  }
+
+  const bosqichlar = await pipelineBosqichlari(params.businessId);
+  const updated = await prisma.deal.update({
+    where: { id: deal.id },
+    data: {
+      holat: params.holat,
+      stageId: bosqichlar[params.holat],
+      yopilganAt: yopiqHolat(params.holat) ? new Date() : null,
+    },
+  });
+
+  await prisma.activity.create({
+    data: {
+      businessId: params.businessId,
+      dealId: deal.id,
+      contactId: deal.contactId,
+      turi: "tizim",
+      matn: `Holat: ${params.holat}`,
+      userId: params.userId,
+    },
+  });
+
+  return updated;
+}
+
+/**
+ * ZAKAZNI BUGUNGA KO'CHIRISH (10-talab, "Bugungi zakazga o'tkazish").
+ *
+ * Holat o'zgarmaydi — SANA bugunga o'rnatiladi, ustun esa sanadan
+ * hisoblanadi. Ya'ni "bugungi" bayrog'i degan ikkinchi haqiqat manbai
+ * paydo bo'lmaydi.
+ */
+export async function bugungaKochirish(params: {
+  businessId: string;
+  dealId: string;
+  userId: string;
+  bugun?: string;
+}) {
+  const bugun = params.bugun ?? todayTashkentDateOnlyString();
+  const deal = await prisma.deal.findFirst({
+    where: { id: params.dealId, businessId: params.businessId, deletedAt: null },
+    select: { id: true, contactId: true, holat: true },
+  });
+  if (!deal) throw new ForbiddenError("Zakaz topilmadi");
+  if (deal.holat !== "KUTILMOQDA") {
+    throw new BadRequestError("Faqat kutilayotgan zakaz bugungiga ko'chiriladi");
+  }
+
+  const updated = await prisma.deal.update({
+    where: { id: deal.id },
+    data: { sana: dateOnlyStringToUTCDate(bugun) },
+  });
+  await prisma.activity.create({
+    data: {
+      businessId: params.businessId,
+      dealId: deal.id,
+      contactId: deal.contactId,
+      turi: "tizim",
+      matn: `Zakaz sanasi bugunga ko'chirildi: ${bugun}`,
+      userId: params.userId,
+    },
+  });
+  return updated;
+}
+
+/** Zakazning joriy doska ustuni (server tomonda kerak bo'lganda). */
+export function dealUstuni(
+  deal: { holat: string; sana: Date | null },
+  bugun = todayTashkentDateOnlyString()
+): Ustun {
+  return zakazUstuni(deal.holat, deal.sana ? utcDateToDateOnlyString(deal.sana) : null, bugun);
 }
 
 export interface YangiBuyurtma {
@@ -90,7 +306,13 @@ export interface YangiBuyurtma {
   contactId?: string | null;
   kontaktIsm?: string | null; // berilsa yangi kontakt yaratiladi
   kontaktTel?: string | null;
-  /** Buyurtma sanasi "YYYY-MM-DD". Berilmasa null (eski xulq). */
+  /**
+   * ZAKAZ SANASI "YYYY-MM-DD" — xizmat qaysi kunga belgilangan.
+   * `createdAt` (CRM'ga qachon kiritildi) bilan ARALASHTIRILMAYDI: doskadagi
+   * o'rin va UI'dagi asosiy sana aynan shu maydon.
+   * Yangi zakazda majburiy (validatsiya qatlami majburlaydi); null — eski
+   * yozuvlar bilan moslik uchun.
+   */
   sana?: string | null;
   muddat?: string | null; // "YYYY-MM-DD"
   manba?: string | null;
@@ -101,6 +323,13 @@ export interface YangiBuyurtma {
   stageId?: string | null;
   /** Zakazdagi xodimlar (kategoriya kesimida). Berilmasa — biriktiruvsiz. */
   xodimlar?: ZakazXodimInput[];
+  /**
+   * TO'LANGAN summa (so'm). To'lov holati shundan hisoblanadi:
+   * `tolangan >= summa` — to'liq, `0 < tolangan < summa` — qisman, 0 — qarzga.
+   */
+  tolangan?: number;
+  /** Pul kanali: "naqd" | "click" | "qarz". */
+  tolovTuri?: string | null;
   /**
    * ZAKAZNI OLGAN SOTUVCHI (Employee.id). Berilmasa — foydalanuvchining
    * o'z sotuvchi profili (avto-tanlash).
@@ -228,15 +457,27 @@ async function sotuvchiniQosh(params: YangiBuyurtma): Promise<ZakazXodimInput[]>
  * Holat berilmasa birinchi OPEN bosqichga tushadi.
  */
 export async function createDeal(params: YangiBuyurtma) {
-  await ensureStages(params.businessId);
+  const bosqichlar = await pipelineBosqichlari(params.businessId);
 
-  const stage = params.stageId
+  // YANGI ZAKAZ HAR DOIM "KUTILAYOTGAN" da tug'iladi (1-talab). Sanasi bugun
+  // bo'lsa u DARHOL "Bugungi zakazlar" ustunida ko'rinadi — chunki ustun
+  // sanadan hisoblanadi, hech qanday qo'shimcha yozuvsiz.
+  //
+  // ESKI YO'L: `stageId` ataylab berilgan bo'lsa (masalan import yoki
+  // tarixiy yozuv) holat O'SHA bosqichdan chiqadi — `holat` va bosqich
+  // hech qachon bir-biriga zid bo'lib qolmasin.
+  const berilganStage = params.stageId
     ? await prisma.stage.findFirst({ where: { id: params.stageId, businessId: params.businessId } })
-    : await prisma.stage.findFirst({
-        where: { businessId: params.businessId, turi: "OPEN" },
-        orderBy: { tartib: "asc" },
-      });
-  if (!stage) throw new BadRequestError("Bosqichlar topilmadi");
+    : null;
+  if (params.stageId && !berilganStage) throw new BadRequestError("Bosqich topilmadi");
+  const stageId = berilganStage?.id ?? bosqichlar.KUTILMOQDA;
+  const holat: ZakazHolat = berilganStage ? bosqichdanHolat(berilganStage) : "KUTILMOQDA";
+
+  const summa = params.summa ?? 0;
+  const tolangan = Math.max(0, Math.min(params.tolangan ?? 0, summa));
+  if ((params.tolangan ?? 0) > summa) {
+    throw new BadRequestError("To'langan summa zakaz narxidan ko'p bo'lmasligi kerak");
+  }
 
   const categoryId = params.categoryId ? await kirimKategoriyasi(params.businessId, params.categoryId) : null;
 
@@ -272,9 +513,13 @@ export async function createDeal(params: YangiBuyurtma) {
     data: {
       businessId: params.businessId,
       nomi: params.nomi.trim(),
-      summa: params.summa ?? 0,
+      summa,
+      tolangan,
+      tolovTuri: params.tolovTuri ?? null,
+      holat,
+      yopilganAt: yopiqHolat(holat) ? new Date() : null,
       categoryId,
-      stageId: stage.id,
+      stageId,
       contactId,
       masulId,
       manba: params.manba ?? "qolda",
@@ -330,11 +575,15 @@ export async function moveDeal(params: {
   const stage = await prisma.stage.findFirst({ where: { id: params.stageId, businessId: params.businessId } });
   if (!stage) throw new ForbiddenError("Bosqich topilmadi");
 
-  const yopilyapti = stage.turi === "WON" || stage.turi === "LOST";
+  // BOSQICH → HOLAT SINXRONI. `Deal.holat` haqiqat manbai, bosqich uning
+  // ko'zgusi; eski yo'l (bosqichga sudrash) hali ishlaydi, shuning uchun
+  // bu yerda teskari yo'nalish ham yuritiladi.
+  const holat = bosqichdanHolat(stage);
+  const yopilyapti = yopiqHolat(holat);
 
   const updated = await prisma.deal.update({
     where: { id: deal.id },
-    data: { stageId: stage.id, yopilganAt: yopilyapti ? new Date() : null },
+    data: { stageId: stage.id, holat, yopilganAt: yopilyapti ? new Date() : null },
   });
 
   await prisma.activity.create({
