@@ -3,6 +3,7 @@
 import { useState, FormEvent } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { formatSom, parseSomInput } from "@/lib/format";
 import { todayDateOnlyString } from "@/lib/date";
 import { QARZ_MATN, type QarzTuri } from "@/lib/biznesTuri";
@@ -185,19 +186,16 @@ export function QarzYangiModal({
             <label className="block text-xs text-muted mb-1" htmlFor="yq-product">
               {avto ? "Mashina" : "Mahsulot"} (ixtiyoriy)
             </label>
-            <select
+            <Select
               id="yq-product"
               value={productId}
-              onChange={(e) => setProductId(e.target.value)}
-              className="w-full rounded-lg border border-line px-3 py-2 text-sm bg-surface"
-            >
-              <option value="">Bog&apos;lanmagan</option>
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nomi}
-                </option>
-              ))}
-            </select>
+              onChange={setProductId}
+              searchable={products.length > 7}
+              options={[
+                { value: "", label: "Bog'lanmagan" },
+                ...products.map((p) => ({ value: p.id, label: p.nomi })),
+              ]}
+            />
           </div>
         )}
 

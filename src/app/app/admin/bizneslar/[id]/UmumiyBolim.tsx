@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { BIZNES_TURLARI } from "@/lib/biznesTuri";
 import { formatToshkentVaqt } from "@/lib/format";
 import type { BiznesTafsilot } from "@/lib/services/biznesTafsilot";
@@ -74,19 +75,19 @@ export function UmumiyBolim({
             "Ombor moduli qaysi ko'rinishda ishlashini belgilaydi."
           }
           ong={
-            <select
-              aria-label="Ishlash rejimi"
-              value={biznes.turi}
-              disabled={band}
-              onChange={(e) => void saqla({ turi: e.target.value }, "Rejim o'zgartirildi")}
-              className="h-11 rounded-xl bg-surface border border-line px-3 text-sm text-fg focus:outline-none focus:border-brand"
-            >
-              {BIZNES_TURLARI.map((t) => (
-                <option key={t.code} value={t.code}>
-                  {t.nomi}
-                </option>
-              ))}
-            </select>
+            <>
+              <label className="sr-only" htmlFor="biz-rejim">
+                Ishlash rejimi
+              </label>
+              <Select
+                id="biz-rejim"
+                value={biznes.turi}
+                disabled={band}
+                onChange={(v) => void saqla({ turi: v }, "Rejim o'zgartirildi")}
+                className="min-w-[11rem]"
+                options={BIZNES_TURLARI.map((t) => ({ value: t.code, label: t.nomi }))}
+              />
+            </>
           }
         />
 

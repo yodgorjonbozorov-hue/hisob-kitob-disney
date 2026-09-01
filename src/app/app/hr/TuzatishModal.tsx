@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { INPUT_CLASS, LABEL_CLASS } from "@/components/ui/fieldStyles";
 
 /**
@@ -90,18 +91,18 @@ export function TuzatishModal({
         </div>
         <div>
           <label className={LABEL_CLASS} htmlFor="tz-holat">Holat (ixtiyoriy)</label>
-          <select
+          <Select
             id="tz-holat"
-            className={INPUT_CLASS}
             value={holat}
-            onChange={(e) => setHolat(e.target.value)}
-          >
-            <option value="">O&apos;zgartirilmasin</option>
-            <option value="keldi">Keldi</option>
-            <option value="yarim">Yarim kun</option>
-            <option value="kelmadi">Kelmadi</option>
-            <option value="tatil">Ta&apos;til / dam</option>
-          </select>
+            onChange={setHolat}
+            options={[
+              { value: "", label: "O'zgartirilmasin" },
+              { value: "keldi", label: "Keldi" },
+              { value: "yarim", label: "Yarim kun" },
+              { value: "kelmadi", label: "Kelmadi" },
+              { value: "tatil", label: "Ta'til / dam" },
+            ]}
+          />
         </div>
         <div>
           <label className={LABEL_CLASS} htmlFor="tz-sabab">Sabab (majburiy)</label>

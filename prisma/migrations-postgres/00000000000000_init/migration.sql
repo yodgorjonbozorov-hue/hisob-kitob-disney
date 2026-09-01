@@ -494,6 +494,8 @@ CREATE TABLE "Contact" (
     "ism" TEXT NOT NULL,
     "tel" TEXT,
     "telegram" TEXT,
+    "manzil" TEXT,
+    "masulShaxs" TEXT,
     "izoh" TEXT,
     "createdBy" TEXT NOT NULL,
     "qarzLimit" INTEGER,

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { formatSom, formatSomLabel, parseSomInput } from "@/lib/format";
 import { todayDateOnlyString } from "@/lib/date";
 import {
@@ -161,19 +162,16 @@ export function QarzTolovForm({
           <label className="block text-xs text-muted mb-1" htmlFor="tolov-kassa">
             Kassa
           </label>
-          <select
+          <Select
             id="tolov-kassa"
             value={accountId}
-            onChange={(e) => setAccountId(e.target.value)}
-            className="w-full rounded-lg border border-line px-3 py-2 text-sm bg-surface"
-          >
-            <option value="">To&apos;lov turiga mos kassa</option>
-            {kassalar.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.nomi}
-              </option>
-            ))}
-          </select>
+            onChange={setAccountId}
+            searchable={kassalar.length > 7}
+            options={[
+              { value: "", label: "To'lov turiga mos kassa" },
+              ...kassalar.map((k) => ({ value: k.id, label: k.nomi })),
+            ]}
+          />
         </div>
       )}
 

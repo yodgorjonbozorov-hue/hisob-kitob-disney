@@ -126,6 +126,9 @@ const telMaydoni = z
 export const yangiMijozSchema = z.object({
   ism: z.string().trim().min(1, "Ism kiritilishi shart").max(100),
   tel: telMaydoni,
+  /** Optom kartochka maydonlari (ixtiyoriy — chakanada so'ralmaydi). */
+  manzil: z.string().trim().max(300).optional().nullable(),
+  masulShaxs: z.string().trim().max(120).optional().nullable(),
   izoh: z.string().trim().max(500).optional().nullable(),
 });
 

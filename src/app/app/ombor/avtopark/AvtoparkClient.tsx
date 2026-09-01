@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
+import { Select } from "@/components/ui/Select";
 import { Jadval, type Ustun } from "@/components/ui/Jadval";
 import { formatSom, formatSomLabel, parseSomInput } from "@/lib/format";
 import { omborMatn, isAvto } from "@/lib/biznesTuri";
@@ -361,18 +362,12 @@ function NewProductModal({ onClose, onDone }: { onClose: () => void; onDone: () 
             <label className="block text-xs text-muted mb-1" htmlFor="np-birlik">
               O&apos;lchov birligi
             </label>
-            <select
+            <Select
               id="np-birlik"
               value={birlik}
-              onChange={(e) => setBirlik(e.target.value)}
-              className="w-full rounded-lg border border-line px-3 py-2 text-sm"
-            >
-              {BIRLIKLAR.map((b) => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
-              ))}
-            </select>
+              onChange={setBirlik}
+              options={BIRLIKLAR.map((b) => ({ value: b, label: b }))}
+            />
           </div>
         </div>
         <div>
@@ -1050,18 +1045,15 @@ function XarajatModal({
         <form onSubmit={submit} className="space-y-3 border-t border-line pt-3">
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-xs text-muted mb-1">Xarajat turi</label>
-              <select
+              <label className="block text-xs text-muted mb-1" htmlFor="xarajat-turi">
+                Xarajat turi
+              </label>
+              <Select
+                id="xarajat-turi"
                 value={turi}
-                onChange={(e) => setTuri(e.target.value)}
-                className="w-full rounded-lg border border-line px-3 py-2 text-sm bg-transparent"
-              >
-                {XARAJAT_TURLARI.map((x) => (
-                  <option key={x.code} value={x.code}>
-                    {x.nomi}
-                  </option>
-                ))}
-              </select>
+                onChange={setTuri}
+                options={XARAJAT_TURLARI.map((x) => ({ value: x.code, label: x.nomi }))}
+              />
             </div>
             <div>
               <label className="block text-xs text-muted mb-1">Summa</label>

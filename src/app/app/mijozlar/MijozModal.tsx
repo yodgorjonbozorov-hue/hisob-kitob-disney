@@ -27,6 +27,8 @@ export function MijozModal({
   const [ism, setIsm] = useState(mijoz?.ism ?? "");
   const [tel, setTel] = useState(mijoz?.tel ?? "");
   const [telegram, setTelegram] = useState(mijoz?.telegram ?? "");
+  const [masulShaxs, setMasulShaxs] = useState(mijoz?.masulShaxs ?? "");
+  const [manzil, setManzil] = useState(mijoz?.manzil ?? "");
   const [izoh, setIzoh] = useState(mijoz?.izoh ?? "");
   const [limit, setLimit] = useState(mijoz?.qarzLimit === null || mijoz === null ? "" : String(mijoz.qarzLimit));
   const [loading, setLoading] = useState(false);
@@ -54,6 +56,8 @@ export function MijozModal({
           ism,
           tel: tel || null,
           telegram: telegram || null,
+          masulShaxs: masulShaxs || null,
+          manzil: manzil || null,
           izoh: izoh || null,
           ...(boshqaruvchi ? { qarzLimit } : {}),
         }),
@@ -111,6 +115,20 @@ export function MijozModal({
             Telegram
           </label>
           <input id="m-tg" value={telegram} onChange={(e) => setTelegram(e.target.value)} maxLength={80} className={input} />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="block text-sm text-muted mb-1" htmlFor="m-masul">
+              Mas&apos;ul shaxs
+            </label>
+            <input id="m-masul" value={masulShaxs} onChange={(e) => setMasulShaxs(e.target.value)} maxLength={120} className={input} />
+          </div>
+          <div>
+            <label className="block text-sm text-muted mb-1" htmlFor="m-manzil">
+              Manzil
+            </label>
+            <input id="m-manzil" value={manzil} onChange={(e) => setManzil(e.target.value)} maxLength={300} className={input} />
+          </div>
         </div>
 
         {boshqaruvchi && (

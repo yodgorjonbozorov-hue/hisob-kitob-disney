@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { INPUT_CLASS, LABEL_CLASS } from "@/components/ui/fieldStyles";
+import { Select } from "@/components/ui/Select";
 import { formatSom, parseSomInput } from "@/lib/format";
 import { RasmTanlash } from "./RasmTanlash";
 import type { OmborKategoriyaDTO, OmborMahsulotDTO } from "@/lib/queries/ombor";
@@ -88,19 +89,16 @@ export function MahsulotTahrir({
           <label className={LABEL_CLASS} htmlFor="mt-kat">
             Kategoriya
           </label>
-          <select
+          <Select
             id="mt-kat"
             value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            className={INPUT_CLASS}
-          >
-            <option value="">Yo&apos;q</option>
-            {kategoriyalar.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.nomi}
-              </option>
-            ))}
-          </select>
+            onChange={setCategoryId}
+            searchable={kategoriyalar.length > 7}
+            options={[
+              { value: "", label: "Yo'q" },
+              ...kategoriyalar.map((k) => ({ value: k.id, label: k.nomi })),
+            ]}
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-3">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Select } from "@/components/ui/Select";
 import { parseSomInput } from "@/lib/format";
 import type { BuyurtmaDTO, KategoriyaDTO } from "./turlar";
 
@@ -65,17 +66,19 @@ export function BuyurtmaTahrir({
     <div className="rounded-xl border border-line bg-surface-2/30 p-3 space-y-2">
       <p className="text-2xs uppercase tracking-wide text-faint">Kategoriya va narx</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <label className="block space-y-1">
-          <span className="text-xs text-muted">Kirim kategoriyasi</span>
-          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={INPUT}>
-            <option value="">Tanlanmagan</option>
-            {kategoriyalar.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.nomi}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="space-y-1">
+          <label className="block text-xs text-muted" htmlFor="bt-kategoriya">Kirim kategoriyasi</label>
+          <Select
+            id="bt-kategoriya"
+            value={categoryId}
+            onChange={setCategoryId}
+            searchable={kategoriyalar.length > 7}
+            options={[
+              { value: "", label: "Tanlanmagan" },
+              ...kategoriyalar.map((k) => ({ value: k.id, label: k.nomi })),
+            ]}
+          />
+        </div>
         <label className="block space-y-1">
           <span className="text-xs text-muted">Narx (so&apos;m)</span>
           <input

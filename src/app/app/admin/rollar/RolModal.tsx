@@ -3,6 +3,7 @@
 import { useState, FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { Select } from "@/components/ui/Select";
 import { huquqJsonParse, huquqlarGuruhlab } from "@/lib/permissions/katalog";
 
 export interface RolDTO {
@@ -96,18 +97,19 @@ export function RolModal({
           className="w-full rounded-lg border border-line px-3 py-2 text-sm"
         />
         <div>
-          <label className="block text-xs font-medium text-muted mb-1">
-            Sahifalar ko'rinishi (nav skeleti)
+          <label className="block text-xs font-medium text-muted mb-1" htmlFor="rol-baza">
+            Sahifalar ko&apos;rinishi (nav skeleti)
           </label>
-          <select
+          <Select
+            id="rol-baza"
             value={bazaRol}
-            onChange={(e) => setBazaRol(e.target.value)}
-            className="w-full rounded-lg border border-line px-3 py-2 text-sm"
-          >
-            <option value="SELLER">Sotuvchi kabi (minimal)</option>
-            <option value="CASHIER">Kassir kabi (sotuv, qarz, kassa)</option>
-            <option value="ADMIN">Administrator kabi (to'liq)</option>
-          </select>
+            onChange={setBazaRol}
+            options={[
+              { value: "SELLER", label: "Sotuvchi kabi (minimal)" },
+              { value: "CASHIER", label: "Kassir kabi (sotuv, qarz, kassa)" },
+              { value: "ADMIN", label: "Administrator kabi (to'liq)" },
+            ]}
+          />
         </div>
 
         <div className="max-h-64 space-y-3 overflow-y-auto rounded-lg border border-line p-3">

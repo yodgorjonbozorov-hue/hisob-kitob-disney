@@ -38,11 +38,20 @@ export function MijozTanlash({
   disabled,
   /** Kiritilayotgan yangi qarz summasi — "Yangi jami" ni ko'rsatish uchun. */
   yangiSumma = 0,
+  /**
+   * Mijoz majburiymi. Naqd chakana sotuvda `false` — yorliq "(ixtiyoriy)"
+   * bo'ladi va bo'sh qoldirsa telefon maydoni ham ko'rinmaydi.
+   */
+  majburiy = true,
+  /** Tanlangach joriy qarz panelini ko'rsatish (qarzga sotuvda kerak). */
+  qarzPanel = true,
 }: {
   qiymat: MijozTanlov;
   onChange: (v: MijozTanlov) => void;
   disabled?: boolean;
   yangiSumma?: number;
+  majburiy?: boolean;
+  qarzPanel?: boolean;
 }) {
   const [takliflar, setTakliflar] = useState<MijozTaklif[]>([]);
   const [ochiq, setOchiq] = useState(false);
@@ -124,7 +133,12 @@ export function MijozTanlash({
     <div className="space-y-3">
       <div ref={wrapRef} className="relative">
         <label className="block text-xs font-medium text-muted mb-1" htmlFor="qarz-mijoz">
-          Mijoz <span className="text-expense">*</span>
+          Mijoz{" "}
+          {majburiy ? (
+            <span className="text-expense">*</span>
+          ) : (
+            <span className="text-faint font-normal">(ixtiyoriy)</span>
+          )}
         </label>
         <div className="relative">
           <input
@@ -204,16 +218,18 @@ export function MijozTanlash({
       </div>
 
       {tanlangan ? (
-        <QarzOldinKorish
-          ism={qiymat.ism}
-          hozirgi={qiymat.ochiqQarz ?? null}
-          yangi={yangiSumma}
-          yuklanmoqda={qiymat.ochiqQarz === undefined}
-        />
-      ) : (
+        qarzPanel && (
+          <QarzOldinKorish
+            ism={qiymat.ism}
+            hozirgi={qiymat.ochiqQarz ?? null}
+            yangi={yangiSumma}
+            yuklanmoqda={qiymat.ochiqQarz === undefined}
+          />
+        )
+      ) : majburiy || qiymat.ism.trim() ? (
         <div>
           <label className="block text-xs font-medium text-muted mb-1" htmlFor="qarz-tel">
-            Telefon <span className="text-expense">*</span>
+            Telefon {majburiy && <span className="text-expense">*</span>}
           </label>
           <input
             id="qarz-tel"
@@ -230,7 +246,7 @@ export function MijozTanlash({
             ro&apos;yxatdan tanlagan ma&apos;qul.
           </p>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

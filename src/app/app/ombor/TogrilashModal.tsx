@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import type { ProductAdminDTO } from "@/lib/queries/inventory";
 
 type Turi = "inventarizatsiya" | "chiqarish";
@@ -80,18 +81,18 @@ export function TogrilashModal({
           <label className="block text-sm text-muted mb-1" htmlFor="tg-mahsulot">
             Mahsulot
           </label>
-          <select
+          <Select
             id="tg-mahsulot"
             value={productId}
-            onChange={(e) => setProductId(e.target.value)}
-            className={input}
-          >
-            {faollar.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nomi} — hisobda {p.miqdor} {p.birlik}
-              </option>
-            ))}
-          </select>
+            onChange={setProductId}
+            searchable={faollar.length > 7}
+            searchPlaceholder="Mahsulotni qidiring..."
+            options={faollar.map((p) => ({
+              value: p.id,
+              label: p.nomi,
+              tavsif: `hisobda ${p.miqdor} ${p.birlik}`,
+            }))}
+          />
         </div>
 
         <div>

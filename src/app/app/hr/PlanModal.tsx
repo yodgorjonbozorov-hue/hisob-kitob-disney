@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { Select } from "@/components/ui/Select";
 import { PLAN_TURLARI, PLAN_NOMI, type PlanTuri } from "@/lib/validation/hr";
 import type { PlanDTO } from "@/lib/queries/xodimPlan";
 
@@ -92,18 +93,12 @@ export function PlanModal({
           <label className="block text-sm text-muted mb-1" htmlFor="p-turi">
             Plan turi
           </label>
-          <select
+          <Select
             id="p-turi"
             value={planTuri}
-            onChange={(e) => setPlanTuri(e.target.value as PlanTuri)}
-            className={INPUT}
-          >
-            {PLAN_TURLARI.map((t) => (
-              <option key={t} value={t}>
-                {PLAN_NOMI[t]}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setPlanTuri(v as PlanTuri)}
+            options={PLAN_TURLARI.map((t) => ({ value: t, label: PLAN_NOMI[t] }))}
+          />
         </div>
 
         {!userIdBor && planTuri !== "vazifa" && (

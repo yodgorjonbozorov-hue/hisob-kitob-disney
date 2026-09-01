@@ -2,6 +2,7 @@
 
 import { useRouter, usePathname } from "next/navigation";
 import { Segmented } from "@/components/ui/Segmented";
+import { Select } from "@/components/ui/Select";
 
 export function AuditFilters({ initial }: { initial: { entity: string; action: string } }) {
   const router = useRouter();
@@ -31,17 +32,21 @@ export function AuditFilters({ initial }: { initial: { entity: string; action: s
         />
       </div>
       <div>
-        <span className="block text-xs font-medium text-muted mb-1">Obyekt</span>
-        <select
+        <label className="block text-xs font-medium text-muted mb-1" htmlFor="audit-obyekt">
+          Obyekt
+        </label>
+        <Select
+          id="audit-obyekt"
           value={initial.entity}
-          onChange={(e) => apply({ entity: e.target.value })}
-          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm min-h-[40px]"
-        >
-          <option value="">Barchasi</option>
-          <option value="transaction">Tranzaksiya</option>
-          <option value="user">Foydalanuvchi</option>
-          <option value="category">Kategoriya</option>
-        </select>
+          onChange={(v) => apply({ entity: v })}
+          className="min-w-[10rem]"
+          options={[
+            { value: "", label: "Barchasi" },
+            { value: "transaction", label: "Tranzaksiya" },
+            { value: "user", label: "Foydalanuvchi" },
+            { value: "category", label: "Kategoriya" },
+          ]}
+        />
       </div>
     </div>
   );

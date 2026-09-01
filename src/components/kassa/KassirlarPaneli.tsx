@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Money } from "@/components/ui/Money";
 import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
+import { Select } from "@/components/ui/Select";
 import { formatSom, parseSomInput } from "@/lib/format";
 import { Modal } from "@/components/ui/Modal";
 import type { KassirQoldiqDTO } from "@/lib/queries/kassirKassa";
@@ -70,18 +71,13 @@ export function KassirlarPaneli({
             <label className="block text-sm font-medium text-fg" htmlFor="berish-kassir">
               Kassir
             </label>
-            <select
+            <Select
               id="berish-kassir"
               value={kassirId}
-              onChange={(e) => setKassirId(e.target.value)}
-              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-fg"
-            >
-              {userlar.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.ism}
-                </option>
-              ))}
-            </select>
+              onChange={setKassirId}
+              searchable={userlar.length > 7}
+              options={userlar.map((u) => ({ value: u.id, label: u.ism }))}
+            />
           </div>
           <div className="space-y-1">
             <label className="block text-sm font-medium text-fg" htmlFor="berish-summa">

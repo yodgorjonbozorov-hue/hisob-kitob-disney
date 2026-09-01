@@ -3,9 +3,14 @@ import { requireTenantPage } from "@/lib/auth/tenant";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { requireModulePage } from "@/lib/modules/guard";
 import { getActiveBusiness } from "@/lib/business";
-import { listProducts, listRecentSales, type ProductKassirDTO } from "@/lib/queries/inventory";
+import {
+  listProducts,
+  listRecentSales,
+  getBugungiSotuvStat,
+  type ProductKassirDTO,
+} from "@/lib/queries/inventory";
 import { SotuvClient } from "./SotuvClient";
-import { isAvto } from "@/lib/biznesTuri";
+import { isAvto, isOptom } from "@/lib/biznesTuri";
 import { isManager } from "@/lib/auth/roles";
 
 export default async function SotuvPage() {
@@ -33,11 +38,13 @@ export default async function SotuvPage() {
   // `/api/debts/mijozlar` orqali qidiriladi (ism/telefon bo'yicha, joriy
   // qarzi bilan) — butun ro'yxatni yuklash mijoz soni o'sgan sari
   // sahifani sekinlashtirardi.
-  const [products, sales, kassalar] = await Promise.all([
+  const [products, sales, kassalar, stat] = await Promise.all([
     listProducts(business.id, { forKassir: true }) as Promise<ProductKassirDTO[]>,
     listRecentSales(business.id, 15),
     // Naqd sotuvda pul qaysi kassaga tushishini tanlash uchun (Naqd / Click / terminal).
     (await import("@/lib/queries/accounts")).listAccounts(business.id, true),
+    // O'ng paneldagi "Bugungi sotuvlar" statistikasi.
+    getBugungiSotuvStat(business.id),
   ]);
 
   return (
@@ -51,7 +58,9 @@ export default async function SotuvPage() {
       <SotuvClient
         products={products}
         initialSales={sales}
+        stat={stat}
         biznesTuri={business.turi}
+        optom={isOptom(business.turi)}
         bekorQilaOladi={isManager(session.rol)}
         kassalar={kassalar}
       />

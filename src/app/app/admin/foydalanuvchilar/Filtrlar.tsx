@@ -3,6 +3,7 @@
 import { Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Segmented } from "@/components/ui/Segmented";
+import { Select } from "@/components/ui/Select";
 import { rolVariantlari, type BusinessOption, type MaxsusRol } from "./turlar";
 import type { Filtr, Holat } from "./useXodimlar";
 
@@ -27,9 +28,6 @@ export function Filtrlar({
   maxsusRollar: MaxsusRol[];
   onYangi: () => void;
 }) {
-  const tanlagich =
-    "min-h-[44px] rounded-lg border border-line bg-surface text-fg text-sm px-2.5";
-
   return (
     <div className="space-y-3">
       {/* Qidiruv va "yangi xodim" BIR QATORDA: telefonda ham ikkalasi
@@ -71,34 +69,38 @@ export function Filtrlar({
           ]}
         />
 
-        <select
+        <label className="sr-only" htmlFor="filtr-rol">
+          Rol bo&apos;yicha filtr
+        </label>
+        <Select
+          id="filtr-rol"
           value={filtr.rol}
-          onChange={(e) => setFiltr({ rol: e.target.value })}
-          aria-label="Rol bo'yicha filtr"
-          className={tanlagich}
-        >
-          <option value="">Barcha rollar</option>
-          {rolVariantlari(maxsusRollar).map((v) => (
-            <option key={v.qiymat} value={v.qiymat}>
-              {v.nomi}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => setFiltr({ rol: v })}
+          searchable={rolVariantlari(maxsusRollar).length > 7}
+          className="min-w-[9rem]"
+          options={[
+            { value: "", label: "Barcha rollar" },
+            ...rolVariantlari(maxsusRollar).map((v) => ({ value: v.qiymat, label: v.nomi })),
+          ]}
+        />
 
         {businesses.length > 1 && (
-          <select
-            value={filtr.biznes}
-            onChange={(e) => setFiltr({ biznes: e.target.value })}
-            aria-label="Biznes bo'yicha filtr"
-            className={tanlagich}
-          >
-            <option value="">Barcha bizneslar</option>
-            {businesses.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.nomi}
-              </option>
-            ))}
-          </select>
+          <>
+            <label className="sr-only" htmlFor="filtr-biznes">
+              Biznes bo&apos;yicha filtr
+            </label>
+            <Select
+              id="filtr-biznes"
+              value={filtr.biznes}
+              onChange={(v) => setFiltr({ biznes: v })}
+              searchable={businesses.length > 7}
+              className="min-w-[9rem]"
+              options={[
+                { value: "", label: "Barcha bizneslar" },
+                ...businesses.map((b) => ({ value: b.id, label: b.nomi })),
+              ]}
+            />
+          </>
         )}
       </div>
     </div>

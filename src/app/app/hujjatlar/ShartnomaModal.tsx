@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { Select } from "@/components/ui/Select";
 import { todayDateOnlyString } from "@/lib/date";
 import {
   SHARTNOMA_TURLARI,
@@ -134,21 +135,15 @@ export function ShartnomaModal({
             <label className="block text-sm text-muted mb-1" htmlFor="s-turi">
               Turi
             </label>
-            <select
+            <Select
               id="s-turi"
               value={turi}
-              onChange={(e) => {
-                setTuri(e.target.value as ShartnomaTuri);
+              onChange={(v) => {
+                setTuri(v as ShartnomaTuri);
                 setKontragentId("");
               }}
-              className={input}
-            >
-              {SHARTNOMA_TURLARI.map((t) => (
-                <option key={t} value={t}>
-                  {SHARTNOMA_TURI_NOMI[t]}
-                </option>
-              ))}
-            </select>
+              options={SHARTNOMA_TURLARI.map((t) => ({ value: t, label: SHARTNOMA_TURI_NOMI[t] }))}
+            />
           </div>
         </div>
 
@@ -164,19 +159,16 @@ export function ShartnomaModal({
             <label className="block text-sm text-muted mb-1" htmlFor="s-kontragent">
               Kontragent kartochkasi
             </label>
-            <select
+            <Select
               id="s-kontragent"
               value={kontragentId}
-              onChange={(e) => setKontragentId(e.target.value)}
-              className={input}
-            >
-              <option value="">Kartochkasiz (nomini qo&apos;lda yozish)</option>
-              {royxat.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.nomi}
-                </option>
-              ))}
-            </select>
+              onChange={setKontragentId}
+              searchable={royxat.length > 7}
+              options={[
+                { value: "", label: "Kartochkasiz (nomini qo'lda yozish)" },
+                ...royxat.map((r) => ({ value: r.id, label: r.nomi })),
+              ]}
+            />
           </div>
         )}
 
@@ -224,13 +216,12 @@ export function ShartnomaModal({
             <label className="block text-sm text-muted mb-1" htmlFor="s-holat">
               Holat
             </label>
-            <select id="s-holat" value={holat} onChange={(e) => setHolat(e.target.value as ShartnomaHolat)} className={input}>
-              {SHARTNOMA_HOLATLARI.map((h) => (
-                <option key={h} value={h}>
-                  {SHARTNOMA_HOLAT_NOMI[h]}
-                </option>
-              ))}
-            </select>
+            <Select
+              id="s-holat"
+              value={holat}
+              onChange={(v) => setHolat(v as ShartnomaHolat)}
+              options={SHARTNOMA_HOLATLARI.map((h) => ({ value: h, label: SHARTNOMA_HOLAT_NOMI[h] }))}
+            />
           </div>
         )}
 

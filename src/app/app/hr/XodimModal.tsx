@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { Select } from "@/components/ui/Select";
 import { PLAN_TURLARI, PLAN_NOMI, type PlanTuri, type StavkaTuri } from "@/lib/validation/hr";
 import { currentMonthString } from "@/lib/date";
 import type { XodimDTO } from "@/lib/queries/hr";
@@ -144,18 +145,12 @@ export function XodimModal({
               <label className="block text-sm text-muted mb-1" htmlFor="x-plan-turi">
                 Plan turi
               </label>
-              <select
+              <Select
                 id="x-plan-turi"
                 value={planTuri}
-                onChange={(e) => setPlanTuri(e.target.value as PlanTuri)}
-                className={XODIM_INPUT}
-              >
-                {PLAN_TURLARI.map((t) => (
-                  <option key={t} value={t}>
-                    {PLAN_NOMI[t]}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setPlanTuri(v as PlanTuri)}
+                options={PLAN_TURLARI.map((t) => ({ value: t, label: PLAN_NOMI[t] }))}
+              />
             </div>
             <div>
               <label className="block text-sm text-muted mb-1" htmlFor="x-plan">

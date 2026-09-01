@@ -76,6 +76,8 @@ export const POST = withTenant(async (request, _ctx, tenantCtx) => {
     userId: user.userId,
     ism: parsed.data.ism,
     tel: parsed.data.tel,
+    manzil: parsed.data.manzil,
+    masulShaxs: parsed.data.masulShaxs,
     izoh: parsed.data.izoh,
   });
   return NextResponse.json(mijoz, { status: 201 });

@@ -109,8 +109,8 @@ export interface SignupParams {
   ism: string;
   login: string; // normalizatsiya qilingan telefon raqam
   parol: string;
-  /** Biznes turi: "umumiy" (default) yoki "avto" — kategoriyalar shunga qarab tanlanadi. */
-  biznesTuri?: "umumiy" | "avto";
+  /** Biznes turi: "umumiy" (default), "avto" yoki "optom" — kategoriyalar shunga qarab tanlanadi. */
+  biznesTuri?: "umumiy" | "avto" | "optom";
   /** Tarif kodi (lib/billing/plans.ts). Default STANDARD. */
   plan?: string;
   /**

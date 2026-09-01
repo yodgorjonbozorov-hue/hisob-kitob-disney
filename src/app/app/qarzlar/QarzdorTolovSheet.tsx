@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { formatSom, formatSomLabel, formatDateUz, parseSomInput } from "@/lib/format";
 import { todayDateOnlyString } from "@/lib/date";
 import { telKorinish } from "@/lib/validation/qarz";
@@ -216,19 +217,16 @@ export function QarzdorTolovSheet({
               <label className="block text-xs text-muted mb-1" htmlFor="qarzdor-tolov-kassa">
                 Kassa
               </label>
-              <select
+              <Select
                 id="qarzdor-tolov-kassa"
                 value={accountId}
-                onChange={(e) => setAccountId(e.target.value)}
-                className="w-full min-h-[44px] rounded-lg border border-line px-3 py-2 text-sm bg-surface"
-              >
-                <option value="">To&apos;lov turiga mos kassa</option>
-                {kassalar.map((k) => (
-                  <option key={k.id} value={k.id}>
-                    {k.nomi}
-                  </option>
-                ))}
-              </select>
+                onChange={setAccountId}
+                searchable={kassalar.length > 7}
+                options={[
+                  { value: "", label: "To'lov turiga mos kassa" },
+                  ...kassalar.map((k) => ({ value: k.id, label: k.nomi })),
+                ]}
+              />
             </div>
           )}
           <div>
@@ -252,24 +250,22 @@ export function QarzdorTolovSheet({
             <label className="block text-xs text-muted mb-1" htmlFor="qarzdor-tolov-qaysi">
               Qaysi qarzga yoziladi
             </label>
-            <select
+            <Select
               id="qarzdor-tolov-qaysi"
               value={qolda}
-              onChange={(e) => {
-                // Summa avtomatik to'ldirilmaydi — operator yozgan qiymat
-                // saqlanadi; chegaradan oshsa yuborishda xato ko'rsatiladi.
-                setQolda(e.target.value);
-              }}
-              className="w-full min-h-[44px] rounded-lg border border-line px-3 py-2 text-sm bg-surface"
-            >
-              <option value="">Eng eski qarzdan boshlab (avtomatik)</option>
-              {ochiqQarzlar.map((q) => (
-                <option key={q.id} value={q.id}>
-                  {formatDateUz(new Date(q.sana))} · qolgan {formatSom(q.qolgan)}
-                  {q.izoh ? ` · ${q.izoh}` : ""}
-                </option>
-              ))}
-            </select>
+              // Summa avtomatik to'ldirilmaydi — operator yozgan qiymat
+              // saqlanadi; chegaradan oshsa yuborishda xato ko'rsatiladi.
+              onChange={setQolda}
+              searchable={ochiqQarzlar.length > 7}
+              options={[
+                { value: "", label: "Eng eski qarzdan boshlab (avtomatik)" },
+                ...ochiqQarzlar.map((q) => ({
+                  value: q.id,
+                  label: formatDateUz(new Date(q.sana)),
+                  tavsif: `qolgan ${formatSom(q.qolgan)}${q.izoh ? ` · ${q.izoh}` : ""}`,
+                })),
+              ]}
+            />
           </div>
         )}
 

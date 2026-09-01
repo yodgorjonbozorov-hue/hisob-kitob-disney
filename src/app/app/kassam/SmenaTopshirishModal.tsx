@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { parseSomInput, formatMoney } from "@/lib/format";
 
 export interface TopshirishNishoni {
@@ -140,13 +141,13 @@ export function SmenaTopshirishModal({
           <label className="block text-sm text-muted mb-1" htmlFor="sm-to">
             Kimga topshiriladi
           </label>
-          <select id="sm-to" value={toAccountId} onChange={(e) => setTo(e.target.value)} className={input}>
-            {nishonlar.map((n) => (
-              <option key={n.id} value={n.id}>
-                {n.egaIsm ?? n.nomi}
-              </option>
-            ))}
-          </select>
+          <Select
+            id="sm-to"
+            value={toAccountId}
+            onChange={setTo}
+            searchable={nishonlar.length > 7}
+            options={nishonlar.map((n) => ({ value: n.id, label: n.egaIsm ?? n.nomi }))}
+          />
         </div>
 
         <div>

@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { Belgi } from "./belgilar";
 import { soro } from "./soro";
 
@@ -197,15 +198,15 @@ export function BayroqPaneli({
             <label htmlFor="bq-doira" className="block text-sm font-medium text-fg mb-1">
               Doira
             </label>
-            <select
+            <Select
               id="bq-doira"
-              className={MAYDON}
               value={yangi.doira}
-              onChange={(e) => setYangi({ ...yangi, doira: e.target.value })}
-            >
-              <option value="GLOBAL">Global — barcha kompaniyalar</option>
-              <option value="TENANT">Tanlangan kompaniyalar</option>
-            </select>
+              onChange={(v) => setYangi({ ...yangi, doira: v })}
+              options={[
+                { value: "GLOBAL", label: "Global — barcha kompaniyalar" },
+                { value: "TENANT", label: "Tanlangan kompaniyalar" },
+              ]}
+            />
           </div>
           <div>
             <label htmlFor="bq-sabab" className="block text-sm font-medium text-fg mb-1">

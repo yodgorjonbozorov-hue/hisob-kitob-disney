@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { INPUT_CLASS, LABEL_CLASS } from "@/components/ui/fieldStyles";
+import { Select } from "@/components/ui/Select";
+import { LABEL_CLASS } from "@/components/ui/fieldStyles";
 
 export interface XodimSiyosatDTO {
   id: string;
@@ -78,39 +79,35 @@ export function SiyosatKarta({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className={LABEL_CLASS} htmlFor="sk-jadval">Ish jadvali</label>
-          <select
+          <Select
             id="sk-jadval"
-            className={INPUT_CLASS}
             value={workScheduleId}
-            onChange={(e) => setWorkScheduleId(e.target.value)}
-          >
-            <option value="">
-              {standartJadval ? `Standart (${standartJadval})` : "Standart jadval yo'q"}
-            </option>
-            {jadvallar.map((j) => (
-              <option key={j.id} value={j.id}>
-                {j.nomi}
-              </option>
-            ))}
-          </select>
+            onChange={setWorkScheduleId}
+            searchable={jadvallar.length > 7}
+            options={[
+              {
+                value: "",
+                label: standartJadval ? `Standart (${standartJadval})` : "Standart jadval yo'q",
+              },
+              ...jadvallar.map((j) => ({ value: j.id, label: j.nomi })),
+            ]}
+          />
         </div>
         <div>
           <label className={LABEL_CLASS} htmlFor="sk-joy">Ish joyi (GPS)</label>
-          <select
+          <Select
             id="sk-joy"
-            className={INPUT_CLASS}
             value={workLocationId}
-            onChange={(e) => setWorkLocationId(e.target.value)}
-          >
-            <option value="">
-              {standartJoy ? `Standart (${standartJoy})` : "Standart ish joyi yo'q"}
-            </option>
-            {joylar.map((j) => (
-              <option key={j.id} value={j.id}>
-                {j.nomi}
-              </option>
-            ))}
-          </select>
+            onChange={setWorkLocationId}
+            searchable={joylar.length > 7}
+            options={[
+              {
+                value: "",
+                label: standartJoy ? `Standart (${standartJoy})` : "Standart ish joyi yo'q",
+              },
+              ...joylar.map((j) => ({ value: j.id, label: j.nomi })),
+            ]}
+          />
         </div>
       </div>
       <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2">

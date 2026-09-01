@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Select } from "@/components/ui/Select";
 import { parseSomInput } from "@/lib/format";
 import type { KategoriyaDTO, StageDTO, XodimDTO, XodimKategoriyaDTO } from "./turlar";
 import {
@@ -109,17 +110,17 @@ export function BuyurtmaModal({
       >
         <h2 className="font-semibold text-fg text-lg">Yangi buyurtma</h2>
 
-        <label className="block space-y-1">
-          <span className="text-xs text-muted">Kategoriya</span>
-          <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={INPUT} required>
-            {kategoriyalar.length === 0 && <option value="">Kategoriya yo&apos;q</option>}
-            {kategoriyalar.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.nomi}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="space-y-1">
+          <label className="block text-xs text-muted" htmlFor="bm-kategoriya">Kategoriya</label>
+          <Select
+            id="bm-kategoriya"
+            value={categoryId}
+            onChange={setCategoryId}
+            searchable={kategoriyalar.length > 7}
+            placeholder="Kategoriya yo'q"
+            options={kategoriyalar.map((k) => ({ value: k.id, label: k.nomi }))}
+          />
+        </div>
 
         <label className="block space-y-1">
           <span className="text-xs text-muted">Xizmat / buyurtma nomi</span>
@@ -170,27 +171,26 @@ export function BuyurtmaModal({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {/* Sotuvchi kategoriya-selektori bo'lsa mas'ul o'sha yerdan chiqadi. */}
           {!sotuvchiSelektorBor && (
-            <label className="block space-y-1">
-              <span className="text-xs text-muted">Mas&apos;ul xodim</span>
-              <select value={masulId} onChange={(e) => setMasulId(e.target.value)} className={INPUT}>
-                {xodimlar.map((x) => (
-                  <option key={x.id} value={x.id}>
-                    {x.ism}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="space-y-1">
+              <label className="block text-xs text-muted" htmlFor="bm-masul">Mas&apos;ul xodim</label>
+              <Select
+                id="bm-masul"
+                value={masulId}
+                onChange={setMasulId}
+                searchable={xodimlar.length > 7}
+                options={xodimlar.map((x) => ({ value: x.id, label: x.ism }))}
+              />
+            </div>
           )}
-          <label className="block space-y-1">
-            <span className="text-xs text-muted">Holat</span>
-            <select value={stageId} onChange={(e) => setStageId(e.target.value)} className={INPUT}>
-              {stages.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.nomi}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="space-y-1">
+            <label className="block text-xs text-muted" htmlFor="bm-holat">Holat</label>
+            <Select
+              id="bm-holat"
+              value={stageId}
+              onChange={setStageId}
+              options={stages.map((s) => ({ value: s.id, label: s.nomi }))}
+            />
+          </div>
         </div>
 
         <ZakazXodimlariTanlash

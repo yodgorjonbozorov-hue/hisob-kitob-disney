@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { parseSomInput, formatSom, formatMoney } from "@/lib/format";
 import type { KassaNazoratKarta } from "@/lib/queries/kassaNazorat";
 
@@ -145,18 +146,17 @@ export function TopshirishModal({
             <label className="block text-sm text-muted mb-1" htmlFor="tp-from">
               Qaysi kassa
             </label>
-            <select
+            <Select
               id="tp-from"
               value={fromId}
-              onChange={(e) => manbaAlmash(e.target.value)}
-              className={input}
-            >
-              {kassalar.map((k) => (
-                <option key={k.id} value={k.id}>
-                  {k.nomi} · {formatSom(k.mavjud)}
-                </option>
-              ))}
-            </select>
+              onChange={manbaAlmash}
+              searchable={kassalar.length > 7}
+              options={kassalar.map((k) => ({
+                value: k.id,
+                label: k.nomi,
+                tavsif: formatSom(k.mavjud),
+              }))}
+            />
           </div>
         )}
 
@@ -209,16 +209,16 @@ export function TopshirishModal({
           <label className="block text-sm text-muted mb-1" htmlFor="tp-to">
             Qabul qiluvchi
           </label>
-          <select id="tp-to" value={toId} onChange={(e) => setTo(e.target.value)} className={input}>
-            <option value="">— tanlang —</option>
-            {nishonlar
+          <Select
+            id="tp-to"
+            value={toId}
+            onChange={setTo}
+            placeholder="— tanlang —"
+            searchable={nishonlar.length > 7}
+            options={nishonlar
               .filter((n) => n.id !== fromId)
-              .map((n) => (
-                <option key={n.id} value={n.id}>
-                  {n.egaIsm ?? n.nomi}
-                </option>
-              ))}
-          </select>
+              .map((n) => ({ value: n.id, label: n.egaIsm ?? n.nomi }))}
+          />
         </div>
 
         <div>

@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { soro } from "./soro";
 import { HOLAT_LABEL, MUHIMLIK_LABEL } from "@/lib/superadmin/turlar";
 
@@ -80,35 +81,23 @@ export function TiketPaneli({
           <label htmlFor="tk-holat" className="block text-sm font-medium text-fg mb-1">
             Holat
           </label>
-          <select
+          <Select
             id="tk-holat"
-            className={MAYDON}
             value={yangiHolat}
-            onChange={(e) => setYangiHolat(e.target.value)}
-          >
-            {Object.entries(HOLAT_LABEL).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </select>
+            onChange={setYangiHolat}
+            options={Object.entries(HOLAT_LABEL).map(([k, v]) => ({ value: k, label: v }))}
+          />
         </div>
         <div>
           <label htmlFor="tk-muh" className="block text-sm font-medium text-fg mb-1">
             Muhimlik
           </label>
-          <select
+          <Select
             id="tk-muh"
-            className={MAYDON}
             value={yangiMuhimlik}
-            onChange={(e) => setYangiMuhimlik(e.target.value)}
-          >
-            {Object.entries(MUHIMLIK_LABEL).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v}
-              </option>
-            ))}
-          </select>
+            onChange={setYangiMuhimlik}
+            options={Object.entries(MUHIMLIK_LABEL).map(([k, v]) => ({ value: k, label: v }))}
+          />
         </div>
       </div>
 

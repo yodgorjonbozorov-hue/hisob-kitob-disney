@@ -27,6 +27,8 @@ export function YangiMijozForm({
 }) {
   const [ism, setIsm] = useState(boshlangichIsm?.trim() ?? "");
   const [tel, setTel] = useState("");
+  const [masulShaxs, setMasulShaxs] = useState("");
+  const [manzil, setManzil] = useState("");
   const [izoh, setIzoh] = useState("");
   const [xato, setXato] = useState<string | null>(null);
   // Server dublikatni topib mavjud kartochkani qaytarsa — shu matn.
@@ -50,6 +52,8 @@ export function YangiMijozForm({
         body: JSON.stringify({
           ism: ism.trim(),
           tel: tel.trim() || undefined,
+          masulShaxs: masulShaxs.trim() || undefined,
+          manzil: manzil.trim() || undefined,
           izoh: izoh.trim() || undefined,
         }),
       });
@@ -96,13 +100,13 @@ export function YangiMijozForm({
 
       <div>
         <label className="block text-2xs text-muted mb-1" htmlFor="yangi-mijoz-ism">
-          Ism familiya <span className="text-expense">*</span>
+          Mijoz / kompaniya nomi <span className="text-expense">*</span>
         </label>
         <input
           id="yangi-mijoz-ism"
           value={ism}
           onChange={(e) => setIsm(e.target.value)}
-          placeholder="Ali Valiyev"
+          placeholder="Ali Valiyev yoki NAVOI PAPER"
           autoFocus
           className="w-full rounded-lg border border-line px-3 py-2 text-sm bg-surface"
         />
@@ -121,6 +125,33 @@ export function YangiMijozForm({
           placeholder="+998 __ ___ __ __"
           className="w-full rounded-lg border border-line px-3 py-2 text-sm bg-surface"
         />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-2xs text-muted mb-1" htmlFor="yangi-mijoz-masul">
+            Mas&apos;ul shaxs
+          </label>
+          <input
+            id="yangi-mijoz-masul"
+            value={masulShaxs}
+            onChange={(e) => setMasulShaxs(e.target.value)}
+            placeholder="Kim bilan gaplashiladi"
+            className="w-full rounded-lg border border-line px-3 py-2 text-sm bg-surface"
+          />
+        </div>
+        <div>
+          <label className="block text-2xs text-muted mb-1" htmlFor="yangi-mijoz-manzil">
+            Manzil
+          </label>
+          <input
+            id="yangi-mijoz-manzil"
+            value={manzil}
+            onChange={(e) => setManzil(e.target.value)}
+            placeholder="Shahar, ko'cha"
+            className="w-full rounded-lg border border-line px-3 py-2 text-sm bg-surface"
+          />
+        </div>
       </div>
 
       <div>

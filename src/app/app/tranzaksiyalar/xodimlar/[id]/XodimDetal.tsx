@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { INPUT_CLASS } from "@/components/ui/fieldStyles";
+import { Select } from "@/components/ui/Select";
 import { formatSom, formatDate } from "@/lib/format";
 import { TOLOV_GURUHLARI, TOLOV_GURUHI_NOMI } from "@/lib/tolovBolimi";
 import type { XodimDetalDTO } from "@/lib/queries/xodimStatistika";
@@ -79,32 +79,25 @@ export function XodimDetal({
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <select
+        <Select
           aria-label="Kategoriya filtri"
           value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
-          className={INPUT_CLASS}
-        >
-          <option value="">Barcha kategoriyalar</option>
-          {kategoriyalar.map((k) => (
-            <option key={k.id} value={k.id}>
-              {k.nomi}
-            </option>
-          ))}
-        </select>
-        <select
+          onChange={setCategoryId}
+          searchable={kategoriyalar.length > 7}
+          options={[
+            { value: "", label: "Barcha kategoriyalar" },
+            ...kategoriyalar.map((k) => ({ value: k.id, label: k.nomi })),
+          ]}
+        />
+        <Select
           aria-label="To'lov turi filtri"
           value={tolov}
-          onChange={(e) => setTolov(e.target.value)}
-          className={INPUT_CLASS}
-        >
-          <option value="">Barcha to&apos;lovlar</option>
-          {TOLOV_GURUHLARI.map((t) => (
-            <option key={t} value={t}>
-              {TOLOV_GURUHI_NOMI[t]}
-            </option>
-          ))}
-        </select>
+          onChange={setTolov}
+          options={[
+            { value: "", label: "Barcha to'lovlar" },
+            ...TOLOV_GURUHLARI.map((t) => ({ value: t, label: TOLOV_GURUHI_NOMI[t] })),
+          ]}
+        />
       </div>
 
       <Card className="p-0 overflow-hidden">

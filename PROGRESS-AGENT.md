@@ -5401,3 +5401,57 @@ buyurtma mosligi, hisobot.korish matritsasi). `test:izolyatsiya-royxati`,
 `test:backup`, `test:crm`, `test:xodim-statistika`, `test:xodim-plan`,
 `test:isolation`, `test:hr`, `test:tasks`, `test:migratsiya`, `test:davomat`,
 `test:kirim-chiqim`, `test:dialect`, `test:postgres` — yashil. `npm run build` o'tdi.
+
+## 2026-09-01 — BALANSA DESIGN SYSTEM + OPTOM CRM INTEGRATSIYASI
+
+**Maqsad:** (1) butun platformada native `<select>` larni yagona premium
+ko'rinishga keltirish; (2) optom bizneslar uchun Sotuv → Mijoz → Qarz
+zanjirini to'liq ishlatish ("qaysi mijozga nima sotildi, qancha qarzi bor").
+
+**Design system:**
+- `components/ui/Select.tsx` — YANGI yagona ochiladigan ro'yxat: custom
+  listbox, klaviatura (Up/Down/Home/End/Enter/Esc/Tab), `searchable`
+  (qidiruv maydoni), `tavsif` (ikkilamchi qator), disabled variantlar,
+  pastga sig'masa yuqoriga ochilish, `aria-label`/combobox rollari.
+  Native select endi asosiy UI'da YO'Q — 71 ta select ~53 faylda almashdi
+  (sotuv, qarzlar, tranzaksiyalar, kassa, ombor, hr, crm, hujjatlar, admin,
+  superadmin, pos, kunlik, vazifalar, takroriy, tasdiqlash, ai).
+- `BusinessSwitcher` qayta yozildi: qidiruvli (5+ biznesda), faol biznes
+  belgisi, hover/focus/klaviatura. Almashish mantig'i O'ZGARMAGAN
+  (`/api/me/active-business` + cookie).
+- Sotuv formasi: `TolovTuriTanlov` (segmented Naqd/Qarzga), Jami — alohida
+  brand-wash karta (`Money` bilan), `INPUT_CLASS`/`LABEL_CLASS` ga o'tildi.
+
+**Optom (ulgurji) rejim:**
+- `Business.turi` ga yangi qiymat "optom" (`lib/biznesTuri.ts`:
+  `isOptom()`, BIZNES_TURLARI; validation/business, superadmin, signup,
+  biznesYaratish kengaytirildi). Migratsiya KERAK EMAS — turi string ustun.
+- SERVER qoidasi (`createSale`): optom biznesda mijozsiz sotuv o'tmaydi
+  (naqdda ham); qarzga sotuvda mijoz har doim majburiy (avvalgidek).
+  Frontend ham bloklaydi, lekin manba — server.
+- Sotuv formasida mijoz endi TEPADA va har sotuvda tanlanadi: optomda
+  majburiy, chakanada "(ixtiyoriy)", qarzda majburiy. Naqd sotuv ham endi
+  `contactId` bilan yoziladi — mijoz aniqlash BITTA joyda
+  (`mijozniAniqlaTx`: egalik tekshiruvi + dublikat himoyasi naqdga ham).
+- Sotuv sahifasi: o'ngda "Bugungi sotuvlar" paneli — 4 stat
+  (`getBugungiSotuvStat`: savdo/soni/naqd/qarz, bitta groupBy) + so'nggi
+  sotuvlar jadvaliga Vaqt va Mijoz ustunlari + EmptyState.
+
+**Mijoz kartochkasi (Contact):**
+- YANGI migratsiya `20260901090000_kontakt_optom_maydonlar` — Contact'ga
+  `manzil` va `masulShaxs` (ikkalasi nullable, FAQAT QO'SHUVCHI; postgres
+  init `pg:migratsiya` bilan qayta generatsiya qilindi).
+- Tez qo'shish formasi (YangiMijozForm) va MijozModal'da yangi maydonlar;
+  `qarzMijozYarat` mavjud kartochkada bo'sh maydonlarni to'ldiradi (ustidan
+  yozmaydi).
+- Profil (`mijozlar/[id]`): jamlanmalar endi 50 talik kesimdan emas,
+  AGREGATLARDAN — jami xarid, sotuv soni, oxirgi sotuv sanasi, YANGI
+  "Jami to'lov" (naqd sotuvlar + qarz to'lovlari), joriy qarz.
+
+**Testlar:** YANGI `tests/optom-sotuv.test.ts` (`test:optom`, 8 test):
+optomda naqd/qarz mijozsiz rad + ombor tegilmaydi; mijozli naqd → kartochka
++ kirim + qoldiq; qarzga → BITTA qarz, saleId bog'i, kirim yo'q; kartochka
+statistikasi; umumiy biznes regressiyasi; dublikat kartochka yo'q.
+Regressiya: isolation 22, izolyatsiya-royxati 9, qarz-mijoz 18, sotuv-bekor
+11, mijozlar 15, qarz 16, qarzdorlik 16, migratsiya 12, atomik 6,
+kirim-chiqim 19, crm 24, tolov-taqsimoti 11 — hammasi yashil. Build o'tdi.

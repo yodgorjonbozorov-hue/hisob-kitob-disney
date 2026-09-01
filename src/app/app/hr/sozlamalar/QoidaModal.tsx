@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { INPUT_CLASS, LABEL_CLASS } from "@/components/ui/fieldStyles";
 
 export interface QoidaDTO {
@@ -76,15 +77,15 @@ export function QoidaModal({ qoida, onYopish }: { qoida: QoidaDTO | null; onYopi
         {!qoida && (
           <div>
             <label className={LABEL_CLASS} htmlFor="qd-turi">Qoida turi</label>
-            <select
+            <Select
               id="qd-turi"
-              className={INPUT_CLASS}
               value={turi}
-              onChange={(e) => setTuri(e.target.value)}
-            >
-              <option value="kechikish">Kechikish (daqiqa oralig'i)</option>
-              <option value="kelmadi">Kelmagan kun</option>
-            </select>
+              onChange={setTuri}
+              options={[
+                { value: "kechikish", label: "Kechikish (daqiqa oralig'i)" },
+                { value: "kelmadi", label: "Kelmagan kun" },
+              ]}
+            />
           </div>
         )}
         {kechikishmi && (

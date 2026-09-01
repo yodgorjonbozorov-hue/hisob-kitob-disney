@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 import { formatSom, parseSomInput } from "@/lib/format";
 import { TOLOV_GURUHLARI, TOLOV_GURUHI_BELGI, TOLOV_GURUHI_NOMI } from "@/lib/tolovBolimi";
 import type { CategoryOption, FiltrQiymati, XodimOption } from "./turlar";
@@ -79,19 +80,16 @@ export function FiltrSheet({
           <label className="block text-sm font-medium text-fg mb-1.5" htmlFor="filtr-kategoriya">
             Kategoriya
           </label>
-          <select
+          <Select
             id="filtr-kategoriya"
             value={f.categoryId}
-            onChange={(e) => set({ categoryId: e.target.value })}
-            className={MAYDON}
-          >
-            <option value="">Barchasi</option>
-            {korinadiganKategoriyalar.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nomi}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => set({ categoryId: v })}
+            searchable={korinadiganKategoriyalar.length > 7}
+            options={[
+              { value: "", label: "Barchasi" },
+              ...korinadiganKategoriyalar.map((c) => ({ value: c.id, label: c.nomi })),
+            ]}
+          />
         </div>
 
         {xodimlar.length > 0 && (
@@ -99,19 +97,16 @@ export function FiltrSheet({
             <label className="block text-sm font-medium text-fg mb-1.5" htmlFor="filtr-xodim">
               Kim kiritdi
             </label>
-            <select
+            <Select
               id="filtr-xodim"
               value={f.xodimId}
-              onChange={(e) => set({ xodimId: e.target.value })}
-              className={MAYDON}
-            >
-              <option value="">Barchasi</option>
-              {xodimlar.map((x) => (
-                <option key={x.id} value={x.id}>
-                  {x.ism}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => set({ xodimId: v })}
+              searchable={xodimlar.length > 7}
+              options={[
+                { value: "", label: "Barchasi" },
+                ...xodimlar.map((x) => ({ value: x.id, label: x.ism })),
+              ]}
+            />
           </div>
         )}
 

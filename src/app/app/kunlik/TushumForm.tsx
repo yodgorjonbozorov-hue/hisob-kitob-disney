@@ -9,6 +9,7 @@ import {
   KUNLIK_TOLOV_TURLARI,
   type KunlikTolovTuri,
 } from "@/lib/validation/kunlik";
+import { Select } from "@/components/ui/Select";
 import { SummaInput, sonOqi } from "./SummaInput";
 
 /**
@@ -113,18 +114,13 @@ export function TushumForm({
             <label className="block text-sm text-muted mb-1" htmlFor="kunlik-kategoriya">
               Kategoriya
             </label>
-            <select
+            <Select
               id="kunlik-kategoriya"
               value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-              className="w-full min-h-[48px] px-3 py-2 rounded-xl bg-surface-2 border border-line text-fg focus:border-brand focus:outline-none"
-            >
-              {kategoriyalar.map((k) => (
-                <option key={k.id} value={k.id}>
-                  {k.nomi}
-                </option>
-              ))}
-            </select>
+              onChange={setCategoryId}
+              searchable={kategoriyalar.length > 7}
+              options={kategoriyalar.map((k) => ({ value: k.id, label: k.nomi }))}
+            />
           </div>
         )}
 

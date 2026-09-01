@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Money } from "@/components/ui/Money";
+import { Select } from "@/components/ui/Select";
 import { formatSomLabel } from "@/lib/format";
 import type { AccountDTO } from "@/lib/queries/accounts";
 import { MijozTanlash, type MijozTanlov } from "@/components/qarz/MijozTanlash";
@@ -98,19 +99,20 @@ export function TolovModal({
 
         {!qarz && kassalar.length > 0 && (
           <div>
-            <label className="block text-xs text-muted mb-1">Pul qaysi kassaga tushadi</label>
-            <select
+            <label className="block text-xs text-muted mb-1" htmlFor="pos-kassa">
+              Pul qaysi kassaga tushadi
+            </label>
+            <Select
+              id="pos-kassa"
               value={accountId}
-              onChange={(e) => setAccountId(e.target.value)}
-              className="w-full rounded-lg border border-line px-3 py-2 text-sm bg-surface"
-            >
-              {kassalar.map((k) => (
-                <option key={k.id} value={k.id}>
-                  {k.nomi}
-                  {k.egaIsm ? ` (${k.egaIsm})` : ""}
-                </option>
-              ))}
-            </select>
+              onChange={setAccountId}
+              searchable={kassalar.length > 7}
+              options={kassalar.map((k) => ({
+                value: k.id,
+                label: k.nomi,
+                tavsif: k.egaIsm ?? undefined,
+              }))}
+            />
           </div>
         )}
 

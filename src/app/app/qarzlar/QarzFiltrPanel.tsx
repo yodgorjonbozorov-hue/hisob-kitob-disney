@@ -2,6 +2,7 @@
 
 import { QARZ_MATN } from "@/lib/biznesTuri";
 import { MUDDAT_BELGI, YAQIN_MUDDAT_KUN } from "@/lib/qarzMuddat";
+import { Select } from "@/components/ui/Select";
 
 /** Yo'nalish filtri: kimga qarzdor. "Barcha" ATAYLAB yo'q — 26-talab. */
 export type QarzYonalish = "hammasi" | "olinadigan" | "beriladigan";
@@ -149,33 +150,26 @@ export function QarzFiltrPanel({
         />
 
         {korinish === "qarzdorlar" ? (
-          <select
-            value={tartib}
-            onChange={(e) => onTartib(e.target.value as QarzTartib)}
-            className="min-h-[44px] rounded-lg border border-line px-3 py-2 text-sm bg-surface"
+          <Select
+            className="w-48 shrink-0"
             aria-label="Tartib"
-          >
-            {TARTIBLAR.map((t) => (
-              <option key={t.kod} value={t.kod}>
-                {t.nomi}
-              </option>
-            ))}
-          </select>
+            value={tartib}
+            onChange={(v) => onTartib(v as QarzTartib)}
+            options={TARTIBLAR.map((t) => ({ value: t.kod, label: t.nomi }))}
+          />
         ) : (
           kategoriyalar.length > 0 && (
-            <select
-              value={kategoriya}
-              onChange={(e) => onKategoriya(e.target.value)}
-              className="min-h-[44px] rounded-lg border border-line px-3 py-2 text-sm bg-surface"
+            <Select
+              className="w-48 shrink-0"
               aria-label="Kategoriya bo'yicha filtr"
-            >
-              <option value="">Barcha kategoriyalar</option>
-              {kategoriyalar.map((k) => (
-                <option key={k} value={k}>
-                  {k}
-                </option>
-              ))}
-            </select>
+              value={kategoriya}
+              onChange={onKategoriya}
+              searchable={kategoriyalar.length > 7}
+              options={[
+                { value: "", label: "Barcha kategoriyalar" },
+                ...kategoriyalar.map((k) => ({ value: k, label: k })),
+              ]}
+            />
           )
         )}
 

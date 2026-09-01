@@ -10,15 +10,30 @@
  * Client va server ikkalasida ishlatiladi — server-only import qo'shilmasin.
  */
 
-export type BiznesTuri = "umumiy" | "avto";
+export type BiznesTuri = "umumiy" | "avto" | "optom";
 
 export const BIZNES_TURLARI: { code: BiznesTuri; nomi: string; tavsif: string }[] = [
   { code: "umumiy", nomi: "Umumiy", tavsif: "Tovar sotadigan biznes — ombor qoldig'i dona bilan yuritiladi." },
   { code: "avto", nomi: "Avto (olib-sotar)", tavsif: "Har bir mashina alohida yuritiladi: olingan narx, sotilgan narx, sof foyda." },
+  {
+    code: "optom",
+    nomi: "Optom (ulgurji)",
+    tavsif:
+      "Ulgurji savdo — har sotuvda mijoz MAJBURIY tanlanadi: kim qancha xarid qilgani va qarzi mijoz kesimida ko'rinadi.",
+  },
 ];
 
 export function isAvto(turi: string | null | undefined): boolean {
   return turi === "avto";
+}
+
+/**
+ * OPTOM rejim — ombor mantiqida "umumiy" bilan bir xil, farqi bitta qoida:
+ * har sotuvda mijoz majburiy (naqdda ham). Qarzga sotuvda mijoz har qanday
+ * biznes turida allaqachon majburiy edi.
+ */
+export function isOptom(turi: string | null | undefined): boolean {
+  return turi === "optom";
 }
 
 export interface OmborMatn {
