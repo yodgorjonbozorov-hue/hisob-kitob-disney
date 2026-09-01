@@ -83,6 +83,8 @@
     "test:xodim-statistika": "node -r ts-node/register tests/xodim-statistika.test.ts",
     "test:xodim-kategoriya": "node -r ts-node/register tests/xodim-kategoriya.test.ts",
     "test:xodim-plan": "node -r ts-node/register tests/xodim-plan.test.ts",
+    "test:kpi": "node -r ts-node/register tests/kpi.test.ts",
+    "test:kpi-hisob": "node -r ts-node/register tests/kpi-hisob.test.ts",
     "test:tasks": "node -r ts-node/register tests/tasks.test.ts",
     "test:ai": "node -r ts-node/register tests/ai.test.ts",
     "test:automation": "node -r ts-node/register tests/automation.test.ts",

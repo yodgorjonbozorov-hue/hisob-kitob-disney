@@ -121,6 +121,18 @@ const BUSINESS_SCOPED = new Set([
   "EmployeeCategory",
   "EmployeeCategoryMember",
   "DealEmployee",
+  // Xodimlar KPI / ball / oylik moduli
+  "KpiSetting",
+  "KpiSalesBracket",
+  "KpiScoreRule",
+  "KpiTask",
+  "KpiTaskAssignment",
+  "KpiPenaltyPreset",
+  "KpiPointLog",
+  "KpiSalesTarget",
+  "KpiPayroll",
+  "KpiPayrollItem",
+  "KpiPayrollAdjustment",
   "HrSetting",
   // Hujjatlar (Faza 6.6)
   "Contract",

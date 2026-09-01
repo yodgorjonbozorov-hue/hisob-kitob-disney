@@ -8,6 +8,8 @@ import { listXodimVazifalari } from "@/lib/services/xodimVazifa";
 import { currentMonthString } from "@/lib/date";
 import { MenClient } from "./MenClient";
 import { MenNatijalarim } from "./MenNatijalarim";
+import { MenKpi } from "./MenKpi";
+import { hisoblaXodim } from "@/lib/kpi/oylik";
 
 /** DAVOMATIM — xodimning o'z check-in/check-out sahifasi (mobil ustuvor). */
 export default async function MenPage() {
@@ -35,10 +37,14 @@ export default async function MenPage() {
     const vazifalar = performance
       ? await listXodimVazifalari(businessId, performance.id, oy)
       : [];
+    // KPI xulosasi ham faqat SHU xodim uchun — id serverda topilgan
+    // (`getMenPerformance` sessiyadagi userId bo'yicha), mijozdan olinmagan.
+    const kpi = performance ? await hisoblaXodim(businessId, performance.id, oy) : null;
 
     return (
       <div className="space-y-6">
         <MenClient boshlangich={holat} ism={session.ism} />
+        {kpi && <MenKpi hisob={kpi.hisob} boshlangichBall={kpi.sozlama.boshlangichBall} />}
         {performance && (
           <MenNatijalarim oy={oy} performance={performance} vazifalar={vazifalar} />
         )}

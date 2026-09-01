@@ -1148,6 +1148,191 @@ CREATE TABLE "SupportMessage" (
     CONSTRAINT "SupportMessage_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "KpiSetting" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "mavsumOylar" TEXT NOT NULL DEFAULT '3,5,6,7,8,9,10,11,12',
+    "mavsumPlan" INTEGER NOT NULL DEFAULT 100000000,
+    "mavsumsizPlan" INTEGER NOT NULL DEFAULT 80000000,
+    "planBonus" INTEGER NOT NULL DEFAULT 1000000,
+    "boshlangichBall" INTEGER NOT NULL DEFAULT 100,
+    "kunlikLimit" INTEGER NOT NULL DEFAULT 5,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "KpiSetting_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "KpiSalesBracket" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "dan" INTEGER NOT NULL,
+    "gacha" INTEGER,
+    "foiz" INTEGER NOT NULL,
+    "tartib" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "KpiSalesBracket_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "KpiScoreRule" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "minBall" INTEGER NOT NULL,
+    "maxBall" INTEGER NOT NULL,
+    "foiz" INTEGER NOT NULL,
+    "tartib" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "KpiScoreRule_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "KpiTask" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "nomi" TEXT NOT NULL,
+    "izoh" TEXT,
+    "oylikHaq" INTEGER NOT NULL DEFAULT 0,
+    "aktiv" BOOLEAN NOT NULL DEFAULT true,
+    "tartib" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "KpiTask_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "KpiTaskAssignment" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "taskId" TEXT NOT NULL,
+    "employeeId" TEXT NOT NULL,
+    "aktiv" BOOLEAN NOT NULL DEFAULT true,
+    "userId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "KpiTaskAssignment_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "KpiPenaltyPreset" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "taskId" TEXT,
+    "sabab" TEXT NOT NULL,
+    "ball" INTEGER NOT NULL,
+    "kritik" BOOLEAN NOT NULL DEFAULT false,
+    "aktiv" BOOLEAN NOT NULL DEFAULT true,
+    "tartib" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "KpiPenaltyPreset_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "KpiPointLog" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "employeeId" TEXT NOT NULL,
+    "taskId" TEXT NOT NULL,
+    "oy" TEXT NOT NULL,
+    "sana" TIMESTAMP(3) NOT NULL,
+    "ball" INTEGER NOT NULL,
+    "ballOldin" INTEGER NOT NULL,
+    "ballKeyin" INTEGER NOT NULL,
+    "sabab" TEXT NOT NULL,
+    "izoh" TEXT,
+    "turi" TEXT NOT NULL DEFAULT 'jarima',
+    "kritik" BOOLEAN NOT NULL DEFAULT false,
+    "presetId" TEXT,
+    "bekorQilinganId" TEXT,
+    "userId" TEXT NOT NULL,
+    "userIsm" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "KpiPointLog_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "KpiSalesTarget" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "employeeId" TEXT NOT NULL,
+    "oy" TEXT NOT NULL,
+    "maqsad" INTEGER NOT NULL,
+    "planBonus" INTEGER,
+    "izoh" TEXT,
+    "userId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "KpiSalesTarget_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "KpiPayroll" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "employeeId" TEXT NOT NULL,
+    "oy" TEXT NOT NULL,
+    "sotuv" INTEGER NOT NULL DEFAULT 0,
+    "plan" INTEGER NOT NULL DEFAULT 0,
+    "vazifaHaqi" INTEGER NOT NULL DEFAULT 0,
+    "sotuvBonusi" INTEGER NOT NULL DEFAULT 0,
+    "planBonusi" INTEGER NOT NULL DEFAULT 0,
+    "tuzatish" INTEGER NOT NULL DEFAULT 0,
+    "jami" INTEGER NOT NULL DEFAULT 0,
+    "holat" TEXT NOT NULL DEFAULT 'HISOBLANDI',
+    "hisoblanganAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "tasdiqlaganId" TEXT,
+    "tasdiqlanganAt" TIMESTAMP(3),
+    "tolaganId" TEXT,
+    "tolanganAt" TIMESTAMP(3),
+    "tolanganSumma" INTEGER,
+    "izoh" TEXT,
+    "userId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "KpiPayroll_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "KpiPayrollItem" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "payrollId" TEXT NOT NULL,
+    "taskId" TEXT,
+    "taskNomi" TEXT NOT NULL,
+    "oylikHaq" INTEGER NOT NULL,
+    "ball" INTEGER NOT NULL,
+    "foiz" INTEGER NOT NULL,
+    "hisoblangan" INTEGER NOT NULL,
+
+    CONSTRAINT "KpiPayrollItem_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "KpiPayrollAdjustment" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "payrollId" TEXT NOT NULL,
+    "summa" INTEGER NOT NULL,
+    "sabab" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "userIsm" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "KpiPayrollAdjustment_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "Tenant_slug_key" ON "Tenant"("slug");
 
@@ -1733,6 +1918,75 @@ CREATE INDEX "SupportTicket_masulId_idx" ON "SupportTicket"("masulId");
 -- CreateIndex
 CREATE INDEX "SupportMessage_ticketId_createdAt_idx" ON "SupportMessage"("ticketId", "createdAt");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "KpiSetting_businessId_key" ON "KpiSetting"("businessId");
+
+-- CreateIndex
+CREATE INDEX "KpiSalesBracket_businessId_tartib_idx" ON "KpiSalesBracket"("businessId", "tartib");
+
+-- CreateIndex
+CREATE INDEX "KpiScoreRule_businessId_tartib_idx" ON "KpiScoreRule"("businessId", "tartib");
+
+-- CreateIndex
+CREATE INDEX "KpiTask_businessId_aktiv_tartib_idx" ON "KpiTask"("businessId", "aktiv", "tartib");
+
+-- CreateIndex
+CREATE INDEX "KpiTaskAssignment_businessId_employeeId_aktiv_idx" ON "KpiTaskAssignment"("businessId", "employeeId", "aktiv");
+
+-- CreateIndex
+CREATE INDEX "KpiTaskAssignment_employeeId_idx" ON "KpiTaskAssignment"("employeeId");
+
+-- CreateIndex
+CREATE INDEX "KpiTaskAssignment_taskId_idx" ON "KpiTaskAssignment"("taskId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "KpiTaskAssignment_taskId_employeeId_key" ON "KpiTaskAssignment"("taskId", "employeeId");
+
+-- CreateIndex
+CREATE INDEX "KpiPenaltyPreset_businessId_aktiv_tartib_idx" ON "KpiPenaltyPreset"("businessId", "aktiv", "tartib");
+
+-- CreateIndex
+CREATE INDEX "KpiPenaltyPreset_taskId_idx" ON "KpiPenaltyPreset"("taskId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "KpiPointLog_bekorQilinganId_key" ON "KpiPointLog"("bekorQilinganId");
+
+-- CreateIndex
+CREATE INDEX "KpiPointLog_businessId_employeeId_oy_idx" ON "KpiPointLog"("businessId", "employeeId", "oy");
+
+-- CreateIndex
+CREATE INDEX "KpiPointLog_businessId_oy_idx" ON "KpiPointLog"("businessId", "oy");
+
+-- CreateIndex
+CREATE INDEX "KpiPointLog_employeeId_taskId_sana_idx" ON "KpiPointLog"("employeeId", "taskId", "sana");
+
+-- CreateIndex
+CREATE INDEX "KpiPointLog_taskId_idx" ON "KpiPointLog"("taskId");
+
+-- CreateIndex
+CREATE INDEX "KpiSalesTarget_businessId_oy_idx" ON "KpiSalesTarget"("businessId", "oy");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "KpiSalesTarget_employeeId_oy_key" ON "KpiSalesTarget"("employeeId", "oy");
+
+-- CreateIndex
+CREATE INDEX "KpiPayroll_businessId_oy_holat_idx" ON "KpiPayroll"("businessId", "oy", "holat");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "KpiPayroll_employeeId_oy_key" ON "KpiPayroll"("employeeId", "oy");
+
+-- CreateIndex
+CREATE INDEX "KpiPayrollItem_payrollId_idx" ON "KpiPayrollItem"("payrollId");
+
+-- CreateIndex
+CREATE INDEX "KpiPayrollItem_taskId_idx" ON "KpiPayrollItem"("taskId");
+
+-- CreateIndex
+CREATE INDEX "KpiPayrollAdjustment_payrollId_idx" ON "KpiPayrollAdjustment"("payrollId");
+
+-- CreateIndex
+CREATE INDEX "KpiPayrollAdjustment_businessId_createdAt_idx" ON "KpiPayrollAdjustment"("businessId", "createdAt");
+
 -- AddForeignKey
 ALTER TABLE "Role" ADD CONSTRAINT "Role_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
@@ -2131,6 +2385,69 @@ ALTER TABLE "SupportMessage" ADD CONSTRAINT "SupportMessage_ticketId_fkey" FOREI
 
 -- AddForeignKey
 ALTER TABLE "SupportMessage" ADD CONSTRAINT "SupportMessage_muallifId_fkey" FOREIGN KEY ("muallifId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "KpiSetting" ADD CONSTRAINT "KpiSetting_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "KpiSalesBracket" ADD CONSTRAINT "KpiSalesBracket_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "KpiScoreRule" ADD CONSTRAINT "KpiScoreRule_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "KpiTask" ADD CONSTRAINT "KpiTask_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "KpiTaskAssignment" ADD CONSTRAINT "KpiTaskAssignment_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "KpiTaskAssignment" ADD CONSTRAINT "KpiTaskAssignment_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "KpiTask"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "KpiTaskAssignment" ADD CONSTRAINT "KpiTaskAssignment_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "KpiPenaltyPreset" ADD CONSTRAINT "KpiPenaltyPreset_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "KpiPenaltyPreset" ADD CONSTRAINT "KpiPenaltyPreset_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "KpiTask"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "KpiPointLog" ADD CONSTRAINT "KpiPointLog_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "KpiPointLog" ADD CONSTRAINT "KpiPointLog_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "KpiPointLog" ADD CONSTRAINT "KpiPointLog_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "KpiTask"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "KpiSalesTarget" ADD CONSTRAINT "KpiSalesTarget_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "KpiSalesTarget" ADD CONSTRAINT "KpiSalesTarget_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "KpiPayroll" ADD CONSTRAINT "KpiPayroll_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "KpiPayroll" ADD CONSTRAINT "KpiPayroll_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "KpiPayrollItem" ADD CONSTRAINT "KpiPayrollItem_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "KpiPayrollItem" ADD CONSTRAINT "KpiPayrollItem_payrollId_fkey" FOREIGN KEY ("payrollId") REFERENCES "KpiPayroll"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "KpiPayrollItem" ADD CONSTRAINT "KpiPayrollItem_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "KpiTask"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "KpiPayrollAdjustment" ADD CONSTRAINT "KpiPayrollAdjustment_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "KpiPayrollAdjustment" ADD CONSTRAINT "KpiPayrollAdjustment_payrollId_fkey" FOREIGN KEY ("payrollId") REFERENCES "KpiPayroll"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 
 -- ---------------------------------------------------------------------------

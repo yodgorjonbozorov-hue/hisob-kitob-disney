@@ -41,6 +41,12 @@ export const HUQUQLAR: Huquq[] = [
   // Xarid
   { code: "xarid.korish", label: "Xarid buyurtmalarini ko'rish", guruh: "Xarid" },
   { code: "xarid.qabul", label: "Xarid qabul qilish va to'lash", guruh: "Xarid" },
+  // Xodimlar KPI / ball / oylik
+  { code: "kpi.korish", label: "Xodimlar KPI va oyligini ko'rish", guruh: "Xodimlar KPI" },
+  { code: "kpi.ball", label: "Ball ayirish va qaytarish", guruh: "Xodimlar KPI" },
+  { code: "kpi.sozlash", label: "KPI vazifalari va bonus sozlamalari", guruh: "Xodimlar KPI" },
+  { code: "kpi.oylik.tasdiq", label: "Oyni yopish va oylikni tasdiqlash", guruh: "Xodimlar KPI" },
+  { code: "kpi.oylik.tolash", label: "Oylikni to'landi deb belgilash", guruh: "Xodimlar KPI" },
   // Boshqaruv
   { code: "hisobot.korish", label: "Hisobotlarni ko'rish", guruh: "Boshqaruv" },
   { code: "foydalanuvchi.boshqarish", label: "Foydalanuvchilarni boshqarish", guruh: "Boshqaruv" },

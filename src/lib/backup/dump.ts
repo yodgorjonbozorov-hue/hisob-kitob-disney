@@ -107,6 +107,24 @@ export const ZAXIRA_JADVALLARI = [
   "hrSetting",
   "payroll",
   "payrollAdvance",
+  // KPI moduli. TARTIB MUHIM: `kpiTask` `business`dan keyin yetarli;
+  // `kpiTaskAssignment` va `kpiPointLog` — `kpiTask` VA `employee`dan KEYIN
+  // (ikkalasiga ham FK); `kpiPenaltyPreset` — `kpiTask`dan keyin;
+  // `kpiSalesTarget` — `employee`dan keyin; `kpiPayrollItem` va
+  // `kpiPayrollAdjustment` — `kpiPayroll`dan KEYIN (`kpiPayrollItem` yana
+  // `kpiTask`ka ham FK bilan murojaat qiladi). Tartib buzilsa zaxira
+  // tiklanmaydi: "Foreign key constraint violated".
+  "kpiSetting",
+  "kpiSalesBracket",
+  "kpiScoreRule",
+  "kpiTask",
+  "kpiTaskAssignment",
+  "kpiPenaltyPreset",
+  "kpiPointLog",
+  "kpiSalesTarget",
+  "kpiPayroll",
+  "kpiPayrollItem",
+  "kpiPayrollAdjustment",
   "contract",
   "attachment",
   // dailyReport business/user'dan keyin; dailyTransaction dailyReport'ga FK bilan bog'liq.
