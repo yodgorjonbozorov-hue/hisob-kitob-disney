@@ -47,21 +47,36 @@ export interface ZakazXodimDTO {
 
 export interface BuyurtmaDTO {
   id: string;
-  /** Xizmat/buyurtma nomi. */
+  /** Xizmat/zakaz nomi. */
   nomi: string;
   summa: number;
+  /** Haqiqatda olingan pul — to'lov holati shundan hisoblanadi. */
+  tolangan: number;
+  /** Pul kanali: "naqd" | "click" | "qarz" (yoki null). */
+  tolovTuri: string | null;
+  /** Ish jarayoni holati: KUTILMOQDA | JARAYONDA | YUTILDI | YOQOTILDI. */
+  holat: string;
   stageId: string;
   categoryId: string | null;
   kategoriya: string | null;
   kontakt: string | null;
   tel: string | null;
-  /** "YYYY-MM-DD" yoki null. */
+  /**
+   * ZAKAZ SANASI "YYYY-MM-DD" — xizmat qaysi kunga belgilangan (UI'da
+   * ko'rinadigan asosiy sana). `createdAt` bilan aralashtirilmaydi.
+   */
   sana: string | null;
   izoh: string | null;
   masulId: string;
   masulIsm: string | null;
   /** Bog'langan kirim tranzaksiyasi — null bo'lsa kirim hali yozilmagan. */
   transactionId: string | null;
+  /** Yakunlashda ochilgan qarz yozuvi (to'lanmagan qism). */
+  debtId: string | null;
+  /** Kirimga o'tgan REAL summa (tranzaksiyadan; o'chirilgani 0). */
+  kirimSumma: number;
+  /** Ochilgan qarzning qoldig'i (qarz yozuvidan). */
+  qarzQoldiq: number;
 }
 
 export interface KunlikXulosaDTO {
@@ -95,3 +110,10 @@ export function kirimHavolasi(b: BuyurtmaDTO): string {
   p.set("q", b.nomi);
   return `/app/tranzaksiyalar?${p.toString()}`;
 }
+
+/**
+ * Ochilgan qarzga havola. Qarzdorlik sahifasi faqat `turi` filtrini
+ * o'qiydi (mijoz bo'yicha qidiruv sahifaning o'zida) — shuning uchun
+ * havola olinadigan qarzlar ro'yxatini ochadi.
+ */
+export const QARZ_HAVOLASI = "/app/qarzlar?turi=olinadigan";

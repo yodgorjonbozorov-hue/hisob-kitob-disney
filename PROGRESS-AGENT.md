@@ -5455,3 +5455,72 @@ statistikasi; umumiy biznes regressiyasi; dublikat kartochka yo'q.
 Regressiya: isolation 22, izolyatsiya-royxati 9, qarz-mijoz 18, sotuv-bekor
 11, mijozlar 15, qarz 16, qarzdorlik 16, migratsiya 12, atomik 6,
 kirim-chiqim 19, crm 24, tolov-taqsimoti 11 — hammasi yashil. Build o'tdi.
+
+---
+
+## CRM ZAKAZ PIPELINE (Disney Navoiy) — 2026-09-01
+
+Doska "Yangi → Aloqa qilindi → Taklif yuborildi → Yutildi → Yo'qotildi"
+bosqichlariga tayanardi. Disney Navoiy zakazi esa OLDINDAN olinadi: 01.09 da
+murojaat, xizmat 18.09 da. Bunday zakazning o'rni bosqich bilan emas, SANA
+bilan aniqlanadi.
+
+**Asosiy arxitektura qarori — "BUGUNGI" ALOHIDA HOLAT EMAS.**
+Ustun `Deal.holat` + `Deal.sana` dan HAR O'QISHDA hisoblanadi
+(`lib/crm/pipeline.ts` — sof, bazasiz funksiyalar; server ham, brauzer ham
+ayni qoidada). Kun almashganda bazaga hech narsa yozilmaydi:
+- kunlik cron kerak emas (ishlamay qolsa doska yolg'on ko'rsatardi);
+- admin qo'lda status almashtirmaydi;
+- kechagi bajarilmagan zakaz "Bugungi"dan chiqib KUTILAYOTGANda qoladi va
+  "N kun kechikkan" belgisini oladi (yo'qolib ketmaydi).
+Sana Asia/Tashkent bo'yicha (`todayTashkentDateOnlyString`) — UTC yarim tuni
+zakazni bir kun oldin/keyin surib yubormaydi.
+
+**Baza:** migratsiya `20260901140000_crm_zakaz_pipeline` — `Deal` ga to'rt
+ustun (YANGI JADVAL YO'Q):
+- `holat` (KUTILMOQDA | JARAYONDA | YUTILDI | YOQOTILDI) — eski yozuvlarda
+  bosqich turidan backfill (WON→YUTILDI, LOST→YOQOTILDI, qolgani KUTILMOQDA);
+- `tolangan` — haqiqatda olingan pul (to'lov holati SHUNDAN hisoblanadi;
+  alohida `paymentStatus` ustuni ATAYLAB yo'q — u summa bilan zid holatga
+  tushib qolardi). Backfill: kirim yozilgan zakaz — to'liq to'langan;
+- `tolovTuri` — pul kanali ("naqd" | "click" | "qarz");
+- `debtId` + UNIQUE + FK — yakunlashda ochilgan qarz. UNIQUE aynan
+  `transactionId` dagi kabi: bitta zakaz ikkita qarz ham, ikkita kirim ham
+  yarata olmaydi. Himoya BAZADA.
+Bosqichlar (`Stage`) TEGILMADI: ular `holat` ning ko'zgusi sifatida sinxron
+yuritiladi (`bosqichdanHolat` / `pipelineBosqichlari`), chunki dashboard, AI
+analitikasi va xodim reytingi hali `Stage.turi` ni o'qiydi. Eski bizneslarda
+yetishmagan "Jarayonda" bosqichi idempotent qo'shiladi, eskilari
+o'chirilmaydi (tarixiy zakazlar ularga bog'langan).
+
+**Moliya (`lib/crm/yakunlash.ts`):** "Yutildi" — BIZNES yakuni, to'lov holati
+ALOHIDA haqiqat manbai. Yakunlash pulni ikkiga bo'ladi: to'langan qism
+KIRIMga, qolgani QARZDORLIKKA. Qarzga savdo kirim yozmaydi (mavjud qarz
+moduli qoidasi) — kirim keyin, to'lov sanasi bilan tushadi. Hammasi bitta
+`runBusinessTx` ichida; takroriy chaqiruv jimgina mavjud natijani qaytaradi.
+
+**Sotuvchi statistikasi:** kategoriya analitikasi endi olingan / bugungi /
+jarayonda / yutilgan / yo'qotilgan kesimlarini (soni + summa), konversiyani
+va "to'liq puli kelgan sotuv" ni (bonus hisobi shu raqamga tayanadi —
+qarzga ketgan qism kirmaydi) beradi. Kesim CRM doskasi bilan AYNI
+funksiyadan chiqadi, ya'ni raqamlar ustun sarlavhalari bilan mos.
+
+**UI:** 4 ustunli doska (mobil gorizontal svayp saqlangan), ustun
+sarlavhasida soni + summa + kechikkanlar, karta (kategoriya/nomi/mijoz/
+telefon/narx/sana/sotuvchi/to'lov va workflow belgilari), filtr (sana
+presetlari, sotuvchi, kategoriya, to'lov holati — URL'da), tafsilotda
+ustunga mos tez amallar. Yangi zakaz formasida ZAKAZ SANASI majburiy va
+to'lov turi (to'liq/qisman/qarzga) tanlanadi; "Yutildi bosilganda: Kirim X ·
+Qarzdorlik Y" oldindan ko'rsatiladi.
+
+**Testlar:** YANGI `tests/crm-pipeline.test.ts` (`test:crm-pipeline`, 18
+test) — topshiriqdagi 8 stsenariy (kelajak/bugungi ustun, jarayonga o'tish,
+to'liq/qarz/qisman taqsimot, kechikkan zakaz, ikki marta yutildi → bitta
+kirim) + bazadagi UNIQUE himoyasi, moliyaviy qulf, arxiv, izolyatsiya,
+filtr. Regressiya: crm 24, xodim-kategoriya 19, xodim-statistika 12,
+isolation 22, izolyatsiya-royxati 9, ai 28, qarz 16, qarzdorlik 16,
+migratsiya 12, backup 6, soft-delete 8, atomik 6, kunlik 27, hr 19,
+mijozlar 15, dashboard-ux 21, kirim-chiqim 19, tolov-taqsimoti 11,
+postgres 2 — hammasi yashil. Build o'tdi.
+(panel 3 va cron 1 qizil — o'zgarishdan OLDIN ham qizil edi, bu ish bilan
+bog'liq emas.)

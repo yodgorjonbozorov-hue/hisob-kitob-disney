@@ -137,7 +137,7 @@ export async function handleLeadText(ctx: Context, user: User): Promise<boolean>
 
     await ctx.reply(
       [
-        "✅ Lead saqlandi — CRM'ning «Yangi» bosqichida",
+        "✅ Lead saqlandi — CRM'ning «Kutilayotgan zakazlar» ustunida",
         `Mijoz: ${flow.ism}${flow.tel ? ` (${flow.tel})` : ""}`,
         `Bitim: ${deal.nomi}`,
         summa > 0 ? `Summa: ${formatMoney(summa)}` : null,

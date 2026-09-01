@@ -80,6 +80,7 @@
     "test:magazin": "node -r ts-node/register tests/magazin.test.ts",
     "test:magazin-postgres": "node scripts/pg-sinov.mjs tests/magazin-postgres.test.ts",
     "test:crm": "node -r ts-node/register tests/crm.test.ts",
+    "test:crm-pipeline": "node -r ts-node/register tests/crm-pipeline.test.ts",
     "test:xodim-statistika": "node -r ts-node/register tests/xodim-statistika.test.ts",
     "test:xodim-kategoriya": "node -r ts-node/register tests/xodim-kategoriya.test.ts",
     "test:xodim-plan": "node -r ts-node/register tests/xodim-plan.test.ts",

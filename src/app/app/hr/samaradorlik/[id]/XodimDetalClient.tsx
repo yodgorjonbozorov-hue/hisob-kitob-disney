@@ -8,14 +8,19 @@ import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { formatSom, formatDateUZ } from "@/lib/format";
+import { USTUN_NOMI, type Ustun } from "@/lib/crm/pipeline";
 import type { XodimKategoriyaDetalDTO } from "@/lib/queries/kategoriyaAnalitika";
 import { XodimAvatar } from "../../XodimAvatar";
 import { PlanProgress } from "../../PlanProgress";
 import { DavrFiltri, davrChegara, type Davr } from "@/app/app/tranzaksiyalar/xodimlar/DavrFiltri";
 
-const STAGE_TONE: Record<string, "kirim" | "chiqim" | "neutral"> = {
-  WON: "kirim",
-  LOST: "chiqim",
+/** Doska ustuni → belgi ohangi (CRM kartalari bilan bir xil o'qish). */
+const USTUN_TONE: Record<string, "kirim" | "chiqim" | "warning" | "info" | "neutral"> = {
+  YUTILDI: "kirim",
+  YOQOTILDI: "chiqim",
+  JARAYONDA: "warning",
+  BUGUNGI: "info",
+  KUTILAYOTGAN: "neutral",
 };
 
 /**
@@ -94,12 +99,20 @@ export function XodimDetalClient({
 
       {/* KPI */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <Kpi label="Zakazlar" qiymat={`${data.stat.jami} ta`} loading={loading} />
+        <Kpi label="Olingan zakazlar" qiymat={`${data.stat.jami} ta`} loading={loading} />
+        <Kpi label="Bugungi" qiymat={`${data.stat.bugungi} ta`} loading={loading} />
+        <Kpi label="Jarayonda" qiymat={`${data.stat.jarayonda} ta`} loading={loading} />
         <Kpi label={sotuvchimi ? "Yutilgan" : "Bajarilgan"} qiymat={`${data.stat.yutilgan} ta`} loading={loading} />
-        <Kpi label="Yutqazilgan" qiymat={`${data.stat.yutqazilgan} ta`} loading={loading} />
+        <Kpi label="Yo'qotilgan" qiymat={`${data.stat.yutqazilgan} ta`} loading={loading} />
         <Kpi
           label={sotuvchimi ? "Sotuv" : "Qatnashgan zakazlar tushumi"}
           qiymat={`${formatSom(data.stat.summa)} so'm`}
+          loading={loading}
+        />
+        {/* Bonus hisobi shu raqamga tayanadi: qarzga ketgan qism kirmaydi. */}
+        <Kpi
+          label="To'liq puli kelgan sotuv"
+          qiymat={`${formatSom(data.stat.tolanganSotuv)} so'm`}
           loading={loading}
         />
         <Kpi label="O'rtacha chek" qiymat={`${formatSom(data.stat.ortacha)} so'm`} loading={loading} />
@@ -145,7 +158,9 @@ export function XodimDetalClient({
                     <span className="block font-display tnum font-semibold text-fg">
                       {z.summa > 0 ? formatSom(z.summa) : "—"}
                     </span>
-                    <Badge tone={STAGE_TONE[z.stageTuri] ?? "neutral"}>{z.stageNomi}</Badge>
+                    <Badge tone={USTUN_TONE[z.ustun] ?? "neutral"}>
+                      {USTUN_NOMI[z.ustun as Ustun] ?? z.stageNomi}
+                    </Badge>
                   </span>
                   <ChevronRight className="w-4 h-4 text-faint shrink-0" aria-hidden="true" />
                 </Link>
