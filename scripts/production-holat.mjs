@@ -110,6 +110,29 @@ async function main() {
     }
   }
 
+  // ZAKAZ JAMOASI + SIFAT NAZORATI (migratsiya 20260902090000) — faqat PRAGMA.
+  bolim("Sxema bayroqlari (zakaz jamoasi / baho)");
+  const ecUstun = (await jadvalBor("EmployeeCategory")) ? await ustunlar("EmployeeCategory") : [];
+  const deUstun = (await jadvalBor("DealEmployee")) ? await ustunlar("DealEmployee") : [];
+  chiziq(`EmployeeCategory.zakazgaBiriktiriladi: ${ecUstun.includes("zakazgaBiriktiriladi") ? "BOR" : "YO'Q"}`);
+  chiziq(`EmployeeCategory.kopXodim:             ${ecUstun.includes("kopXodim") ? "BOR" : "YO'Q"}`);
+  chiziq(`DealEmployee.baho:                     ${deUstun.includes("baho") ? "BOR" : "YO'Q"}`);
+  chiziq(`DealEmployee.bahoIzoh:                 ${deUstun.includes("bahoIzoh") ? "BOR" : "YO'Q"}`);
+  chiziq(`DealEmployee.bahoAt:                   ${deUstun.includes("bahoAt") ? "BOR" : "YO'Q"}`);
+  const dfBor = await jadvalBor("DealFeedback");
+  chiziq(`DealFeedback jadvali:                  ${dfBor ? "BOR" : "YO'Q"}`);
+  if (dfBor) {
+    const idx = (await c.execute(`PRAGMA index_list("DealFeedback")`)).rows.map((r) => String(r.name));
+    chiziq(`DealFeedback_dealId_key (UNIQUE):      ${idx.includes("DealFeedback_dealId_key") ? "BOR" : "YO'Q"}`);
+    chiziq(`DealFeedback yozuvlar: ${await son(`SELECT COUNT(*) n FROM "DealFeedback"`)}`);
+  }
+  if (deUstun.includes("baho")) {
+    chiziq(`DealEmployee jami: ${await son(`SELECT COUNT(*) n FROM "DealEmployee"`)} · baholangan: ${await son(`SELECT COUNT(*) n FROM "DealEmployee" WHERE "baho" IS NOT NULL`)}`);
+    // Dublikat biriktiruv bo'lishi mumkin emas (UNIQUE) — tekshiruv sifatida.
+    const dub = await son(`SELECT COUNT(*) n FROM (SELECT "dealId","categoryId","employeeId" FROM "DealEmployee" GROUP BY 1,2,3 HAVING COUNT(*) > 1)`);
+    chiziq(`DealEmployee dublikat guruhlar: ${dub}`);
+  }
+
   bolim("Yaxlitlik");
   const fk = await c.execute("PRAGMA foreign_key_check");
   chiziq(`Tashqi kalitlar: ${fk.rows.length === 0 ? "buzilish yo'q" : `${fk.rows.length} ta BUZILISH`}`);
