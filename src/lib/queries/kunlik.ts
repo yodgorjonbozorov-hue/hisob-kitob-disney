@@ -33,10 +33,17 @@ export interface KunlikReportDTO {
   clickSumma: number;
   qarzSumma: number;
   jamiSumma: number;
-  /** Shu kunning Yozuvlardagi chiqimlari jami (jonli hisoblanadi). */
-  chiqimSumma: number;
-  /** jamiSumma − chiqimSumma — kun yakunida ko'rsatiladigan SOF natija. */
-  sofSumma: number;
+  /**
+   * Shu kunning Yozuvlardagi chiqimlari jami (jonli hisoblanadi).
+   *
+   * `null` — so'rovchida `hisobot.korish` huquqi YO'Q. Chiqim butun biznes
+   * bo'yicha jamlanadi, ya'ni bu kassirning o'z smenasi emas, kompaniyaning
+   * moliyaviy ko'rsatkichi. Oylik hisobot boshqaruvchiga yopilgan bo'lsa-yu,
+   * xuddi shu raqam kunlik kesimda ochiq qolsa — huquq aylanib o'tilardi.
+   */
+  chiqimSumma: number | null;
+  /** jamiSumma − chiqimSumma — kun yakunidagi SOF natija; huquq bo'lmasa `null`. */
+  sofSumma: number | null;
   /** Kassa topshiruvi (pul nazorati). */
   submittedByIsm: string | null;
   submittedAt: string | null;
@@ -68,7 +75,18 @@ function holatDTO(holat: string): KunlikHolatDTO {
  * (kun boshlanmagan) — nol qiymatli "virtual" DTO qaytadi: yangi kun har doim
  * 0 so'mdan boshlanadi, yozuv esa birinchi tushumda yaratiladi.
  */
-export async function getKunlikReport(businessId: string, sanaStr: string): Promise<KunlikReportDTO> {
+export async function getKunlikReport(
+  businessId: string,
+  sanaStr: string,
+  /**
+   * MOLIYAVIY KO'RSATKICH KO'RINADIMI (`hisobot.korish` huquqi).
+   *
+   * ATAYLAB majburiy parametr — default qiymat qo'yilsa, uni unutgan yangi
+   * chaqiruv jimgina chiqim/sof foydani ochib yuborardi. Bu yerda unutish
+   * kompilyatsiya xatosi bo'ladi.
+   */
+  moliyaKorinadi: boolean
+): Promise<KunlikReportDTO> {
   const sana = dateOnlyStringToUTCDate(sanaStr);
   // Chiqim kunlikda saqlanmaydi — Yozuvlardan (Transaction) jonli jamlanadi,
   // shuning uchun har doim haqiqiy holatni ko'rsatadi.
@@ -87,7 +105,8 @@ export async function getKunlikReport(businessId: string, sanaStr: string): Prom
       where: { businessId, turi: "chiqim", deletedAt: null, sana },
     }),
   ]);
-  const chiqimSumma = chiqimAgg._sum.summa ?? 0;
+  const chiqimJami = chiqimAgg._sum.summa ?? 0;
+  const chiqimSumma = moliyaKorinadi ? chiqimJami : null;
   if (!report) {
     return {
       id: null,
@@ -98,7 +117,7 @@ export async function getKunlikReport(businessId: string, sanaStr: string): Prom
       qarzSumma: 0,
       jamiSumma: 0,
       chiqimSumma,
-      sofSumma: -chiqimSumma,
+      sofSumma: moliyaKorinadi ? -chiqimJami : null,
       submittedByIsm: null,
       submittedAt: null,
       sanalganNaqd: null,
@@ -121,7 +140,7 @@ export async function getKunlikReport(businessId: string, sanaStr: string): Prom
     qarzSumma: report.qarzSumma,
     jamiSumma: report.jamiSumma,
     chiqimSumma,
-    sofSumma: report.jamiSumma - chiqimSumma,
+    sofSumma: moliyaKorinadi ? report.jamiSumma - chiqimJami : null,
     submittedByIsm: report.submittedByIsm,
     submittedAt: report.submittedAt ? report.submittedAt.toISOString() : null,
     sanalganNaqd: report.sanalganNaqd,

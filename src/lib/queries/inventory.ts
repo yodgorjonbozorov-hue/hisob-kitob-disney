@@ -409,9 +409,14 @@ export interface SaleDTO {
  * bilan kiritilgan sotuv o'z o'rniga tushishi kerak.
  * Bekor qilinganlar ham ko'rsatiladi (ataylab): kassir nima bo'lganini ko'rsin.
  */
-export async function listRecentSales(businessId: string, limit = 20): Promise<SaleDTO[]> {
+export async function listRecentSales(
+  businessId: string,
+  limit = 20,
+  /** `null` — biznesdagi barcha sotuvlar; userId — faqat shu xodim rasmiylashtirgani. */
+  scopeUserId: string | null = null
+): Promise<SaleDTO[]> {
   const sales = await prisma.sale.findMany({
-    where: { businessId },
+    where: { businessId, ...(scopeUserId ? { userId: scopeUserId } : {}) },
     include: { product: { select: { nomi: true } } },
     orderBy: [{ sana: "desc" }, { createdAt: "desc" }],
     take: limit,

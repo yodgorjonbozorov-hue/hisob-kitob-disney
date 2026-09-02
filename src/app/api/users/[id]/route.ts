@@ -7,7 +7,8 @@ import { updateUserSchema } from "@/lib/validation/user";
 import { hashPassword } from "@/lib/auth/password";
 import { requirePro } from "@/lib/billing/pro";
 import { biznesIdlariniHalQil, biriktiruvlarniYangila, birlamchiBiznes } from "@/lib/services/userBiznes";
-import { xodimHimoyasi } from "@/lib/services/userGuard";
+import { egalikTekshir, xodimHimoyasi } from "@/lib/services/userGuard";
+import { logAudit } from "@/lib/services/audit";
 import { xodimniOqi } from "@/lib/queries/xodimlar";
 
 const USER_SELECT = {
@@ -106,6 +107,12 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
     yangiFaol: rest.isActive,
   });
 
+  // EGALIK HIMOYASI (lib/services/userGuard.ts): OWNER rolini faqat OWNER
+  // beradi; OWNER hisobiga (parol/login/rol/faollik) faqat OWNER tegadi;
+  // hech kim o'z rolini o'zi o'zgartira olmaydi. `rol` yuqorida maxsus
+  // rolning `bazaRol` i bilan almashtirilgan — tekshiruv shundan keyin.
+  await egalikTekshir({ userId: user.userId, rol: user.rol }, { yangiRol: rol, nishon: existing }, params.id);
+
   // Bizneslarni rol asosida hal qilamiz (ko'p-bizneslik — lib/services/userBiznes.ts):
   //  - CASHIER → kamida bitta biznes majburiy.
   //  - SELLER → ixtiyoriy (biriktirilsa yozuvlari faqat o'sha bizneslarga tushadi).
@@ -150,6 +157,19 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
 
   await biriktiruvlarniYangila(params.id, biznesIdlar);
 
+  // ROL O'ZGARISHI — alohida audit yozuvi. Extension'ning avtomatik yozuvi
+  // butun qatorni beradi; bu yerda hodisa NOMI bilan qidiriladigan bo'lib
+  // qoladi ("kim kimga qaysi rolni berdi").
+  if (rol !== undefined && rol !== existing.rol) {
+    await logAudit({
+      action: "update",
+      entity: "user",
+      entityId: params.id,
+      before: { rol: existing.rol },
+      after: { rol, ozgartirdi: user.userId },
+    });
+  }
+
   // Biriktiruvlar yozilgandan KEYIN o'qiladi (biznes nomlari bilan).
   return NextResponse.json(await xodimniOqi(params.id));
 });
@@ -175,6 +195,9 @@ export const DELETE = withTenant<{ params: { id: string } }>(async (request, { p
 
   // Oxirgi direktorni o'chirish kompaniyani boshqaruvsiz qoldiradi.
   await xodimHimoyasi(user.userId, target, { ochirish: true });
+
+  // Direktor hisobini faqat boshqa direktor o'chira oladi.
+  await egalikTekshir({ userId: user.userId, rol: user.rol }, { nishon: target }, id);
 
   const txCount = await prisma.transaction.count({ where: { userId: id } });
   if (txCount > 0) {

@@ -18,7 +18,12 @@ import type { KunlikReportDTO } from "@/lib/queries/kunlik";
  * "accounting method" o'ylab topilmaydi.
  */
 export function XulosaKartalar({ report }: { report: KunlikReportDTO }) {
+  // MOLIYAVIY KESIM `hisobot.korish` huquqiga bog'liq: huquq bo'lmasa server
+  // `null` yuboradi (lib/queries/kunlik.ts) va bu ikki karta UMUMAN
+  // chizilmaydi. Xodimga qoladigan raqam — o'z tushumi, ya'ni kassa
+  // topshirig'ining predmeti.
   const sof = report.sofSumma;
+  const moliyaKorinadi = report.chiqimSumma !== null && sof !== null;
 
   const kesim = [
     { turi: "CASH" as const, summa: report.naqdSumma },
@@ -28,7 +33,11 @@ export function XulosaKartalar({ report }: { report: KunlikReportDTO }) {
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+      <div
+        className={
+          moliyaKorinadi ? "grid grid-cols-2 lg:grid-cols-3 gap-3" : "grid grid-cols-1 gap-3"
+        }
+      >
         <Card className="p-4">
           <p className="text-2xs sm:text-sm text-muted">📈 Jami kirim</p>
           <div className="mt-1.5">
@@ -36,25 +45,29 @@ export function XulosaKartalar({ report }: { report: KunlikReportDTO }) {
           </div>
         </Card>
 
-        <Card className="p-4">
-          <p className="text-2xs sm:text-sm text-muted">📉 Jami chiqim</p>
-          <div className="mt-1.5">
-            <Money value={report.chiqimSumma} size="xl" tone="expense" />
-          </div>
-        </Card>
+        {moliyaKorinadi && (
+          <>
+            <Card className="p-4">
+              <p className="text-2xs sm:text-sm text-muted">📉 Jami chiqim</p>
+              <div className="mt-1.5">
+                <Money value={report.chiqimSumma ?? 0} size="xl" tone="expense" />
+              </div>
+            </Card>
 
-        <Card className="p-4 col-span-2 lg:col-span-1">
-          <p className="text-2xs sm:text-sm text-muted">💰 Sof natija</p>
-          <div className="mt-1.5">
-            <Money
-              value={sof}
-              size="display"
-              tone={sof >= 0 ? "brand" : "expense"}
-              signed={sof < 0}
-            />
-          </div>
-          <p className="text-2xs text-faint mt-1">Kirim − chiqim</p>
-        </Card>
+            <Card className="p-4 col-span-2 lg:col-span-1">
+              <p className="text-2xs sm:text-sm text-muted">💰 Sof natija</p>
+              <div className="mt-1.5">
+                <Money
+                  value={sof ?? 0}
+                  size="display"
+                  tone={(sof ?? 0) >= 0 ? "brand" : "expense"}
+                  signed={(sof ?? 0) < 0}
+                />
+              </div>
+              <p className="text-2xs text-faint mt-1">Kirim − chiqim</p>
+            </Card>
+          </>
+        )}
       </div>
 
       <Card className="p-4">

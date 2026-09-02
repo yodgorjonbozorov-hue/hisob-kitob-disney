@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/deploy-zaxira.mjs && node scripts/db-migrate.mjs && node -r ts-node/register scripts/kassa-migratsiya.ts && node -r ts-node/register scripts/qarz-migratsiya.ts && node -r ts-node/register scripts/kassa-handover-migratsiya.ts && node scripts/bootstrap-superadmin.mjs && node scripts/bir-martalik-parol.mjs && next build",
+    "build": "node scripts/deploy-zaxira.mjs && node scripts/db-migrate.mjs && node -r ts-node/register scripts/kassa-migratsiya.ts && node -r ts-node/register scripts/qarz-migratsiya.ts && node -r ts-node/register scripts/kassa-handover-migratsiya.ts && node scripts/bootstrap-superadmin.mjs && next build",
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate",
@@ -68,6 +68,7 @@
     "test:narx-toldirish": "node -r ts-node/register tests/narx-toldirish.test.ts",
     "test:bot-holat": "node -r ts-node/register tests/bot-holat.test.ts",
     "test:visibility": "node -r ts-node/register tests/visibility.test.ts",
+    "test:eskalatsiya": "node -r ts-node/register tests/eskalatsiya.test.ts",
     "test:kop-biznes": "node -r ts-node/register tests/kop-biznes.test.ts",
     "test:foydalanuvchilar": "node -r ts-node/register tests/foydalanuvchilar.test.ts",
     "test:foydalanuvchilar-e2e": "node -r ts-node/register tests/foydalanuvchilar-brauzer.test.ts",

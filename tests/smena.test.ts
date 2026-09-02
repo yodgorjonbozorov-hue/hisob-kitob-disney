@@ -222,7 +222,7 @@ test("kassada qoldirilgan pul keyingi smenaning boshlangich qoldig'i bo'ladi", a
 // ---------- Kunlik raqamlarga tegilmaydi ----------
 
 test("kunlik kirim/chiqim jamlari smenadan keyin ham o'zgarmaydi", async () => {
-  const r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  const r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
   // 1 000 000 + 600 000 naqd, 400 000 click, 300 000 qarz — kun bo'yicha to'liq.
   assert.equal(r.naqdSumma, 1_600_000);
   assert.equal(r.clickSumma, 400_000);

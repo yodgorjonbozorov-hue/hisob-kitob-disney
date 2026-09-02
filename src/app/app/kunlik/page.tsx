@@ -14,6 +14,7 @@ import { getSmenaHolat } from "@/lib/queries/smena";
 import { getKunlikRuxsat, kunlikBugun } from "@/lib/services/kunlik";
 import { getKgSavdo } from "@/lib/queries/selos";
 import { kgSavdoKorinadi } from "@/lib/mijozXos";
+import { hasPermission } from "@/lib/permissions/tekshir";
 import { KunlikClient } from "./KunlikClient";
 import { SelosBugunKartasi } from "../SelosBugunKartasi";
 
@@ -61,7 +62,7 @@ export default async function KunlikPage({
     const kgPanel = kgSavdoKorinadi(ctx.tenant);
     const [report, direktor, smena, kassa, operatsiyalar, kategoriyalar, kutilayotganlar, kgSavdo] =
       await Promise.all([
-        getKunlikReport(businessId, sana),
+        getKunlikReport(businessId, sana, await hasPermission(session.userId, "hisobot.korish")),
         getKunlikDirektor(businessId),
         getSmenaHolat(businessId, sana, bugun),
         getKunlikKassa(businessId, session.userId),

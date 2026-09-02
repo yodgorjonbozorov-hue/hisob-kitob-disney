@@ -123,7 +123,7 @@ test("tushum bugungi hisobotga tushadi, jami avtomatik hisoblanadi", async () =>
   await A(() => kunlikSvc.addKunlikTushum(tA.business.id, kassirAktor(), { summa: 1_350_000, tolovTuri: "CLICK", izoh: "terminal" }));
   await A(() => kunlikSvc.addKunlikTushum(tA.business.id, kassirAktor(), { summa: 500_000, tolovTuri: "DEBT" }));
 
-  const r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  const r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
   assert.equal(r.naqdSumma, 2_500_000);
   assert.equal(r.clickSumma, 1_350_000);
   assert.equal(r.qarzSumma, 500_000);
@@ -145,7 +145,7 @@ test("parallel kiritish dublikat hisobot ochmaydi (race)", async () => {
     prisma.dailyReport.findMany({ where: { businessId: tA.business.id } })
   );
   assert.equal(reportlar.length, 1);
-  const r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  const r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
   assert.equal(r.items.length, 3 + soni);
   const kutilgan = 4_350_000 + Array.from({ length: soni }, (_, i) => 10_000 + i).reduce((a, b) => a + b, 0);
   assert.equal(r.jamiSumma, kutilgan);
@@ -237,7 +237,7 @@ test("tasdiqlangan kunga tushum kiritib bo'lmaydi", async () => {
 });
 
 test("tasdiqlangan kun tushumini o'zgartirish/o'chirish rad etiladi", async () => {
-  const r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  const r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
   const id = r.items[0].id;
   await assert.rejects(
     () => A(() => kunlikSvc.updateKunlikTushum(tA.business.id, egaAktor(), id, { summa: 999 })),
@@ -263,10 +263,10 @@ test("qayta ochish: xodimga taqiq, direktor/boshqaruvchiga ruxsat; keyin tuzatil
   assert.equal(ochildi.confirmedBy, null);
 
   // Tuzatish: bitta tushum o'chiriladi — jami kamayadi (soft delete, tarixda qoladi)
-  const r1 = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  const r1 = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
   const oxirgi = r1.items[0];
   await A(() => kunlikSvc.deleteKunlikTushum(tA.business.id, egaAktor(), oxirgi.id));
-  const r2 = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  const r2 = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
   assert.equal(r2.jamiSumma, r1.jamiSumma - oxirgi.summa);
   assert.equal(r2.items.length, r1.items.length - 1);
   const ochirilgan = await rawPrisma.dailyTransaction.findUnique({ where: { id: oxirgi.id } });
@@ -291,7 +291,7 @@ test("qayta ochish: xodimga taqiq, direktor/boshqaruvchiga ruxsat; keyin tuzatil
   await A(() =>
     kunlikSvc.addKunlikTushum(tA.business.id, kassirAktor(), { summa: 1_000, tolovTuri: "CASH" })
   );
-  const r3 = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  const r3 = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
   assert.equal(r3.jamiSumma, r2.jamiSumma + 1_000);
 
   // Kun qayta tasdiqlanadi
@@ -311,7 +311,7 @@ test("tarix saqlanadi: eski kun o'z summasi bilan, boshqa kun unga ta'sir qilmay
   assert.equal(eski.holat, "CONFIRMED");
 
   // Hisobot ochilmagan kun 0 dan boshlanadi (virtual DTO)
-  const bosh = await A(() => kunlikQ.getKunlikReport(tA.business.id, "2026-08-05"));
+  const bosh = await A(() => kunlikQ.getKunlikReport(tA.business.id, "2026-08-05", true));
   assert.equal(bosh.id, null);
   assert.equal(bosh.jamiSumma, 0);
   assert.equal(bosh.holat, "OPEN");
@@ -377,7 +377,7 @@ test("Yozuvlardan bugungi kirim kunlikka o'zi tushadi; boshqa sana va chiqim tus
   await A(() => prisma.tenantModule.create({ data: { code: "KUNLIK", isActive: true } }));
   // Oldingi testlarda bugun tasdiqlangan edi — qayta ochamiz
   await A(() => kunlikSvc.reopenKunlikReport(tA.business.id, egaAktor(), bugun));
-  const bosh = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  const bosh = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
 
   const kirimCat = await A(() =>
     prisma.category.findFirst({ where: { businessId: tA.business.id, turi: "kirim" } })
@@ -392,7 +392,7 @@ test("Yozuvlardan bugungi kirim kunlikka o'zi tushadi; boshqa sana va chiqim tus
       turi: "kirim", categoryId: kirimCat.id, summa: 700_000, sana: bugun,
     })
   );
-  let r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  let r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
   assert.equal(r.naqdSumma, bosh.naqdSumma + 700_000);
   const ulangan = r.items.find((i: any) => i.yozuvdan);
   assert.ok(ulangan, "ulangan tushum ko'rinishi kerak");
@@ -406,9 +406,9 @@ test("Yozuvlardan bugungi kirim kunlikka o'zi tushadi; boshqa sana va chiqim tus
       turi: "kirim", categoryId: kirimCat.id, summa: 999_000, sana: kecha,
     })
   );
-  r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
   assert.equal(r.naqdSumma, bosh.naqdSumma + 700_000, "kechagi kirim bugungi kunlikka qo'shilmasin");
-  const kechaR = await A(() => kunlikQ.getKunlikReport(tA.business.id, kecha));
+  const kechaR = await A(() => kunlikQ.getKunlikReport(tA.business.id, kecha, true));
   assert.equal(kechaR.jamiSumma, 0, "kechagi kunlik ham ochilmasin");
 
   // 3) Bugungi CHIQIM -> kunlikka tushmaydi (kunlik faqat tushum)
@@ -417,7 +417,7 @@ test("Yozuvlardan bugungi kirim kunlikka o'zi tushadi; boshqa sana va chiqim tus
       turi: "chiqim", categoryId: chiqimCat.id, summa: 50_000, sana: bugun,
     })
   );
-  r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
   assert.equal(r.jamiSumma, bosh.jamiSumma + 700_000);
 
   // 4) Plastik kassaga kirim -> CLICK bo'lib tushadi
@@ -430,7 +430,7 @@ test("Yozuvlardan bugungi kirim kunlikka o'zi tushadi; boshqa sana va chiqim tus
       turi: "kirim", categoryId: kirimCat.id, summa: 300_000, sana: bugun, accountId: plastik.id,
     })
   );
-  r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
   assert.equal(r.clickSumma, bosh.clickSumma + 300_000);
 
   // 5) Ulangan tushum kunlikda TAHRIRLANMAYDI (manba — Transaction),
@@ -442,23 +442,23 @@ test("Yozuvlardan bugungi kirim kunlikka o'zi tushadi; boshqa sana va chiqim tus
 
   // 6) Yozuv o'chirilsa -> kunlikdan ham chiqadi; tiklansa -> qaytadi
   await A(() => kunlikSvc.kunlikSinxron({ ...t1, deletedAt: new Date() }, null));
-  r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
   assert.equal(r.naqdSumma, bosh.naqdSumma, "o'chirilgan yozuv kunlikdan chiqishi kerak");
   await A(() => kunlikSvc.kunlikSinxron({ ...t1, deletedAt: null }, "A egasi"));
-  r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
   assert.equal(r.naqdSumma, bosh.naqdSumma + 700_000, "tiklangan yozuv kunlikka qaytishi kerak");
 
   // 7) Sana kechaga o'zgartirilsa -> kunlikdan chiqadi
   await A(() =>
     kunlikSvc.kunlikSinxron({ ...t1, sana: date.dateOnlyStringToUTCDate(kecha), deletedAt: null }, "A egasi")
   );
-  r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
   assert.equal(r.naqdSumma, bosh.naqdSumma, "sanasi o'zgargan yozuv kunlikdan chiqishi kerak");
 });
 
 test("yozuvdagi ANIQ to'lov turi kunlikka to'g'ri tushadi; qarz kassasiz; sof = kirim − chiqim", async () => {
   const { createTransaction } = await import("@/lib/services/transactionService");
-  const bosh = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  const bosh = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
 
   const kirimCat = await A(() =>
     prisma.category.findFirst({ where: { businessId: tA.business.id, turi: "kirim" } })
@@ -487,7 +487,7 @@ test("yozuvdagi ANIQ to'lov turi kunlikka to'g'ri tushadi; qarz kassasiz; sof = 
     })
   );
 
-  let r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  let r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
   assert.equal(r.clickSumma, bosh.clickSumma + 120_000);
   assert.equal(r.qarzSumma, bosh.qarzSumma + 80_000);
   assert.equal(r.naqdSumma, bosh.naqdSumma + 60_000);
@@ -498,7 +498,7 @@ test("yozuvdagi ANIQ to'lov turi kunlikka to'g'ri tushadi; qarz kassasiz; sof = 
       turi: "chiqim", categoryId: chiqimCat.id, summa: 40_000, sana: bugun, tolovTuri: "naqd",
     })
   );
-  r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
   assert.equal(r.jamiSumma, bosh.jamiSumma + 260_000);
   assert.equal(r.chiqimSumma, bosh.chiqimSumma + 40_000);
   assert.equal(r.sofSumma, r.jamiSumma - r.chiqimSumma, "sof = tushum − chiqim");
@@ -537,7 +537,7 @@ test("modul yoqilmagan tenantda sinxron ishlamaydi", async () => {
 test("tasdiqlangan kunga sinxron tegmaydi, asosiy yozuv esa yoziladi", async () => {
   const { createTransaction } = await import("@/lib/services/transactionService");
   await A(() => kunlikSvc.confirmKunlikReport(tA.business.id, kassirAktor(), bugun));
-  const oldin = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  const oldin = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
 
   const kirimCat = await A(() =>
     prisma.category.findFirst({ where: { businessId: tA.business.id, turi: "kirim" } })
@@ -549,7 +549,7 @@ test("tasdiqlangan kunga sinxron tegmaydi, asosiy yozuv esa yoziladi", async () 
   );
   assert.ok(t.id, "asosiy yozuv baribir yozilishi kerak");
 
-  const keyin = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  const keyin = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
   assert.equal(keyin.jamiSumma, oldin.jamiSumma, "yopilgan kun o'zgarmasin");
   assert.equal(keyin.items.length, oldin.items.length);
 });
@@ -559,7 +559,7 @@ test("tasdiqlangan kunga sinxron tegmaydi, asosiy yozuv esa yoziladi", async () 
 test("xodim kassani topshiradi: sanalgan naqd, farq, tushum qulfi, direktor tasdig'i", async () => {
   // Holat: bugun CONFIRMED (oldingi testdan) — tekshirish uchun qayta ochamiz.
   await A(() => kunlikSvc.reopenKunlikReport(tA.business.id, egaAktor(), bugun));
-  const r0 = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  const r0 = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
   assert.equal(r0.holat, "OPEN");
   assert.equal(r0.sanalganNaqd, null, "qayta ochilganda topshiruv ham tozalanadi");
 
@@ -586,7 +586,7 @@ test("xodim kassani topshiradi: sanalgan naqd, farq, tushum qulfi, direktor tasd
   assert.ok(topshirildi.submittedAt);
 
   // DTO'da farq ko'rinadi: KAM = manfiy (pul yetishmayapti — nazorat signali)
-  const dto = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  const dto = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
   assert.equal(dto.holat, "SUBMITTED");
   assert.equal(dto.naqdFarq, -50_000);
   assert.equal(dto.izoh, "50 000 yo'qoldi");
@@ -607,7 +607,7 @@ test("xodim kassani topshiradi: sanalgan naqd, farq, tushum qulfi, direktor tasd
       turi: "kirim", categoryId: kirimCat.id, summa: 77_000, sana: bugun,
     })
   );
-  const dto2 = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  const dto2 = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
   assert.equal(dto2.jamiSumma, dto.jamiSumma, "topshirilgan kun o'zgarmasin");
 
   // Qayta topshirish rad etiladi (DOUBLE-SUBMIT himoyasi)

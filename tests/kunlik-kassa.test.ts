@@ -196,7 +196,7 @@ test("10 mln naqd kirim kassirning kassasiga tushadi va Jami Kirimga kiradi", as
 
   assert.equal(await qoldiq(kassirKassa.id), 10_000_000, "pul kassirning kassasida");
 
-  const r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  const r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
   assert.equal(r.jamiSumma, 10_000_000, "kunlik hisobot ham 10 mln ko'rsatadi");
   assert.equal(r.naqdSumma, 10_000_000);
   assert.equal(r.items.length, 1, "kunlikda ham BITTA qator");
@@ -220,7 +220,7 @@ test("3 mln naqd chiqim kassadan ayriladi, Jami Kirimga tegmaydi", async () => {
 
   assert.equal(await qoldiq(kassirKassa.id), 7_000_000, "kassada 7 mln qolishi kerak");
 
-  const r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  const r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
   assert.equal(r.jamiSumma, 10_000_000);
   assert.equal(r.chiqimSumma, 3_000_000);
   assert.equal(r.sofSumma, 7_000_000, "sof natija = 7 mln");
@@ -292,7 +292,7 @@ test("Jami Kirim 10 mln, Jami Chiqim 3 mln — transferdan KEYIN ham", async () 
   assert.equal(xulosa.sofFoyda, 7_000_000);
 
   // Kunlik hisobot ham (tasdiqlangan kun tarixda muzlaydi).
-  const r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun));
+  const r = await A(() => kunlikQ.getKunlikReport(tA.business.id, bugun, true));
   assert.equal(r.jamiSumma, 10_000_000);
   assert.equal(r.chiqimSumma, 3_000_000);
   assert.equal(r.sofSumma, 7_000_000);

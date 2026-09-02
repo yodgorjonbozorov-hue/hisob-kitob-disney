@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { requireTenantPage } from "@/lib/auth/tenant";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { requireModulePage } from "@/lib/modules/guard";
+import { hasPermission } from "@/lib/permissions/tekshir";
 import { getActiveBusiness } from "@/lib/business";
 import {
   listProducts,
@@ -40,7 +41,13 @@ export default async function SotuvPage() {
   // sahifani sekinlashtirardi.
   const [products, sales, kassalar, stat] = await Promise.all([
     listProducts(business.id, { forKassir: true }) as Promise<ProductKassirDTO[]>,
-    listRecentSales(business.id, 15),
+    // Ro'yxat API bilan BIR XIL qoidada kesiladi (api/sales/route.ts): hisobot
+    // huquqi bo'lmagan xodim faqat o'zi rasmiylashtirgan sotuvlarni ko'radi.
+    listRecentSales(
+      business.id,
+      15,
+      (await hasPermission(session.userId, "hisobot.korish")) ? null : session.userId
+    ),
     // Naqd sotuvda pul qaysi kassaga tushishini tanlash uchun (Naqd / Click / terminal).
     (await import("@/lib/queries/accounts")).listAccounts(business.id, true),
     // O'ng paneldagi "Bugungi sotuvlar" statistikasi.

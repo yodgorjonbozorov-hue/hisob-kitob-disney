@@ -121,7 +121,10 @@ export default async function TranzaksiyalarPage({
   // yuklanmaydi.
   const bugun = todayTashkentDateOnlyString();
   let sotuvStatistika: SotuvStatistikaDTO | null = null;
-  if (session.rol !== "SELLER") {
+  // API bilan BIR XIL shart (api/sales/statistika/route.ts): blok `hisobot.korish`
+  // huquqiga bog'liq. Ilgari bu yerda "sotuvchi bo'lmasa ko'rsatiladi" turardi —
+  // kassir blokni ko'rar, sana filtrini almashtirsa API dan ham javob olardi.
+  if (jamiKorish) {
     const [omborYoqiq, biznes] = await Promise.all([
       isModuleOnForTenant(tenantId, "OMBOR"),
       getActiveBusiness(session),

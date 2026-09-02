@@ -3,6 +3,7 @@ import { withTenant } from "@/lib/auth/tenant";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { getKunlikReport } from "@/lib/queries/kunlik";
 import { getKunlikRuxsat, kunlikBugun } from "@/lib/services/kunlik";
+import { hasPermission } from "@/lib/permissions/tekshir";
 
 /**
  * GET /api/kunlik/hisobot?sana=YYYY-MM-DD — bitta kunning hisoboti.
@@ -30,7 +31,11 @@ export const GET = withTenant(
       return NextResponse.json({ error: "Oldingi kunlarni ko'rish huquqi yo'q" }, { status: 403 });
     }
 
-    const report = await getKunlikReport(businessId, sana);
+    // MOLIYAVIY KESIM (chiqim va sof natija) — faqat `hisobot.korish` huquqi
+    // bilan. Kassirning O'Z tushumi (naqd/click/qarz va jami) qoladi: kassa
+    // topshirig'i aynan shu raqam ustida yuritiladi, usiz kun yopilmaydi.
+    const moliyaKorinadi = await hasPermission(user.userId, "hisobot.korish");
+    const report = await getKunlikReport(businessId, sana, moliyaKorinadi);
     return NextResponse.json({ report, ruxsat, bugun });
   },
   { module: "KUNLIK" }

@@ -7,6 +7,7 @@ import { createSale } from "@/lib/services/inventory";
 import { listRecentSales } from "@/lib/queries/inventory";
 import { dashboardYangilandi } from "@/lib/cache";
 import { isModuleOnForTenant } from "@/lib/modules/guard";
+import { hasPermission } from "@/lib/permissions/tekshir";
 
 export const GET = withTenant(async (_request, _ctx, { session: user }) => {
   forbidSeller(user.rol);
@@ -15,7 +16,11 @@ export const GET = withTenant(async (_request, _ctx, { session: user }) => {
   if (!businessId) return NextResponse.json([]);
   await requireOmborli(businessId);
 
-  const sales = await listRecentSales(businessId);
+  // KO'RINUVCHANLIK (lib/auth/visibility.ts qoidasi bilan bir xil): hisobot
+  // huquqi bo'lmagan xodim butun biznesning sotuvlarini emas, FAQAT o'zi
+  // rasmiylashtirganini ko'radi.
+  const hammasi = await hasPermission(user.userId, "hisobot.korish");
+  const sales = await listRecentSales(businessId, 20, hammasi ? null : user.userId);
   return NextResponse.json(sales);
 }, { module: "OMBOR" });
 

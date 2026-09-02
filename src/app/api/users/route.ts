@@ -8,6 +8,7 @@ import { hashPassword } from "@/lib/auth/password";
 import { requirePro } from "@/lib/billing/pro";
 import { biznesIdlariniHalQil, biriktiruvlarniYangila, birlamchiBiznes } from "@/lib/services/userBiznes";
 import { listXodimlar, xodimSanoqlari, xodimniOqi, type XodimHolat } from "@/lib/queries/xodimlar";
+import { egalikTekshir } from "@/lib/services/userGuard";
 
 const USER_SELECT = {
   id: true,
@@ -85,6 +86,11 @@ export const POST = withTenant(async (request, _ctx, tenant) => {
   if (parsed.data.huquqPlus?.length || parsed.data.huquqMinus?.length) {
     requirePro(tenant);
   }
+
+  // EGALIK HIMOYASI: direktor (OWNER) rolini faqat direktor bera oladi.
+  // Tekshiruv `effectiveRol` ustida — ya'ni maxsus rolning `bazaRol` i orqali
+  // kelgan daraja ham shu yerda ushlanadi (lib/services/userGuard.ts).
+  await egalikTekshir({ userId: user.userId, rol: user.rol }, { yangiRol: effectiveRol }, "yangi");
 
   // Kassir uchun kamida bitta biznes MAJBURIY; sotuvchi uchun IXTIYORIY
   // (biriktirilsa — yozuvlari faqat o'sha bizneslarga tushadi; biriktirilmasa

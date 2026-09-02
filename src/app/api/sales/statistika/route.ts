@@ -1,5 +1,5 @@
-import { forbidSeller } from "@/lib/auth/guard";
 import { withTenant } from "@/lib/auth/tenant";
+import { requirePermission } from "@/lib/permissions/tekshir";
 import { NextResponse } from "next/server";
 import { sotuvStatistikaSchema } from "@/lib/validation/inventory";
 import { resolveActiveBusinessId, requireOmborli } from "@/lib/business";
@@ -14,7 +14,10 @@ import { todayTashkentDateOnlyString } from "@/lib/date";
  * qayta yuklanmaydi.
  */
 export const GET = withTenant(async (request, _ctx, { session: user }) => {
-  forbidSeller(user.rol);
+  // BUTUN BIZNES bo'yicha, ERKIN sana oralig'ida, mahsulot kesimidagi jami
+  // savdo — bu hisobot. Ilgari faqat `forbidSeller` turardi, ya'ni kassir
+  // oylik hisobotda yopilgan jami savdoni shu yo'l bilan yig'ib olardi.
+  await requirePermission(user.userId, "hisobot.korish");
 
   const { searchParams } = new URL(request.url);
   const bugun = todayTashkentDateOnlyString();
