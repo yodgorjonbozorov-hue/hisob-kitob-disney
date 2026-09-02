@@ -1,9 +1,10 @@
 import { prisma } from "@/lib/prisma";
-import { getAccountBalances, getKassaKunlik, type AccountQoldiq } from "@/lib/queries/accounts";
-import { toshkentKunBoshi } from "@/lib/kassaDavr";
+import { getAccountBalances, type AccountQoldiq } from "@/lib/queries/accounts";
+import { getKassaSmenasi } from "@/lib/queries/kassaSmena";
 
 /**
- * BITTA KASSANING DETALI — qoldiq, davr kesimi va HARAKATLAR TARIXI.
+ * BITTA KASSANING DETALI — qoldiq, smena kesimi, davr kesimi va HARAKATLAR
+ * TARIXI.
  *
  * Harakat — kassadagi pulni o'zgartirgan har qanday voqea. Uch manbadan
  * yig'iladi va bitta vaqt o'qiga tiziladi:
@@ -13,6 +14,12 @@ import { toshkentKunBoshi } from "@/lib/kassaDavr";
  *
  * Faqat YAKUNLANGAN o'tkazmalar tarixga kiradi (`bajarildi` / `bekor`):
  * tasdiq kutayotgani hali pulni ko'chirmagan va alohida panelda ko'rinadi.
+ *
+ * ═══ JORIY SMENA ═══
+ * `smenaKirim/smenaChiqim` — shu kassadan OXIRGI TOPSHIRISHDAN beri
+ * (topshirilmagan kassada kun boshidan). Kassa topshirilgan zahoti bu
+ * raqamlar 0 dan boshlanadi; tarix (pastdagi lenta) esa to'liq saqlanadi.
+ * Batafsil: lib/queries/kassaSmena.ts.
  *
  * Davr `createdAt` bo'yicha kesiladi (yozuvning `sana` si emas) — kassadagi
  * pul yozuv qaysi kunga tegishli ekaniga emas, QACHON kiritilganiga qarab
@@ -55,9 +62,16 @@ export interface DetalTransfer {
 
 export interface KassaDetal {
   kassa: AccountQoldiq;
-  /** Bugungi kesim — davr filtridan qat'i nazar (kartadagi raqam bilan bir xil). */
-  bugungiKirim: number;
-  bugungiChiqim: number;
+  /** Joriy smena boshi (ISO) va u topshirishdan boshlanadimi. */
+  smenaBoshi: string;
+  smenaTopshirishdan: boolean;
+  /** Joriy smena kesimi — davr filtridan qat'i nazar (kartadagi raqam bilan bir xil). */
+  smenaKirim: number;
+  smenaChiqim: number;
+  /** Tasdiq kutayotgan chiqim — hali kassada, lekin band. */
+  kutilayotganChiqim: number;
+  /** `qoldiq − kutilayotganChiqim` — xodim uchun "kassadagi pul". */
+  mavjud: number;
   /** Tanlangan davr kesimi. */
   davrKirim: number;
   davrChiqim: number;
@@ -98,11 +112,10 @@ export async function getKassaDetal(
     boshlanish || tugash
       ? { createdAt: { ...(boshlanish ? { gte: boshlanish } : {}), ...(tugash ? { lt: tugash } : {}) } }
       : {};
-  const bugun = toshkentKunBoshi();
 
-  const [qoldiqlar, kunlik, tranzaksiyalar, transferlar, oxirgi] = await Promise.all([
+  const [qoldiqlar, smena, tranzaksiyalar, transferlar, oxirgi, kutilayotgan] = await Promise.all([
     getAccountBalances(businessId),
-    getKassaKunlik(businessId, bugun),
+    getKassaSmenasi(businessId, accountId),
     prisma.transaction.findMany({
       where: { businessId, accountId, deletedAt: null, ...davrFiltr },
       select: {
@@ -135,6 +148,10 @@ export async function getKassaDetal(
       where: { businessId, fromAccountId: accountId, turi: "smena", holat: "bajarildi" },
       orderBy: { createdAt: "desc" },
       select: { createdAt: true },
+    }),
+    prisma.accountTransfer.aggregate({
+      where: { businessId, fromAccountId: accountId, holat: "kutilmoqda" },
+      _sum: { summa: true },
     }),
   ]);
 
@@ -171,11 +188,16 @@ export async function getKassaDetal(
     ...transferlar.map((tr) => {
       const chiqqan = tr.fromAccountId === accountId;
       const qarshi = chiqqan ? tr.toAccount.nomi : tr.fromAccount.nomi;
+      const topshirish = tr.turi === "smena";
       return {
         id: tr.id,
         turi: chiqqan ? "transfer-chiqqan" : "transfer-kirgan",
         summa: chiqqan ? -tr.summa : tr.summa,
-        matn: chiqqan ? `${qarshi}ga o'tkazildi` : `${qarshi}dan qabul qilindi`,
+        matn: chiqqan
+          ? topshirish
+            ? `Kassa topshirildi: ${qarshi}`
+            : `${qarshi}ga o'tkazildi`
+          : `${qarshi}dan qabul qilindi`,
         qarshiTomon: qarshi,
         vaqt: tr.createdAt.toISOString(),
       };
@@ -202,11 +224,15 @@ export async function getKassaDetal(
     };
   };
 
-  const bugungi = kunlik.get(accountId) ?? { kirim: 0, chiqim: 0 };
+  const band = kutilayotgan._sum.summa ?? 0;
   return {
     kassa,
-    bugungiKirim: bugungi.kirim,
-    bugungiChiqim: bugungi.chiqim,
+    smenaBoshi: smena.boshi.toISOString(),
+    smenaTopshirishdan: smena.topshirishdan,
+    smenaKirim: smena.kirim,
+    smenaChiqim: smena.chiqim,
+    kutilayotganChiqim: band,
+    mavjud: kassa.qoldiq - band,
     davrKirim: tolovKesimi.reduce((a, k) => a + k.kirim, 0),
     davrChiqim: tolovKesimi.reduce((a, k) => a + k.chiqim, 0),
     tolovKesimi,

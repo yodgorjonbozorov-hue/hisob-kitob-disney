@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Money } from "@/components/ui/Money";
-import { formatSom, formatRelative } from "@/lib/format";
+import { formatSom, formatRelative, formatToshkentSoat } from "@/lib/format";
 import { ACCOUNT_TURI_NOMI, type AccountTuri } from "@/lib/validation/account";
 import type { KassaNazoratKarta } from "@/lib/queries/kassaNazorat";
 import { KartaMenyu, type KartaAmal } from "./KartaMenyu";
@@ -14,13 +14,18 @@ const TURI_BELGI: Record<string, string> = { naqd: "💵", plastik: "💳", bank
  * BITTA KASSA KARTASI — pul nazorati birligi.
  *
  * Ierarxiya ataylab qat'iy: eng katta element — JORIY QOLDIQ, chunki sahifani
- * ochgan odamning birinchi savoli "bu kassada hozir qancha pul bor". Bugungi
+ * ochgan odamning birinchi savoli "bu kassada hozir qancha pul bor". Smena
  * kirim/chiqim undan kichik, o'tkazma qatori esa eng past darajada — u
  * kamdan-kam bo'ladi va faqat bo'lganda ko'rinadi.
  *
+ * ═══ JORIY SMENA ═══
+ * Kirim/chiqim/sof — shu kassadan OXIRGI TOPSHIRISHDAN beri (topshirilmagan
+ * kassada bugundan). Kassa topshirilgan zahoti bu raqamlar 0 dan boshlanadi;
+ * direktor "topshirishdan keyin qancha yig'ildi"ni aynan shu yerda ko'radi.
+ *
  * O'tkazma AYRIM qatorda: u kirim ham, chiqim ham emas (biznes hisobotiga
  * qo'shilmaydi), lekin kassaning qoldig'ini o'zgartiradi. Bir qatorga
- * qo'shib yuborilsa "bugun 5 mln kirdi, qoldiq nega 2 mln" degan savol
+ * qo'shib yuborilsa "5 mln kirdi, qoldiq nega 2 mln" degan savol
  * javobsiz qolardi.
  */
 export function KassaKarta({
@@ -34,7 +39,7 @@ export function KassaKarta({
   /** "⋯" menyusidagi amallar (huquqqa qarab sahifa tayyorlaydi). */
   amallar: KartaAmal[];
 }) {
-  const transferBor = kassa.bugungiKirgan > 0 || kassa.bugungiChiqqan > 0;
+  const transferBor = kassa.smenaKirgan > 0 || kassa.smenaChiqqan > 0;
 
   return (
     <article
@@ -86,31 +91,39 @@ export function KassaKarta({
 
       <dl className="mt-3 pt-3 border-t border-line space-y-1.5 text-2xs">
         <div className="flex items-center justify-between gap-2">
-          <dt className="text-muted">Bugun kirim</dt>
-          <dd className="tnum font-medium text-income">+ {formatSom(kassa.bugungiKirim)}</dd>
+          <dt className="text-faint">Joriy smena</dt>
+          <dd className="text-faint truncate">
+            {kassa.smenaTopshirishdan
+              ? `topshirishdan (${formatToshkentSoat(new Date(kassa.smenaBoshi))})`
+              : "bugundan"}
+          </dd>
         </div>
         <div className="flex items-center justify-between gap-2">
-          <dt className="text-muted">Bugun chiqim</dt>
-          <dd className="tnum font-medium text-expense">− {formatSom(kassa.bugungiChiqim)}</dd>
+          <dt className="text-muted">Kirim</dt>
+          <dd className="tnum font-medium text-income">+ {formatSom(kassa.smenaKirim)}</dd>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <dt className="text-muted">Chiqim</dt>
+          <dd className="tnum font-medium text-expense">− {formatSom(kassa.smenaChiqim)}</dd>
         </div>
         <div className="flex items-center justify-between gap-2">
           <dt className="text-muted">Sof</dt>
           <dd
             className={`tnum font-semibold ${
-              kassa.bugungiSof > 0 ? "text-income" : kassa.bugungiSof < 0 ? "text-expense" : "text-fg"
+              kassa.smenaSof > 0 ? "text-income" : kassa.smenaSof < 0 ? "text-expense" : "text-fg"
             }`}
           >
-            {kassa.bugungiSof > 0 ? "+ " : kassa.bugungiSof < 0 ? "− " : ""}
-            {formatSom(Math.abs(kassa.bugungiSof))}
+            {kassa.smenaSof > 0 ? "+ " : kassa.smenaSof < 0 ? "− " : ""}
+            {formatSom(Math.abs(kassa.smenaSof))}
           </dd>
         </div>
         {transferBor && (
           <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-line">
-            <dt className="text-faint">Bugungi o&apos;tkazma</dt>
+            <dt className="text-faint">Smena o&apos;tkazmasi</dt>
             <dd className="tnum text-muted">
-              {kassa.bugungiKirgan > 0 && `+${formatSom(kassa.bugungiKirgan)}`}
-              {kassa.bugungiKirgan > 0 && kassa.bugungiChiqqan > 0 && " · "}
-              {kassa.bugungiChiqqan > 0 && `−${formatSom(kassa.bugungiChiqqan)}`}
+              {kassa.smenaKirgan > 0 && `+${formatSom(kassa.smenaKirgan)}`}
+              {kassa.smenaKirgan > 0 && kassa.smenaChiqqan > 0 && " · "}
+              {kassa.smenaChiqqan > 0 && `−${formatSom(kassa.smenaChiqqan)}`}
             </dd>
           </div>
         )}
@@ -119,7 +132,7 @@ export function KassaKarta({
       {(kassa.kutilayotganChiqim > 0 || kassa.oxirgiTopshirish) && (
         <p className="mt-2 text-2xs text-faint">
           {kassa.kutilayotganChiqim > 0
-            ? `${formatSom(kassa.kutilayotganChiqim)} soʻm tasdiq kutmoqda`
+            ? `${formatSom(kassa.kutilayotganChiqim)} soʻm tasdiq kutmoqda · mavjud ${formatSom(kassa.mavjud)}`
             : `Oxirgi topshirish: ${formatRelative(new Date(kassa.oxirgiTopshirish!))}`}
         </p>
       )}

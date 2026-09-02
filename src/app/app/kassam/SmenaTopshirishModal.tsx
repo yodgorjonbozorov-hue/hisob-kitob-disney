@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
+import { useToast } from "@/components/ui/Toast";
 import { parseSomInput, formatMoney } from "@/lib/format";
 
 export interface TopshirishNishoni {
@@ -35,6 +36,7 @@ export function SmenaTopshirishModal({
   onClose: () => void;
   onDone: () => void;
 }) {
+  const { toast } = useToast();
   const [toAccountId, setTo] = useState(nishonlar[0]?.id ?? "");
   const [summaMatn, setSummaMatn] = useState(String(qoldiq));
   const [izoh, setIzoh] = useState("");
@@ -47,6 +49,9 @@ export function SmenaTopshirishModal({
   const nishon = nishonlar.find((n) => n.id === toAccountId);
 
   async function yubor() {
+    // Ikki marta bosishdan himoya: birinchi so'rov tugamaguncha ikkinchisi ketmaydi
+    // (server ham ochiq topshiriqni qayta tekshiradi).
+    if (loading) return;
     setLoading(true);
     setXato(null);
     try {
@@ -66,6 +71,13 @@ export function SmenaTopshirishModal({
         setTasdiq(false);
         return;
       }
+      toast({
+        message:
+          `Kassa muvaffaqiyatli topshirildi · Topshirildi: ${formatMoney(summa)} · ` +
+          `Joriy kassa: ${formatMoney(Math.max(qoldiq - summa, 0))}`,
+        tone: "success",
+        duration: 7000,
+      });
       onDone();
     } catch {
       setXato("Serverga ulanib bo'lmadi");
@@ -111,10 +123,15 @@ export function SmenaTopshirishModal({
           </p>
           {xato && <p className="text-sm text-expense">{xato}</p>}
           <div className="flex gap-2">
-            <Button type="button" variant="secondary" onClick={() => setTasdiq(false)}>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setTasdiq(false)}
+              disabled={loading}
+            >
               Orqaga
             </Button>
-            <Button type="button" loading={loading} onClick={yubor}>
+            <Button type="button" loading={loading} disabled={loading} onClick={yubor}>
               Topshirish
             </Button>
           </div>

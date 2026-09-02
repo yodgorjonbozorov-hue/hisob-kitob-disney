@@ -28,6 +28,11 @@ export const HUQUQLAR: Huquq[] = [
   { code: "tranzaksiya.korish", label: "Yozuvlarni (tranzaksiya) ko'rish", guruh: "Moliya" },
   { code: "tranzaksiya.yaratish", label: "Yozuv (kirim/chiqim) yaratish", guruh: "Moliya" },
   { code: "kassa.korish", label: "Kassalarni ko'rish", guruh: "Moliya" },
+  // KASSA MAXFIYLIGI: umumiy jami, boshqa xodimlarning kassa qoldig'i va
+  // biznes kesimidagi kirim/chiqim FAQAT shu huquq bilan ochiladi. Oddiy
+  // kassir/sotuvchi "kassa.korish" bilan faqat O'Z kassasini ko'radi.
+  // Default: faqat OWNER/ADMIN (pastdagi ro'yxatlar) — kassir to'plamida YO'Q.
+  { code: "kassa.jami", label: "Barcha kassalar va jami summani ko'rish", guruh: "Moliya" },
   { code: "pul.berish", label: "Pul berish (o'tkazma yaratish)", guruh: "Moliya" },
   { code: "pul.qabul", label: "Pul qabul qilish", guruh: "Moliya" },
   // Magazin (POS / QR / Barcode)

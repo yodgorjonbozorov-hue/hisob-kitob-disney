@@ -4,7 +4,7 @@ import { resolveActiveBusinessId } from "@/lib/business";
 import { listKutilayotganTransferlar } from "@/lib/queries/accounts";
 import { kassaTransferYarat } from "@/lib/services/kassaTransfer";
 import { kassaTransferSchema } from "@/lib/validation/account";
-import { requirePermission } from "@/lib/permissions/tekshir";
+import { hasPermission, requirePermission } from "@/lib/permissions/tekshir";
 import { dashboardYangilandi } from "@/lib/cache";
 
 /**
@@ -15,13 +15,22 @@ import { dashboardYangilandi } from "@/lib/cache";
  * foyda raqamlari o'zgarmaydi.
  */
 
-/** GET — tasdiq kutayotgan o'tkazmalar (kassalarni ko'rish huquqi yetarli). */
+/**
+ * GET — tasdiq kutayotgan o'tkazmalar.
+ *
+ * KASSA MAXFIYLIGI: "kassa.jami" bo'lsa biznesdagi hammasi; aks holda faqat
+ * shu foydalanuvchi yuborgan yoki unga yuborilgan o'tkazmalar — boshqa
+ * xodimlar orasidagi summalar kassirga ochilmaydi (server tomonda kesiladi).
+ */
 export const GET = withTenant(async (_request, _ctx, { session: user }) => {
   const businessId = await resolveActiveBusinessId(user);
   if (!businessId) return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });
 
   await requirePermission(user.userId, "kassa.korish");
-  return NextResponse.json(await listKutilayotganTransferlar(businessId));
+  const hammasi = await hasPermission(user.userId, "kassa.jami");
+  return NextResponse.json(
+    await listKutilayotganTransferlar(businessId, 50, hammasi ? null : user.userId)
+  );
 });
 
 /** POST — yangi o'tkazma. Qabul qiluvchi boshqa odam bo'lsa tasdiq kutadi. */

@@ -5619,3 +5619,65 @@ ishi bilan bir vaqtda bajarildi va merge paytida ular yarashtirildi:
   sotuvchi bonusi esa FAQAT to'liq to'langan zakazlardan (`puliKelgan`) —
   topshiriqning 16-18-talabi shuni majburlaydi.
 
+
+## Kassa maxfiyligi + kassa topshirish reset nuqtasi (2026-09-02)
+
+**Muammo 1 — xodim jami kassani ko'rardi.** `/app/kassa` "kassa.korish"
+bilan ochilardi, kassir to'plamida esa bu huquq bor: u barcha kassalar
+qoldig'i, jami pul va biznesning kunlik kirim/chiqimini ko'rardi.
+`/api/kassa-transfer` (GET) ham barcha kutilayotgan o'tkazmalarni
+qaytarardi, `/app/kassa/[id]` istalgan kassani ochardi, Kg savdosi sahifasi
+kassa qoldiqlarini kassirga ham uzatardi, AI `kassa_holati` ham shu huquq
+bilan ochiq edi.
+
+**Yechim — yangi granular huquq `kassa.jami`** ("Barcha kassalar va jami
+summani ko'rish", `lib/permissions/katalog.ts`). Default: OWNER/ADMIN'da
+bor, CASHIER/SELLER'da YO'Q; maxsus rol (PRO) orqali berish mumkin.
+Server tomonda:
+- `/app/kassa` va `/app/kassa/hisobot` — `kassa.jami` shart, aks holda
+  `/app/kassam` (o'z kassasi);
+- `/app/kassa/[id]` — `kassa.jami` YOKI kassa egasi o'zi;
+- `/api/accounts?qoldiq=1` — `kassa.jami` (avval `requireManager`);
+- `/api/kassa-transfer` GET — `kassa.jami` bo'lmasa faqat men yuborgan /
+  menga yuborilgan o'tkazmalar (`listKutilayotganTransferlar(..., faqatUserId)`);
+- `/app/selos` — kassa qoldiqlari faqat `kassa.jami` bilan so'raladi;
+- AI `kassa` sohasi — `kassa.jami`;
+- nav: "Kassalar" faqat BOSHQARUVCHILAR (kassir "Mening kassam" bilan ishlaydi).
+`/app/kassam` endi boshqa kassalarning qoldig'ini umuman hisoblamaydi
+(nishonlar — faqat nomlar).
+
+**Muammo 2 — topshirilgandan keyin eski summa qolardi.** Kassa kartasi va
+"Mening kassam"dagi kirim/chiqim/sof Toshkent KUN BOSHIDAN hisoblanardi;
+topshirish uni nolga tushirmasdi. Qoldiq esa tasdiqlanmaguncha ledgerda
+turadi (pul limbo'ga tushmasin qoidasi) — xodim "0" ni ko'rmasdi.
+
+**Yechim — reset nuqtasi (`lib/queries/kassaSmena.ts`).** Yangi model
+YO'Q: mavjud `AccountTransfer(turi="smena")` yozuvi smena chegarasi.
+Har kassaning joriy smenasi shu kassadan OXIRGI topshirishdan
+(`holat in (kutilmoqda, bajarildi)`) boshlanadi; hech qachon
+topshirilmagan kassada — kun boshidan (avvalgi xatti-harakat). `rad`/`bekor`
+reset emas (pul qaytdi). Kesim `createdAt > boshi` (topshirishning o'zi
+yangi smenaga tushmaydi), har kassa o'z chegarasi bilan BITTA `OR` so'rovda.
+- `getKassaNazorat` kartalari: `smenaKirim/smenaChiqim/smenaSof/
+  smenaKirgan/smenaChiqqan/smenaBoshi/smenaTopshirishdan` (avvalgi
+  `bugungi*` o'rnida); sarlavhadagi biznes "bugungi kirim/chiqim/sof" kun
+  boshidan QOLDI — topshirish biznes savdosini o'zgartirmaydi.
+- `getKassaDetal`, `getMeningKassam`: smena kesimi + `kutilayotganChiqim`
+  + `mavjud` (qoldiq − tasdiq kutayotgan). Xodimga "Kassangizdagi pul" =
+  MAVJUD — topshirilgan zahoti 0, tasdiq kutayotgan summa alohida qatorda.
+- Tarix o'chirilmaydi, ledger o'zgarmaydi, kunlik/oylik hisobot o'zgarmaydi.
+- UI: muvaffaqiyat toast'i ("Kassa muvaffaqiyatli topshirildi · Topshirildi
+  · Joriy kassa"), `router.refresh()` (server hisobi), ikki marta bosish
+  qulfi; ochiq topshiriq borida tugma o'chadi.
+- Qisman topshirish (kamomad) mavjud biznes talabi — saqlandi: farq
+  muzlatiladi, sabab majburiy, yetishmagan pul kassirda ochiq qoladi.
+
+**Testlar:** YANGI `tests/kassa-maxfiylik.test.ts` (`test:kassa-maxfiylik`,
+12 test): huquq katalogi, xodim manbasida boshqa kassa/jami yo'qligi, API
+filtri, direktor ko'rinishi, tenant izolyatsiyasi, to'liq topshirish → 0,
+keyingi savdo 0 dan, tarix saqlanishi, rad reset emas, parallel ikki
+topshirish → bittasi, kamomad, topshirilmagan kassa kun boshidan.
+Yangilandi: `kassa-nazorat` (maydon nomlari), `modules` (kassir nav).
+Regressiya: kassa-nazorat 23, kassa-transfer 20, kunlik-kassa 18,
+kassir-kassa 22, kassa-qoldiq 5, isolation 22, izolyatsiya-royxati 9,
+ai 28, modules 21, visibility 10, dashboard-ux 21 — yashil.

@@ -83,18 +83,19 @@ test("computeNav: SELLER faqat Yozuvlar ko'radi", () => {
 test("computeNav: CASHIER — yozuvlar, qarzlar, smena va (omborli bo'lsa) sotuv", () => {
   const items = registry.computeNav({ rol: "CASHIER", yoqilgan: new Set(["MOLIYA", "OMBOR", "BOSHQARUV"]), omborli: true });
   const hrefs = items.map((i: any) => i.href);
-  // Tartib "asosiy" bo'limdan boshlanadi (Kirim/Chiqim, Qarzlar, Kassalar),
+  // Tartib "asosiy" bo'limdan boshlanadi (Kirim/Chiqim, Qarzlar),
   // keyin ish jarayoni havolalari keladi.
-  // "Kassalar" kassirga ham ochiq: u boshqa kassalarda qancha pul borligini
-  // ko'rishi va ularga pul o'tkazishi kerak (boshqaruv amallari huquq bilan).
+  // "Kassalar" (barcha kassalar va JAMI pul) kassirga YOPIQ — kassa
+  // maxfiyligi: u boshqa xodimning kassasidagi pulni ko'rmaydi va o'z
+  // kassasi bilan "Mening kassam"da ishlaydi.
   assert.deepEqual(hrefs, [
     "/app/tranzaksiyalar",
     "/app/qarzlar",
-    "/app/kassa",
     "/app/smena",
     "/app/kassam",
     "/app/sotuv",
   ]);
+  assert.ok(!hrefs.includes("/app/kassa"), "kassir menyusida Kassalar yo'q");
 });
 
 // ---------- Sidebar bo'limlari (UX guruhlash) ----------

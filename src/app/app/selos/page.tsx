@@ -5,6 +5,7 @@ import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import { kgSavdoKorinadi } from "@/lib/mijozXos";
 import { getKgSavdo } from "@/lib/queries/selos";
 import { getAccountBalances } from "@/lib/queries/accounts";
+import { hasPermission } from "@/lib/permissions/tekshir";
 import { todayTashkentDateOnlyString } from "@/lib/date";
 import { KgSavdoHisobotView } from "./KgSavdoHisobotView";
 
@@ -43,9 +44,13 @@ export default async function SelosPage({ searchParams }: { searchParams?: { san
     // Kassa QOLDIG'I ataylab alohida so'rovdan: kg savdosi kassa balansini
     // hisoblamaydi (u ledger'dan keladi), shu yerda faqat yonma-yon
     // ko'rsatiladi — "kassada qancha pul bor" va "bugun necha kg sotildi".
+    // KASSA MAXFIYLIGI: kassa qoldiqlari faqat "kassa.jami" huquqi bilan
+    // (default — direktor/admin). Kassir/sotuvchi kg kesimini ko'radi, lekin
+    // boshqa kassalardagi pulni emas — so'rov umuman ketmaydi.
+    const jamiKoradi = await hasPermission(session.userId, "kassa.jami");
     const [hisobot, qoldiqlar] = await Promise.all([
       getKgSavdo(businessId, sana),
-      getAccountBalances(businessId),
+      jamiKoradi ? getAccountBalances(businessId) : Promise.resolve([]),
     ]);
     const kassaPuli: Record<string, number> = {};
     for (const q of qoldiqlar) kassaPuli[q.id] = q.qoldiq;

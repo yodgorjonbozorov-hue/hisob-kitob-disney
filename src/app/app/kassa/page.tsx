@@ -23,8 +23,14 @@ import { KassaClient } from "./KassaClient";
  * Boshqa biznesning kassasi, o'tkazmasi yoki topshirig'i bu yerga hech
  * qanday yo'l bilan tushmaydi.
  *
- * ═══ HUQUQ ═══
- * Ko'rish — "kassa.korish" (yo'q bo'lsa tranzaksiyalarga qaytariladi).
+ * ═══ HUQUQ (KASSA MAXFIYLIGI) ═══
+ * Bu sahifa BARCHA kassalarning qoldig'ini, jami pulni va biznesning kunlik
+ * kirim/chiqimini ko'rsatadi — bu "kassa.jami" darajasi (default: faqat
+ * OWNER/ADMIN). Oddiy xodim (kassir/sotuvchi) "kassa.korish" bilan
+ * "Mening kassam"ga yo'naltiriladi va faqat O'Z kassasini ko'radi; huquqi
+ * umuman bo'lmasa — tranzaksiyalarga. Ma'lumot UI'da yashirilmaydi —
+ * huquqsiz so'rovda so'rovning o'zi ketmaydi (API'lar ham shunday).
+ *
  * Amal huquqlari (`pul.berish`, `pul.qabul`, boshqaruvchilik) client'ga
  * BAYROQ sifatida uzatiladi — tugmani yashirish uchun. Amalning o'zini esa
  * har API route mustaqil tekshiradi.
@@ -38,6 +44,9 @@ export default async function KassaPage({
   return runWithTenant(tenantId, async () => {
     if (!(await hasPermission(session.userId, "kassa.korish"))) {
       redirect("/app/tranzaksiyalar");
+    }
+    if (!(await hasPermission(session.userId, "kassa.jami"))) {
+      redirect("/app/kassam");
     }
 
     const businessId = await resolveActiveBusinessId(session);

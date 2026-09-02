@@ -6,10 +6,14 @@ import { listAccounts, getAccountBalances } from "@/lib/queries/accounts";
 import { createAccount } from "@/lib/services/accounts";
 import { createAccountSchema } from "@/lib/validation/account";
 import { dashboardYangilandi } from "@/lib/cache";
+import { requirePermission } from "@/lib/permissions/tekshir";
 
 /**
  * Kassa/hisob-raqamlar ro'yxati.
- * `?qoldiq=1` — har kassaning joriy qoldig'i bilan (faqat boshqaruvchilar).
+ * `?qoldiq=1` — har kassaning joriy qoldig'i bilan. KASSA MAXFIYLIGI: bu
+ * barcha xodimlarning kassa qoldig'ini ochadi, shuning uchun "kassa.jami"
+ * huquqi shart (default — faqat OWNER/ADMIN). Kassir to'g'ridan-to'g'ri
+ * so'rov yuborsa ham 403 oladi.
  */
 export const GET = withTenant(async (request, _ctx, { session: user }) => {
   const businessId = await resolveActiveBusinessId(user);
@@ -17,7 +21,7 @@ export const GET = withTenant(async (request, _ctx, { session: user }) => {
 
   const { searchParams } = new URL(request.url);
   if (searchParams.get("qoldiq") === "1") {
-    requireManager(user.rol);
+    await requirePermission(user.userId, "kassa.jami");
     return NextResponse.json(await getAccountBalances(businessId));
   }
   // Yozuv kiritishda kassa tanlash uchun — barcha rollarga faol kassalar.
