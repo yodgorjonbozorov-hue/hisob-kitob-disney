@@ -62,3 +62,13 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
         run: node scripts/production-holat.mjs
+
+      # MAS'UL → SOTUVCHI migratsiyasi — FAQAT QURUQ (dry-run) hisobot.
+      # `--qollash` bayrog'i YO'Q: skript faqat SELECT bajaradi va nechta
+      # zakaz ko'chishi/nega o'tkazib yuborilishini sanaydi. `CI` muhitida
+      # biznes nomlari chiqmaydi (repo ommaviy).
+      - name: Mas'ul→sotuvchi migratsiyasi (quruq, yozmaydi)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: node -r ts-node/register scripts/masul-sotuvchi-migratsiya.ts
