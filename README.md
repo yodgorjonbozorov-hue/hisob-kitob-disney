@@ -248,6 +248,12 @@ Bot ishga tushirilgan holda qolsa, har oyning 1-sanasida (server vaqti bo'yicha)
 
 ## Production'ga deploy qilish (bepul: Vercel + Turso)
 
+> **Build xotirasi.** Vercel build konteyneri 2 yadro / 8 GB. `next build`
+> shu chegaradan oshib OOM (SIGKILL) bo'lmasligi uchun `package.json` da
+> Node `22.x` pinlangan (`engines`) va `next build` `NODE_OPTIONS=--max-old-space-size=4096`
+> bilan ishga tushadi. Bularni olib tashlash deploy'ni yana yiqitadi
+> (2026-09-02 diagnostikasi, `PROGRESS-AGENT.md`).
+
 Lokal fayl-based SQLite va uzluksiz bot jarayoni serverless hostingda (Vercel) ishlamaydi, shuning uchun production uchun ikkita almashtirish qilinadi: baza → Turso (bulutli, SQLite-mos), bot → webhook (Vercel'ning o'zida, alohida server shart emas).
 
 ### 1. Turso'da baza yaratish
