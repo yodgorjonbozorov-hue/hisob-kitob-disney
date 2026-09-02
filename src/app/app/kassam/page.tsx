@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireTenantPage } from "@/lib/auth/tenant";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
-import { getAccountBalances, listKutilayotganTransferlar } from "@/lib/queries/accounts";
+import { listAccounts, listKutilayotganTransferlar } from "@/lib/queries/accounts";
 import { getKassaDetal } from "@/lib/queries/kassaDetal";
 import { KutilayotganTransferlar } from "@/components/kassa/KutilayotganTransferlar";
 import { KassamClient } from "./KassamClient";
@@ -13,6 +13,18 @@ import { KassamClient } from "./KassamClient";
  * Manba — Account ledgeri (Kassalar sahifasi bilan AYNI). Xodimning shaxsiy
  * kassasi bo'lmasa sahifa buni ochiq aytadi: direktor "Kassalar → Shaxsiy
  * kassa rejimi" ni yoqishi kerak, aks holda naqd umumiy kassaga tushadi.
+ *
+ * ═══ KASSA MAXFIYLIGI ═══
+ * Bu sahifa xodimga faqat O'Z kassasini ko'rsatadi: boshqa kassalarning
+ * qoldig'i, biznesning jami puli va boshqa xodimlar orasidagi o'tkazmalar
+ * bu yerga tushmaydi. Topshirish nishonlari — faqat NOM (summasiz).
+ * Tasdiq kutayotganlar — faqat men yuborgan yoki menga yuborilganlar
+ * (server tomonda kesiladi, `listKutilayotganTransferlar`).
+ *
+ * ═══ JORIY SMENA ═══
+ * Kirim/chiqim/sof — oxirgi topshirishdan beri. Kassa topshirilgan zahoti
+ * ular 0 dan boshlanadi, "Kassangizdagi pul" esa MAVJUD pul (tasdiq
+ * kutayotgan topshirish ayrilgan). Tarix pastdagi lentada to'liq qoladi.
  */
 export default async function KassamPage() {
   const { session, tenantId } = await requireTenantPage();
@@ -29,8 +41,12 @@ export default async function KassamPage() {
       );
     }
 
-    const qoldiqlar = await getAccountBalances(businessId);
-    const meniki = qoldiqlar.find((q) => q.userId === session.userId && q.isActive);
+    // Faqat O'Z kassasi qidiriladi — boshqa kassalarning qoldig'i hisoblanmaydi.
+    const meniki = await prisma.account.findFirst({
+      where: { businessId, userId: session.userId, isActive: true },
+      select: { id: true },
+      orderBy: { createdAt: "asc" },
+    });
 
     if (!meniki) {
       return (
@@ -45,28 +61,31 @@ export default async function KassamPage() {
       );
     }
 
-    const [detal, kutilayotganlar] = await Promise.all([
+    const [detal, kutilayotganlar, faolKassalar, xodim] = await Promise.all([
       getKassaDetal(businessId, meniki.id, 20),
-      listKutilayotganTransferlar(businessId),
+      listKutilayotganTransferlar(businessId, 50, session.userId),
+      // Nishonlar — nomlar, summasiz (kassa maxfiyligi).
+      listAccounts(businessId, true),
+      // Ism — sahifa sarlavhasida biznes nomi bilan birga ko'rsatiladi.
+      prisma.user.findUnique({ where: { id: session.userId }, select: { ism: true } }),
     ]);
+    if (!detal) {
+      return (
+        <div className="space-y-6">
+          <h1 className="text-xl sm:text-2xl font-bold text-fg">Mening kassam</h1>
+          <p className="text-muted">Kassa topilmadi.</p>
+        </div>
+      );
+    }
 
-    // Menga tegishli kutilayotganlar: menga yuborilgan yoki men yuborgan.
-    const meniki_kutilayotgan = kutilayotganlar.filter(
-      (t) => t.toUserId === session.userId || t.fromUserId === session.userId
-    );
-    const kutilayotganChiqim = meniki_kutilayotgan
-      .filter((t) => t.fromAccountId === meniki.id)
-      .reduce((a, t) => a + t.summa, 0);
-
-    const nishonlar = qoldiqlar
-      .filter((q) => q.isActive && q.id !== meniki.id)
+    const nishonlar = faolKassalar
+      .filter((q) => q.id !== meniki.id)
       .map((q) => ({ id: q.id, nomi: q.nomi, egaIsm: q.egaIsm }));
 
-    // Ism — sahifa sarlavhasida biznes nomi bilan birga ko'rsatiladi.
-    const xodim = await prisma.user.findUnique({
-      where: { id: session.userId },
-      select: { ism: true },
-    });
+    // Tasdiq kutayotgan MENING topshirishim (bo'lsa) — xodim "pul qayerda"ni ko'rsin.
+    const ochiqTopshirish = kutilayotganlar.find(
+      (t) => t.fromAccountId === meniki.id && t.turi === "smena"
+    );
 
     return (
       <div className="space-y-6">
@@ -78,19 +97,30 @@ export default async function KassamPage() {
         </div>
 
         <KutilayotganTransferlar
-          transferlar={meniki_kutilayotgan}
+          transferlar={kutilayotganlar}
           meniUserId={session.userId}
           boshqaruvchi={false}
         />
 
         <KassamClient
           accountId={meniki.id}
-          qoldiq={detal?.kassa.qoldiq ?? meniki.qoldiq}
-          bugungiKirim={detal?.bugungiKirim ?? 0}
-          bugungiChiqim={detal?.bugungiChiqim ?? 0}
-          harakatlar={detal?.harakatlar ?? []}
+          mavjud={detal.mavjud}
+          kutilayotganChiqim={detal.kutilayotganChiqim}
+          smenaKirim={detal.smenaKirim}
+          smenaChiqim={detal.smenaChiqim}
+          smenaBoshi={detal.smenaBoshi}
+          smenaTopshirishdan={detal.smenaTopshirishdan}
+          harakatlar={detal.harakatlar}
           nishonlar={nishonlar}
-          kutilayotganChiqim={kutilayotganChiqim}
+          ochiqTopshirish={
+            ochiqTopshirish
+              ? {
+                  summa: ochiqTopshirish.summa,
+                  kimga: ochiqTopshirish.toUserIsm ?? ochiqTopshirish.toNomi,
+                  vaqt: ochiqTopshirish.createdAt,
+                }
+              : null
+          }
         />
       </div>
     );

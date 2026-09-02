@@ -54,7 +54,10 @@ const TALAB: Record<Soha, { modul?: string; huquq?: string }> = {
   // darajasi. Kassir/sotuvchida bu huquq yo'q, ya'ni "umumiy sof foyda
   // qancha?" degan savol AI orqali ham ochilmaydi.
   hisobot: { huquq: "hisobot.korish" },
-  kassa: { huquq: "kassa.korish" },
+  // Kassa sohasi BARCHA kassalar qoldig'ini ochadi (kassa_holati) — bu
+  // "kassa.jami" darajasi. Kassir o'z kassasini sahifada ko'radi, AI orqali
+  // boshqalarnikini so'rab ololmaydi.
+  kassa: { huquq: "kassa.jami" },
   qarz: { huquq: "qarz.korish" },
   ombor: { modul: "OMBOR", huquq: "ombor.korish" },
   crm: { modul: "CRM" },

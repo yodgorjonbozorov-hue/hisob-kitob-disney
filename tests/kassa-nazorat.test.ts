@@ -210,10 +210,12 @@ test("bugungi kirim / chiqim / sof to'g'ri", async () => {
   assert.equal(n.bugungiChiqim, 500_000);
   assert.equal(n.bugungiSof, 17_500_000);
 
+  // Kartadagi kesim — JORIY SMENA (hali topshirilmagan: kun boshidan).
   const k = await karta(kassirKassa);
-  assert.equal(k.bugungiKirim, 3_000_000);
-  assert.equal(k.bugungiChiqim, 500_000);
-  assert.equal(k.bugungiSof, 2_500_000);
+  assert.equal(k.smenaTopshirishdan, false);
+  assert.equal(k.smenaKirim, 3_000_000);
+  assert.equal(k.smenaChiqim, 500_000);
+  assert.equal(k.smenaSof, 2_500_000);
 });
 
 // ---------------------------------------------------------------------------
@@ -253,11 +255,11 @@ test("Kassa A → Kassa B 1 mln: pul ko'chadi, kirim/chiqim O'ZGARMAYDI", async 
 
 test("bugungi o'tkazma kassa kartasida ALOHIDA ko'rinadi (kirim/chiqimga qo'shilmaydi)", async () => {
   const bank = await karta(bankKassa);
-  assert.equal(bank.bugungiKirgan, 1_000_000);
-  assert.equal(bank.bugungiKirim, 5_000_000, "o'tkazma kirimga qo'shilmasligi kerak");
+  assert.equal(bank.smenaKirgan, 1_000_000);
+  assert.equal(bank.smenaKirim, 5_000_000, "o'tkazma kirimga qo'shilmasligi kerak");
   const dir = await karta(direktorKassa);
-  assert.equal(dir.bugungiChiqqan, 1_000_000);
-  assert.equal(dir.bugungiChiqim, 0);
+  assert.equal(dir.smenaChiqqan, 1_000_000);
+  assert.equal(dir.smenaChiqim, 0);
 });
 
 // ---------------------------------------------------------------------------

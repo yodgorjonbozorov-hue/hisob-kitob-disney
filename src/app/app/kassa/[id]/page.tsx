@@ -33,6 +33,11 @@ const TOLOV_NOMI: Record<string, string> = {
  *
  * Kassa boshqa biznesniki bo'lsa `getKassaDetal` uni umuman topmaydi
  * (so'rov aktiv `businessId` bilan cheklangan) — sahifa 404 qaytaradi.
+ *
+ * ═══ KASSA MAXFIYLIGI ═══
+ * "kassa.jami" bo'lmagan xodim faqat O'Z shaxsiy kassasini ocha oladi;
+ * boshqa kassa IDsi so'ralsa "Mening kassam"ga qaytariladi. Tekshiruv
+ * kassa egasi bo'yicha SERVERDA — URL'ni qo'lda terish ham ochmaydi.
  */
 export default async function KassaDetalPage({
   params,
@@ -62,6 +67,13 @@ export default async function KassaDetalPage({
     if (!detal) notFound();
 
     const { kassa } = detal;
+    const jamiKoradi = await hasPermission(session.userId, "kassa.jami");
+    if (!jamiKoradi && kassa.userId !== session.userId) {
+      redirect("/app/kassam");
+    }
+    const smenaIzoh = detal.smenaTopshirishdan
+      ? `oxirgi topshirishdan (${formatToshkentVaqt(new Date(detal.smenaBoshi))})`
+      : "bugundan";
     const davrNomi = oraliq ? `${searchParams?.dan} — ${searchParams?.gacha}` : DAVR_YORLIQ[davr];
 
     return (
@@ -84,9 +96,16 @@ export default async function KassaDetalPage({
           <div className="mt-1">
             <Money value={kassa.qoldiq} size="display" tone={kassa.qoldiq >= 0 ? "brand" : "expense"} />
           </div>
-          <dl className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-line text-2xs">
-            <Kesim yorliq="Bugungi kirim" qiymat={detal.bugungiKirim} rang="text-income" belgi="+" />
-            <Kesim yorliq="Bugungi chiqim" qiymat={detal.bugungiChiqim} rang="text-expense" belgi="−" />
+          {detal.kutilayotganChiqim > 0 && (
+            <p className="mt-2 text-2xs text-debt">
+              {formatSom(detal.kutilayotganChiqim)} soʻm topshirilgan — tasdiq kutmoqda. Mavjud:{" "}
+              <span className="tnum font-medium">{formatSom(detal.mavjud)}</span> soʻm
+            </p>
+          )}
+          <p className="mt-3 text-2xs text-faint">Joriy smena · {smenaIzoh}</p>
+          <dl className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-2 pt-3 border-t border-line text-2xs">
+            <Kesim yorliq="Smena kirimi" qiymat={detal.smenaKirim} rang="text-income" belgi="+" />
+            <Kesim yorliq="Smena chiqimi" qiymat={detal.smenaChiqim} rang="text-expense" belgi="−" />
             <Kesim yorliq={`${davrNomi} kirim`} qiymat={detal.davrKirim} rang="text-income" belgi="+" />
             <Kesim yorliq={`${davrNomi} chiqim`} qiymat={detal.davrChiqim} rang="text-expense" belgi="−" />
           </dl>

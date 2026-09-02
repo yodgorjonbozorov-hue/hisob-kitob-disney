@@ -31,7 +31,10 @@ type Oyna =
  * topshirishlar, so'ng kassalar, tarix va oxirida sozlamalar.
  *
  * ═══ HUQUQ ═══
- * Barcha xodimlar barcha kassalarni KO'RADI — pul qayerda ekani sir emas.
+ * Bu ekran faqat "kassa.jami" huquqi bilan ochiladi (sahifa serverda
+ * tekshiradi): barcha kassalar, jami pul va bugungi biznes kesimi — direktor
+ * darajasi. Oddiy xodim bu yerga tushmaydi, u "Mening kassam"da faqat o'z
+ * kassasini ko'radi.
  * Amallar esa huquq bilan qulflanadi: o'tkazma va topshirish "pul.berish",
  * qaror "pul.qabul", kassa ochish/tahrirlash faqat boshqaruvchida. Bu
  * yerdagi bayroqlar shunchaki ishlamaydigan tugmani ko'rsatmaydi — HAR

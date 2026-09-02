@@ -105,15 +105,16 @@ export const MODULLAR: ModulTarifi[] = [
       // sahifada tab bo'lib turadi, shuning uchun yorliq "Hisobotlar".
       { href: "/app/hisobot", label: "Hisobotlar", icon: "report", tartib: 16, rollar: BOSHQARUVCHILAR, guruh: "asosiy" },
       { href: "/app/byudjet", label: "Budjet", icon: "budget", tartib: 26, rollar: BOSHQARUVCHILAR },
-      // KASSALAR — kassirga ham ochiq: u boshqa kassalarda qancha pul borligini
-      // ko'rishi va ularga pul o'tkazishi kerak. Sahifadagi BOSHQARUV amallari
-      // (kassa ochish/o'chirish, rejim) baribir huquq bilan qulflangan.
+      // KASSALAR — barcha kassalar va JAMI pul: faqat boshqaruvchilarga.
+      // Kassir boshqa xodimning kassasidagi pulni ko'rmasligi kerak (kassa
+      // maxfiyligi) — u "Mening kassam" bilan ishlaydi. Sahifaning o'zi ham
+      // "kassa.jami" huquqini mustaqil tekshiradi (nav yashirish himoya emas).
       {
         href: "/app/kassa",
         label: "Kassalar",
         icon: "wallet",
         tartib: 14,
-        rollar: ["OWNER", "ADMIN", "CASHIER"],
+        rollar: BOSHQARUVCHILAR,
         guruh: "asosiy",
       },
       // QARZLAR — MOLIYA ichida, OMBOR emas. Qarz ombordan mustaqil moliyaviy

@@ -25,15 +25,21 @@ export function KassamKartasi({ kassa }: { kassa: MeningKassam | null }) {
           <p className="text-sm text-muted">Mening kassam · {kassa.nomi}</p>
           <div className="mt-0.5">
             <Money
-              value={kassa.qoldiq}
+              value={kassa.mavjud}
               size="xl"
-              tone={kassa.qoldiq > 0 ? "brand" : kassa.qoldiq < 0 ? "expense" : "neutral"}
+              tone={kassa.mavjud > 0 ? "brand" : kassa.mavjud < 0 ? "expense" : "neutral"}
             />
           </div>
+          {/* Smena kesimi — oxirgi topshirishdan beri; topshirilgan zahoti 0. */}
           <p className="text-xs text-faint mt-1">
-            Bugungi kirim: {kassa.bugungiKirim.toLocaleString("ru-RU")} · Bugungi chiqim:{" "}
-            {kassa.bugungiChiqim.toLocaleString("ru-RU")}
+            Smena kirimi: {kassa.smenaKirim.toLocaleString("ru-RU")} · Smena chiqimi:{" "}
+            {kassa.smenaChiqim.toLocaleString("ru-RU")}
           </p>
+          {kassa.kutilayotganChiqim > 0 && (
+            <p className="text-xs text-debt mt-1">
+              Topshirildi: {kassa.kutilayotganChiqim.toLocaleString("ru-RU")} soʻm — tasdiq kutmoqda
+            </p>
+          )}
         </div>
         <div className="flex flex-col items-end gap-2">
           {kassa.kutilayotganSoni > 0 && (
@@ -45,7 +51,7 @@ export function KassamKartasi({ kassa }: { kassa: MeningKassam | null }) {
             href="/app/kassam"
             className="inline-flex items-center justify-center rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white shadow-sm hover:brightness-110 min-h-[44px]"
           >
-            {kassa.kutilayotganSoni > 0 ? "Kassam" : "Smenani topshirish"}
+            {kassa.kutilayotganSoni > 0 || kassa.mavjud <= 0 ? "Kassam" : "Smenani topshirish"}
           </Link>
         </div>
       </div>

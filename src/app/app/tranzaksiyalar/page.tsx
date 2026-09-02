@@ -14,7 +14,6 @@ import { isModuleOnForTenant } from "@/lib/modules/guard";
 import { TransactionsClient } from "./TransactionsClient";
 import { listAccounts, getMeningKassam } from "@/lib/queries/accounts";
 import { listBiznesXodimlari } from "@/lib/services/sotuvchi";
-import { toshkentBugunBoshi } from "@/lib/services/kassirKassa";
 import { KassamKartasi } from "@/components/kassa/KassamKartasi";
 import { SotilganMahsulotlar } from "./SotilganMahsulotlar";
 import { getSotuvStatistika, type SotuvStatistikaDTO } from "@/lib/queries/sotuvStatistika";
@@ -106,7 +105,7 @@ export default async function TranzaksiyalarPage({
     listBiznesXodimlari(businessId),
     // MENING KASSAM: foydalanuvchining shaxsiy kassasi (ledgerdan). Yuqoridagi
     // Naqd/Click/Qarz/Sof raqamlariga hech qanday ta'siri yo'q.
-    getMeningKassam(businessId, session.userId, toshkentBugunBoshi()),
+    getMeningKassam(businessId, session.userId),
     // Ko'p ishlatiladigan kategoriyalar — FAQAT formadagi tartib uchun.
     getTezKategoriyalar(businessId, scopeUserId),
   ]);

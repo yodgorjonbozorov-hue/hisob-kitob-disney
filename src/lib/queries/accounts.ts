@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { businessQueryRaw, businessScope, songa } from "@/lib/db/businessRaw";
 import { QARZ_EMAS, qarzEmasSql } from "@/lib/qarzFiltr";
+import { getKassaSmenasi } from "@/lib/queries/kassaSmena";
 
 export interface AccountDTO {
   id: string;
@@ -188,9 +189,18 @@ export async function getKassaKunlikTransfer(
 export interface MeningKassam {
   accountId: string;
   nomi: string;
+  /** Ledger qoldig'i (tasdiq kutayotgan topshirish hali ichida). */
   qoldiq: number;
-  bugungiKirim: number;
-  bugungiChiqim: number;
+  /** Tasdiq kutayotgan chiqim (topshirilgan, hali qabul qilinmagan). */
+  kutilayotganChiqim: number;
+  /** `qoldiq − kutilayotganChiqim` — xodim qo'lidagi HAQIQIY pul. */
+  mavjud: number;
+  /** Joriy smena (oxirgi topshirishdan beri) kirimi va chiqimi. */
+  smenaKirim: number;
+  smenaChiqim: number;
+  /** Joriy smena boshi (ISO) va u topshirishdan boshlanadimi. */
+  smenaBoshi: string;
+  smenaTopshirishdan: boolean;
   /** Menga yuborilgan, hali qabul qilinmagan o'tkazmalar soni. */
   kutilayotganSoni: number;
 }
@@ -200,30 +210,41 @@ export interface MeningKassam {
  *
  * `null` — shaxsiy kassa ochilmagan (rejim yoqilmagan): u holda xodimning
  * naqdi umumiy kassaga tushadi va alohida karta ko'rsatishning ma'nosi yo'q.
+ *
+ * Kirim/chiqim JORIY SMENA bo'yicha — kassa topshirilgan zahoti 0 dan
+ * boshlanadi (lib/queries/kassaSmena.ts). Boshqa kassalarning qoldig'i bu
+ * yerdan chiqmaydi: faqat o'z kassasi qaytariladi.
  */
 export async function getMeningKassam(
   businessId: string,
-  userId: string,
-  kunBoshi: Date
+  userId: string
 ): Promise<MeningKassam | null> {
   const qoldiqlar = await getAccountBalances(businessId);
   const meniki = qoldiqlar.find((q) => q.userId === userId && q.isActive);
   if (!meniki) return null;
 
-  const [kunlik, kutilayotgan] = await Promise.all([
-    getKassaKunlik(businessId, kunBoshi),
+  const [smena, kutilayotgan, band] = await Promise.all([
+    getKassaSmenasi(businessId, meniki.id),
     prisma.accountTransfer.count({
       where: { businessId, holat: "kutilmoqda", toUserId: userId },
     }),
+    prisma.accountTransfer.aggregate({
+      where: { businessId, fromAccountId: meniki.id, holat: "kutilmoqda" },
+      _sum: { summa: true },
+    }),
   ]);
-  const bugun = kunlik.get(meniki.id) ?? { kirim: 0, chiqim: 0 };
+  const kutilayotganChiqim = band._sum.summa ?? 0;
 
   return {
     accountId: meniki.id,
     nomi: meniki.nomi,
     qoldiq: meniki.qoldiq,
-    bugungiKirim: bugun.kirim,
-    bugungiChiqim: bugun.chiqim,
+    kutilayotganChiqim,
+    mavjud: meniki.qoldiq - kutilayotganChiqim,
+    smenaKirim: smena.kirim,
+    smenaChiqim: smena.chiqim,
+    smenaBoshi: smena.boshi.toISOString(),
+    smenaTopshirishdan: smena.topshirishdan,
     kutilayotganSoni: kutilayotgan,
   };
 }
@@ -341,10 +362,20 @@ export async function listKassaHarakatlari(
  */
 export async function listKutilayotganTransferlar(
   businessId: string,
-  limit = 50
+  limit = 50,
+  /**
+   * KASSA MAXFIYLIGI: berilsa faqat shu foydalanuvchi YUBORGAN yoki UNGA
+   * yuborilgan o'tkazmalar qaytadi — boshqa xodimlar orasidagi summalar
+   * "kassa.jami" huquqisiz ko'rinmaydi.
+   */
+  faqatUserId?: string | null
 ): Promise<TransferDTO[]> {
   const rows = await prisma.accountTransfer.findMany({
-    where: { businessId, holat: "kutilmoqda" },
+    where: {
+      businessId,
+      holat: "kutilmoqda",
+      ...(faqatUserId ? { OR: [{ fromUserId: faqatUserId }, { toUserId: faqatUserId }] } : {}),
+    },
     include: TRANSFER_INCLUDE,
     orderBy: { createdAt: "desc" },
     take: limit,

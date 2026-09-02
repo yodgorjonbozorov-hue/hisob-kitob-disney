@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
+import { useToast } from "@/components/ui/Toast";
 import { parseSomInput, formatSom, formatMoney } from "@/lib/format";
 import type { KassaNazoratKarta } from "@/lib/queries/kassaNazorat";
 
@@ -42,6 +43,7 @@ export function TopshirishModal({
   onClose: () => void;
   onDone: () => void;
 }) {
+  const { toast } = useToast();
   const [fromId, setFrom] = useState(boshlangichId ?? kassalar[0]?.id ?? "");
   const manba = kassalar.find((k) => k.id === fromId);
   const tizim = Math.max(manba?.mavjud ?? 0, 0);
@@ -87,6 +89,15 @@ export function TopshirishModal({
         setTasdiq(false);
         return;
       }
+      // Topshirilgan zahoti joriy smena 0 dan boshlanadi (server hisobi);
+      // "Joriy kassa" — topshirishdan keyin kassada qoladigan mavjud pul.
+      toast({
+        message:
+          `Kassa muvaffaqiyatli topshirildi · Topshirildi: ${formatSom(summa)} soʻm · ` +
+          `Joriy kassa: ${formatSom(Math.max(tizim - summa, 0))} soʻm`,
+        tone: "success",
+        duration: 7000,
+      });
       onDone();
     } catch {
       setXato("Serverga ulanib bo'lmadi");

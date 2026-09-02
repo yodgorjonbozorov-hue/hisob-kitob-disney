@@ -50,8 +50,13 @@ export default async function KassaHisobotPage({
   const { session, tenantId } = await requireTenantPage();
 
   return runWithTenant(tenantId, async () => {
+    // Hisobot BARCHA kassalar balansini ochadi — "hisobot.korish" ustiga
+    // "kassa.jami" ham shart (kassa maxfiyligi).
     if (!(await hasPermission(session.userId, "hisobot.korish"))) {
       redirect("/app/kassa");
+    }
+    if (!(await hasPermission(session.userId, "kassa.jami"))) {
+      redirect("/app/kassam");
     }
     const businessId = await resolveActiveBusinessId(session);
     if (!businessId) redirect("/app");

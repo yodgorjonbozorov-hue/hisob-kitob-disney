@@ -44,6 +44,7 @@
     "test:kassa-nazorat": "node -r ts-node/register tests/kassa-nazorat.test.ts",
     "test:kassa-qoldiq": "node -r ts-node/register tests/kassa-qoldiq.test.ts",
     "test:handover-migratsiya": "node -r ts-node/register tests/handover-migratsiya.test.ts",
+    "test:kassa-maxfiylik": "node -r ts-node/register tests/kassa-maxfiylik.test.ts",
     "test:tozalash": "node -r ts-node/register tests/tozalash.test.ts",
     "test:qarz": "node -r ts-node/register tests/qarz.test.ts",
     "test:qarzdorlik": "node -r ts-node/register tests/qarzdorlik.test.ts",
