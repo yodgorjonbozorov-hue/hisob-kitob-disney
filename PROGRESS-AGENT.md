@@ -5681,3 +5681,68 @@ Yangilandi: `kassa-nazorat` (maydon nomlari), `modules` (kassir nav).
 Regressiya: kassa-nazorat 23, kassa-transfer 20, kunlik-kassa 18,
 kassir-kassa 22, kassa-qoldiq 5, isolation 22, izolyatsiya-royxati 9,
 ai 28, modules 21, visibility 10, dashboard-ux 21 — yashil.
+## Disney Navoiy: zakaz jamoasi + xodimlar analitikasi (2026-09-02)
+
+**Audit xulosasi.** "Kim sotdi" (sotuvchi) va "kim bajaradi" (ijrochi)
+tuzilmasi allaqachon bor edi: `EmployeeCategory` (lavozim, biznesga
+bog'liq, qattiq kod yo'q), `EmployeeCategoryMember` (xodim ↔ lavozim,
+ko'p-ko'p), `DealEmployee` (zakaz ↔ xodim ↔ lavozim, UNIQUE). Yangi
+"OrderEmployeeAssignment" jadvali YARATILMADI — mavjud `DealEmployee`
+ayni shu rolni bajaradi. Eski `Deal.masulId` (User) TEGILMADI: sotuvchi
+lavozimi sozlanmagan biznesda "Mas'ul xodim" maydoni avvalgidek qoladi,
+sozlangan biznesda esa forma "Sotuvchi *" ni ko'rsatadi va mas'ul sotuvchi
+tanlovidan sinxronlanadi (avvalgi qoida).
+
+**Migratsiya:** `20260902090000_zakaz_jamoasi_baho` — FAQAT QO'SHUVCHI:
+`EmployeeCategory.zakazgaBiriktiriladi` (default true), `.kopXodim`
+(default false — bir zakazga bir nechta xodim), `DealEmployee.baho/
+bahoIzoh/bahoAt`, yangi `DealFeedback` (zakaz darajasidagi mijoz fikri,
+`dealId` UNIQUE). Postgres init qayta generatsiya qilindi.
+
+**Backend:**
+- `lib/services/zakazJamoasi.ts` — biriktiruv mantiqi shu yerga ko'chdi
+  (`xodimKategoriya.ts` qayta eksport qiladi). Saqlash FARQ asosida va
+  `runBusinessTx` ichida: o'zgarmagan qator qayta yozilmaydi (bahosi
+  saqlanadi), o'zgarish bo'lmasa bazaga tegilmaydi (dublikat yo'q), xodim
+  almashsa lentaga "chiqdi/qo'shildi" yoziladi. `kopXodim=false` lavozimga
+  ikkinchi xodim rad; `zakazgaBiriktiriladi=false` lavozim rad.
+  TOPILGAN VA TUZATILGAN XATO: eski `deleteMany + create` jamoa tahriri
+  sotuvchi qatorini ham o'chirib yuborardi — endi kiruvchi ro'yxatda
+  sotuvchi bo'lmasa u tegilmaydi.
+- `lib/services/zakazBaho.ts` — sifat nazorati: servis bahosi/e'tiroz/
+  yaxshilash (zakaz) + har biriktiruvga 1..10 baho (xodim). Faqat YUTILDI
+  zakaz baholanadi. API: `GET/PUT /api/crm/deals/[id]/baho`.
+- Huquqlar: `crm.jamoa` (mavjud zakaz jamoasini o'zgartirish; usiz faqat
+  o'z zakazi, yakunlangunga qadar), `crm.baho` (sifat nazorati). OWNER/
+  ADMIN'da bor, SELLER'da yo'q — oddiy xodim boshqalarning biriktiruvini
+  o'zgartirib statistikani buza olmaydi.
+- `lib/queries/xodimJamoaKpi.ts` — barcha xodimlar uchun lavozim kesimidagi
+  davr KPI'si IKKI so'rovda (N+1 yo'q). `kategoriyaAnalitika` ga
+  `ortachaBaho` qo'shildi.
+
+**UI:** Yangi zakaz formasi: SOTUVCHI bo'limi + yig'iladigan "Zakaz
+jamoasi  N xodim ›" bo'limi; har lavozim qatori qidiruvli pastki varaq
+(`XodimTanlovSheet`) ochadi — kopXodim lavozimda checkbox (Videochilar:
+Sardor, Bekzod), oddiyda radio (bosilganda yopiladi). Tafsilotda jamoa
+lavozim bo'yicha guruhlangan; yutilgan zakazda "Sifat nazorati" bloki.
+Xodimlar sahifasi: dinamik lavozim filtri, kartada lavozim(lar) va "Bu oy"
+KPI (sotuvchi: zakaz/yutilgan/summa; ijrochi: chiqdi/bajarildi/baho).
+Xodim sahifasida "Lavozim KPI" tabi. "Kategoriyalar" UI'da "Lavozimlar"
+deb nomlandi (route o'zgarmadi), lavozim formasiga ikki bayroq qo'shildi.
+
+**Mavjud ma'lumot:** `scripts/masul-sotuvchi-migratsiya.ts` (quruq rejim
+standart, `--qollash` bilan yozadi) — sotuvchi biriktiruvi yo'q eski
+zakazlarga FAQAT mas'ul foydalanuvchining xodimi sotuvchi lavozimi a'zosi
+bo'lsa biriktiradi; direktor "mas'ul" bo'lgan zakazlar ataylab tegilmaydi.
+Build zanjiriga kiritilmadi — egasi qaror qiladi.
+
+**Testlar:** YANGI `tests/zakaz-jamoasi.test.ts` (`test:zakaz-jamoasi`, 16
+test) — 40-46 stsenariylar (yaratish, participation va zakaz soni 1,
+dublikat, xodim almashtirish, multi-select, biznes izolyatsiyasi, oy
+filtri) + bayroqlar, baho, huquq, kirim qulfi. Regressiya: xodim-kategoriya
+19, crm-sotuvchi 20, crm-pipeline 18, crm 24, isolation 22,
+izolyatsiya-royxati 9, backup 6, migratsiya 12, postgres 2, hr 19,
+xodim-statistika 12, kpi-hisob 16 — hammasi yashil. `tsc` toza,
+`npm run build` o'tdi. (Repoda ESLint konfiguratsiyasi yo'q — `next lint`
+interaktiv so'rov beradi; lint bosqichi tsc bilan qoplandi.)
+

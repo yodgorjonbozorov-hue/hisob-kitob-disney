@@ -59,14 +59,14 @@ export default async function SamaradorlikPage() {
           </Link>
           <div className="flex-1 min-w-0">
             <h1 className="text-xl sm:text-2xl font-bold text-fg">Xodimlar samaradorligi</h1>
-            <p className="text-sm text-muted">Kategoriya kesimida zakaz natijalari va reyting</p>
+            <p className="text-sm text-muted">Lavozim kesimida zakaz natijalari va reyting</p>
           </div>
           <LinkButton href="/app/hr/sotuvchilar" variant="secondary" size="sm">
             Sotuvchilar reytingi
           </LinkButton>
           {isManager(session.rol) && (
             <LinkButton href="/app/hr/kategoriyalar" variant="secondary" size="sm">
-              Kategoriyalar
+              Lavozimlar
             </LinkButton>
           )}
         </div>
@@ -74,11 +74,11 @@ export default async function SamaradorlikPage() {
         {tablar.length === 0 ? (
           <EmptyState
             icon="🏷️"
-            title="Xodim kategoriyalari hali yo'q"
-            description="Avval kategoriyalar (Sotuvchi, Diktor, Shofer, ...) yaratib, xodimlarni biriktiring — keyin zakazlardagi qatnashuv shu yerda hisoblanadi."
+            title="Lavozimlar hali yo'q"
+            description="Avval lavozimlar (Sotuvchi, Animator, Shofyor, Videochi, ...) yaratib, xodimlarni biriktiring — keyin zakazlardagi qatnashuv shu yerda hisoblanadi."
             action={
               isManager(session.rol) ? (
-                <LinkButton href="/app/hr/kategoriyalar">Kategoriya yaratish</LinkButton>
+                <LinkButton href="/app/hr/kategoriyalar">Lavozim yaratish</LinkButton>
               ) : undefined
             }
           />

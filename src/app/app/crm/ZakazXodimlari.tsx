@@ -1,99 +1,41 @@
 "use client";
 
 import { useState } from "react";
-import { Select } from "@/components/ui/Select";
 import type { XodimKategoriyaDTO, ZakazXodimDTO } from "./turlar";
+import { ZakazJamoasiTanlash, biriktiruvdanTanlov, tanlovdanRoyxat, type ZakazXodimTanlov } from "./ZakazJamoasi";
 
 /**
- * ZAKAZDAGI IJROCHILAR — kategoriya-selektorlar (Diktor, Dekorator, Shofer...).
- * Har faol kategoriya uchun bitta selektor; ro'yxatda FAQAT o'sha kategoriya
- * a'zolari (server ham a'zolikni majburlaydi). Hech biri majburiy emas.
- *
- * SOTUVCHI BU YERDA CHIQMAYDI: u alohida birinchi darajali maydonga ko'chdi
- * (`SotuvchiTanlash`) — "zakazni kim oldi" va "zakazni kim bajaradi" ikki
- * boshqa savol (38-talab), ikkita joyda so'ralsa qarama-qarshi javob paydo
- * bo'lardi.
+ * Jamoani lavozim bo'yicha guruhlaydi (33-talab): "Videochilar: Sardor,
+ * Bekzod". Sotuvchi chiqariladi — u yuqorida alohida qatorda.
  */
-
-/** Ijrochi kategoriyalari — sotuvchi turidagilar chiqarib tashlanadi. */
-export function ijroKategoriyalari(kategoriyalar: XodimKategoriyaDTO[]): XodimKategoriyaDTO[] {
-  return kategoriyalar.filter((k) => k.turi !== "sotuvchi");
-}
-
-
-/** categoryId → employeeId ("" — tanlanmagan). */
-export type ZakazXodimTanlov = Record<string, string>;
-
-/** Tanlovni API kutadigan ro'yxatga aylantiradi (bo'shlari tashlanadi). */
-export function tanlovdanRoyxat(t: ZakazXodimTanlov): { categoryId: string; employeeId: string }[] {
-  return Object.entries(t)
-    .filter(([, employeeId]) => employeeId)
-    .map(([categoryId, employeeId]) => ({ categoryId, employeeId }));
-}
-
-/**
- * Mavjud biriktiruvlardan tanlov (tahrirlash oynasi uchun). Sotuvchi
- * qatorlari chiqariladi — u alohida maydondan boshqariladi.
- */
-export function biriktiruvdanTanlov(xodimlar: ZakazXodimDTO[]): ZakazXodimTanlov {
-  const t: ZakazXodimTanlov = {};
+export function jamoaGuruhlab(xodimlar: ZakazXodimDTO[]): { nomi: string; ismlar: string[] }[] {
+  const guruhlar = new Map<string, { nomi: string; ismlar: string[] }>();
   for (const x of xodimlar) {
     if (x.kategoriyaTuri === "sotuvchi") continue;
-    t[x.categoryId] = x.employeeId;
+    const g = guruhlar.get(x.categoryId) ?? { nomi: x.kategoriyaNomi, ismlar: [] };
+    g.ismlar.push(x.isActive ? x.ism : `${x.ism} (nofaol)`);
+    guruhlar.set(x.categoryId, g);
   }
-  return t;
-}
-
-export function ZakazXodimlariTanlash({
-  kategoriyalar,
-  tanlov,
-  onChange,
-}: {
-  kategoriyalar: XodimKategoriyaDTO[];
-  tanlov: ZakazXodimTanlov;
-  onChange: (t: ZakazXodimTanlov) => void;
-}) {
-  if (kategoriyalar.length === 0) return null;
-  return (
-    <div className="space-y-2">
-      <p className="text-2xs uppercase tracking-wide text-faint">Zakazni bajaruvchilar</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {kategoriyalar.map((k) => (
-          <div key={k.id} className="space-y-1">
-            <label className="block text-xs text-muted" htmlFor={`zakaz-xodim-${k.id}`}>
-              {k.nomi}
-            </label>
-            <Select
-              id={`zakaz-xodim-${k.id}`}
-              value={tanlov[k.id] ?? ""}
-              onChange={(v) => onChange({ ...tanlov, [k.id]: v })}
-              searchable={k.azolar.length > 7}
-              options={[
-                { value: "", label: "Tanlanmagan" },
-                ...k.azolar.map((a) => ({ value: a.id, label: a.ism })),
-              ]}
-            />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  return [...guruhlar.values()];
 }
 
 /**
- * Tafsilot oynasidagi blok: joriy biriktiruvlar ro'yxati + (kirim yozilmagan
- * bo'lsa) tahrirlash. Kirim yozilgach server ham qulflaydi — bu yerda faqat
- * o'qish rejimi qoladi (tarixiy biriktiruv o'zgarmaydi).
+ * TAFSILOT OYNASIDAGI JAMOA BLOKI: lavozim bo'yicha guruhlangan ro'yxat +
+ * (huquq bo'lsa va kirim yozilmagan bo'lsa) tahrirlash. Kirim yozilgach
+ * server ham qulflaydi — faqat o'qish rejimi qoladi (tarix o'zgarmaydi).
  */
 export function ZakazXodimlariBlok({
   dealId,
   kirimBor,
+  ozgartira,
   kategoriyalar,
   xodimlar,
   onSaqlandi,
 }: {
   dealId: string;
   kirimBor: boolean;
+  /** `crm.jamoa` huquqi yoki zakazning o'z mas'uli (37-talab). */
+  ozgartira: boolean;
   kategoriyalar: XodimKategoriyaDTO[];
   /** null — hali yuklanmagan. */
   xodimlar: ZakazXodimDTO[] | null;
@@ -104,9 +46,8 @@ export function ZakazXodimlariBlok({
   const [loading, setLoading] = useState(false);
   const [xato, setXato] = useState<string | null>(null);
 
-  // Sotuvchi bu blokda ko'rsatilmaydi — u yuqorida alohida qatorda.
-  const ijrochilar = xodimlar?.filter((x) => x.kategoriyaTuri !== "sotuvchi") ?? null;
-  if (kategoriyalar.length === 0 && (!ijrochilar || ijrochilar.length === 0)) return null;
+  const guruhlar = xodimlar ? jamoaGuruhlab(xodimlar) : null;
+  if (kategoriyalar.length === 0 && (!guruhlar || guruhlar.length === 0)) return null;
 
   async function saqlash() {
     setLoading(true);
@@ -130,8 +71,8 @@ export function ZakazXodimlariBlok({
   return (
     <div className="rounded-xl border border-line bg-surface-2/30 p-3 space-y-2">
       <div className="flex items-center justify-between">
-        <p className="text-2xs uppercase tracking-wide text-faint">Zakazni bajaruvchilar</p>
-        {!kirimBor && kategoriyalar.length > 0 && !tahrir && (
+        <p className="text-2xs uppercase tracking-wide text-faint">Zakaz jamoasi</p>
+        {!kirimBor && ozgartira && kategoriyalar.length > 0 && !tahrir && (
           <button
             onClick={() => {
               setTanlov(biriktiruvdanTanlov(xodimlar ?? []));
@@ -146,7 +87,7 @@ export function ZakazXodimlariBlok({
 
       {tahrir ? (
         <div className="space-y-2">
-          <ZakazXodimlariTanlash kategoriyalar={kategoriyalar} tanlov={tanlov} onChange={setTanlov} />
+          <ZakazJamoasiTanlash kategoriyalar={kategoriyalar} tanlov={tanlov} onChange={setTanlov} boshidaOchiq />
           {xato && <p className="text-expense text-sm">{xato}</p>}
           <div className="flex gap-2 justify-end">
             <button onClick={() => setTahrir(false)} className="px-3 py-1.5 rounded-lg border border-line text-xs text-muted">
@@ -161,16 +102,16 @@ export function ZakazXodimlariBlok({
             </button>
           </div>
         </div>
-      ) : ijrochilar === null ? (
+      ) : guruhlar === null ? (
         <p className="text-sm text-faint">Yuklanmoqda...</p>
-      ) : ijrochilar.length === 0 ? (
-        <p className="text-sm text-faint">Bajaruvchi biriktirilmagan.</p>
+      ) : guruhlar.length === 0 ? (
+        <p className="text-sm text-faint">Jamoa biriktirilmagan.</p>
       ) : (
         <ul className="space-y-1">
-          {ijrochilar.map((x) => (
-            <li key={x.id} className="flex items-center justify-between text-sm">
-              <span className="text-muted">{x.kategoriyaNomi}</span>
-              <span className="font-medium text-fg">{x.ism}</span>
+          {guruhlar.map((g) => (
+            <li key={g.nomi} className="flex items-start justify-between gap-3 text-sm">
+              <span className="text-muted shrink-0">{g.nomi}</span>
+              <span className="font-medium text-fg text-right">{g.ismlar.join(", ")}</span>
             </li>
           ))}
         </ul>

@@ -65,8 +65,9 @@ export function XodimQator({
           </span>
 
           <span className="block text-2xs text-muted tnum">
-            Konversiya: {x.konversiya}%
-            {sotuvchimi ? ` · To'liq puli kelgan sotuv: ${formatSom(x.tolanganSotuv)} so'm` : ""}
+            {sotuvchimi
+              ? `Konversiya: ${x.konversiya}% · To'liq puli kelgan sotuv: ${formatSom(x.tolanganSotuv)} so'm`
+              : `O'rtacha baho: ${x.ortachaBaho !== null ? `${x.ortachaBaho}/10 (${x.bahoSoni} ta)` : "—"}`}
           </span>
 
           {x.plan && (

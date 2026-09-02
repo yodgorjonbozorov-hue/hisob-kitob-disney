@@ -7,11 +7,11 @@ import { parseSomInput } from "@/lib/format";
 import type { KategoriyaDTO, SotuvchiDTO, XodimDTO, XodimKategoriyaDTO } from "./turlar";
 import { SotuvchiTanlash } from "./SotuvchiTanlash";
 import {
-  ZakazXodimlariTanlash,
+  ZakazJamoasiTanlash,
   ijroKategoriyalari,
   tanlovdanRoyxat,
   type ZakazXodimTanlov,
-} from "./ZakazXodimlari";
+} from "./ZakazJamoasi";
 import {
   TolovMaydonlari,
   tolanganHisobla,
@@ -24,17 +24,23 @@ import { ZakazNarxSana } from "./ZakazNarxSana";
 const INPUT =
   "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand";
 
+/** Forma bo'limi sarlavhasi — "SOTUVCHI", "ZAKAZ JAMOASI". */
+function Bolim({ nomi }: { nomi: string }) {
+  return (
+    <div className="flex items-center gap-2 pt-1">
+      <span className="text-2xs uppercase tracking-wide text-faint">{nomi}</span>
+      <span className="flex-1 border-t border-line" aria-hidden="true" />
+    </div>
+  );
+}
+
 /**
- * YANGI ZAKAZ (6-talab): kategoriya, xizmat nomi, mijoz, telefon, sotuvchi,
- * ZAKAZ SANASI (majburiy), narx, to'lov turi, izoh.
- *
- * ZAKAZ SANASI majburiy, chunki doskadagi o'rin aynan shundan hisoblanadi:
- * sana bugun bo'lsa zakaz darhol "Bugungi zakazlar"da, kelajakda bo'lsa
- * "Kutilayotgan zakazlar"da ko'rinadi. Holat tanlovi ATAYLAB olib
- * tashlandi — yangi zakaz har doim kutilayotganlarda tug'iladi.
- *
- * Kategoriya ro'yxati KIRIM modulining kategoriyalari — CRM o'zining
- * alohida ro'yxatini yuritmaydi.
+ * YANGI ZAKAZ: xizmat nomi, mijoz, telefon, narx, ZAKAZ SANASI (majburiy —
+ * doskadagi o'rin shundan hisoblanadi), to'lov, SOTUVCHI (kim oldi) va
+ * ZAKAZ JAMOASI (kim bajaradi). Sotuvchi va jamoa ATAYLAB ikki bo'lim:
+ * sotuvchi — sotuv statistikasi (yutilsa +1 zakaz, +summa), jamoa —
+ * qatnashuv statistikasi (bajarildi/bekor/baho). Jamoa maydonlari
+ * ixtiyoriy va biznes lavozimlaridan dinamik quriladi (7-talab).
  */
 export function BuyurtmaModal({
   kategoriyalar,
@@ -50,9 +56,9 @@ export function BuyurtmaModal({
 }: {
   kategoriyalar: KategoriyaDTO[];
   xodimlar: XodimDTO[];
-  /** Xodim kategoriyalari (Diktor/Dekorator/...) — "Zakazni bajaruvchilar". */
+  /** Xodim lavozimlari (Animator/Shofyor/...) — "Zakaz jamoasi". */
   xodimKategoriyalari: XodimKategoriyaDTO[];
-  /** Sotuvchilar (faol, sotuvchi kategoriyasi a'zolari). */
+  /** Sotuvchilar (faol, sotuvchi lavozimi a'zolari). */
   sotuvchilar: SotuvchiDTO[];
   /** Joriy foydalanuvchining sotuvchi profili — avto-tanlash. */
   ozimSotuvchi: string | null;
@@ -79,18 +85,18 @@ export function BuyurtmaModal({
   const [tolovTuri, setTolovTuri] = useState<PulKanali>("naqd");
   // AVTO-TANLASH: sotuvchi o'z hisobidan kirsa o'zi tanlangan holda ochiladi.
   const [sotuvchiId, setSotuvchiId] = useState(ozimSotuvchi ?? "");
-  const [xodimTanlov, setXodimTanlov] = useState<ZakazXodimTanlov>({});
+  const [jamoa, setJamoa] = useState<ZakazXodimTanlov>({});
   const [xato, setXato] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Sotuvchi maydoni bor bo'lsa mas'ul o'sha tanlovdan chiqadi (server
-  // sinxronlaydi) — ikkita "kim sotdi" maydoni ko'rsatilmaydi.
+  // sinxronlaydi); ESKI "Mas'ul xodim" faqat sotuvchi lavozimsiz biznesda qoladi.
   const sotuvchiSelektorBor = sotuvchilar.length > 0;
+  const ijrochilar = ijroKategoriyalari(xodimKategoriyalari);
 
   const narx = summa ? parseSomInput(summa) : 0;
   // TO'LANGAN SUMMA tanlovdan chiqadi: to'liq — butun narx, qarzga — 0,
-  // qisman — kiritilgan raqam. To'lov holati serverda ham AYNI shu
-  // ikkovidan (narx va to'langan) hisoblanadi.
+  // qisman — kiritilgan raqam. Server ham AYNI shu ikkovidan hisoblaydi.
   const tolanganSumma = tolanganHisobla(tolovTanlov, narx, tolangan ? parseSomInput(tolangan) : 0);
 
   async function saqlash(e: React.FormEvent) {
@@ -129,7 +135,7 @@ export function BuyurtmaModal({
         izoh: izoh || null,
         masulId,
         sotuvchiId: sotuvchiId || null,
-        xodimlar: tanlovdanRoyxat(xodimTanlov),
+        xodimlar: tanlovdanRoyxat(jamoa),
       }),
     });
     setLoading(false);
@@ -165,32 +171,7 @@ export function BuyurtmaModal({
           onKontaktTel={setKontaktTel}
         />
 
-        <SotuvchiTanlash
-          id="bm-sotuvchi"
-          sotuvchilar={sotuvchilar}
-          value={sotuvchiId}
-          onChange={setSotuvchiId}
-          majburiy={sotuvchiMajburiy}
-          ozgartira={sotuvchiOzgartira}
-        />
-
         <ZakazNarxSana summa={summa} onSumma={setSumma} sana={sana} onSana={setSana} bugun={bugun} />
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {/* Sotuvchi kategoriya-selektori bo'lsa mas'ul o'sha yerdan chiqadi. */}
-          {!sotuvchiSelektorBor && (
-            <div className="space-y-1">
-              <label className="block text-xs text-muted" htmlFor="bm-masul">Mas&apos;ul xodim</label>
-              <Select
-                id="bm-masul"
-                value={masulId}
-                onChange={setMasulId}
-                searchable={xodimlar.length > 7}
-                options={xodimlar.map((x) => ({ value: x.id, label: x.ism }))}
-              />
-            </div>
-          )}
-        </div>
 
         <TolovMaydonlari
           tanlov={tolovTanlov}
@@ -203,14 +184,42 @@ export function BuyurtmaModal({
           tolangan={tolanganSumma}
         />
 
-        <ZakazXodimlariTanlash
-          kategoriyalar={ijroKategoriyalari(xodimKategoriyalari)}
-          tanlov={xodimTanlov}
-          onChange={setXodimTanlov}
-        />
+        <Bolim nomi="Sotuvchi" />
+        {sotuvchiSelektorBor ? (
+          <SotuvchiTanlash
+            id="bm-sotuvchi"
+            sotuvchilar={sotuvchilar}
+            value={sotuvchiId}
+            onChange={setSotuvchiId}
+            majburiy={sotuvchiMajburiy}
+            ozgartira={sotuvchiOzgartira}
+          />
+        ) : (
+          <div className="space-y-1">
+            <label className="block text-xs text-muted" htmlFor="bm-masul">Mas&apos;ul xodim</label>
+            <Select
+              id="bm-masul"
+              value={masulId}
+              onChange={setMasulId}
+              searchable={xodimlar.length > 7}
+              options={xodimlar.map((x) => ({ value: x.id, label: x.ism }))}
+            />
+            <p className="text-2xs text-faint">
+              Sotuvchi lavozimi sozlanmagan — Xodimlar → Lavozimlar bo&apos;limida &quot;Sotuvchi&quot;
+              yarating, shunda bu yerda sotuvchi tanlanadi.
+            </p>
+          </div>
+        )}
+
+        {ijrochilar.length > 0 && (
+          <>
+            <Bolim nomi="Zakaz jamoasi" />
+            <ZakazJamoasiTanlash kategoriyalar={ijrochilar} tanlov={jamoa} onChange={setJamoa} />
+          </>
+        )}
 
         <label className="block space-y-1">
-          <span className="text-xs text-muted">Izoh</span>
+          <span className="text-xs text-muted">Qo&apos;shimcha shartlar</span>
           <textarea
             value={izoh}
             onChange={(e) => setIzoh(e.target.value)}

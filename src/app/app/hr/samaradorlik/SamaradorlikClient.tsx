@@ -98,7 +98,11 @@ export function SamaradorlikClient({
                 <Kpi label="Jami bajarilgan ish" qiymat={`${data.kpi.yutilganZakaz} ta`} loading={loading} />
                 <Kpi label="Faol xodimlar" qiymat={`${data.kpi.faolXodim} ta`} loading={loading} />
                 <Kpi label="Eng ko'p bajargan" qiymat={data.kpi.engYaxshi?.ism ?? "—"} loading={loading} />
-                <Kpi label="O'rtacha zakaz/xodim" qiymat={`${data.kpi.ortachaZakaz} ta`} loading={loading} />
+                <Kpi
+                  label="O'rtacha baho"
+                  qiymat={data.kpi.ortachaBaho !== null ? `${data.kpi.ortachaBaho}/10` : "—"}
+                  loading={loading}
+                />
               </>
             )}
           </div>

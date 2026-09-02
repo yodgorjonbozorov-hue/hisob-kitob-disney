@@ -13,7 +13,7 @@ import {
   sotuvchiUserIdTop,
   zakazXodimlariniSaqlash,
   zakazXodimlariniTekshir,
-} from "@/lib/services/xodimKategoriya";
+} from "@/lib/services/zakazJamoasi";
 import {
   avtoSotuvchi,
   sotuvchiKategoriyaIdlari,

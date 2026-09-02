@@ -883,6 +883,8 @@ CREATE TABLE "EmployeeCategory" (
     "turi" TEXT NOT NULL DEFAULT 'ijrochi',
     "aktiv" BOOLEAN NOT NULL DEFAULT true,
     "tartib" INTEGER NOT NULL DEFAULT 0,
+    "zakazgaBiriktiriladi" BOOLEAN NOT NULL DEFAULT true,
+    "kopXodim" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -907,9 +909,27 @@ CREATE TABLE "DealEmployee" (
     "dealId" TEXT NOT NULL,
     "categoryId" TEXT NOT NULL,
     "employeeId" TEXT NOT NULL,
+    "baho" INTEGER,
+    "bahoIzoh" TEXT,
+    "bahoAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "DealEmployee_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "DealFeedback" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "dealId" TEXT NOT NULL,
+    "servisBahosi" INTEGER,
+    "etiroz" TEXT,
+    "yaxshilash" TEXT,
+    "userId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "DealFeedback_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -1837,6 +1857,12 @@ CREATE INDEX "DealEmployee_employeeId_idx" ON "DealEmployee"("employeeId");
 CREATE UNIQUE INDEX "DealEmployee_dealId_categoryId_employeeId_key" ON "DealEmployee"("dealId", "categoryId", "employeeId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "DealFeedback_dealId_key" ON "DealFeedback"("dealId");
+
+-- CreateIndex
+CREATE INDEX "DealFeedback_businessId_createdAt_idx" ON "DealFeedback"("businessId", "createdAt");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "HrSetting_businessId_key" ON "HrSetting"("businessId");
 
 -- CreateIndex
@@ -2342,6 +2368,12 @@ ALTER TABLE "DealEmployee" ADD CONSTRAINT "DealEmployee_categoryId_fkey" FOREIGN
 
 -- AddForeignKey
 ALTER TABLE "DealEmployee" ADD CONSTRAINT "DealEmployee_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "DealFeedback" ADD CONSTRAINT "DealFeedback_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "DealFeedback" ADD CONSTRAINT "DealFeedback_dealId_fkey" FOREIGN KEY ("dealId") REFERENCES "Deal"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "HrSetting" ADD CONSTRAINT "HrSetting_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;

@@ -13,8 +13,11 @@ import {
 } from "@/lib/crm/pipeline";
 import { YakunlashTasdiq } from "./YakunlashTasdiq";
 import { BuyurtmaTahrir } from "./BuyurtmaTahrir";
-import { ZakazXodimlariBlok, ijroKategoriyalari } from "./ZakazXodimlari";
+import { ZakazXodimlariBlok } from "./ZakazXodimlari";
+import { ijroKategoriyalari } from "./ZakazJamoasi";
+import { ZakazBahoBlok } from "./ZakazBaho";
 import { ZakazSotuvchisiBlok } from "./ZakazSotuvchisi";
+import type { ZakazBahoDTO } from "@/lib/services/zakazBaho";
 import { ZakazMoliya } from "./ZakazMoliya";
 import { ZakazTarix, type ActivityDTO } from "./ZakazTarix";
 import type {
@@ -49,6 +52,9 @@ export function BuyurtmaSheet({
   xodimKategoriyalari,
   sotuvchilar,
   sotuvchiOzgartira,
+  jamoaHuquqi,
+  bahoYozaOladi,
+  meId,
   onUstunga,
   onYoqotildi,
   onTahrirlandi,
@@ -65,6 +71,11 @@ export function BuyurtmaSheet({
   sotuvchilar: SotuvchiDTO[];
   /** `crm.sotuvchi` huquqi (27-talab). */
   sotuvchiOzgartira: boolean;
+  /** `crm.jamoa` huquqi — mavjud zakaz jamoasini o'zgartirish. */
+  jamoaHuquqi: boolean;
+  /** `crm.baho` huquqi — sifat nazorati. */
+  bahoYozaOladi: boolean;
+  meId: string;
   onUstunga: (u: Ustun) => void;
   onYoqotildi: () => void;
   onTahrirlandi: (yangi: {
@@ -80,8 +91,12 @@ export function BuyurtmaSheet({
   const [activities, setActivities] = useState<ActivityDTO[] | null>(null);
   const [zakazXodimlar, setZakazXodimlar] = useState<ZakazXodimDTO[] | null>(null);
   const [sotuvchi, setSotuvchi] = useState<ZakazSotuvchiDTO | null>(b.sotuvchi);
+  const [baho, setBaho] = useState<ZakazBahoDTO | null>(null);
   const [tasdiq, setTasdiq] = useState(false);
   const kirimBor = Boolean(b.transactionId);
+  // Jamoani o'zgartirish (37-talab): huquq yoki zakazning o'z mas'uli
+  // (yakunlangunga qadar) — server ham AYNI qoidani tekshiradi.
+  const jamoaOzgartira = jamoaHuquqi || (b.masulId === meId && b.holat !== "YUTILDI");
   const moliyaYozilgan = Boolean(b.transactionId || b.debtId);
   const kechikkan = kechikkanKun(b.holat, b.sana, bugun);
   const tolov = tolovHolati(b.summa, b.tolangan);
@@ -93,6 +108,7 @@ export function BuyurtmaSheet({
       setActivities(data.activities ?? []);
       setZakazXodimlar(data.xodimlar ?? []);
       setSotuvchi(data.sotuvchi ?? null);
+      setBaho(data.baho ?? null);
     }
   }, [b.id]);
 
@@ -133,7 +149,7 @@ export function BuyurtmaSheet({
             {b.summa > 0 ? formatMoney(b.summa) : "Narx kiritilmagan"}
             {b.sana ? ` · ${formatDateUZ(new Date(b.sana))}` : ""}
           </p>
-          {b.masulIsm && <p className="text-xs text-faint">Sotuvchi: {b.masulIsm}</p>}
+          {b.masulIsm && !sotuvchi && <p className="text-xs text-faint">Mas&apos;ul: {b.masulIsm}</p>}
           <div className="flex gap-1.5 flex-wrap pt-1">
             <Badge tone="neutral">{USTUN_NOMI[ustun]}</Badge>
             <Badge tone={tolov === "TOLANGAN" ? "kirim" : tolov === "QISMAN" ? "warning" : "chiqim"}>
@@ -184,10 +200,11 @@ export function BuyurtmaSheet({
           }}
         />
 
-        {/* Zakazni bajaruvchilar: ro'yxat + kirim yozilmaguncha tahrir. */}
+        {/* Zakaz jamoasi (33-talab): lavozim bo'yicha guruhlangan + tahrir. */}
         <ZakazXodimlariBlok
           dealId={b.id}
           kirimBor={kirimBor}
+          ozgartira={jamoaOzgartira}
           kategoriyalar={ijroKategoriyalari(xodimKategoriyalari)}
           xodimlar={zakazXodimlar}
           onSaqlandi={() => {
@@ -195,6 +212,11 @@ export function BuyurtmaSheet({
             router.refresh();
           }}
         />
+
+        {/* Sifat nazorati (24/25-talab) — faqat yakunlangan zakazda. */}
+        {b.holat === "YUTILDI" && (
+          <ZakazBahoBlok dealId={b.id} baho={baho} yozaOladi={bahoYozaOladi} onSaqlandi={() => void yuklash()} />
+        )}
 
         <ZakazMoliya
           b={b}

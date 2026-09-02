@@ -64,6 +64,10 @@ export interface KategoriyaXodimStatDTO {
   ortacha: number;
   /** Konversiya: yutilgan / jami, % (butun). */
   konversiya: number;
+  /** O'rtacha baho (1..10, bir xona kasr) — baholangan biriktiruvlardan; null — baho yo'q. */
+  ortachaBaho: number | null;
+  /** Nechta biriktiruv baholangan. */
+  bahoSoni: number;
   /** Davr oxiri oyining plani (mavjud EmployeePlan dvigateli bilan hisoblangan). */
   plan: PlanDTO | null;
   /** Reyting o'rni (1 dan boshlab). */
@@ -87,6 +91,8 @@ export interface KategoriyaKpiDTO {
   faolXodim: number;
   /** Ijrochi KPI: bajarilgan ishga ega xodimlar bo'yicha o'rtacha zakaz. */
   ortachaZakaz: number;
+  /** Lavozim bo'yicha o'rtacha baho (null — hali baholanmagan). */
+  ortachaBaho: number | null;
   engYaxshi: { employeeId: string; ism: string } | null;
 }
 
@@ -141,6 +147,13 @@ interface XodimJam {
   jarayondaSumma: number;
   summa: number;
   tolanganSotuv: number;
+  bahoYigindi: number;
+  bahoSoni: number;
+}
+
+/** O'rtacha baho — bir xona kasr; baho bo'lmasa null. */
+export function ortachaBahoHisobla(yigindi: number, soni: number): number | null {
+  return soni > 0 ? Math.round((yigindi / soni) * 10) / 10 : null;
 }
 
 const BOSH_JAM: XodimJam = {
@@ -156,6 +169,8 @@ const BOSH_JAM: XodimJam = {
   jarayondaSumma: 0,
   summa: 0,
   tolanganSotuv: 0,
+  bahoYigindi: 0,
+  bahoSoni: 0,
 };
 
 /**
@@ -169,10 +184,15 @@ const BOSH_JAM: XodimJam = {
 function jamgaQosh(
   m: XodimJam,
   deal: { holat: string; summa: number; tolangan: number; sana: Date | null },
-  bugun: string
+  bugun: string,
+  baho: number | null = null
 ): XodimJam {
   m.jami += 1;
   m.jamiSumma += deal.summa;
+  if (baho !== null) {
+    m.bahoYigindi += baho;
+    m.bahoSoni += 1;
+  }
   const ustun = zakazUstuni(deal.holat, deal.sana ? utcDateToDateOnlyString(deal.sana) : null, bugun);
   if (ustun === "YUTILDI") {
     m.yutilgan += 1;
@@ -226,6 +246,7 @@ export async function getKategoriyaAnalitika(params: {
       where: { businessId, categoryId, deal: { deletedAt: null, ...dealDavrWhere(from, to) } },
       select: {
         employeeId: true,
+        baho: true,
         employee: { select: { id: true, ism: true, rasmUrl: true, isActive: true } },
         deal: { select: { summa: true, tolangan: true, holat: true, sana: true } },
       },
@@ -265,7 +286,7 @@ export async function getKategoriyaAnalitika(params: {
   const jamlar = new Map<string, XodimJam>();
   for (const q of qatnashuvlar) {
     const m = jamlar.get(q.employeeId) ?? { ...BOSH_JAM };
-    jamlar.set(q.employeeId, jamgaQosh(m, q.deal, bugun));
+    jamlar.set(q.employeeId, jamgaQosh(m, q.deal, bugun, q.baho));
   }
 
   const sotuvchimi = kategoriya.turi === "sotuvchi";
@@ -292,6 +313,8 @@ export async function getKategoriyaAnalitika(params: {
       tolanganSotuv: m.tolanganSotuv,
       ortacha: m.yutilgan > 0 ? Math.round(m.summa / m.yutilgan) : 0,
       konversiya: m.jami > 0 ? Math.round((m.yutilgan / m.jami) * 100) : 0,
+      ortachaBaho: ortachaBahoHisobla(m.bahoYigindi, m.bahoSoni),
+      bahoSoni: m.bahoSoni,
       plan: planMap.get(employeeId) ?? null,
       orin: 0,
     };
@@ -320,6 +343,10 @@ export async function getKategoriyaAnalitika(params: {
     konversiya: jamiZakaz > 0 ? Math.round((yutilganZakaz / jamiZakaz) * 100) : 0,
     faolXodim: qatorlar.filter((q) => q.azo && q.isActive).length,
     ortachaZakaz: qatnashganlar > 0 ? Math.round(yutilganZakaz / qatnashganlar) : 0,
+    ortachaBaho: ortachaBahoHisobla(
+      [...jamlar.values()].reduce((s2, j) => s2 + j.bahoYigindi, 0),
+      [...jamlar.values()].reduce((s2, j) => s2 + j.bahoSoni, 0)
+    ),
     engYaxshi: birinchi ? { employeeId: birinchi.employeeId, ism: birinchi.ism } : null,
   };
 
@@ -346,6 +373,8 @@ export interface XodimZakazQatoriDTO {
   kategoriyaNomi: string;
   /** Kirim yozilganmi (havola ko'rsatish uchun). */
   kirimBor: boolean;
+  /** Shu biriktiruvga berilgan baho (1..10) yoki null. */
+  baho: number | null;
 }
 
 export interface XodimKategoriyaDetalDTO {
@@ -375,6 +404,8 @@ export interface XodimKategoriyaDetalDTO {
     tolanganSotuv: number;
     ortacha: number;
     konversiya: number;
+    ortachaBaho: number | null;
+    bahoSoni: number;
   };
   plan: PlanDTO | null;
   /** Kategoriya tanlangan bo'lsa — reytingdagi o'rin (aks holda null). */
@@ -419,6 +450,7 @@ export async function getXodimKategoriyaDetal(params: {
   const rows = await prisma.dealEmployee.findMany({
     where,
     select: {
+      baho: true,
       deal: {
         select: {
           id: true,
@@ -442,7 +474,7 @@ export async function getXodimKategoriyaDetal(params: {
   const bugunKuni = todayTashkentDateOnlyString();
   const jam = { ...BOSH_JAM };
   const zakazlar: XodimZakazQatoriDTO[] = rows.map((r) => {
-    jamgaQosh(jam, r.deal, bugunKuni);
+    jamgaQosh(jam, r.deal, bugunKuni, r.baho);
     const sana = r.deal.sana ? utcDateToDateOnlyString(r.deal.sana) : null;
     return {
       dealId: r.deal.id,
@@ -455,12 +487,14 @@ export async function getXodimKategoriyaDetal(params: {
       stageTuri: r.deal.stage.turi,
       kategoriyaNomi: r.category.nomi,
       kirimBor: Boolean(r.deal.transactionId),
+      baho: r.baho,
     };
   });
   const stat = {
     ...jam,
     ortacha: jam.yutilgan > 0 ? Math.round(jam.summa / jam.yutilgan) : 0,
     konversiya: jam.jami > 0 ? Math.round((jam.yutilgan / jam.jami) * 100) : 0,
+    ortachaBaho: ortachaBahoHisobla(jam.bahoYigindi, jam.bahoSoni),
   };
 
   // Sana bo'yicha teskari tartib (createdAt bo'yicha kelgan, sana ustunroq).

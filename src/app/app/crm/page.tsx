@@ -75,6 +75,8 @@ export default async function CrmPage({
       ozim,
       sotuvchiMajburiy,
       sotuvchiOzgartira,
+      jamoaHuquqi,
+      bahoYozaOladi,
     ] = await Promise.all([
       getBoard(businessId, filtr),
       // KATEGORIYA MANBAI BITTA: Kirim modulining kategoriyalari.
@@ -101,6 +103,8 @@ export default async function CrmPage({
       avtoSotuvchi(businessId, session.userId),
       sotuvchiMajburiymi(businessId),
       hasPermission(session.userId, "crm.sotuvchi"),
+      hasPermission(session.userId, "crm.jamoa"),
+      hasPermission(session.userId, "crm.baho"),
     ]);
 
     const ismlar = new Map(xodimlar.map((x) => [x.id, x.ism]));
@@ -154,12 +158,15 @@ export default async function CrmPage({
             id: k.id,
             nomi: k.nomi,
             turi: k.turi,
+            kopXodim: k.kopXodim,
             azolar: k.azolar.map((a) => ({ id: a.id, ism: a.ism, userId: a.userId })),
           }))}
           sotuvchilar={sotuvchilar}
           ozimSotuvchi={ozim?.id ?? null}
           sotuvchiMajburiy={sotuvchiMajburiy}
           sotuvchiOzgartira={sotuvchiOzgartira}
+          jamoaHuquqi={jamoaHuquqi}
+          bahoYozaOladi={bahoYozaOladi}
           meId={session.userId}
           bugun={bugun}
           buyurtmalar={zakazlar.map((d) => ({

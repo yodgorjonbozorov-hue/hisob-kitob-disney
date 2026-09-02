@@ -35,6 +35,8 @@ export function CrmClient({
   ozimSotuvchi,
   sotuvchiMajburiy,
   sotuvchiOzgartira,
+  jamoaHuquqi,
+  bahoYozaOladi,
   filtr,
   meId,
   bugun,
@@ -50,6 +52,10 @@ export function CrmClient({
   ozimSotuvchi: string | null;
   sotuvchiMajburiy: boolean;
   sotuvchiOzgartira: boolean;
+  /** `crm.jamoa` — mavjud zakaz jamoasini o'zgartirish huquqi. */
+  jamoaHuquqi: boolean;
+  /** `crm.baho` — sifat nazorati huquqi. */
+  bahoYozaOladi: boolean;
   filtr: {
     from: string;
     to: string;
@@ -191,6 +197,9 @@ export function CrmClient({
           xodimKategoriyalari={xodimKategoriyalari}
           sotuvchilar={sotuvchilar}
           sotuvchiOzgartira={sotuvchiOzgartira}
+          jamoaHuquqi={jamoaHuquqi}
+          bahoYozaOladi={bahoYozaOladi}
+          meId={meId}
           onUstunga={(u) => ustungaKochirish(tanlangan.id, u)}
           onYoqotildi={() => yoqotildi(tanlangan.id)}
           onTahrirlandi={(yangi) => {

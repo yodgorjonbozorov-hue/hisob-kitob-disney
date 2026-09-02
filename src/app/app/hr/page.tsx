@@ -6,6 +6,9 @@ import { isManager } from "@/lib/auth/roles";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import { listXodimlar, listOyliklar, getHrStats } from "@/lib/queries/hr";
 import { getXodimlarPerformance } from "@/lib/queries/xodimPlan";
+import { getXodimlarJamoaKpi } from "@/lib/queries/xodimJamoaKpi";
+import { listKategoriyaTablari } from "@/lib/queries/kategoriyaAnalitika";
+import { oyOraligi } from "@/lib/xodimDavr";
 import { currentMonthString } from "@/lib/date";
 import { LinkButton } from "@/components/ui/LinkButton";
 import { HrClient } from "./HrClient";
@@ -37,11 +40,14 @@ export default async function HrPage({
       ? searchParams.oy!
       : currentMonthString();
 
-    const [xodimlar, oyliklar, stats, performance] = await Promise.all([
+    const [xodimlar, oyliklar, stats, performance, jamoa, lavozimlar] = await Promise.all([
       listXodimlar(businessId),
       listOyliklar(businessId, oy),
       getHrStats(businessId, oy),
       getXodimlarPerformance(businessId, oy),
+      // Lavozim kesimidagi oy KPI'si — barcha xodimlar bitta so'rovda (39-talab).
+      getXodimlarJamoaKpi(businessId, oyOraligi(oy)),
+      listKategoriyaTablari(businessId),
     ]);
 
     return (
@@ -65,7 +71,7 @@ export default async function HrPage({
               Samaradorlik
             </LinkButton>
             <LinkButton href="/app/hr/kategoriyalar" variant="secondary" size="sm">
-              Kategoriyalar
+              Lavozimlar
             </LinkButton>
           </div>
         </div>
@@ -74,6 +80,8 @@ export default async function HrPage({
           oyliklar={oyliklar}
           stats={stats}
           performance={performance}
+          jamoaKpi={Object.fromEntries(jamoa)}
+          lavozimlar={lavozimlar.map((l) => ({ id: l.id, nomi: l.nomi }))}
           oy={oy}
           initialTab="xodimlar"
         />

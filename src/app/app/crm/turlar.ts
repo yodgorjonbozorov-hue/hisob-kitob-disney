@@ -25,12 +25,14 @@ export interface XodimAzoDTO {
   userId: string | null;
 }
 
-/** Xodim kategoriyasi (Sotuvchi/Diktor/...) — faol a'zolari bilan. */
+/** Xodim lavozimi (Sotuvchi/Animator/Videochi/...) — faol a'zolari bilan. */
 export interface XodimKategoriyaDTO {
   id: string;
   nomi: string;
   /** "sotuvchi" | "ijrochi" — sotuvchi selektorida joriy xodim oldindan tanlanadi. */
   turi: string;
+  /** Bir zakazga bir nechta xodim (Videochilar, Bezakchilar). */
+  kopXodim: boolean;
   azolar: XodimAzoDTO[];
 }
 
@@ -65,6 +67,9 @@ export interface ZakazXodimDTO {
   employeeId: string;
   ism: string;
   rasmUrl: string | null;
+  isActive: boolean;
+  /** Sifat nazorati bahosi (1..10) yoki null. */
+  baho: number | null;
 }
 
 export interface BuyurtmaDTO {

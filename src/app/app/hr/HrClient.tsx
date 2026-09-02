@@ -11,6 +11,7 @@ import { STAVKA_NOMI, type StavkaTuri } from "@/lib/validation/hr";
 import { shiftMonthString } from "@/lib/date";
 import type { XodimDTO, OylikDTO, HrStats } from "@/lib/queries/hr";
 import type { XodimlarPerformanceDTO } from "@/lib/queries/xodimPlan";
+import type { XodimJamoaKpiDTO } from "@/lib/queries/xodimJamoaKpi";
 import { XodimModal } from "./XodimModal";
 import { PerformancePanel } from "./PerformancePanel";
 import { OylikModal, AvansModal } from "./OylikModal";
@@ -31,6 +32,8 @@ export function HrClient({
   oyliklar,
   stats,
   performance,
+  jamoaKpi = {},
+  lavozimlar = [],
   oy,
   initialTab = "oylik",
   basePath = "/app/hr",
@@ -39,6 +42,9 @@ export function HrClient({
   oyliklar: OylikDTO[];
   stats: HrStats;
   performance: XodimlarPerformanceDTO;
+  /** Lavozim kesimidagi oy KPI'si (kalit: Employee.id) va filtr lavozimlari. */
+  jamoaKpi?: Record<string, XodimJamoaKpiDTO>;
+  lavozimlar?: { id: string; nomi: string }[];
   oy: string;
   initialTab?: "oylik" | "xodimlar";
   basePath?: string;
@@ -97,24 +103,14 @@ export function HrClient({
 
       <div className="flex flex-wrap gap-2 justify-between">
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant={tab === "oylik" ? "primary" : "secondary"} onClick={() => setTab("oylik")}>
-            Oylik vedomosti
-          </Button>
-          <Button size="sm" variant={tab === "xodimlar" ? "primary" : "secondary"} onClick={() => setTab("xodimlar")}>
-            Xodimlar ({xodimlar.length})
-          </Button>
+          <Button size="sm" variant={tab === "oylik" ? "primary" : "secondary"} onClick={() => setTab("oylik")}>Oylik vedomosti</Button>
+          <Button size="sm" variant={tab === "xodimlar" ? "primary" : "secondary"} onClick={() => setTab("xodimlar")}>Xodimlar ({xodimlar.length})</Button>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
-          <Button size="sm" variant="ghost" onClick={() => oyniOzgart(-1)}>
-            ←
-          </Button>
+          <Button size="sm" variant="ghost" onClick={() => oyniOzgart(-1)}>←</Button>
           <span className="text-sm text-fg tnum">{oy}</span>
-          <Button size="sm" variant="ghost" onClick={() => oyniOzgart(1)}>
-            →
-          </Button>
-          <Button size="sm" onClick={() => setXodimModal("yangi")}>
-            Yangi xodim
-          </Button>
+          <Button size="sm" variant="ghost" onClick={() => oyniOzgart(1)}>→</Button>
+          <Button size="sm" onClick={() => setXodimModal("yangi")}>Yangi xodim</Button>
         </div>
       </div>
 
@@ -124,6 +120,8 @@ export function HrClient({
         <PerformancePanel
           performance={performance}
           xodimlar={xodimlar}
+          jamoaKpi={jamoaKpi}
+          lavozimlar={lavozimlar}
           onTahrir={(x) => setXodimModal(x)}
           onYangi={() => setXodimModal("yangi")}
         />
@@ -189,18 +187,12 @@ export function HrClient({
                         <div className="flex flex-wrap gap-1 justify-end">
                           {o.holat !== "tolangan" && (
                             <>
-                              <Button size="sm" variant="secondary" onClick={() => setOylikModal(o)}>
-                                Hisoblash
-                              </Button>
-                              <Button size="sm" variant="ghost" onClick={() => setAvansModal(o)}>
-                                Avans
-                              </Button>
+                              <Button size="sm" variant="secondary" onClick={() => setOylikModal(o)}>Hisoblash</Button>
+                              <Button size="sm" variant="ghost" onClick={() => setAvansModal(o)}>Avans</Button>
                             </>
                           )}
                           {o.holat === "qoralama" && o.id && o.tolanadigan > 0 && (
-                            <Button size="sm" loading={amal === o.id} onClick={() => tola(o.id!)}>
-                              To&apos;lash
-                            </Button>
+                            <Button size="sm" loading={amal === o.id} onClick={() => tola(o.id!)}>To&apos;lash</Button>
                           )}
                         </div>
                       </td>
