@@ -96,6 +96,8 @@ export const ZAXIRA_JADVALLARI = [
   "employeeCategory",
   "employeeCategoryMember",
   "dealEmployee",
+  // Zakaz sifat nazorati — `deal`dan KEYIN (dealId FK).
+  "dealFeedback",
   "attendance",
   // `attendanceSelfie` `attendanceCheck`dan OLDIN — Check.selfieId unga FK.
   "attendanceSelfie",

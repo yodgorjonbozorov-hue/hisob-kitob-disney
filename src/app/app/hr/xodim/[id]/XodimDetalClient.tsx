@@ -19,18 +19,22 @@ import { PlanProgress } from "../../PlanProgress";
 import { PlanModal } from "../../PlanModal";
 import type { XodimSiyosatDTO } from "./SiyosatKarta";
 import type { SotuvchiKpiDTO } from "@/lib/queries/sotuvchiKpi";
+import type { XodimJamoaKpiDTO } from "@/lib/queries/xodimJamoaKpi";
+import type { XodimZakazQatoriDTO } from "@/lib/queries/kategoriyaAnalitika";
 import { UmumiyTab } from "./UmumiyTab";
+import { JamoaTab } from "./JamoaTab";
 import { SotuvTab } from "./SotuvTab";
 import { ZakazlarTab } from "./ZakazlarTab";
 import { VazifalarTab } from "./VazifalarTab";
 import { DavomatTab } from "./DavomatTab";
 import { OylikTab } from "./OylikTab";
 
-const TABLAR = ["umumiy", "sotuv", "zakazlar", "vazifalar", "davomat", "oylik"] as const;
+const TABLAR = ["umumiy", "jamoa", "sotuv", "zakazlar", "vazifalar", "davomat", "oylik"] as const;
 type Tab = (typeof TABLAR)[number];
 
 const TAB_NOMI: Record<Tab, string> = {
   umumiy: "Umumiy",
+  jamoa: "Lavozim KPI",
   sotuv: "Sotuv",
   zakazlar: "Zakazlar",
   vazifalar: "Vazifalar",
@@ -57,6 +61,8 @@ export function XodimDetalClient({
   oyliklar,
   zakazlar,
   sotuvKpi,
+  jamoa,
+  jamoaZakazlar,
   tarix,
   jarimalar,
   bonuslar,
@@ -73,6 +79,10 @@ export function XodimDetalClient({
   zakazlar: XodimZakazDTO[];
   /** CRM sotuvchi KPI'si — xodim sotuvchi bo'lmasa null (24-talab). */
   sotuvKpi: SotuvchiKpiDTO | null;
+  /** Lavozim kesimidagi oy KPI'si (null — lavozimsiz xodim). */
+  jamoa: XodimJamoaKpiDTO | null;
+  /** Oy ichidagi zakaz qatnashuvlari (CRM). */
+  jamoaZakazlar: XodimZakazQatoriDTO[];
   tarix: TarixYozuvDTO[];
   jarimalar: JarimaDTO[];
   bonuslar: BonusDTO[];
@@ -111,7 +121,7 @@ export function XodimDetalClient({
               {xodim.ism} <Badge tone={holatBelgi.tone}>{holatBelgi.matn}</Badge>
             </h1>
             <p className="text-sm text-muted mt-0.5">
-              {xodim.lavozim ?? "—"}
+              {jamoa?.lavozimlar.length ? jamoa.lavozimlar.map((l) => l.nomi).join(" · ") : xodim.lavozim ?? "—"}
               {xodim.tel && ` · ${xodim.tel}`}
             </p>
           </div>
@@ -159,7 +169,7 @@ export function XodimDetalClient({
 
       <div className="flex flex-wrap gap-2">
         {/* "Sotuv" tabi faqat sotuvchi kategoriyasidagi xodimda ko'rinadi. */}
-        {TABLAR.filter((t) => t !== "sotuv" || sotuvKpi).map((t) => (
+        {TABLAR.filter((t) => (t !== "sotuv" || sotuvKpi) && (t !== "jamoa" || jamoa)).map((t) => (
           <Button
             key={t}
             size="sm"
@@ -174,6 +184,7 @@ export function XodimDetalClient({
       {tab === "umumiy" && (
         <UmumiyTab performance={performance} planTarixi={planTarixi} vazifalar={vazifalar} />
       )}
+      {tab === "jamoa" && <JamoaTab jamoa={jamoa} zakazlar={jamoaZakazlar} oy={oy} />}
       {tab === "sotuv" && <SotuvTab kpi={sotuvKpi} employeeId={xodim.id} oy={oy} />}
       {tab === "zakazlar" && <ZakazlarTab zakazlar={zakazlar} userIdBor={Boolean(xodim.userId)} />}
       {tab === "vazifalar" && (

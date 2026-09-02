@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import type { XodimlarPerformanceDTO, XodimPerformanceDTO } from "@/lib/queries/xodimPlan";
+import type { XodimJamoaKpiDTO } from "@/lib/queries/xodimJamoaKpi";
 import type { XodimDTO } from "@/lib/queries/hr";
 import { XodimKarta } from "./XodimKarta";
 import { PlanModal } from "./PlanModal";
@@ -41,22 +42,32 @@ function saralash(kalit: SortKalit) {
 export function PerformancePanel({
   performance,
   xodimlar,
+  jamoaKpi,
+  lavozimlar,
   onTahrir,
   onYangi,
 }: {
   performance: XodimlarPerformanceDTO;
   xodimlar: XodimDTO[];
+  /** Lavozim kesimidagi oy KPI'si (kalit: Employee.id). */
+  jamoaKpi: Record<string, XodimJamoaKpiDTO>;
+  /** Faol lavozimlar — filtr tugmalari (30-talab, dinamik). */
+  lavozimlar: { id: string; nomi: string }[];
   onTahrir: (x: XodimDTO) => void;
   onYangi: () => void;
 }) {
   const router = useRouter();
   const [sort, setSort] = useState<SortKalit>("foiz");
+  const [lavozimId, setLavozimId] = useState("");
   const [planModal, setPlanModal] = useState<XodimPerformanceDTO | null>(null);
   const d = performance.dashboard;
 
   const saralangan = useMemo(
-    () => [...performance.xodimlar].sort(saralash(sort)),
-    [performance.xodimlar, sort]
+    () =>
+      [...performance.xodimlar]
+        .filter((x) => !lavozimId || jamoaKpi[x.id]?.lavozimlar.some((l) => l.categoryId === lavozimId))
+        .sort(saralash(sort)),
+    [performance.xodimlar, sort, lavozimId, jamoaKpi]
   );
 
   // Reyting o'rni — plan foizi bo'yicha (faqat plani bor faollar raqamlanadi).
@@ -113,6 +124,26 @@ export function PerformancePanel({
         </Card>
       </div>
 
+      {/* LAVOZIM FILTRI (30-talab) — biznes lavozimlaridan dinamik. */}
+      {lavozimlar.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+          {[{ id: "", nomi: "Barchasi" }, ...lavozimlar].map((l) => (
+            <button
+              key={l.id}
+              type="button"
+              onClick={() => setLavozimId(l.id)}
+              className={`shrink-0 px-3.5 py-2 rounded-xl text-sm font-medium border transition ${
+                l.id === lavozimId
+                  ? "bg-brand text-white border-transparent"
+                  : "border-line bg-surface text-muted hover:border-brand/50"
+              }`}
+            >
+              {l.nomi}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2 items-center">
         <span className="text-2xs text-muted">Saralash:</span>
         {(Object.keys(SORT_NOMI) as SortKalit[]).map((k) => (
@@ -127,11 +158,15 @@ export function PerformancePanel({
         ))}
       </div>
 
+      {saralangan.length === 0 && (
+        <p className="text-sm text-muted">Bu lavozimda xodim yo&apos;q.</p>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {saralangan.map((x) => (
           <XodimKarta
             key={x.id}
             xodim={x}
+            jamoa={jamoaKpi[x.id] ?? null}
             orin={orinlar.get(x.id) ?? null}
             onPlan={() => setPlanModal(x)}
             onTahrir={() => {

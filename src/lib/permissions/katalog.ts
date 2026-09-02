@@ -46,6 +46,14 @@ export const HUQUQLAR: Huquq[] = [
   // Usiz ham sotuvchi zakaz yarata oladi — lekin faqat O'Z nomiga
   // (sotuvni boshqa xodimga yozib qo'yish boshqaruvchi qarori).
   { code: "crm.sotuvchi", label: "Zakaz sotuvchisini tanlash/o'zgartirish", guruh: "CRM" },
+  // Zakaz JAMOASI (animator, shofyor, videochi...) — YARATISHDA har kim
+  // o'z zakaziga jamoani yozadi; MAVJUD zakazning jamoasini o'zgartirish
+  // esa shu huquq bilan (yoki zakaz o'zining mas'uli bo'lsa, yakunlangunga
+  // qadar). Aks holda oddiy xodim boshqalarning biriktiruvini o'zgartirib
+  // statistikani buzishi mumkin edi.
+  { code: "crm.jamoa", label: "Zakaz jamoasini o'zgartirish", guruh: "CRM" },
+  // Sifat nazorati: servis bahosi, xodim bahosi, mijoz e'tirozi.
+  { code: "crm.baho", label: "Zakaz sifatini baholash", guruh: "CRM" },
   // Xodimlar KPI / ball / oylik
   { code: "kpi.korish", label: "Xodimlar KPI va oyligini ko'rish", guruh: "Xodimlar KPI" },
   { code: "kpi.ball", label: "Ball ayirish va qaytarish", guruh: "Xodimlar KPI" },

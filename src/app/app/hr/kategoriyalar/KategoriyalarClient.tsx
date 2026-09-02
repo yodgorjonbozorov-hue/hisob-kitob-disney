@@ -60,9 +60,9 @@ export function KategoriyalarClient({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-muted">{kategoriyalar.length} ta kategoriya</p>
+        <p className="text-sm text-muted">{kategoriyalar.length} ta lavozim</p>
         <Button size="sm" onClick={() => setModal("yangi")}>
-          Yangi kategoriya
+          Yangi lavozim
         </Button>
       </div>
 
@@ -71,9 +71,9 @@ export function KategoriyalarClient({
       {kategoriyalar.length === 0 ? (
         <EmptyState
           icon="🏷️"
-          title="Hali kategoriya yo'q"
-          description="Masalan: Sotuvchi, Diktor, Dekoratsiyachi, Videochi, Shofer. Har biznes o'z ro'yxatini tuzadi."
-          action={<Button onClick={() => setModal("yangi")}>Kategoriya yaratish</Button>}
+          title="Hali lavozim yo'q"
+          description="Masalan: Sotuvchi, Animator, Shofyor, Diktor, Videochi, Bezakchi, Dizayner. Har biznes o'z ro'yxatini tuzadi."
+          action={<Button onClick={() => setModal("yangi")}>Lavozim yaratish</Button>}
         />
       ) : (
         <div className="space-y-3">
@@ -105,6 +105,8 @@ export function KategoriyalarClient({
                     <Badge tone={k.turi === "sotuvchi" ? "kirim" : "neutral"}>
                       {k.turi === "sotuvchi" ? "Sotuv KPI" : "Ijro KPI"}
                     </Badge>
+                    {k.kopXodim && <Badge tone="info">Bir nechta xodim</Badge>}
+                    {!k.zakazgaBiriktiriladi && <Badge tone="warning">Zakazga biriktirilmaydi</Badge>}
                     {!k.aktiv && <Badge tone="chiqim">Noaktiv</Badge>}
                   </div>
                   <p className="text-xs text-muted">

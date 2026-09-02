@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
-import type { KategoriyaCreateInput, KategoriyaPatchInput, ZakazXodimInput } from "@/lib/validation/xodimKategoriya";
+import type { KategoriyaCreateInput, KategoriyaPatchInput } from "@/lib/validation/xodimKategoriya";
 
 /**
  * XODIM KATEGORIYALARI (yo'nalishlar) va zakaz-xodim biriktiruvi xizmati.
@@ -28,6 +28,10 @@ export interface KategoriyaDTO {
   turi: string;
   aktiv: boolean;
   tartib: number;
+  /** Zakaz formasida chiqadimi. */
+  zakazgaBiriktiriladi: boolean;
+  /** Bir zakazga bir nechta xodim (multi-select). */
+  kopXodim: boolean;
   azolar: KategoriyaAzoDTO[];
 }
 
@@ -50,6 +54,8 @@ export async function listKategoriyalar(businessId: string): Promise<KategoriyaD
     turi: k.turi,
     aktiv: k.aktiv,
     tartib: k.tartib,
+    zakazgaBiriktiriladi: k.zakazgaBiriktiriladi,
+    kopXodim: k.kopXodim,
     azolar: k.azolar
       .filter((a) => !a.employee.deletedAt)
       .map((a) => ({
@@ -64,13 +70,15 @@ export async function listKategoriyalar(businessId: string): Promise<KategoriyaD
 }
 
 /**
- * CRM "Yangi zakaz" formasi uchun: FAOL kategoriyalar, har birida FAOL
- * a'zolar. Bo'sh kategoriya ham qaytadi (selektor "Tanlanmagan" ko'rsatadi).
+ * CRM "Yangi zakaz" formasi uchun: FAOL va zakazga biriktiriladigan
+ * lavozimlar, har birida FAOL a'zolar. Bo'sh lavozim ham qaytadi (selektor
+ * "Tanlanmagan" ko'rsatadi). Nofaol/o'chirilgan xodim yangi zakazga
+ * tanlanmaydi — tarixiy biriktiruvlari esa o'z joyida qoladi.
  */
 export async function crmFormaKategoriyalari(businessId: string): Promise<KategoriyaDTO[]> {
   const hammasi = await listKategoriyalar(businessId);
   return hammasi
-    .filter((k) => k.aktiv)
+    .filter((k) => k.aktiv && (k.zakazgaBiriktiriladi || k.turi === "sotuvchi"))
     .map((k) => ({ ...k, azolar: k.azolar.filter((a) => a.isActive) }));
 }
 
@@ -93,7 +101,14 @@ export async function createKategoriya(businessId: string, data: KategoriyaCreat
   }
 
   return prisma.employeeCategory.create({
-    data: { businessId, nomi: data.nomi, turi: data.turi, tartib },
+    data: {
+      businessId,
+      nomi: data.nomi,
+      turi: data.turi,
+      tartib,
+      zakazgaBiriktiriladi: data.zakazgaBiriktiriladi ?? true,
+      kopXodim: data.kopXodim ?? false,
+    },
   });
 }
 
@@ -116,6 +131,8 @@ export async function updateKategoriya(businessId: string, id: string, data: Kat
       ...(data.turi !== undefined ? { turi: data.turi } : {}),
       ...(data.aktiv !== undefined ? { aktiv: data.aktiv } : {}),
       ...(data.tartib !== undefined ? { tartib: data.tartib } : {}),
+      ...(data.zakazgaBiriktiriladi !== undefined ? { zakazgaBiriktiriladi: data.zakazgaBiriktiriladi } : {}),
+      ...(data.kopXodim !== undefined ? { kopXodim: data.kopXodim } : {}),
     },
   });
 }
@@ -165,132 +182,14 @@ export async function kategoriyaAzolariniSaqlash(
   return { qoshildi: qoshiladigan.length, ochirildi: ochiriladigan.length };
 }
 
-export interface ZakazXodimDTO {
-  id: string;
-  categoryId: string;
-  kategoriyaNomi: string;
-  kategoriyaTuri: string;
-  employeeId: string;
-  ism: string;
-  rasmUrl: string | null;
-}
-
-/** Zakazning joriy biriktiruvlari (tafsilot oynasi uchun). */
-export async function zakazXodimlari(businessId: string, dealId: string): Promise<ZakazXodimDTO[]> {
-  const rows = await prisma.dealEmployee.findMany({
-    where: { businessId, dealId },
-    include: {
-      category: { select: { nomi: true, turi: true, tartib: true } },
-      employee: { select: { ism: true, rasmUrl: true } },
-    },
-  });
-  return rows
-    .sort((a, b) => a.category.tartib - b.category.tartib)
-    .map((r) => ({
-      id: r.id,
-      categoryId: r.categoryId,
-      kategoriyaNomi: r.category.nomi,
-      kategoriyaTuri: r.category.turi,
-      employeeId: r.employeeId,
-      ism: r.employee.ism,
-      rasmUrl: r.employee.rasmUrl,
-    }));
-}
-
 /**
- * Biriktiruv ro'yxatini tekshiradi (buyurtma yaratilishidan OLDIN ham
- * chaqiriladi — xato bo'lsa buyurtma umuman yaratilmasin): kategoriya shu
- * biznesniki va FAOL, xodim shu biznesniki va o'sha kategoriya A'ZOSI.
- * Dublikat juftliklar chiqarilgan ro'yxat qaytadi.
+ * ZAKAZ JAMOASI (biriktiruv) mantiqi `lib/services/zakazJamoasi.ts` ga
+ * ko'chdi — eski import yo'llari buzilmasin deb shu yerdan qayta eksport.
  */
-export async function zakazXodimlariniTekshir(
-  businessId: string,
-  items: ZakazXodimInput[]
-): Promise<ZakazXodimInput[]> {
-  const noyob = new Map<string, ZakazXodimInput>();
-  for (const it of items) noyob.set(`${it.categoryId}:${it.employeeId}`, it);
-  const royxat = [...noyob.values()];
-
-  if (royxat.length > 0) {
-    const azoliklar = await prisma.employeeCategoryMember.findMany({
-      where: {
-        businessId,
-        categoryId: { in: royxat.map((r) => r.categoryId) },
-        employeeId: { in: royxat.map((r) => r.employeeId) },
-        category: { aktiv: true },
-        employee: { deletedAt: null },
-      },
-      select: { categoryId: true, employeeId: true },
-    });
-    const bor = new Set(azoliklar.map((a) => `${a.categoryId}:${a.employeeId}`));
-    for (const r of royxat) {
-      if (!bor.has(`${r.categoryId}:${r.employeeId}`)) {
-        throw new ForbiddenError("Xodim tanlangan kategoriyaning a'zosi emas");
-      }
-    }
-  }
-  return royxat;
-}
-
-/**
- * ZAKAZ XODIMLARINI TO'LIQ ALMASHTIRISH.
- *
- * Qoidalar:
- *  - kirim yozilgan (transactionId bor) buyurtmada QULFLANADI — yakunlangan
- *    zakaz statistikasi keyin o'zgarib qolmasin;
- *  - kategoriya shu biznesniki va FAOL bo'lishi shart;
- *  - xodim shu biznesniki va o'sha kategoriya A'ZOSI bo'lishi shart
- *    (frontend selektorlari ham shu ro'yxatni ko'rsatadi — server majburlaydi).
- */
-export async function zakazXodimlariniSaqlash(
-  businessId: string,
-  dealId: string,
-  items: ZakazXodimInput[]
-) {
-  const deal = await prisma.deal.findFirst({
-    where: { id: dealId, businessId, deletedAt: null },
-    select: { id: true, transactionId: true },
-  });
-  if (!deal) throw new ForbiddenError("Buyurtma topilmadi");
-  if (deal.transactionId) {
-    throw new BadRequestError("Kirim yozilgan buyurtmaning xodimlari o'zgartirilmaydi");
-  }
-
-  const royxat = await zakazXodimlariniTekshir(businessId, items);
-
-  await prisma.dealEmployee.deleteMany({ where: { dealId, businessId } });
-  for (const r of royxat) {
-    await prisma.dealEmployee.create({
-      data: { businessId, dealId, categoryId: r.categoryId, employeeId: r.employeeId },
-    });
-  }
-
-  return zakazXodimlari(businessId, dealId);
-}
-
-/**
- * SOTUVCHI → MAS'UL sinxroni: biriktiruvlar ichida "sotuvchi" turidagi
- * kategoriyaga tayinlangan, tizim hisobi bog'langan xodim bo'lsa — o'sha
- * foydalanuvchi qaytadi. Deal.masulId shu qiymatga o'rnatiladi, shunda
- * CRM→Kirim ko'chirilganda `Transaction.sotuvchiId` (mavjud xodim
- * statistikasi) ham AYNI sotuvchiga yoziladi — ikki tizim bir haqiqat.
- */
-export async function sotuvchiUserIdTop(
-  businessId: string,
-  items: ZakazXodimInput[]
-): Promise<string | null> {
-  if (items.length === 0) return null;
-  const sotuvKategoriyalar = await prisma.employeeCategory.findMany({
-    where: { businessId, id: { in: items.map((i) => i.categoryId) }, turi: "sotuvchi" },
-    select: { id: true },
-  });
-  const sotuvIdlar = new Set(sotuvKategoriyalar.map((k) => k.id));
-  const sotuvchiItem = items.find((i) => sotuvIdlar.has(i.categoryId));
-  if (!sotuvchiItem) return null;
-
-  const xodim = await prisma.employee.findFirst({
-    where: { id: sotuvchiItem.employeeId, businessId, deletedAt: null },
-    select: { userId: true },
-  });
-  return xodim?.userId ?? null;
-}
+export {
+  zakazXodimlari,
+  zakazXodimlariniTekshir,
+  zakazXodimlariniSaqlash,
+  sotuvchiUserIdTop,
+  type ZakazXodimDTO,
+} from "@/lib/services/zakazJamoasi";

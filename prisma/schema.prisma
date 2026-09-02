@@ -225,6 +225,7 @@ model Business {
   employeeCategories EmployeeCategory[]
   categoryAzolar     EmployeeCategoryMember[]
   dealEmployees      DealEmployee[]
+  dealFeedbacks      DealFeedback[]
   // Xodimlar KPI / ball / oylik moduli
   kpiSetting         KpiSetting?
   kpiBracketlar      KpiSalesBracket[]
@@ -1163,6 +1164,8 @@ model Deal {
   tasks         Task[]
   /// Zakazda qatnashgan xodimlar (kategoriya kesimida).
   xodimlar      DealEmployee[]
+  /// Sifat nazorati — mijoz fikri (bir zakazga bitta).
+  feedback      DealFeedback?
 
   @@index([businessId, stageId])
   @@index([businessId, masulId])
@@ -1769,6 +1772,14 @@ model EmployeeCategory {
   turi       String   @default("ijrochi")
   aktiv      Boolean  @default(true)
   tartib     Int      @default(0)
+  /// ZAKAZGA BIRIKTIRISH MUMKINMI. `false` — lavozim faqat HR ro'yxati uchun
+  /// (masalan Administrator): CRM "Yangi zakaz" formasida chiqmaydi.
+  zakazgaBiriktiriladi Boolean @default(true)
+  /// BIR ZAKAZGA BIR NECHTA XODIM (multi-select): Videochi, Bezakchi kabi
+  /// lavozimlarda yoqiladi. `false` — bir zakazda shu lavozimdan BITTA xodim
+  /// (server ham majburlaydi). Baza tuzilmasi ikkalasini ham sig'diradi —
+  /// bayroq faqat biznes qoidasi, sxema cheklovi emas.
+  kopXodim   Boolean  @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -1814,6 +1825,12 @@ model DealEmployee {
   category   EmployeeCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   employeeId String
   employee   Employee         @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  /// SIFAT NAZORATI: shu xodimning shu zakazdagi ishiga baho (1..10).
+  /// Null — baholanmagan. Xodim profilidagi "O'rtacha baho" shu ustunning
+  /// AVG'i — alohida hisoblagich saqlanmaydi (haqiqat manbai — biriktiruv).
+  baho       Int?
+  bahoIzoh   String?
+  bahoAt     DateTime?
   createdAt  DateTime         @default(now())
 
   @@unique([dealId, categoryId, employeeId])
@@ -1823,6 +1840,31 @@ model DealEmployee {
   @@index([dealId])
   @@index([categoryId])
   @@index([employeeId])
+}
+
+/// ZAKAZ SIFAT NAZORATI — butun zakazga tegishli mijoz fikri (bir zakazga
+/// BITTA yozuv, `dealId` UNIQUE). Xodimga tegishli baho bu yerda EMAS —
+/// u `DealEmployee.baho` da, o'sha biriktiruv bilan birga turadi.
+/// Baholar 1..10 (validatsiya qatlami majburlaydi). Pul yozilmaydi.
+model DealFeedback {
+  id           String   @id @default(cuid())
+  businessId   String
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  dealId       String   @unique
+  deal         Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  /// Umumiy servis bahosi (1..10). Null — berilmagan.
+  servisBahosi Int?
+  /// Mijoz e'tirozi (bo'lsa).
+  etiroz       String?
+  /// Nimani yaxshilash kerak (ichki xulosa).
+  yaxshilash   String?
+  /// Kim yozdi (User.id) — audit uchun; FK ataylab yo'q (foydalanuvchi
+  /// o'chirilsa ham fikr qolsin).
+  userId       String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([businessId, createdAt])
 }
 
 /// HR SOZLAMALARI — bir biznesga bitta yozuv (DailyReportSetting uslubi).

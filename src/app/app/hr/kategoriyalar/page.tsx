@@ -37,16 +37,16 @@ export default async function KategoriyalarPage() {
       <div className="space-y-4">
         <div className="flex items-center gap-3">
           <Link
-            href="/app/hr/samaradorlik"
-            aria-label="Samaradorlikka qaytish"
+            href="/app/hr"
+            aria-label="Xodimlarga qaytish"
             className="w-10 h-10 rounded-xl border border-line bg-surface flex items-center justify-center text-muted hover:text-fg transition"
           >
             <ArrowLeft className="w-5 h-5" aria-hidden="true" />
           </Link>
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-fg">Xodim kategoriyalari</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-fg">Lavozimlar</h1>
             <p className="text-sm text-muted">
-              Sotuvchi, Diktor, Shofer... — zakaz formasi va samaradorlik shu ro&apos;yxatga tayanadi
+              Sotuvchi, Animator, Shofyor, Videochi... — zakaz jamoasi va samaradorlik shu ro&apos;yxatga tayanadi
             </p>
           </div>
         </div>

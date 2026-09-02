@@ -9,12 +9,14 @@ import { buyurtmaPatchSchema } from "@/lib/validation/crm";
 import { dashboardYangilandi } from "@/lib/cache";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import {
+  jamoaOzgartiraOladimi,
   sotuvchiUserIdTop,
   zakazXodimlari,
   zakazXodimlariniSaqlash,
-} from "@/lib/services/xodimKategoriya";
+} from "@/lib/services/zakazJamoasi";
+import { zakazBahosi } from "@/lib/services/zakazBaho";
 import { sotuvchiniOzgartirish, zakazSotuvchisi } from "@/lib/services/zakazSotuvchi";
-import { requirePermission } from "@/lib/permissions/tekshir";
+import { hasPermission, requirePermission } from "@/lib/permissions/tekshir";
 import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
 import type { Prisma } from "@prisma/client";
 
@@ -36,11 +38,12 @@ export const GET = withTenant<{ params: { id: string } }>(
     if (!deal) return NextResponse.json({ error: "Buyurtma topilmadi" }, { status: 404 });
     // Zakazdagi xodimlar (kategoriya kesimida) — tafsilot oynasi ko'rsatadi.
     // `sotuvchi` alohida qaytadi: u ijrochilardan boshqa tushuncha (38-talab).
-    const [xodimlar, sotuvchi] = await Promise.all([
+    const [xodimlar, sotuvchi, baho] = await Promise.all([
       zakazXodimlari(businessId ?? "-", deal.id),
       zakazSotuvchisi(businessId ?? "-", deal.id),
+      zakazBahosi(businessId ?? "-", deal.id),
     ]);
-    return NextResponse.json({ ...deal, xodimlar, sotuvchi });
+    return NextResponse.json({ ...deal, xodimlar, sotuvchi, baho });
   },
   { module: "CRM" }
 );
@@ -141,12 +144,21 @@ export const PATCH = withTenant<{ params: { id: string } }>(
       });
     }
 
-    // Zakaz xodimlarini almashtirish — kirim yozilgan buyurtmada xizmat
-    // qatlami o'zi qulflaydi. Sotuvchi biriktiruvi mas'ulni yetaklaydi
-    // (createDeal bilan bir xil qoida): keyin kirim yozilsa `sotuvchiId`
-    // ayni sotuvchiga tushadi.
+    // Zakaz JAMOASINI almashtirish — kirim yozilgan buyurtmada xizmat
+    // qatlami o'zi qulflaydi. HUQUQ (37-talab): `crm.jamoa` yoki zakazning
+    // o'z mas'uli (yakunlangunga qadar) — oddiy xodim boshqalarning
+    // biriktiruvini o'zgartirib statistikani buza olmaydi.
+    // Sotuvchi biriktiruvi mas'ulni yetaklaydi (createDeal bilan bir xil
+    // qoida): keyin kirim yozilsa `sotuvchiId` ayni sotuvchiga tushadi.
     if (data.xodimlar !== undefined) {
-      await zakazXodimlariniSaqlash(businessId, params.id, data.xodimlar);
+      const ruxsat = await jamoaOzgartiraOladimi({
+        businessId,
+        dealId: params.id,
+        userId: user.userId,
+        huquqBor: await hasPermission(user.userId, "crm.jamoa"),
+      });
+      if (!ruxsat) throw new ForbiddenError("Zakaz jamoasini o'zgartirish uchun sizda huquq yo'q");
+      await zakazXodimlariniSaqlash(businessId, params.id, data.xodimlar, user.userId);
       const sotuvchiUserId = await sotuvchiUserIdTop(businessId, data.xodimlar);
       if (sotuvchiUserId) {
         const sotuvchi = await prisma.user.findFirst({

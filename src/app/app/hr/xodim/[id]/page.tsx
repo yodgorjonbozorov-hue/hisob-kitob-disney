@@ -15,6 +15,8 @@ import {
 } from "@/lib/queries/xodimPlan";
 import { listXodimVazifalari } from "@/lib/services/xodimVazifa";
 import { getSotuvchilarKpi } from "@/lib/queries/sotuvchiKpi";
+import { getXodimlarJamoaKpi } from "@/lib/queries/xodimJamoaKpi";
+import { getXodimKategoriyaDetal } from "@/lib/queries/kategoriyaAnalitika";
 import { oyOraligi } from "@/lib/xodimDavr";
 import { toshkentSana } from "@/lib/davomat/vaqt";
 import { utcDateToDateOnlyString, currentMonthString } from "@/lib/date";
@@ -60,6 +62,8 @@ export default async function XodimDetalPage({
       oyliklar,
       zakazlar,
       sotuvchilar,
+      jamoaHammasi,
+      jamoaDetal,
     ] = await Promise.all([
         getDavomatTarixi(businessId, { from, to: bugun, employeeId: xodim.id }),
         listJarimalar(businessId, { employeeId: xodim.id, from }),
@@ -73,6 +77,9 @@ export default async function XodimDetalPage({
         xodim.userId ? getXodimZakazlari(businessId, xodim.userId, oy) : Promise.resolve([]),
         // CRM sotuvchi KPI'si (24-talab) — bitta o'qish, xodim boshiga emas.
         getSotuvchilarKpi({ businessId, ...oyOraligi(oy) }),
+        // Lavozim kesimidagi KPI (17-23-talab) va zakaz qatnashuvlari lentasi.
+        getXodimlarJamoaKpi(businessId, oyOraligi(oy)),
+        getXodimKategoriyaDetal({ businessId, employeeId: xodim.id, ...oyOraligi(oy) }),
       ]);
 
     const performance = hammasi.xodimlar.find((x) => x.id === xodim.id) ?? null;
@@ -103,6 +110,8 @@ export default async function XodimDetalPage({
         oyliklar={oyliklar}
         zakazlar={zakazlar}
         sotuvKpi={sotuvKpi}
+        jamoa={jamoaHammasi.get(xodim.id) ?? null}
+        jamoaZakazlar={jamoaDetal?.zakazlar ?? []}
         tarix={tarix}
         jarimalar={jarimalar}
         bonuslar={bonuslar}
