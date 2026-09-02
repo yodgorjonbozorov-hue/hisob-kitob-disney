@@ -72,3 +72,13 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
         run: node -r ts-node/register scripts/masul-sotuvchi-migratsiya.ts
+
+      # SOTUVCHI XARITALASH HISOBOTI — faqat o'qish: lavozimlar, xodimlar,
+      # foydalanuvchilar va eski zakazlarning mas'ul taqsimoti. Ism/login
+      # niqoblanadi (repo ommaviy), pul chiqmaydi, bazaga yozilmaydi.
+      - name: Sotuvchi xaritalash hisoboti (faqat SELECT)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          TENANT_SLUG: disney-navoiy
+        run: node -r ts-node/register scripts/sotuvchi-xaritalash-hisobot.ts
