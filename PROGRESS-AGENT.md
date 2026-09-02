@@ -5746,3 +5746,40 @@ xodim-statistika 12, kpi-hisob 16 — hammasi yashil. `tsc` toza,
 `npm run build` o'tdi. (Repoda ESLint konfiguratsiyasi yo'q — `next lint`
 interaktiv so'rov beradi; lint bosqichi tsc bilan qoplandi.)
 
+
+
+## Production deploy diagnostikasi — Vercel build OOM (2026-09-02)
+
+**Belgi.** `main` ga merge qilingan `63f146c` (KPI) va `cecf3d5` (kassa
+maxfiyligi) production'ga chiqmadi; `/api/health` `9d5dd09` ni ko'rsatib
+turdi.
+
+**Dalil (Vercel API).** Loyiha `hisob-kitob-disneyn1` GitHub'ga to'g'ri
+bog'langan (`productionBranch: main`), har push uchun deploy YARATILGAN,
+lekin:
+- `63f146c` / `69eaf01` (production): `next build` → "Next.js build worker
+  exited with code: null and signal: SIGKILL" + Vercel hisoboti: "At least
+  one Out of Memory (OOM) event was detected" (2 yadro, 8 GB konteyner);
+- `cecf3d5`, `8c57163`, `63731bf`: "build step did not complete within the
+  maximum of 45min" — "Creating an optimized production build..." da osilib
+  qolgan (o'sha xotira bosimi);
+- oxirgi yashil production — `9d5dd09` (2026-09-01 15:41).
+Git integratsiyasi, production branch, root directory, ignored build step
+— hammasi to'g'ri; sabab FAQAT build xotirasi. Vercel loyihasida Node
+`24.x`, lokalda (Node 22, 4 yadro) `next build` cho'qqisi ~2 GB.
+
+**Tuzatish (repo ichida).**
+- `package.json`: `engines.node = "22.x"` — Vercel build'i lokalda
+  tekshirilgan Node versiyasida ishlaydi (Node 24 + Next 14.2 xotira
+  xatti-harakati boshqacha);
+- `build` skriptida `next build` `NODE_OPTIONS=--max-old-space-size=4096`
+  bilan — V8 heap konteyner RAM'idan ancha pastda cheklanadi, GC ertaroq
+  ishlaydi, konteyner OOM'ga bormaydi (Vercel'ning rasmiy tavsiyasi).
+Lokal o'lchov (heap cap bilan): cho'qqi 2,2 GB, build o'tdi.
+
+**Alohida (tuzatilmadi, egaga).** Preview deploylar `deploy-zaxira.mjs`
+da to'xtaydi: Preview muhitida `BACKUP_CHAT_ID`/`BACKUP_BOT_TOKEN` yo'q,
+kutayotgan migratsiya bo'lsa zaxira yuborilmaydi va build TO'XTAYDI
+(ataylab). Preview build'lar production `DATABASE_URL` ga migratsiya
+qo'llashi ham xavfli — Preview uchun alohida baza yoki preview deploy'ni
+o'chirish tavsiya etiladi.

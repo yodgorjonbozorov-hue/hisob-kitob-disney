@@ -2,9 +2,12 @@
   "name": "balansa",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/deploy-zaxira.mjs && node scripts/db-migrate.mjs && node -r ts-node/register scripts/kassa-migratsiya.ts && node -r ts-node/register scripts/qarz-migratsiya.ts && node -r ts-node/register scripts/kassa-handover-migratsiya.ts && node scripts/bootstrap-superadmin.mjs && node scripts/bir-martalik-parol.mjs && next build",
+    "build": "node scripts/deploy-zaxira.mjs && node scripts/db-migrate.mjs && node -r ts-node/register scripts/kassa-migratsiya.ts && node -r ts-node/register scripts/qarz-migratsiya.ts && node -r ts-node/register scripts/kassa-handover-migratsiya.ts && node scripts/bootstrap-superadmin.mjs && node scripts/bir-martalik-parol.mjs && NODE_OPTIONS=--max-old-space-size=4096 next build",
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate",
