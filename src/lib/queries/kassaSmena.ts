@@ -44,8 +44,14 @@ export interface SmenaBoshi {
 }
 
 /**
- * Berilgan kassalarning joriy smena boshi — BITTA `groupBy`.
+ * Berilgan kassalarning joriy smena boshi — BITTA so'rov.
  * Kassalar soni qancha bo'lsa ham so'rov bitta.
+ *
+ * ATAYLAB `groupBy + _max(createdAt)` EMAS: eski qo'lda/skript bilan
+ * yozilgan qatorlarda `createdAt` "YYYY-MM-DD HH:MM:SS" matn ko'rinishida
+ * bo'lishi mumkin va Prisma agregat natijasini `DateTime` ga o'gira olmay
+ * yiqiladi (P2023). `findMany` esa bunday qiymatni o'qiy oladi —
+ * `orderBy desc + distinct` har kassaning oxirgi topshirishini beradi.
  */
 export async function getSmenaBoshlari(
   businessId: string,
@@ -56,17 +62,18 @@ export async function getSmenaBoshlari(
   const natija = new Map<string, SmenaBoshi>();
   if (accountIds.length === 0) return natija;
 
-  const oxirgilar = await prisma.accountTransfer.groupBy({
-    by: ["fromAccountId"],
+  const oxirgilar = await prisma.accountTransfer.findMany({
     where: {
       businessId,
       fromAccountId: { in: accountIds },
       turi: "smena",
       holat: { in: [...SMENA_BOSHI_HOLATLARI] },
     },
-    _max: { createdAt: true },
+    select: { fromAccountId: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+    distinct: ["fromAccountId"],
   });
-  const oxirgi = new Map(oxirgilar.map((r) => [r.fromAccountId, r._max.createdAt]));
+  const oxirgi = new Map(oxirgilar.map((r) => [r.fromAccountId, r.createdAt]));
 
   for (const id of accountIds) {
     const t = oxirgi.get(id);

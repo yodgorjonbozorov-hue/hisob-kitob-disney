@@ -80,10 +80,12 @@ export async function getKassaNazorat(businessId: string): Promise<KassaNazorat>
     getAccountBalances(businessId),
     getKassaKunlik(businessId, kunBoshi),
     listKutilayotganTransferlar(businessId),
-    prisma.accountTransfer.groupBy({
-      by: ["fromAccountId"],
+    // `groupBy + _max` emas — matnli eski `createdAt` da yiqiladi (kassaSmena.ts).
+    prisma.accountTransfer.findMany({
       where: { businessId, turi: "smena", holat: "bajarildi" },
-      _max: { createdAt: true },
+      select: { fromAccountId: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+      distinct: ["fromAccountId"],
     }),
   ]);
 
@@ -95,7 +97,7 @@ export async function getKassaNazorat(businessId: string): Promise<KassaNazorat>
   const kesimlar = await getSmenaKesimlari(businessId, boshlari);
 
   const oxirgi = new Map(
-    oxirgiTopshirishlar.map((r) => [r.fromAccountId, r._max.createdAt?.toISOString() ?? null])
+    oxirgiTopshirishlar.map((r) => [r.fromAccountId, r.createdAt.toISOString()])
   );
 
   // Kutilayotgan chiqimlar kassa bo'yicha: yuboruvchining qoldig'ida turibdi,
