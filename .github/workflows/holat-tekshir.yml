@@ -102,3 +102,12 @@ jobs:
           DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
           TENANT_SLUG: disney-navoiy
         run: node -r ts-node/register scripts/lavozim-audit.ts
+
+      # SOTUVCHI ATTRIBUTION AUDITI — avtomatik migratsiya yozgan biriktiruvni
+      # qo'lda yozilganidan ajratish mumkinmi. Faqat SELECT, qaror bermaydi.
+      - name: Sotuvchi attribution auditi (faqat SELECT)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          BUSINESS_ID: biz_disney_navoiy
+        run: node -r ts-node/register scripts/sotuvchi-attribution-audit.ts
