@@ -5,6 +5,7 @@ import { createTransactionTx } from "@/lib/services/transactionService";
 import { ensureCategoryTx } from "@/lib/services/inventory";
 import { kunlikSinxron } from "@/lib/services/kunlik";
 import { utcDateToDateOnlyString, todayDateOnlyString } from "@/lib/date";
+import { tolovHolati } from "@/lib/crm/pipeline";
 
 /**
  * BUYURTMANI KIRIMGA O'TKAZISH.
@@ -57,6 +58,21 @@ export async function kirimgaKochirish(params: KirimgaKochirishParams) {
   if (!deal) throw new ForbiddenError("Buyurtma topilmadi");
   if (deal.transactionId) {
     throw new BadRequestError("Bu buyurtma bo'yicha kirim allaqachon yozilgan");
+  }
+  // QARZ OCHILGAN zakazga butun summani kirimga yozib bo'lmaydi: pul qarz
+  // to'lovi orqali, TO'LOV SANASI bilan keladi (`lib/services/qarz.ts`).
+  // Aks holda bir zakaz ham qarzda, ham kirimda — ikki marta sanalardi.
+  if (deal.debtId) {
+    throw new BadRequestError("Bu zakaz bo'yicha qarz yozilgan — pul qarz to'lovi orqali kirimga tushadi");
+  }
+  // Foydalanuvchi "Qarzga" yoki qisman to'lovni tanlagan bo'lsa, bu eski
+  // "butun summa kirim" yo'li uning tanloviga zid. Moliya "Yutildi" orqali
+  // yoziladi: to'langan qism kirim, qolgani qarz (`lib/crm/yakunlash.ts`).
+  const tolov = tolovHolati(deal.summa, deal.tolangan, deal.tolovTuri);
+  if (tolov === "QARZ" || tolov === "QISMAN") {
+    throw new BadRequestError(
+      "Zakaz to'lovi qarzga/qisman belgilangan — moliya \"Yutildi\" orqali yoziladi (to'langan qism kirim, qolgani qarz)"
+    );
   }
   if (deal.summa <= 0) {
     throw new BadRequestError("Buyurtma summasi kiritilmagan — avval narxni yozing");

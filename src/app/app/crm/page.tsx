@@ -112,7 +112,7 @@ export default async function CrmPage({
     // TO'LOV HOLATI bazada ustun emas (summa va tolangan'dan hisoblanadi),
     // shuning uchun bu filtr o'qishdan keyin qo'llanadi.
     const zakazlar = filtr.tolov
-      ? board.deals.filter((d) => tolovHolati(d.summa, d.tolangan) === (filtr.tolov as TolovHolat))
+      ? board.deals.filter((d) => tolovHolati(d.summa, d.tolangan, d.tolovTuri) === (filtr.tolov as TolovHolat))
       : board.deals;
 
     return (
@@ -182,6 +182,9 @@ export default async function CrmPage({
             kontakt: d.contact?.ism ?? null,
             tel: d.contact?.tel ?? null,
             sana: d.sana ? utcDateToDateOnlyString(d.sana) : null,
+            // Doska tartibi uchun (yangi/yangilangan tepada). Migratsiya eski
+            // qatorlarni to'ldirgan; zaxira — yaratilgan vaqti.
+            updatedAt: (d.updatedAt ?? d.createdAt).toISOString(),
             izoh: d.izoh,
             masulId: d.masulId,
             masulIsm: ismlar.get(d.masulId) ?? null,

@@ -93,6 +93,11 @@ export interface BuyurtmaDTO {
    * ko'rinadigan asosiy sana). `createdAt` bilan aralashtirilmaydi.
    */
   sana: string | null;
+  /**
+   * OXIRGI O'ZGARISH (ISO). Doska tartibi shu bo'yicha: yangi yaratilgan
+   * yoki holati hozirgina o'zgargan zakaz ustun BOSHIDA turadi.
+   */
+  updatedAt: string;
   izoh: string | null;
   masulId: string;
   masulIsm: string | null;

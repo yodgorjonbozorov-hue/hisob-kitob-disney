@@ -79,7 +79,7 @@ export const PATCH = withTenant<{ params: { id: string } }>(
     if (maydonlar) {
       const existing = await prisma.deal.findFirst({
         where: { id: params.id, businessId, deletedAt: null },
-        select: { id: true, transactionId: true, debtId: true, summa: true, tolangan: true },
+        select: { id: true, holat: true, transactionId: true, debtId: true, summa: true, tolangan: true },
       });
       if (!existing) throw new ForbiddenError("Buyurtma topilmadi");
 
@@ -129,6 +129,16 @@ export const PATCH = withTenant<{ params: { id: string } }>(
         patch.category = data.categoryId ? { connect: { id: data.categoryId } } : { disconnect: true };
       }
       await prisma.deal.update({ where: { id: params.id }, data: patch });
+
+      // YUTILGAN, lekin moliyasi hali yozilmagan zakazda (to'lov endi
+      // belgilandi) kirim/qarz DARHOL yoziladi — foydalanuvchi alohida
+      // "kirimga o'tkazish" bosmaydi. Idempotent: mavjud yozuv takrorlanmaydi.
+      // `holat` ham kelgan bo'lsa quyidagi blok o'zi hal qiladi.
+      const tolovOzgardi =
+        data.tolangan !== undefined || data.tolovTuri !== undefined || data.summa !== undefined;
+      if (existing.holat === "YUTILDI" && !existing.transactionId && !existing.debtId && tolovOzgardi && !data.holat) {
+        await zakazniYakunlash({ businessId, dealId: params.id, userId: user.userId });
+      }
     }
 
     // SOTUVCHINI ALMASHTIRISH (10/27-talab) — faqat `crm.sotuvchi` huquqi

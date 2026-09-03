@@ -2,6 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { dateOnlyStringToUTCDate, todayTashkentDateOnlyString, utcDateToDateOnlyString } from "@/lib/date";
 import { kirimgaKochirish } from "@/lib/crm/kirim";
+// Aylanma import (yakunlash.ts ham shu fayldan `pipelineBosqichlari` ni oladi)
+// xavfsiz: ikkala tomon ham faqat CHAQIRUV vaqtida murojaat qiladi.
+import { zakazniYakunlash } from "@/lib/crm/yakunlash";
 import {
   yopiqHolat,
   zakazUstuni,
@@ -188,7 +191,12 @@ export async function getBoard(businessId: string, filtr: DoskaFiltr = {}) {
         transaction: { select: { id: true, summa: true, deletedAt: true } },
         debt: { select: { id: true, jamiSumma: true, tolangan: true, status: true } },
       },
-      orderBy: [{ sana: "asc" }, { createdAt: "desc" }],
+      // YANGI / HOZIRGINA O'ZGARGAN zakaz ro'yxat BOSHIDA: tartib oxirgi
+      // o'zgarish bo'yicha (`updatedAt` — Prisma har yozuvda yangilaydi).
+      // Ustun ichidagi tartib (kechikkanlar oldinda) brauzerda, ayni
+      // qoida bilan (`ZakazUstuni`). `updatedAt` migratsiyada to'ldirilgan,
+      // null qolmaydi; `createdAt` — teng vaqtlar uchun zaxira.
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
       take: 500, // sog'lom chegara; arxiv alohida filtr bilan ochiladi
     }),
   ]);
@@ -549,15 +557,37 @@ export async function createDeal(params: YangiBuyurtma) {
     },
   });
 
+  // To'g'ridan-to'g'ri YUTILDI bosqichida yaratilgan (eski yo'l: import,
+  // tarixiy yozuv) zakazning moliyasi ham DARHOL yoziladi — "yutilgan, lekin
+  // kirimi yo'q" holat paydo bo'lmasin. To'lov tanlanmagan bo'lsa hech
+  // narsa yozilmaydi (yakunlash.ts qoidasi).
+  if (holat === "YUTILDI") {
+    await zakazniYakunlash({ businessId: params.businessId, dealId: deal.id, userId: params.userId });
+    const yangilangan = await prisma.deal.findFirst({
+      where: { id: deal.id, businessId: params.businessId },
+      include: {
+        contact: { select: { id: true, ism: true, tel: true } },
+        category: { select: { id: true, nomi: true } },
+      },
+    });
+    return yangilangan ?? deal;
+  }
+
   return deal;
 }
 
 /**
- * Buyurtmani boshqa holatga (bosqichga) ko'chirish.
+ * Buyurtmani boshqa holatga (bosqichga) ko'chirish — ESKI YO'L (bosqichga
+ * sudrash / `stageId` bilan PATCH).
  *
- * WON bosqichda `kirimYoz` berilsa kirim SHU YERDA emas, `kirimgaKochirish`
- * orqali yoziladi — dublikatga qarshi himoya (baza cheklovi + atomik
- * tranzaksiya) YAGONA joyda tursin.
+ * WON bosqich = YUTILDI: moliya (to'langan qism kirim, qolgani qarz) SHU
+ * YERDA emas, `zakazniYakunlash` orqali — atomik va idempotent, dublikatga
+ * qarshi himoya YAGONA joyda tursin. Shunda "yutilgan, lekin kirimi yo'q"
+ * zakaz bu yo'ldan ham paydo bo'lmaydi.
+ *
+ * `kirimYoz` (eski xulq): to'lovi TANLANMAGAN zakazda butun summa kirimga
+ * (`kirimgaKochirish`). To'lovi belgilangan zakazda u ahamiyatsiz — moliya
+ * allaqachon tanlovga ko'ra yozilgan.
  */
 export async function moveDeal(params: {
   businessId: string;
@@ -581,6 +611,20 @@ export async function moveDeal(params: {
   const holat = bosqichdanHolat(stage);
   const yopilyapti = yopiqHolat(holat);
 
+  if (holat === "YUTILDI") {
+    // YUTILDI → holat, kirim va qarz BITTA tranzaksiyada (yakunlash.ts).
+    // Takror chaqiruv yangi yozuv yaratmaydi.
+    await zakazniYakunlash({ businessId: params.businessId, dealId: deal.id, userId: params.userId });
+    const hozir = await prisma.deal.findFirst({
+      where: { id: deal.id, businessId: params.businessId },
+      select: { transactionId: true, debtId: true, summa: true },
+    });
+    if (params.kirimYoz && hozir && !hozir.transactionId && !hozir.debtId && hozir.summa > 0) {
+      await kirimgaKochirish({ businessId: params.businessId, dealId: deal.id, userId: params.userId });
+    }
+    return prisma.deal.findFirst({ where: { id: deal.id, businessId: params.businessId } });
+  }
+
   const updated = await prisma.deal.update({
     where: { id: deal.id },
     data: { stageId: stage.id, holat, yopilganAt: yopilyapti ? new Date() : null },
@@ -596,13 +640,6 @@ export async function moveDeal(params: {
       userId: params.userId,
     },
   });
-
-  // Yutildi + kirim yozish so'ralgan bo'lsa — bitta yo'ldan (dublikat himoyasi
-  // o'sha yerda). Allaqachon ko'chirilgan bo'lsa jimgina o'tiladi.
-  if (stage.turi === "WON" && params.kirimYoz && !deal.transactionId && deal.summa > 0) {
-    await kirimgaKochirish({ businessId: params.businessId, dealId: deal.id, userId: params.userId });
-    return prisma.deal.findFirst({ where: { id: deal.id, businessId: params.businessId } });
-  }
 
   return updated;
 }

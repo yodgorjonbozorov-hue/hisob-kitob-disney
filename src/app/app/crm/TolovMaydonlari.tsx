@@ -2,12 +2,17 @@
 
 import { Select } from "@/components/ui/Select";
 import { formatMoney } from "@/lib/format";
+import { kirimUlushi, qarzUlushi } from "@/lib/crm/pipeline";
 
 const INPUT =
   "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand";
 
-/** To'lov tanlovi — `tolangan` summani BELGILAYDI (6-talab). */
-export type TolovTanlov = "toliq" | "qisman" | "qarz";
+/**
+ * To'lov tanlovi — `tolangan` summani BELGILAYDI (6-talab).
+ * "tanlanmagan" — foydalanuvchi hali tanlamagan (tahrir formasida saqlangan
+ * zakazning haqiqiy holatini ko'rsatish uchun; yangi zakazda taklif etilmaydi).
+ */
+export type TolovTanlov = "toliq" | "qisman" | "qarz" | "tanlanmagan";
 
 /** Pul kanali — kirim tranzaksiyasiga o'sha ko'rinishda uzatiladi. */
 export type PulKanali = "naqd" | "click";
@@ -20,8 +25,26 @@ export type PulKanali = "naqd" | "click";
  */
 export function tolanganHisobla(tanlov: TolovTanlov, narx: number, qismanSumma: number): number {
   if (tanlov === "toliq") return narx;
-  if (tanlov === "qarz") return 0;
+  if (tanlov === "qarz" || tanlov === "tanlanmagan") return 0;
   return qismanSumma;
+}
+
+/**
+ * Serverga yuboriladigan pul kanali: "Qarzga" tanlovi `tolovTuri = "qarz"`
+ * bilan saqlanadi — to'lov holati (`lib/crm/pipeline.ts`) "Qarzga" ni
+ * AYNAN shu belgidan o'qiydi, `tolangan = 0` dan emas. Tanlanmagan — null.
+ */
+export function tolovTuriHisobla(tanlov: TolovTanlov, kanal: PulKanali): string | null {
+  if (tanlov === "qarz") return "qarz";
+  if (tanlov === "tanlanmagan") return null;
+  return kanal;
+}
+
+/** Forma xatosi: qisman to'lovda summa kiritilishi shart (0 — tanlov emas). */
+export function tolovXatosi(tanlov: TolovTanlov, narx: number, tolangan: number): string | null {
+  if (tanlov === "qisman" && tolangan <= 0) return "Qisman to'lov summasini kiriting";
+  if (tolangan > narx) return "To'langan summa zakaz narxidan ko'p bo'lmasligi kerak";
+  return null;
 }
 
 /**
@@ -59,6 +82,8 @@ export function TolovMaydonlari({
             value={tanlov}
             onChange={(v) => onTanlov(v as TolovTanlov)}
             options={[
+              // Saqlangan zakazda tanlov bo'lmasa — hozirgi holat ko'rinsin.
+              ...(tanlov === "tanlanmagan" ? [{ value: "tanlanmagan", label: "Tanlanmagan" }] : []),
               { value: "toliq", label: "To'liq to'langan" },
               { value: "qisman", label: "Qisman to'langan" },
               { value: "qarz", label: "Qarzga" },
@@ -77,7 +102,7 @@ export function TolovMaydonlari({
             />
           </label>
         )}
-        {tanlov !== "qarz" && (
+        {tanlov !== "qarz" && tanlov !== "tanlanmagan" && (
           <div className="space-y-1">
             <label className="block text-xs text-muted" htmlFor="bm-kanal">Pul kanali</label>
             <Select
@@ -93,10 +118,15 @@ export function TolovMaydonlari({
         )}
       </div>
 
-      {narx > 0 && (
+      {narx > 0 && tanlov === "tanlanmagan" && (
+        <p className="text-2xs text-debt-fg">
+          To&apos;lov tanlanmagan — Yutildi bosilganda kirim ham, qarz ham yozilmaydi.
+        </p>
+      )}
+      {narx > 0 && tanlov !== "tanlanmagan" && (
         <p className="text-2xs text-faint tnum">
-          Yutildi bosilganda: Kirim {formatMoney(Math.min(tolangan, narx))} · Qarzdorlik{" "}
-          {formatMoney(Math.max(0, narx - tolangan))}
+          Yutildi bosilganda: Kirim {formatMoney(kirimUlushi(narx, tolangan))} · Qarzdorlik{" "}
+          {formatMoney(qarzUlushi(narx, tolangan, tolovTuriHisobla(tanlov, kanal)))}
         </p>
       )}
     </>

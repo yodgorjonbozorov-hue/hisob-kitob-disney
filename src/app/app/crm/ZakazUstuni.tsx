@@ -17,8 +17,11 @@ const USTUN_RANG: Record<Ustun, string> = {
  * DOSKA USTUNI (8-talab): sarlavhada nomi, zakaz soni va umumiy summa —
  * joriy filtr bo'yicha.
  *
- * KUTILAYOTGAN ustunida KECHIKKAN zakazlar eng tepada turadi (7-talab):
- * eski bajarilmagan zakaz ko'zdan yo'qolmasin.
+ * TARTIB: KECHIKKAN zakazlar eng tepada (7-talab: eski bajarilmagan zakaz
+ * ko'zdan yo'qolmasin), qolgani OXIRGI O'ZGARISH bo'yicha — yangi yaratilgan
+ * yoki holati hozirgina o'zgargan zakaz ustun boshida (Yutildiga hozirgina
+ * o'tkazilgan zakaz oxiriga tushib ketmaydi). Mobil va desktop bir xil:
+ * ustun komponenti bitta.
  */
 export function ZakazUstuni({
   ustun,
@@ -40,12 +43,12 @@ export function ZakazUstuni({
   const jami = zakazlar.reduce((a, b) => a + b.summa, 0);
   const kechikkanlar = zakazlar.filter((b) => kechikkanKun(b.holat, b.sana, bugun) > 0).length;
 
-  // Kechikkanlar oldinda, keyin sana bo'yicha (yaqin kun tepada).
+  // Kechikkanlar oldinda, keyin oxirgi o'zgarish bo'yicha (yangi tepada).
   const tartiblangan = [...zakazlar].sort((a, b) => {
     const ka = kechikkanKun(a.holat, a.sana, bugun);
     const kb = kechikkanKun(b.holat, b.sana, bugun);
     if (ka !== kb) return kb - ka;
-    return (a.sana ?? "9999-99-99").localeCompare(b.sana ?? "9999-99-99");
+    return b.updatedAt.localeCompare(a.updatedAt);
   });
 
   return (

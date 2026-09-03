@@ -63,10 +63,18 @@ export function ZakazMoliya({
       ) : (
         <>
           <Badge tone="warning">🟠 Moliyaga o&apos;tmagan</Badge>
-          <p className="text-xs text-muted">
-            Ish yakunlangach &quot;Yutildi&quot; bosiladi: to&apos;langan qism Kirimga, qolgani
-            Qarzdorlikka yoziladi.
-          </p>
+          {yakunlanganmi ? (
+            <p className="text-xs text-muted">
+              Zakaz yutilgan, lekin to&apos;lovi belgilanmagan. Yuqorida to&apos;lovni tanlab saqlang —
+              kirim (va qisman/qarzga bo&apos;lsa qarzdorlik) o&apos;zi yoziladi.
+            </p>
+          ) : (
+            <p className="text-xs text-muted">
+              Ish yakunlangach &quot;Yutildi&quot; bosiladi: to&apos;langan qism Kirimga, qisman
+              to&apos;lovda qolgani, &quot;Qarzga&quot; tanlanganda butun summa Qarzdorlikka yoziladi.
+              To&apos;lov tanlanmagan bo&apos;lsa hech narsa yozilmaydi.
+            </p>
+          )}
           {!yakunlanganmi && (
             <button
               onClick={onYakunlash}

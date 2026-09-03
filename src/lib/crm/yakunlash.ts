@@ -9,7 +9,7 @@ import { qarzHolatHisobla, qarzYopiqmi } from "@/lib/validation/qarz";
 import { utcDateToDateOnlyString, todayTashkentDateOnlyString, dateOnlyStringToUTCDate } from "@/lib/date";
 import { kirimIzohi } from "@/lib/crm/kirim";
 import { pipelineBosqichlari } from "@/lib/crm/service";
-import { kirimUlushi, qarzUlushi, tolovHolati } from "@/lib/crm/pipeline";
+import { kirimUlushi, qarzUlushi, tolovHolati, type TolovHolat } from "@/lib/crm/pipeline";
 
 /**
  * ZAKAZNI YUTILDI QILISH — CRM va MOLIYA o'rtasidagi yagona yakuniy ko'prik.
@@ -20,7 +20,15 @@ import { kirimUlushi, qarzUlushi, tolovHolati } from "@/lib/crm/pipeline";
  *
  *   to'liq to'langan  → butun summa KIRIM;
  *   qisman to'langan  → to'langan qism KIRIM, qolgani QARZDORLIK;
- *   qarzga            → kirim YO'Q, butun summa QARZDORLIK.
+ *   qarzga            → kirim YO'Q, butun summa QARZDORLIK —
+ *                       FAQAT foydalanuvchi "Qarzga" ni tanlaganda;
+ *   to'lov tanlanmagan→ kirim ham, qarz ham YO'Q (holat YUTILDI bo'ladi).
+ *
+ * YUTILDI QARZNI AVTOMATIK OCHMAYDI. To'lov holati faqat foydalanuvchi
+ * tanlovidan (`lib/crm/pipeline.ts` → `tolovHolati`): `tolangan = 0` ning
+ * o'zi "qarzga" emas. To'lovi keyin belgilangan yutilgan zakazda shu
+ * funksiya qayta chaqiriladi (API PATCH) va yetishmayotgan yozuv yoziladi —
+ * foydalanuvchi alohida "kirimga o'tkazish" bosmaydi.
  *
  * Qarzga berilgan savdo kirim yozmasligi — mavjud qarz moduli qoidasi
  * (`lib/services/qarz.ts`): mahsulot ketdi, pul kelmadi, balans o'zgarmaydi.
@@ -37,6 +45,14 @@ import { kirimUlushi, qarzUlushi, tolovHolati } from "@/lib/crm/pipeline";
 
 /** Kategoriyasiz eski zakazlar uchun zaxira kategoriya (kirim.ts bilan bir xil). */
 const ZAXIRA_KATEGORIYA = "Sotuv";
+
+/** Faoliyat jurnalidagi to'lov holati matni. */
+const TOLOV_MATNI: Record<TolovHolat, string> = {
+  TOLANGAN: "to'liq to'langan",
+  QISMAN: "qisman to'langan",
+  QARZ: "qarzga",
+  TANLANMAGAN: "to'lov tanlanmagan",
+};
 
 export interface YakunlashParams {
   businessId: string;
@@ -77,7 +93,7 @@ export async function zakazniYakunlash(params: YakunlashParams): Promise<Yakunla
   }
 
   const kirimSumma = kirimUlushi(deal.summa, deal.tolangan);
-  const qarzSumma = qarzUlushi(deal.summa, deal.tolangan);
+  const qarzSumma = qarzUlushi(deal.summa, deal.tolangan, deal.tolovTuri);
 
   // IDEMPOTENTLIK. Yakunlangan va moliyasi yozilgan zakazda hech narsa
   // qayta yozilmaydi — mavjud natija qaytadi (8-test: ikki marta bosilsa
@@ -185,7 +201,9 @@ export async function zakazniYakunlash(params: YakunlashParams): Promise<Yakunla
       data: { holat: "YUTILDI", stageId: bosqichlar.YUTILDI, yopilganAt: new Date() },
     });
 
-    const holat = tolovHolati(deal.summa, deal.tolangan);
+    const holat = tolovHolati(deal.summa, deal.tolangan, deal.tolovTuri);
+    // Allaqachon yutilgan zakazda bu chaqiruv faqat moliyani to'ldiradi.
+    const sarlavha = deal.holat === "YUTILDI" ? "Moliyaga o'tkazildi" : "Yutildi";
     await tx.activity.create({
       data: {
         businessId: params.businessId,
@@ -193,7 +211,7 @@ export async function zakazniYakunlash(params: YakunlashParams): Promise<Yakunla
         contactId: deal.contactId,
         turi: "tizim",
         matn:
-          `Yutildi (${holat === "TOLANGAN" ? "to'liq to'langan" : holat === "QISMAN" ? "qisman to'langan" : "qarzga"}). ` +
+          `${sarlavha} (${TOLOV_MATNI[holat]}). ` +
           `Kirim: ${kirimSumma} so'm, qarzdorlik: ${qarzSumma} so'm`,
         userId: params.userId,
       },

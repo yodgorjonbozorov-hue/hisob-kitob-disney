@@ -26,8 +26,8 @@ export function YakunlashTasdiq({
   const [xato, setXato] = useState<string | null>(null);
 
   const kirim = kirimUlushi(b.summa, b.tolangan);
-  const qarz = qarzUlushi(b.summa, b.tolangan);
-  const holat = tolovHolati(b.summa, b.tolangan);
+  const qarz = qarzUlushi(b.summa, b.tolangan, b.tolovTuri);
+  const holat = tolovHolati(b.summa, b.tolangan, b.tolovTuri);
 
   async function yakunlash() {
     setLoading(true);
@@ -78,6 +78,12 @@ export function YakunlashTasdiq({
         {b.summa <= 0 && (
           <p className="text-2xs text-debt-fg">
             Narx kiritilmagan — zakaz yutildi bo&apos;ladi, lekin moliyaviy yozuv bo&apos;lmaydi.
+          </p>
+        )}
+        {b.summa > 0 && holat === "TANLANMAGAN" && (
+          <p className="text-2xs text-debt-fg">
+            To&apos;lov tanlanmagan — zakaz yutildi bo&apos;ladi, lekin kirim ham, qarz ham yozilmaydi.
+            To&apos;lovni keyin belgilasangiz kirim o&apos;zi yoziladi.
           </p>
         )}
         {xato && <p className="text-expense text-sm">{xato}</p>}

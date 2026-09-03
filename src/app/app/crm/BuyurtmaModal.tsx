@@ -15,6 +15,8 @@ import {
 import {
   TolovMaydonlari,
   tolanganHisobla,
+  tolovTuriHisobla,
+  tolovXatosi,
   type PulKanali,
   type TolovTanlov,
 } from "./TolovMaydonlari";
@@ -114,10 +116,8 @@ export function BuyurtmaModal({
       setXato("Buyurtmani olgan sotuvchini tanlang");
       return;
     }
-    if (tolanganSumma > narx) {
-      setXato("To'langan summa zakaz narxidan ko'p bo'lmasligi kerak");
-      return;
-    }
+    const tolovXato = tolovXatosi(tolovTanlov, narx, tolanganSumma);
+    if (tolovXato) return setXato(tolovXato);
     setLoading(true);
     setXato(null);
     const res = await fetch("/api/crm/deals", {
@@ -128,7 +128,7 @@ export function BuyurtmaModal({
         categoryId,
         summa: narx,
         tolangan: tolanganSumma,
-        tolovTuri: tolovTanlov === "qarz" ? "qarz" : tolovTuri,
+        tolovTuri: tolovTuriHisobla(tolovTanlov, tolovTuri),
         kontaktIsm: kontaktIsm || null,
         kontaktTel: kontaktTel || null,
         sana,

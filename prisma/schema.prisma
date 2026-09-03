@@ -1159,6 +1159,13 @@ model Deal {
   debt          Debt?          @relation("CrmBuyurtmaQarzi", fields: [debtId], references: [id], onDelete: SetNull)
   izoh          String?
   createdAt     DateTime       @default(now())
+  /// OXIRGI O'ZGARISH — doska tartibi shu bo'yicha (yangi yaratilgan yoki
+  /// holati hozirgina o'zgargan zakaz ro'yxat BOSHIDA turadi). Prisma har
+  /// yozuvda o'zi yangilaydi (`@updatedAt`, updateMany'da ham). Nullable —
+  /// SQLite'da mavjud jadvalga NOT NULL ustun qo'shib bo'lmaydi (Debt bilan
+  /// bir xil yo'l); migratsiya eski qatorlarni `yopilganAt`/`createdAt`
+  /// bilan to'ldiradi, shuning uchun amalda null bo'lmaydi.
+  updatedAt     DateTime?      @updatedAt
   deletedAt     DateTime?
   activities    Activity[]
   tasks         Task[]
@@ -1174,6 +1181,8 @@ model Deal {
   /// CRM doskasining asosiy kesimi: holat + sana (ustunlar shu ikkovidan
   /// hisoblanadi).
   @@index([businessId, holat, sana])
+  /// Doska tartibi: oxirgi o'zgarish bo'yicha (yangi/yangilangan tepada).
+  @@index([businessId, updatedAt])
   @@index([categoryId])
 }
 

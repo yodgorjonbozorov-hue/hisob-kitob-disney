@@ -537,6 +537,7 @@ CREATE TABLE "Deal" (
     "debtId" TEXT,
     "izoh" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3),
     "deletedAt" TIMESTAMP(3),
 
     CONSTRAINT "Deal_pkey" PRIMARY KEY ("id")
@@ -1654,6 +1655,9 @@ CREATE INDEX "Deal_businessId_sana_idx" ON "Deal"("businessId", "sana");
 
 -- CreateIndex
 CREATE INDEX "Deal_businessId_holat_sana_idx" ON "Deal"("businessId", "holat", "sana");
+
+-- CreateIndex
+CREATE INDEX "Deal_businessId_updatedAt_idx" ON "Deal"("businessId", "updatedAt");
 
 -- CreateIndex
 CREATE INDEX "Deal_categoryId_idx" ON "Deal"("categoryId");

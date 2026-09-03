@@ -3,14 +3,28 @@
 import { useState } from "react";
 import { Select } from "@/components/ui/Select";
 import { parseSomInput } from "@/lib/format";
-import { TolovMaydonlari, tolanganHisobla, type PulKanali, type TolovTanlov } from "./TolovMaydonlari";
+import {
+  TolovMaydonlari,
+  tolanganHisobla,
+  tolovTuriHisobla,
+  tolovXatosi,
+  type PulKanali,
+  type TolovTanlov,
+} from "./TolovMaydonlari";
 import type { BuyurtmaDTO, KategoriyaDTO } from "./turlar";
 
-/** Saqlangan `tolangan`/`summa` dan forma tanlovini tiklaydi. */
+/**
+ * Saqlangan zakazdan forma tanlovini tiklaydi — SERVER bilan AYNI qoida
+ * (`lib/crm/pipeline.ts` → `tolovHolati`). "Qarzga" faqat foydalanuvchi
+ * uni tanlagan bo'lsa (`tolovTuri = "qarz"`); to'lovi belgilanmagan zakaz
+ * "tanlanmagan" bo'lib ochiladi — forma jimgina "Qarzga" ga o'tkazib
+ * qo'ymaydi (avvalgi xato: narxni tuzatib saqlash zakazni qarzga aylantirardi).
+ */
 function boshlangichTanlov(b: BuyurtmaDTO): TolovTanlov {
   if (b.summa > 0 && b.tolangan >= b.summa) return "toliq";
   if (b.tolangan > 0) return "qisman";
-  return "qarz";
+  if (b.tolovTuri === "qarz") return "qarz";
+  return "tanlanmagan";
 }
 
 const INPUT =
@@ -42,7 +56,10 @@ export function BuyurtmaTahrir({
     kategoriya: string;
     summa: number;
     tolangan: number;
-    tolovTuri: string;
+    tolovTuri: string | null;
+    /** Yutilgan zakazda to'lov belgilanganda server moliyani DARHOL yozadi. */
+    transactionId: string | null;
+    debtId: string | null;
   }) => void;
 }) {
   const [categoryId, setCategoryId] = useState(b.categoryId ?? "");
@@ -55,16 +72,21 @@ export function BuyurtmaTahrir({
 
   const yangiSumma = summa ? parseSomInput(summa) : 0;
   const yangiTolangan = tolanganHisobla(tolovTanlov, yangiSumma, qisman ? parseSomInput(qisman) : 0);
+  const yangiTolovTuri = tolovTuriHisobla(tolovTanlov, kanal);
   const ozgardi =
-    categoryId !== (b.categoryId ?? "") || yangiSumma !== b.summa || yangiTolangan !== b.tolangan;
+    categoryId !== (b.categoryId ?? "") ||
+    yangiSumma !== b.summa ||
+    yangiTolangan !== b.tolangan ||
+    yangiTolovTuri !== (b.tolovTuri ?? null);
 
   async function saqlash() {
     if (!categoryId) {
       setXato("Kategoriya tanlansin");
       return;
     }
-    if (yangiTolangan > yangiSumma) {
-      setXato("To'langan summa zakaz narxidan ko'p bo'lmasligi kerak");
+    const tolovXato = tolovXatosi(tolovTanlov, yangiSumma, yangiTolangan);
+    if (tolovXato) {
+      setXato(tolovXato);
       return;
     }
     setLoading(true);
@@ -76,12 +98,13 @@ export function BuyurtmaTahrir({
         categoryId,
         summa: yangiSumma,
         tolangan: yangiTolangan,
-        tolovTuri: tolovTanlov === "qarz" ? "qarz" : kanal,
+        tolovTuri: yangiTolovTuri,
       }),
     });
     setLoading(false);
+    const javob = await res.json();
     if (!res.ok) {
-      setXato((await res.json()).error ?? "Saqlanmadi");
+      setXato(javob.error ?? "Saqlanmadi");
       return;
     }
     onSaqlandi({
@@ -89,7 +112,9 @@ export function BuyurtmaTahrir({
       kategoriya: kategoriyalar.find((k) => k.id === categoryId)?.nomi ?? "",
       summa: yangiSumma,
       tolangan: yangiTolangan,
-      tolovTuri: tolovTanlov === "qarz" ? "qarz" : kanal,
+      tolovTuri: yangiTolovTuri,
+      transactionId: javob.transactionId ?? b.transactionId,
+      debtId: javob.debtId ?? b.debtId,
     });
   }
 

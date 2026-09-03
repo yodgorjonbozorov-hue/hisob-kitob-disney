@@ -96,36 +96,61 @@ export function kechikkanKun(holat: string, sana: string | null, bugun: string):
 // To'lov holati
 // ---------------------------------------------------------------------------
 
-export const TOLOV_HOLATLARI = ["TOLANGAN", "QISMAN", "QARZ"] as const;
+export const TOLOV_HOLATLARI = ["TOLANGAN", "QISMAN", "QARZ", "TANLANMAGAN"] as const;
 export type TolovHolat = (typeof TOLOV_HOLATLARI)[number];
 
 export const TOLOV_HOLAT_NOMI: Record<TolovHolat, string> = {
   TOLANGAN: "To'langan",
   QISMAN: "Qisman to'langan",
   QARZ: "Qarzga",
+  TANLANMAGAN: "To'lov tanlanmagan",
 };
 
+/** Foydalanuvchi "Qarzga" ni tanlaganda `Deal.tolovTuri` da turadigan qiymat. */
+export const QARZ_KANALI = "qarz";
+
 /**
- * TO'LOV HOLATI — `tolangan` va `summa` dan HISOBLANADI, saqlanmaydi.
- * Alohida ustun ikkinchi haqiqat manbai bo'lardi va summa tahrirlanganda
- * jimgina yolg'onga aylanardi (`Debt.status` bilan bir xil qoida).
+ * TO'LOV HOLATI — FAQAT FOYDALANUVCHI TANLOVIDAN kelib chiqadi; saqlanmaydi,
+ * `summa`, `tolangan` va `tolovTuri` dan HISOBLANADI (alohida ustun
+ * ikkinchi haqiqat manbai bo'lardi va summa tahrirlanganda yolg'onga
+ * aylanardi).
+ *
+ *   to'liq to'langan (tolangan >= summa)  → TOLANGAN
+ *   qisman (0 < tolangan < summa)         → QISMAN (qolgani qarz)
+ *   "Qarzga" tanlangan (tolovTuri="qarz") → QARZ
+ *   boshqasi                              → TANLANMAGAN
+ *
+ * ESKI XATO: `tolangan = 0` ning o'zi "Qarzga" deb o'qilardi. Shunda to'lovi
+ * hali belgilanmagan zakaz (bot orqali kelgan lead, narxsiz yaratilgan
+ * zakaz, eski yozuv) foydalanuvchi tanlamasa ham "Qarzga" bo'lib ko'rinar
+ * va YUTILDI bosilganda unga avtomatik QARZ ochilardi. Endi "Qarzga" faqat
+ * foydalanuvchi shuni tanlaganda; tanlov yo'q — holat yo'q (TANLANMAGAN),
+ * moliyaviy yozuv ham yo'q.
  *
  * YUTILDI — biznes yakuni, to'lov holati esa ALOHIDA o'lchov (5-talab):
  * zakaz yutilgan bo'lishi va shu bilan birga to'liq qarzga qolishi mumkin.
  */
-export function tolovHolati(summa: number, tolangan: number): TolovHolat {
-  if (summa <= 0) return "QARZ";
-  if (tolangan >= summa) return "TOLANGAN";
+export function tolovHolati(summa: number, tolangan: number, tolovTuri: string | null | undefined): TolovHolat {
+  if (summa > 0 && tolangan >= summa) return "TOLANGAN";
   if (tolangan > 0) return "QISMAN";
-  return "QARZ";
+  if (tolovTuri === QARZ_KANALI) return "QARZ";
+  return "TANLANMAGAN";
 }
 
-/** Yutilganda KIRIMga yoziladigan summa (to'langan qism, summadan oshmaydi). */
+/** Yutilganda KIRIMga yoziladigan summa (haqiqatda olingan qism, summadan oshmaydi). */
 export function kirimUlushi(summa: number, tolangan: number): number {
   return Math.max(0, Math.min(tolangan, summa));
 }
 
-/** Yutilganda QARZDORLIKKA o'tadigan summa (qolgan qism). */
-export function qarzUlushi(summa: number, tolangan: number): number {
+/**
+ * Yutilganda QARZDORLIKKA o'tadigan summa (qolgan qism).
+ *
+ * FAQAT foydalanuvchi tanlovi bo'lganda: qisman to'lovda qolgani, "Qarzga"
+ * tanlanganda butun summa. To'lov tanlanmagan zakazga qarz OCHILMAYDI —
+ * YUTILDI bilan QARZ orasidagi avtomatik bog'lanish ataylab yo'q.
+ */
+export function qarzUlushi(summa: number, tolangan: number, tolovTuri: string | null | undefined): number {
+  const holat = tolovHolati(summa, tolangan, tolovTuri);
+  if (holat !== "QISMAN" && holat !== "QARZ") return 0;
   return Math.max(0, summa - kirimUlushi(summa, tolangan));
 }

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ASOSIY_USTUNLAR, zakazUstuni, type Ustun } from "@/lib/crm/pipeline";
+import { ASOSIY_USTUNLAR, kirimUlushi, qarzUlushi, zakazUstuni, type Ustun } from "@/lib/crm/pipeline";
 import { BuyurtmaModal } from "./BuyurtmaModal";
 import { BuyurtmaSheet } from "./BuyurtmaSheet";
 import { DoskaFiltr } from "./DoskaFiltr";
@@ -206,7 +206,12 @@ export function CrmClient({
             // Ochiq oyna serverdan kelgan snapshot ustida ishlaydi — yangi
             // qiymatlar darhol ko'rinsin (doskaning o'zini `router.refresh()`
             // yangilaydi).
-            setTanlangan({ ...tanlangan, ...yangi });
+            // Yutilgan zakazda to'lov belgilanganda server kirim/qarzni
+            // DARHOL yozadi — oynadagi moliya bloki ham shuni ko'rsatsin
+            // (raqamlar serverdagi AYNI qoidadan: kirimUlushi/qarzUlushi).
+            const kirimSumma = yangi.transactionId ? kirimUlushi(yangi.summa, yangi.tolangan) : 0;
+            const qarzQoldiq = yangi.debtId ? qarzUlushi(yangi.summa, yangi.tolangan, yangi.tolovTuri) : 0;
+            setTanlangan({ ...tanlangan, ...yangi, kirimSumma, qarzQoldiq });
             router.refresh();
           }}
           onClose={() => setTanlangan(null)}

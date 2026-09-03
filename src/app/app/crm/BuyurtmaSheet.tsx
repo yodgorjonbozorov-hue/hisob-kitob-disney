@@ -13,6 +13,7 @@ import {
 } from "@/lib/crm/pipeline";
 import { YakunlashTasdiq } from "./YakunlashTasdiq";
 import { BuyurtmaTahrir } from "./BuyurtmaTahrir";
+import { TOLOV_BELGISI } from "./BuyurtmaKarta";
 import { ZakazXodimlariBlok } from "./ZakazXodimlari";
 import { ijroKategoriyalari } from "./ZakazJamoasi";
 import { ZakazBahoBlok } from "./ZakazBaho";
@@ -83,7 +84,9 @@ export function BuyurtmaSheet({
     kategoriya: string;
     summa: number;
     tolangan: number;
-    tolovTuri: string;
+    tolovTuri: string | null;
+    debtId: string | null;
+    transactionId: string | null; // server yutilgan zakazda moliyani darhol yozadi
   }) => void;
   onClose: () => void;
 }) {
@@ -99,7 +102,7 @@ export function BuyurtmaSheet({
   const jamoaOzgartira = jamoaHuquqi || (b.masulId === meId && b.holat !== "YUTILDI");
   const moliyaYozilgan = Boolean(b.transactionId || b.debtId);
   const kechikkan = kechikkanKun(b.holat, b.sana, bugun);
-  const tolov = tolovHolati(b.summa, b.tolangan);
+  const tolov = tolovHolati(b.summa, b.tolangan, b.tolovTuri);
 
   const yuklash = useCallback(async () => {
     const res = await fetch(`/api/crm/deals/${b.id}`);
@@ -152,7 +155,7 @@ export function BuyurtmaSheet({
           {b.masulIsm && !sotuvchi && <p className="text-xs text-faint">Mas&apos;ul: {b.masulIsm}</p>}
           <div className="flex gap-1.5 flex-wrap pt-1">
             <Badge tone="neutral">{USTUN_NOMI[ustun]}</Badge>
-            <Badge tone={tolov === "TOLANGAN" ? "kirim" : tolov === "QISMAN" ? "warning" : "chiqim"}>
+            <Badge tone={TOLOV_BELGISI[tolov].tone}>
               {TOLOV_HOLAT_NOMI[tolov]}
               {tolov === "QISMAN" ? `: ${formatMoney(b.tolangan)}` : ""}
             </Badge>
@@ -182,8 +185,7 @@ export function BuyurtmaSheet({
           )}
         </div>
 
-        {/* Kategoriya/narx/to'lov — faqat moliyaga o'tmagan zakazda (server
-            ham o'sha paytdan boshlab ularni qulflaydi). */}
+        {/* Kategoriya/narx/to'lov — faqat moliyaga o'tmagan zakazda (server ham qulflaydi). */}
         {!moliyaYozilgan && (
           <BuyurtmaTahrir b={b} kategoriyalar={kategoriyalar} onSaqlandi={onTahrirlandi} />
         )}

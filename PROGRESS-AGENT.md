@@ -5855,3 +5855,38 @@ uchun jamoa kattaligiga bog'liq emas.
    natijada workflow ESKI konfiguratsiya bilan yugurdi. Push'dan oldin
    `git rev-parse --short HEAD` emas, AYNAN `origin/main` tekshirilishi
    kerak; commit qaysi tarmoqda ekani `git status -sb` bilan aniqlanadi.
+
+## 2026-09-03 — CRM: to'lov holati faqat tanlovdan, Yutildi → darhol kirim, tartib
+
+Uchta xato tuzatildi (`claude/crm-order-fixes-uf63o4`):
+
+1. **Qarzga avtomatik o'tmaydi.** `tolovHolati` (`lib/crm/pipeline.ts`)
+   `tolangan = 0` ni "Qarzga" deb o'qirdi: bot orqali kelgan lead, narxsiz
+   yaratilgan yoki eski (tolovTuri NULL) zakaz foydalanuvchi tanlamasa ham
+   qarzga ko'rinar, YUTILDI bosilganda `qarzUlushi` unga butun summaga QARZ
+   ochardi. Tahrir formasi ham (`boshlangichTanlov`) shunday zakazni
+   "Qarzga" bilan ochib, narxni tuzatib saqlashda jimgina `tolovTuri="qarz"`
+   yozardi. Endi "Qarzga" faqat `tolovTuri === "qarz"` (foydalanuvchi
+   tanlovi); tanlov yo'q — `TANLANMAGAN` (⚪ "To'lov tanlanmagan"), qarz
+   ham, kirim ham yozilmaydi. Qisman → qolgani qarz (o'zgarmadi).
+2. **Yutildi → darhol kirim.** WON bosqichga sudrash (`moveDeal`) va WON
+   bosqichida yaratish (`createDeal`) holatni yozib moliyani yozmasdi —
+   endi ikkalasi `zakazniYakunlash` orqali (atomik, idempotent). Yutilgan,
+   lekin to'lovi keyin belgilangan zakazda API PATCH yakunlashni qayta
+   chaqiradi: kirim/qarz o'zi yoziladi, alohida "kirimga o'tkazish" yo'q.
+   Eski `kirimgaKochirish` (butun summa) qarz ochilgan yoki qarzga/qisman
+   tanlangan zakazni rad etadi — bir zakaz ikki marta sanalmasin.
+3. **Yangi/yangilangan zakaz tepada.** `Deal.updatedAt` (nullable, Prisma
+   `@updatedAt`; migratsiya `20260903090000_crm_zakaz_updatedat` eski
+   qatorlarni `COALESCE(yopilganAt, createdAt)` bilan to'ldiradi). Doska
+   `updatedAt DESC`, ustun ichida kechikkanlar oldinda, keyin `updatedAt`
+   (mobil va desktop bitta `ZakazUstuni`).
+
+Testlar: `tests/crm-pipeline.test.ts` — A1–A3 (avto-qarz yo'q, qarz faqat
+tanlovda), B1–B6 (darhol kirim: keyin belgilangan to'lov, eski yo'l,
+WON'da yaratish, dublikat yo'q, eski yo'l rad etadi), C1–C2 (tartib).
+
+**Nima o'rganildi.** "Hisoblanadigan holat" ikkinchi haqiqat manbaidan
+qutqaradi, lekin hisob formulasi ham tanlovni ifodalashi shart: `0 so'm`
+"pul kelmadi" degani, "qarzga berildi" degani emas. Tanlov belgisi
+(`tolovTuri="qarz"`) allaqachon bazada bor edi — formula uni o'qimasdi.
