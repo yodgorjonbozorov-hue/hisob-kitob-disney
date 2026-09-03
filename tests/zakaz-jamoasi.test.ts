@@ -317,6 +317,45 @@ test("44: uchta videochi — uchalasida 1 tadan qatnashuv, zakaz soni 1", async 
 
 // ---------- 45. Biznes izolyatsiyasi ----------
 
+test("44b: to'rt animator + so'rovda takrorlangan xodim — 4 qatnashuv, zakaz soni 1", async () => {
+  // Animator "kopXodim" — Videochidan boshqa lavozimda ham ko'p tanlov ishlaydi.
+  // Jajon ATAYLAB yo'q: uning animator hisobi 46-stsenariyda tekshiriladi.
+  const jamoaAzo = [ilhom, sardor, akmal, madina];
+  await A(() =>
+    xk.kategoriyaAzolariniSaqlash(tA.business.id, kAnimator.id, [jajon.id, ...jamoaAzo.map((x) => x.id)])
+  );
+
+  const oldingiZakaz = await A(() => prisma.deal.count({ where: { businessId: tA.business.id, deletedAt: null } }));
+  const oldingiKpi = await Promise.all(jamoaAzo.map(async (x) => (await kpi(x.id, kAnimator.id)).jami));
+
+  // Yutilgan QILINMAYDI: sotuvchi summasi boshqa stsenariylarda qat'iy tekshiriladi.
+  const deal = await A(() =>
+    crm.createDeal({
+      businessId: tA.business.id, nomi: "To'rt animatorli bayram", summa: 500_000, categoryId: katBantik.id,
+      sana: bugun, userId: tA.user.id, sotuvchiId: doston.id,
+      xodimlar: [
+        ...jamoaAzo.map((x) => ({ categoryId: kAnimator.id, employeeId: x.id })),
+        // ATAYLAB takror: bir xodim bir lavozimga ikki marta tushmasligi kerak.
+        { categoryId: kAnimator.id, employeeId: ilhom.id },
+      ],
+    })
+  );
+
+  const animatorlar = (await A(() => jamoa.zakazXodimlari(tA.business.id, deal.id))).filter(
+    (x: any) => x.categoryId === kAnimator.id
+  );
+  assert.equal(animatorlar.length, 4, "besh element yuborildi, to'rt yozuv — takror yig'ildi");
+  assert.equal(new Set(animatorlar.map((x: any) => x.employeeId)).size, 4, "dublikat xodim yo'q");
+
+  const keyingiKpi = await Promise.all(jamoaAzo.map(async (x) => (await kpi(x.id, kAnimator.id)).jami));
+  for (let i = 0; i < jamoaAzo.length; i += 1) {
+    assert.equal(keyingiKpi[i], oldingiKpi[i] + 1, "har animatorga aynan +1 qatnashuv");
+  }
+
+  const keyingiZakaz = await A(() => prisma.deal.count({ where: { businessId: tA.business.id, deletedAt: null } }));
+  assert.equal(keyingiZakaz, oldingiZakaz + 1, "to'rt xodim bo'lsa ham kompaniya zakaz soni +1");
+});
+
 test("45: B biznes xodimi/lavozimi A zakaziga biriktirilmaydi", async () => {
   await assert.rejects(
     A(() => jamoa.zakazXodimlariniSaqlash(tA.business.id, panda.id, [{ categoryId: kVideochi.id, employeeId: bXodim.id }])),

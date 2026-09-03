@@ -28,7 +28,9 @@ env:
   TENANT_SLUG: disney-navoiy
   BUSINESS_ID: biz_disney_navoiy
   # Nom:kopXodim:tartib — kodga hardcode emas, shu yerda ko'rinib turadi.
-  LAVOZIMLAR: "Sotuvchi:yoq:0,Shofyor:yoq:1,Diktor:yoq:2,Animator / Igrushka:yoq:3,Videochi:ha:4,Bezakchi:ha:5"
+  # Barcha IJROCHI lavozimlar ko'p xodimli: bitta zakazga bir lavozimdan
+  # 2, 3, 4 yoki undan ortiq xodim. Sotuvchi hozircha BITTA.
+  LAVOZIMLAR: "Sotuvchi:yoq:0,Shofyor:ha:1,Diktor:ha:2,Animator / Igrushka:ha:3,Videochi:ha:4,Bezakchi:ha:5"
 
 jobs:
   bajar:
