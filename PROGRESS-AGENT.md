@@ -5783,3 +5783,30 @@ kutayotgan migratsiya bo'lsa zaxira yuborilmaydi va build TO'XTAYDI
 (ataylab). Preview build'lar production `DATABASE_URL` ga migratsiya
 qo'llashi ham xavfli — Preview uchun alohida baza yoki preview deploy'ni
 o'chirish tavsiya etiladi.
+
+## 2026-09-03 — Disney Navoiy: sotuvchi lavozimi va eski zakazlar migratsiyasi (PRODUCTION)
+
+Ikki tasdiq, ikki qadam. Har ikkalasidan OLDIN shartsiz zaxira Telegram
+kanaliga ketdi (`zaxira-majburiy.mjs`), yetkazilmasa build to'xtardi.
+
+**1-qadam (run 33711524213).** `Sotuvchi` lavozimi yaratildi
+(`cmtkyvf310002jn4ppzn7v925`, turi `sotuvchi`, `kopXodim=false`), ikki xodim
+a'zo qilindi, Fayruza uchun `Employee.userId` bog'lanishi yozildi. Suxrobga
+sun'iy foydalanuvchi YARATILMADI, Saydaliga tegilmadi.
+
+**2-qadam (run 33712048411).** `masul-sotuvchi-migratsiya.ts --qollash`:
+47 zakazdan 45 tasiga sotuvchi biriktiruvi yozildi (faqat `DealEmployee`
+INSERT). 2 ta zakaz ATAYLAB tegilmadi — mas'uli direktor (OWNER), unga
+xodim kartochkasi bog'lanmagan. Qo'llashdan keyin ayni skript qayta quruq
+yurgizildi: `MIGRATSIYA QILINADI: 0` — idempotentlik tasdiqlandi.
+
+Moliya izi qo'llashdan oldin ham, keyin ham `e05d5891b6f549bf` — o'zgarmadi
+(bu amal pulga tegmaydi). Tashqi kalitlar butun, dublikat guruh 0.
+
+**Nima o'rganildi.** "45 ta yozuv yozildi" degan raqam KPI'ning
+ko'rinishini isbotlamaydi — u faqat jadval holatini aytadi. Shuning uchun
+`scripts/sotuvchi-kpi-tekshir.ts` qo'shildi: `getXodimlarJamoaKpi` bilan
+AYNI manbadan (DealEmployee + Deal.holat) o'qib, sotuvchi kartochkasidagi
+raqamni ko'rsatadi va "qatnashuv soni = sotuvchili zakaz soni" tengligi
+bilan dublikatni tekshiradi. O'lchov: Fayruza 45 jami / 8 yutilgan /
+11 yo'qotilgan; Suxrob 0 (tarixiy mappingi yo'q — kutilgan).
