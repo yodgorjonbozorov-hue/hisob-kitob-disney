@@ -90,6 +90,8 @@
     "test:xodim-kategoriya": "node -r ts-node/register tests/xodim-kategoriya.test.ts",
     "test:zakaz-jamoasi": "node -r ts-node/register tests/zakaz-jamoasi.test.ts",
     "masul:sotuvchi-migratsiya": "node -r ts-node/register scripts/masul-sotuvchi-migratsiya.ts",
+    "sotuvchi:lavozim-sozlash": "node -r ts-node/register scripts/sotuvchi-lavozim-sozlash.ts",
+    "sotuvchi:xaritalash": "node -r ts-node/register scripts/sotuvchi-xaritalash-hisobot.ts",
     "test:xodim-plan": "node -r ts-node/register tests/xodim-plan.test.ts",
     "test:kpi": "node -r ts-node/register tests/kpi.test.ts",
     "test:kpi-hisob": "node -r ts-node/register tests/kpi-hisob.test.ts",
