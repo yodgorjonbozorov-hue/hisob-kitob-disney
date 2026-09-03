@@ -132,7 +132,8 @@
     "test:optom": "node -r ts-node/register tests/optom-sotuv.test.ts",
     "test:selos-kg": "node -r ts-node/register tests/selos-kg.test.ts",
     "test:kochirish": "node -r ts-node/register tests/kochirish.test.ts",
-    "test:launch": "node -r ts-node/register tests/toliq-ishga-tushirish.test.ts"
+    "test:launch": "node -r ts-node/register tests/toliq-ishga-tushirish.test.ts",
+    "sotuvchi:kpi-tekshir": "node -r ts-node/register scripts/sotuvchi-kpi-tekshir.ts"
   },
   "prisma": {
     "seed": "node -r ts-node/register prisma/seed.ts"

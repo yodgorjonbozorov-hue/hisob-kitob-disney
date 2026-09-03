@@ -82,3 +82,13 @@ jobs:
           DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
           TENANT_SLUG: disney-navoiy
         run: node -r ts-node/register scripts/sotuvchi-xaritalash-hisobot.ts
+
+      # SOTUVCHI KPI — migratsiyadan keyin eski zakazlar sotuvchi kartochkasida
+      # ko'rinishini raqam bilan tasdiqlaydi. Faqat SELECT; pul summasi
+      # chiqarilmaydi (repo ommaviy), ism niqoblanadi.
+      - name: Sotuvchi KPI tekshiruvi (faqat SELECT)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          BUSINESS_ID: biz_disney_navoiy
+        run: node -r ts-node/register scripts/sotuvchi-kpi-tekshir.ts
