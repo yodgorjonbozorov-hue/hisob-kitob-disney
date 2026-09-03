@@ -5855,3 +5855,39 @@ uchun jamoa kattaligiga bog'liq emas.
    natijada workflow ESKI konfiguratsiya bilan yugurdi. Push'dan oldin
    `git rev-parse --short HEAD` emas, AYNAN `origin/main` tekshirilishi
    kerak; commit qaysi tarmoqda ekani `git status -sb` bilan aniqlanadi.
+
+## 2026-09-03 — "Kirgan foydalanuvchi = sotuvchi" taxmini olib tashlandi
+
+**Muammo qayerdan chiqdi.** Disney Navoiy sotuv bo'limi bitta umumiy
+kompyuterdan, Fayruza hisobidan ishlaydi. Kod esa ikki joyda "kim kirgan
+bo'lsa, o'sha sotgan" deb taxmin qilardi: formada (`useState(ozimSotuvchi)`)
+va serverda (`sotuvchiniQosh` ichidagi `else if (ozi)`). Natijada butun
+sotuv statistikasi bir odamga yig'ilib borardi.
+
+Buni AUDIT o'lchab ko'rsatdi: migratsiya 45 ta biriktiruv yozgan edi, bir
+soatdan keyin sanoq 47 ga chiqdi — ikkitasi yangi zakazlardan, avtomatik.
+Ya'ni muammo tarixiy emas, o'sha payt DAVOM ETAYOTGAN edi.
+
+**Yechim — o'chirish emas, TASDIQ bayrog'i.** `DealEmployee.tasdiqlangan`:
+odam tanlagani `true`, mashina taxmini `false`. Tasdiqlanmagan qator KPI va
+oylikka kirmaydi, lekin formada ko'rinadi — noto'g'ri attributionni
+YO'QOTMASDAN hisobdan chiqarish mumkin, odam ochib saqlasa tasdiqlanadi.
+
+**Ijrochi oyligi.** `kpi/qatnashuv.ts` — `EmployeeCategory.zakazHaqi` x
+tasdiqlangan qatnashuv soni. Kaliti `Employee.id`, `User.id` EMAS.
+
+**Nima o'rganildi (uch xato).**
+1. Avvalgi migratsiya "mas'ul = sotuvchi" deb yozgan edi. Bu SEMANTIK
+   jihatdan to'g'ri ko'rinardi (`Employee.userId = Deal.masulId` + sotuvchi
+   lavozimi a'zosi), lekin biznes konteksti — umumiy kompyuter — buni
+   bekor qildi. Sxema tekshiruvi to'g'ri bo'lgani ma'lumot to'g'ri degani
+   emas; ish jarayonini so'rash kerak edi.
+2. Yangi test qo'shganda uni fayl O'RTASIGA joyladim: keyingi testlar
+   umumiy fixture'ning qat'iy sonlariga tayanadi (sardor 2 videochi,
+   doston 1 400 000 sotuv) va uchtasi yiqildi. Bunday faylda yangi test
+   OXIRGA qo'yiladi yoki nisbiy (oldin/keyin) tekshiradi.
+3. `zakazXodimlariniSaqlash` da erta qaytish sharti (`ochiriladigan` va
+   `qoshiladigan` bo'sh bo'lsa qaytadi) yangi `tasdiqlanadigan` holatini
+   qamramay qoldi — funksiya jimgina hech narsa qilmadi va test buni
+   ushladi. Yangi "ish bor" holati qo'shilganda BARCHA erta chiqish
+   shartlari qayta ko'riladi.
