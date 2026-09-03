@@ -93,10 +93,12 @@ export const PATCH = withTenant<{ params: { id: string } }>(
       // holatga tushirardi (summa/kategoriya bilan bir xil qoida).
       if (
         (existing.transactionId || existing.debtId) &&
-        (data.tolangan !== undefined || data.tolovTuri !== undefined)
+        (data.tolangan !== undefined ||
+          data.tolovTuri !== undefined ||
+          (data.summa !== undefined && data.summa !== existing.summa))
       ) {
         throw new BadRequestError(
-          "Moliyaga o'tgan zakazning to'lovi o'zgartirilmaydi — Kirim yoki Qarzdorlik bo'limidan tuzating"
+          "Moliyaga o'tgan zakazning summasi va to'lovi o'zgartirilmaydi — Kirim yoki Qarzdorlik bo'limidan tuzating"
         );
       }
       const yangiSumma = data.summa ?? existing.summa;

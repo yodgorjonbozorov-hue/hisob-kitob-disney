@@ -47,7 +47,6 @@ export function BuyurtmaModal({
   xodimlar,
   xodimKategoriyalari,
   sotuvchilar,
-  ozimSotuvchi,
   sotuvchiMajburiy,
   sotuvchiOzgartira,
   meId,
@@ -60,8 +59,6 @@ export function BuyurtmaModal({
   xodimKategoriyalari: XodimKategoriyaDTO[];
   /** Sotuvchilar (faol, sotuvchi lavozimi a'zolari). */
   sotuvchilar: SotuvchiDTO[];
-  /** Joriy foydalanuvchining sotuvchi profili — avto-tanlash. */
-  ozimSotuvchi: string | null;
   /** Biznes sozlamasi: sotuvchi majburiymi. */
   sotuvchiMajburiy: boolean;
   /** `crm.sotuvchi` huquqi — yo'q bo'lsa maydon qulflanadi. */
@@ -83,8 +80,11 @@ export function BuyurtmaModal({
   const [tolovTanlov, setTolovTanlov] = useState<TolovTanlov>("toliq");
   const [tolangan, setTolangan] = useState("");
   const [tolovTuri, setTolovTuri] = useState<PulKanali>("naqd");
-  // AVTO-TANLASH: sotuvchi o'z hisobidan kirsa o'zi tanlangan holda ochiladi.
-  const [sotuvchiId, setSotuvchiId] = useState(ozimSotuvchi ?? "");
+  // AVTO-TANLASH YO'Q (ataylab): Disney Navoiy sotuv bo'limida BITTA umumiy
+  // kompyuter ishlatiladi, ya'ni tizimga kirgan hisob zakazni kim sotganini
+  // BILDIRMAYDI. Default "Tanlanmagan" — sotuvchini har safar odam tanlaydi.
+  // Kirgan foydalanuvchi faqat createdBy/audit uchun (`Activity.userId`).
+  const [sotuvchiId, setSotuvchiId] = useState("");
   const [jamoa, setJamoa] = useState<ZakazXodimTanlov>({});
   const [xato, setXato] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);

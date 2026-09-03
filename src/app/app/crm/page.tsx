@@ -8,7 +8,7 @@ import { tolovHolati, type TolovHolat } from "@/lib/crm/pipeline";
 import { doskaFiltrSchema } from "@/lib/validation/crm";
 import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
 import { crmFormaKategoriyalari } from "@/lib/services/xodimKategoriya";
-import { avtoSotuvchi, sotuvchilarRoyxati, sotuvchiMajburiymi } from "@/lib/services/zakazSotuvchi";
+import { sotuvchilarRoyxati, sotuvchiMajburiymi } from "@/lib/services/zakazSotuvchi";
 import { hasPermission } from "@/lib/permissions/tekshir";
 import { kunlikBuyurtmalar, kategoriyaStatistikasi } from "@/lib/crm/statistika";
 import { todayTashkentDateOnlyString, utcDateToDateOnlyString } from "@/lib/date";
@@ -72,7 +72,6 @@ export default async function CrmPage({
       kategoriyaStat,
       xodimKategoriyalari,
       sotuvchilar,
-      ozim,
       sotuvchiMajburiy,
       sotuvchiOzgartira,
       jamoaHuquqi,
@@ -99,8 +98,6 @@ export default async function CrmPage({
       crmFormaKategoriyalari(businessId),
       // SOTUVCHI: faqat shu biznesning faol sotuvchilari (forma va filtr).
       sotuvchilarRoyxati(businessId),
-      // Avto-tanlash — foydalanuvchining o'z sotuvchi profili.
-      avtoSotuvchi(businessId, session.userId),
       sotuvchiMajburiymi(businessId),
       hasPermission(session.userId, "crm.sotuvchi"),
       hasPermission(session.userId, "crm.jamoa"),
@@ -162,7 +159,6 @@ export default async function CrmPage({
             azolar: k.azolar.map((a) => ({ id: a.id, ism: a.ism, userId: a.userId })),
           }))}
           sotuvchilar={sotuvchilar}
-          ozimSotuvchi={ozim?.id ?? null}
           sotuvchiMajburiy={sotuvchiMajburiy}
           sotuvchiOzgartira={sotuvchiOzgartira}
           jamoaHuquqi={jamoaHuquqi}

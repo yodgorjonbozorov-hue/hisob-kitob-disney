@@ -8,7 +8,9 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import type { KategoriyaDTO } from "@/lib/services/xodimKategoriya";
-import { KategoriyaModal, AzolarModal, type XodimTanlovDTO } from "./KategoriyaModal";
+import { KategoriyaModal } from "./KategoriyaModal";
+import { AzolarModal, type XodimTanlovDTO } from "./AzolarModal";
+import { formatSomLabel } from "@/lib/format";
 
 /**
  * Kategoriyalar ro'yxati: tartib (↑/↓), aktiv/noaktiv, tahrirlash va a'zolik.
@@ -107,6 +109,7 @@ export function KategoriyalarClient({
                     </Badge>
                     {k.kopXodim && <Badge tone="info">Bir nechta xodim</Badge>}
                     {!k.zakazgaBiriktiriladi && <Badge tone="warning">Zakazga biriktirilmaydi</Badge>}
+                    {k.zakazHaqi > 0 && <Badge tone="neutral">{formatSomLabel(k.zakazHaqi)} / zakaz</Badge>}
                     {!k.aktiv && <Badge tone="chiqim">Noaktiv</Badge>}
                   </div>
                   <p className="text-xs text-muted">

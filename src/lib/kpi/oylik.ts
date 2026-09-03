@@ -13,6 +13,7 @@ import {
 } from "./hisob";
 import { kpiSozlamasi, standartPlan, type KpiSozlamaDTO } from "./sozlama";
 import { sotuvJamlari } from "./sotuv";
+import { qatnashuvJamlari, type XodimQatnashuvi } from "./qatnashuv";
 
 /**
  * OYLIK HISOBI — real vaqtda, manbadan.
@@ -62,6 +63,15 @@ export interface XodimOylikHisobi {
   vazifalar: VazifaHisobi[];
   vazifaHaqi: number;
   sotuvBonusi: number;
+  /**
+   * IJROCHI QATNASHUVI (Videochi, Shofyor, Bezakchi...) — oy ichida nechta
+   * zakazga chiqqani va shundan hisoblangan haq. Manba `DealEmployee`
+   * (tasdiqlangan qatorlar), kaliti `Employee.id` — tizim hisobi SHART EMAS.
+   * Null — bu oyda qatnashuvi yo'q.
+   */
+  qatnashuv: XodimQatnashuvi | null;
+  /** Qatnashuvdan hisoblangan haq (so'm) — `jami` ga kiradi. */
+  qatnashuvHaqi: number;
   bonusQatorlari: BonusQatori[];
   planBonusi: number;
   tuzatish: number;
@@ -172,7 +182,13 @@ function snapshotdan(
     qatorlar: Array<{ taskId: string | null; taskNomi: string; oylikHaq: number; ball: number; foiz: number; hisoblangan: number }>;
   },
   s: KpiSozlamaDTO,
-  zakazlar: number
+  zakazlar: number,
+  /**
+   * YOPILGAN OYDA qatnashuv faqat KO'RSATILADI, hisobga QO'SHILMAYDI:
+   * `p.jami` o'sha paytda muzlatilgan va unga keyin qo'shish yopilgan
+   * oylikni siljitardi.
+   */
+  qatnashuv: XodimQatnashuvi | null = null
 ): XodimOylikHisobi {
   const vazifalar: VazifaHisobi[] = p.qatorlar.map((q) => ({
     taskId: q.taskId ?? "",
@@ -204,6 +220,10 @@ function snapshotdan(
     vazifalar,
     vazifaHaqi: p.vazifaHaqi,
     sotuvBonusi: p.sotuvBonusi,
+    // Yopilgan oy: qatnashuv KO'RSATILADI, lekin `jami` snapshot'dan
+    // olinadi — shuning uchun haq 0 deb beriladi (qo'shilmagan).
+    qatnashuv,
+    qatnashuvHaqi: 0,
     // BREAKDOWN FAQAT MOS KELSA KO'RSATILADI. Qatorlar joriy sozlamadan
     // qayta chiziladi, snapshotdagi JAMI esa o'sha paytdagi sozlama bo'yicha
     // muzlatilgan. Agar oradan keyin foizlar o'zgargan bo'lsa, qatorlar
@@ -232,7 +252,7 @@ export async function hisoblaBarchasi(
 ): Promise<{ sozlama: KpiSozlamaDTO; xodimlar: XodimOylikHisobi[] }> {
   const sozlama = await kpiSozlamasi(businessId);
 
-  const [xodimlar, biriktiruvlar, ballar, sotuvlar, planlar, snapshotlar] = await Promise.all([
+  const [xodimlar, biriktiruvlar, ballar, sotuvlar, qatnashuvlar, planlar, snapshotlar] = await Promise.all([
     prisma.employee.findMany({
       where: { businessId, deletedAt: null },
       orderBy: [{ isActive: "desc" }, { ism: "asc" }],
@@ -248,6 +268,7 @@ export async function hisoblaBarchasi(
     }),
     ballYigindilari(businessId, oy),
     sotuvJamlari(businessId, oy),
+    qatnashuvJamlari(businessId, oy),
     prisma.kpiSalesTarget.findMany({ where: { businessId, oy } }),
     prisma.kpiPayroll.findMany({
       where: { businessId, oy },
@@ -268,9 +289,12 @@ export async function hisoblaBarchasi(
   const natija = xodimlar.map((x) => {
     const sotuvStat = x.userId ? sotuvlar.get(x.userId) : undefined;
     const zakazlar = sotuvStat?.zakazlar ?? 0;
+    // Qatnashuv XODIM bo'yicha (tizim hisobisiz xodimlar ham chiqadi).
+    const qatnashuv = qatnashuvlar.get(x.id) ?? null;
+    const qatnashuvHaqi = qatnashuv?.summa ?? 0;
 
     const snap = snapshotMap.get(x.id);
-    if (snap) return snapshotdan(x, oy, snap, sozlama, zakazlar);
+    if (snap) return snapshotdan(x, oy, snap, sozlama, zakazlar, qatnashuv);
 
     const sotuv = sotuvStat?.summa ?? 0;
     const target = planMap.get(x.id);
@@ -301,10 +325,19 @@ export async function hisoblaBarchasi(
       vazifalar,
       vazifaHaqi: vazifaJami,
       sotuvBonusi: bonus.jami,
+      qatnashuv,
+      qatnashuvHaqi,
       bonusQatorlari: bonus.qatorlar,
       planBonusi: planB,
       tuzatish: 0,
-      jami: jamiOylik({ vazifaHaqi: vazifaJami, sotuvBonusi: bonus.jami, planBonusi: planB }),
+      // Ijrochi haqi `tuzatish` orqali kiradi: `jamiOylik` imzosi
+      // o'zgarmaydi va yopilgan oy snapshot'i bilan mos qoladi.
+      jami: jamiOylik({
+        vazifaHaqi: vazifaJami,
+        sotuvBonusi: bonus.jami,
+        planBonusi: planB,
+        tuzatish: qatnashuvHaqi,
+      }),
       ortachaBall: ortacha,
       ballHolati: ballHolati(ortacha),
       holat: "QORALAMA",

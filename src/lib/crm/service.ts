@@ -404,18 +404,21 @@ async function kontaktTop(params: YangiBuyurtma): Promise<string | null> {
 }
 
 /**
- * ZAKAZ SOTUVCHISINI ANIQLASH (4/5/6/27-talab) va uni biriktiruvlar
- * ro'yxatiga qo'shish.
+ * ZAKAZ SOTUVCHISINI ANIQLASH va uni biriktiruvlar ro'yxatiga qo'shish.
  *
  * TANLASH TARTIBI:
- *  1. `sotuvchiId` — yangi, birinchi darajali maydon (forma shuni yuboradi);
+ *  1. `sotuvchiId` — birinchi darajali maydon (forma shuni yuboradi);
  *  2. `xodimlar` ro'yxatidagi SOTUVCHI turidagi kategoriya qatori — ESKI
- *     yo'l, buzilmasin (bot/eski integratsiyalar shu ko'rinishda yuboradi);
- *  3. AVTO-TANLASH: foydalanuvchining o'z sotuvchi profili (4-talab).
- * Hech biri bo'lmasa va biznes sozlamasi majburiy qilsa — aniq xato.
+ *     yo'l, buzilmasin (bot/eski integratsiyalar shu ko'rinishda yuboradi).
+ * Hech biri bo'lmasa sotuvchi TANLANMAGAN bo'lib qoladi; biznes sozlamasi
+ * majburiy qilsa — aniq xato.
  *
- * Har holatda server xodimni to'liq tekshiradi (biznes, faollik, sotuvchi
- * kategoriyasi a'zoligi) — mijoz yuborgan qiymatga ISHONILMAYDI.
+ * AVTO-TANLASH ATAYLAB YO'Q. Umumiy kompyuterdan ishlaydigan bo'limda
+ * (Disney Navoiy sotuv bo'limi) tizimga kirgan hisob zakazni KIM SOTGANINI
+ * bildirmaydi: bitta hisobdan hamma kiritadi. Kirgan foydalanuvchidan
+ * sotuvchini taxmin qilish butun sotuv statistikasini bir odamga yig'ib
+ * qo'yardi. `avtoSotuvchi()` endi faqat HUQUQ tekshiruvida ishlatiladi
+ * ("o'zini tanlayaptimi yoki boshqani").
  */
 async function sotuvchiniQosh(params: YangiBuyurtma): Promise<ZakazXodimInput[]> {
   const boshqalar = params.xodimlar ?? [];
@@ -437,9 +440,6 @@ async function sotuvchiniQosh(params: YangiBuyurtma): Promise<ZakazXodimInput[]>
       throw new ForbiddenError("Boshqa sotuvchini tanlash uchun sizda huquq yo'q");
     }
     const s = await sotuvchiTekshir(params.businessId, soralgan);
-    tanlangan = { id: s.id, categoryId: s.categoryId };
-  } else if (ozi) {
-    const s = await sotuvchiTekshir(params.businessId, ozi.id);
     tanlangan = { id: s.id, categoryId: s.categoryId };
   }
 
