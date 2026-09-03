@@ -1,0 +1,132 @@
+# DISNEY NAVOIY — SOTUVCHI LAVOZIMI VA ESKI ZAKAZLAR MIGRATSIYASI.
+#
+# IKKI ALOHIDA QADAM, IKKI ALOHIDA TASDIQ:
+#   `sozlash: HA`    — Sotuvchi lavozimini yaratadi, xodimlarni a'zo qiladi va
+#                      Fayruza uchun user↔employee bog'lanishini yozadi;
+#   `migratsiya: HA` — eski zakazlarni sotuvchiga biriktiradi (DealEmployee).
+# Ikkalasi ham bo'sh bo'lsa — HAMMASI QURUQ (dry-run), bazaga yozilmaydi.
+#
+# XAVFSIZLIK:
+#   · har qanday yozishdan OLDIN SHARTSIZ zaxira Telegram kanaliga ketadi
+#     (`zaxira-majburiy.mjs`); yetkazilmasa exit 1 — baza o'zgarmaydi;
+#   · yozishdan oldin va keyin `production-holat.mjs` — UMUMIY MOLIYA IZI
+#     ikkalasida BIR XIL bo'lishi shart (bu amallar pulga tegmaydi);
+#   · migratsiya qo'llangach quruq hisobot QAYTA yuriladi: idempotentlik
+#     tekshiruvi (ikkinchi marta 0 chiqishi kerak);
+#   · repozitoriya OMMAVIY — artefakt yuklanmaydi, ism/telefon niqoblanadi.
+#
+# QIYMATLAR ATAYLAB SHU YERDA (kodda emas): qaysi biznes, qaysi xodim va
+# qaysi foydalanuvchi ekani git tarixida ko'rinib tursin va ko'rib chiqilsin.
+name: Disney sotuvchi (lavozim + migratsiya)
+
+on:
+  workflow_dispatch:
+    inputs:
+      sozlash:
+        description: 'Sotuvchi lavozimi + a''zolik + user bog''lanishini YOZISH uchun "HA"'
+        required: false
+        default: ""
+      migratsiya:
+        description: 'Eski zakazlarni sotuvchiga biriktirish uchun "HA"'
+        required: false
+        default: ""
+
+concurrency:
+  group: disney-sotuvchi
+  cancel-in-progress: false
+
+env:
+  # Disney Navoiy — yagona zakazli biznes.
+  BUSINESS_ID: biz_disney_navoiy
+  LAVOZIM_NOMI: Sotuvchi
+  # Fayruza (lavozim matni "Sotuvchi") + Suxrob (lavozim matni "Sotuvchi").
+  # Saydali (Tabrikchil boshlig'i) ATAYLAB YO'Q.
+  AZO_EMPLOYEE_IDS: cmti9pk9l000910y02pf3nbqd,cmti9nrpz000510y0ayjov7up
+  # Fayruza xodim kartochkasi ↔ Fayruza foydalanuvchisi (egasi tasdiqlagan).
+  # Suxrobda tizim hisobi yo'q — sun'iy foydalanuvchi YARATILMAYDI.
+  BOGLASH: cmti9pk9l000910y02pf3nbqd:cmt48wqqm0001xqhpgro71omt
+
+jobs:
+  bajar:
+    name: Zaxira + sozlash + migratsiya
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Bog'liqliklar
+        run: npm ci
+
+      - name: OLDINGI holat (faqat o'qish)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: node scripts/production-holat.mjs
+
+      # Yozish so'ralgan bo'lsa — avval zaxira. Yetkazilmasa exit 1.
+      - name: ZAXIRA -> Telegram (majburiy, yozishdan oldin)
+        if: inputs.sozlash == 'HA' || inputs.migratsiya == 'HA'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          BACKUP_CHAT_ID: ${{ secrets.BACKUP_CHAT_ID }}
+          BACKUP_BOT_TOKEN: ${{ secrets.BACKUP_BOT_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: node scripts/zaxira-majburiy.mjs "Disney sotuvchi lavozimi/migratsiyasidan oldin"
+
+      - name: 1-QADAM — Sotuvchi lavozimi, a'zolik, user bog'lanishi
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: |
+          node -r ts-node/register scripts/sotuvchi-lavozim-sozlash.ts \
+            ${{ inputs.sozlash == 'HA' && '--qollash' || '' }}
+
+      - name: XARITALASH hisoboti (faqat o'qish)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          TENANT_SLUG: disney-navoiy
+        run: node -r ts-node/register scripts/sotuvchi-xaritalash-hisobot.ts
+
+      - name: 2-QADAM — Migratsiya QURUQ (har doim, yozmaydi)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: node -r ts-node/register scripts/masul-sotuvchi-migratsiya.ts
+
+      - name: 2-QADAM — Migratsiya QO'LLASH
+        if: inputs.migratsiya == 'HA'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: node -r ts-node/register scripts/masul-sotuvchi-migratsiya.ts --qollash
+
+      # Qo'llangandan keyin QAYTA quruq: ikkinchi marta 0 chiqsa — idempotent.
+      - name: Migratsiyadan KEYIN quruq tekshiruv (idempotentlik)
+        if: inputs.migratsiya == 'HA'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: node -r ts-node/register scripts/masul-sotuvchi-migratsiya.ts
+
+      - name: KEYINGI holat (moliya izi o'zgarmagani tekshiriladi)
+        if: always()
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: node scripts/production-holat.mjs
+
+      - name: Yakun
+        if: success()
+        run: |
+          echo "### Disney sotuvchi" >> $GITHUB_STEP_SUMMARY
+          echo "- Sozlash: ${{ inputs.sozlash == 'HA' && 'QO''LLANDI' || 'quruq' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Migratsiya: ${{ inputs.migratsiya == 'HA' && 'QO''LLANDI' || 'quruq' }}" >> $GITHUB_STEP_SUMMARY
+          echo "OLDINGI va KEYINGI \`UMUMIY MOLIYA IZI\` bir xil bo'lishi shart." >> $GITHUB_STEP_SUMMARY
