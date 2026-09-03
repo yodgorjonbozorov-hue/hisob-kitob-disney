@@ -135,7 +135,8 @@
     "test:launch": "node -r ts-node/register tests/toliq-ishga-tushirish.test.ts",
     "sotuvchi:kpi-tekshir": "node -r ts-node/register scripts/sotuvchi-kpi-tekshir.ts",
     "lavozim:audit": "node -r ts-node/register scripts/lavozim-audit.ts",
-    "sotuvchi:attribution-audit": "node -r ts-node/register scripts/sotuvchi-attribution-audit.ts"
+    "sotuvchi:attribution-audit": "node -r ts-node/register scripts/sotuvchi-attribution-audit.ts",
+    "attribution:tasdiqsiz": "node -r ts-node/register scripts/attribution-tasdiqsiz.ts"
   },
   "prisma": {
     "seed": "node -r ts-node/register prisma/seed.ts"
