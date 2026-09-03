@@ -92,3 +92,13 @@ jobs:
           DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
           BUSINESS_ID: biz_disney_navoiy
         run: node -r ts-node/register scripts/sotuvchi-kpi-tekshir.ts
+
+      # ZAKAZ JAMOASI LAVOZIMLARI — audit: xodimlarning eski `lavozim` matni
+      # va maqsad lavozimlarga NOMZOD takliflari. Matn mosligi taklif, dalil
+      # emas; hech kim biriktirilmaydi. Faqat SELECT.
+      - name: Lavozim auditi (faqat SELECT)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          TENANT_SLUG: disney-navoiy
+        run: node -r ts-node/register scripts/lavozim-audit.ts

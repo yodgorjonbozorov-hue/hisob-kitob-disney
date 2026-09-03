@@ -1,0 +1,86 @@
+# DISNEY NAVOIY — ZAKAZ JAMOASI LAVOZIMLARI.
+#
+# `yarat: HA` bo'lsa maqsad lavozimlari `EmployeeCategory` da ochiladi
+# (yoki mavjudining bayroqlari to'g'rilanadi). Bo'sh bo'lsa — faqat audit.
+#
+# XODIM BIRIKTIRMAYDI. A'zolik ataylab bu yerda YO'Q: kim qaysi lavozimda
+# ekanini faqat loyiha egasi tasdiqlaydi, alohida qadamda. Eski `lavozim`
+# matniga ham tegilmaydi.
+#
+# XAVFSIZLIK: yozishdan oldin shartsiz zaxira Telegram kanaliga ketadi;
+# yetkazilmasa exit 1. Yozishdan oldin va keyin moliya izi solishtiriladi
+# (bu amal pulga tegmaydi — iz o'zgarmasligi shart).
+name: Disney lavozimlar (zakaz jamoasi)
+
+on:
+  workflow_dispatch:
+    inputs:
+      yarat:
+        description: 'Lavozimlarni YARATISH uchun "HA" (bo''sh — faqat audit)'
+        required: false
+        default: ""
+
+concurrency:
+  group: disney-lavozimlar
+  cancel-in-progress: false
+
+env:
+  TENANT_SLUG: disney-navoiy
+  BUSINESS_ID: biz_disney_navoiy
+  # Nom:kopXodim:tartib — kodga hardcode emas, shu yerda ko'rinib turadi.
+  LAVOZIMLAR: "Sotuvchi:yoq:0,Shofyor:yoq:1,Diktor:yoq:2,Animator / Igrushka:yoq:3,Videochi:ha:4,Bezakchi:ha:5"
+
+jobs:
+  bajar:
+    name: Audit + lavozim yaratish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Bog'liqliklar
+        run: npm ci
+
+      - name: OLDINGI holat (faqat o'qish)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: node scripts/production-holat.mjs
+
+      - name: ZAXIRA -> Telegram (majburiy, yozishdan oldin)
+        if: inputs.yarat == 'HA'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          BACKUP_CHAT_ID: ${{ secrets.BACKUP_CHAT_ID }}
+          BACKUP_BOT_TOKEN: ${{ secrets.BACKUP_BOT_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: node scripts/zaxira-majburiy.mjs "Disney zakaz jamoasi lavozimlaridan oldin"
+
+      - name: Lavozim auditi / yaratish
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: |
+          node -r ts-node/register scripts/lavozim-audit.ts \
+            ${{ inputs.yarat == 'HA' && '--qollash' || '' }}
+
+      # Yaratilgandan keyin QAYTA audit: ikkinchi marta "mavjud" chiqsa —
+      # idempotent, dublikat lavozim yaratilmagan.
+      - name: Yaratishdan KEYIN qayta audit (idempotentlik)
+        if: inputs.yarat == 'HA'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: node -r ts-node/register scripts/lavozim-audit.ts
+
+      - name: KEYINGI holat (moliya izi o'zgarmagani tekshiriladi)
+        if: always()
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: node scripts/production-holat.mjs
