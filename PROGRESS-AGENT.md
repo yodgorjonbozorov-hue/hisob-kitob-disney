@@ -5810,3 +5810,23 @@ AYNI manbadan (DealEmployee + Deal.holat) o'qib, sotuvchi kartochkasidagi
 raqamni ko'rsatadi va "qatnashuv soni = sotuvchili zakaz soni" tengligi
 bilan dublikatni tekshiradi. O'lchov: Fayruza 45 jami / 8 yutilgan /
 11 yo'qotilgan; Suxrob 0 (tarixiy mappingi yo'q — kutilgan).
+
+## 2026-09-03 — Zakaz jamoasi lavozimlari (Disney Navoiy, PRODUCTION)
+
+Audit (run 33714751688, faqat SELECT) → yaratish (run 33714880374, zaxira
+bilan). Oltita lavozim `EmployeeCategory` da: Sotuvchi (avval bor edi),
+Shofyor, Diktor, Animator / Igrushka, Videochi[kopXodim], Bezakchi[kopXodim].
+Hammasida `zakazgaBiriktiriladi=true`. Yaratishdan keyin qayta audit —
+oltalasi ham "mavjud": idempotent, dublikat lavozim yo'q.
+
+A'ZOLIK BIRIKTIRILMADI (ataylab). Eski `Employee.lavozim` matni faqat
+TAKLIF beradi, dalil emas — kim qaysi lavozimda ekanini egasi tasdiqlaydi.
+Audit topgani: Sotuvchi 2 nomzod (allaqachon a'zo), Videochi 1 nomzod,
+Shofyor/Diktor/Animator/Bezakchi — nomzod yo'q (bunday xodim bazada yo'q).
+
+**Nima o'rganildi.** Ommaviy log gigienasi (ism niqoblash) audit hisobotini
+egasi uchun ham o'qib bo'lmaydigan qiladi: `Az…(10)` kim ekani faqat
+`Employee.id` orqali aniqlanadi. Niqob repo ochiqligi uchun kerak, lekin
+qaror talab qiladigan hisobotda bu narx — kelgusida bunday hisobotni
+xususiy kanalga (Telegram) yuborish yoki id bo'yicha UI havolasi berish
+ma'qul.
