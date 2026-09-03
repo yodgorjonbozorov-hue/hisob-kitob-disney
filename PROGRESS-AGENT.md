@@ -5830,3 +5830,28 @@ egasi uchun ham o'qib bo'lmaydigan qiladi: `Az…(10)` kim ekani faqat
 qaror talab qiladigan hisobotda bu narx — kelgusida bunday hisobotni
 xususiy kanalga (Telegram) yuborish yoki id bo'yicha UI havolasi berish
 ma'qul.
+
+## 2026-09-03 — Barcha ijrochi lavozimlar ko'p xodimli (Disney Navoiy)
+
+Shofyor, Diktor, Animator / Igrushka ham `kopXodim=true` bo'ldi (Videochi va
+Bezakchi allaqachon shunday edi). Sotuvchi bitta bo'lib qoldi.
+Run 33715833226, zaxira bilan; yozishdan keyingi audit beshalasini ham
+`kopXodim=true` deb tasdiqladi. Fayruzaning 45 ta tarixiy sotuvchi
+biriktiruviga tegilmadi (`DealEmployee jami: 45`, dublikat guruh 0).
+
+Kod o'zgarmadi — `kopXodim` ataylab biznes qoidasi: `zakazXodimlariniTekshir`
+bayroqni o'qiydi, tanlov soniga chegara yo'q, har xodimga alohida
+`DealEmployee` yoziladi va kompaniya zakaz soni `Deal` jadvalidan kelgani
+uchun jamoa kattaligiga bog'liq emas.
+
+**Nima o'rganildi (ikki xato).**
+1. Yangi test 44b dastlab Jajonni animator qilib qo'ygani uchun 46-stsenariy
+   yiqildi ("bu oy: faqat Panda" 2 !== 1). Umumiy fixture'ga tayanadigan
+   testda YANGI qatnashuv qo'shish boshqa testning taxminini buzadi — test
+   endi Jajonga tegmaydi va zakazni yutilgan qilmaydi (sotuvchi summasi
+   boshqa joyda qat'iy tekshiriladi).
+2. `git push -u origin main` feature tarmog'ida turib bajarildi: commit
+   `main` ga tushmagan, push esa o'zgarmagan `main` ni qayta yuborgan —
+   natijada workflow ESKI konfiguratsiya bilan yugurdi. Push'dan oldin
+   `git rev-parse --short HEAD` emas, AYNAN `origin/main` tekshirilishi
+   kerak; commit qaysi tarmoqda ekani `git status -sb` bilan aniqlanadi.
