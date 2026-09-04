@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { runBusinessTx } from "@/lib/db/businessTx";
 import { createTransactionTx } from "@/lib/services/transactionService";
+import { shaxsiyKassaId } from "@/lib/services/kassaTanlash";
 import { ensureCategoryTx } from "@/lib/services/inventory";
 import { qarzLimitTekshirTx } from "@/lib/services/mijoz";
 import { kunlikSinxron } from "@/lib/services/kunlik";
@@ -120,16 +121,23 @@ export async function zakazniYakunlash(params: YakunlashParams): Promise<Yakunla
     if (kirimSumma > 0 && !transactionId) {
       const categoryId =
         deal.categoryId ?? (await ensureCategoryTx(tx, params.businessId, ZAXIRA_KATEGORIYA, "kirim"));
+      // QARZ kanali kirimga uzatilmaydi: bu yerda yoziladigan summa
+      // HAQIQATDA olingan pul, qolgani alohida qarz yozuvi bo'ladi.
+      const tolovTuri = deal.tolovTuri === "qarz" ? null : deal.tolovTuri;
+      // KASSA — ZAKAZ MAS'ULINIKI (sotuvchi bilan AYNI qoida): zakazni
+      // yutgan xodimning kassasi ko'payadi va u shu pulni topshiradi.
+      // Shaxsiy kassa rejimi o'chiq bo'lsa `null` — eski xatti-harakat.
+      const accountId =
+        params.accountId ??
+        (await shaxsiyKassaId(tx, params.businessId, sotuvchiId, tolovTuri));
       const created = await createTransactionTx(tx, params.userId, params.businessId, {
         turi: "kirim",
         categoryId,
         summa: kirimSumma,
         sana,
         izoh,
-        accountId: params.accountId ?? null,
-        // QARZ kanali kirimga uzatilmaydi: bu yerda yoziladigan summa
-        // HAQIQATDA olingan pul, qolgani alohida qarz yozuvi bo'ladi.
-        tolovTuri: deal.tolovTuri === "qarz" ? null : deal.tolovTuri,
+        accountId,
+        tolovTuri,
         sotuvchiId,
       });
       // ATOMIK BOG'LASH: `transactionId: null` sharti — poyga himoyasi.

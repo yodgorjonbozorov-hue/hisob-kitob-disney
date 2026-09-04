@@ -1,3 +1,4 @@
+import { prisma } from "@/lib/prisma";
 import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { runBusinessTx, type BusinessTx } from "@/lib/db/businessTx";
 import { isManager } from "@/lib/auth/roles";
@@ -68,6 +69,32 @@ async function kassaTopTx(
   if (!kassa) throw new ForbiddenError("Kassa topilmadi yoki boshqa biznesga tegishli");
   if (!kassa.isActive) throw new BadRequestError("Nofaol kassa bilan pul ko'chirib bo'lmaydi");
   return kassa;
+}
+
+/**
+ * BU SO'ROV XODIMNING O'Z KASSASINI TOPSHIRISHIMI?
+ *
+ * "Kassa topshirish" — huquq emas, MAJBURIYAT: xodim kun oxirida qo'lidagi
+ * naqdni topshirmasa pul hisobda osilib qoladi. Shuning uchun route bu
+ * holatda "pul.berish" huquqini talab qilmaydi (sotuvchi rolida u yo'q).
+ *
+ * Shart: `turi = "smena"` VA manba kassa berilmagan (server o'zi xodimning
+ * shaxsiy kassasini oladi) yoki berilgani aynan shu xodimniki. Boshqa
+ * odamning kassasidan pul chiqarish bu yerdan o'tmaydi — `kassaTransferYarat`
+ * ham buni mustaqil rad etadi (ikki qatlamli tekshiruv).
+ */
+export async function ozKassaTopshirishimi(
+  businessId: string,
+  userId: string,
+  data: KassaTransferInput
+): Promise<boolean> {
+  if (data.turi !== "smena") return false;
+  if (!data.fromAccountId) return true;
+  const kassa = await prisma.account.findFirst({
+    where: { id: data.fromAccountId, businessId },
+    select: { userId: true },
+  });
+  return kassa?.userId === userId;
 }
 
 /**

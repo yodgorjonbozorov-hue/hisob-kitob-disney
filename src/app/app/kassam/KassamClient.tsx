@@ -9,7 +9,10 @@ import { Money } from "@/components/ui/Money";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatSom, formatToshkentVaqt } from "@/lib/format";
 import type { KassaHarakat } from "@/lib/queries/kassaDetal";
-import { SmenaTopshirishModal, type TopshirishNishoni } from "./SmenaTopshirishModal";
+import {
+  SmenaTopshirishModal,
+  type TopshirishNishoni,
+} from "@/components/kassa/SmenaTopshirishModal";
 
 /**
  * MENING KASSAM — xodimning o'z kassasidagi pul.

@@ -118,23 +118,6 @@ export interface BuyurtmaDTO {
   sotuvchi: ZakazSotuvchiDTO | null;
 }
 
-export interface KunlikXulosaDTO {
-  sana: string;
-  jami: number;
-  kirimga: number;
-  kutilmoqda: number;
-  soni: number;
-}
-
-export interface KategoriyaStatDTO {
-  categoryId: string | null;
-  nomi: string;
-  soni: number;
-  jami: number;
-  kirimga: number;
-  kutilmoqda: number;
-}
-
 /**
  * Kirim yozuviga havola. Tranzaksiyalar sahifasida ID bo'yicha filtr yo'q,
  * shuning uchun mavjud filtrlar bilan aniq yozuvgacha toraytiriladi.

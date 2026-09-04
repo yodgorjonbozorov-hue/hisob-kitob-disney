@@ -5924,3 +5924,41 @@ YOKI undan yangiroq `holatAt` yozgan bo'lsa serverning so'zi oxirgi.
 **Nima o'rganildi.** Ustunlar bir xil ko'rinsa ham bir xil MANTIQDA emas:
 "eng yangisi tepada" reja ustunlariga ko'r-ko'rona qo'llanganda kechikkan
 zakazni ko'zdan yashirib qo'yardi. Tartib qoidasi ustun turiga bog'lanadi.
+## 2026-09-04 — CRM yuqori paneli: statistika o'rniga xodim kassasi va chiqim
+
+**Nima o'zgardi.** Buyurtmalar sahifasining tepasidagi ikki statistika bloki
+("Bugungi buyurtmalar" va "Kategoriya bo'yicha") olib tashlandi. O'rnida ish
+qiladigan ikki karta turadi: **Xodim kassasi** (kirim / chiqim / kassada +
+"Kassa topshirish") va **Chiqim** (bugungi jami, oxirgi uchta yozuv +
+"+ Chiqim qilish"). Statistika funksiyalari (`lib/crm/statistika.ts`)
+o'chirilmadi — ular testlar bilan qoplangan va boshqa joyda kerak bo'lishi
+mumkin; faqat sahifadan uzildi.
+
+**Parallel tizim YARATILMADI.** Mavjud infratuzilma UI'ga ulandi:
+kassa raqami `getMeningKassam` (Account ledgeri, "Mening kassam" bilan ayni
+manba), topshirish `AccountTransfer(turi = "smena")`, chiqim esa oddiy
+`/api/transactions`. Shu sababli kassa qoldig'i, smena reseti, tasdiqlash
+moduli va kunlik hisobot avvalgidek ishlaydi.
+
+**Kirim endi ZAKAZ MAS'ULINING kassasiga tushadi.** Ilgari shaxsiy kassa
+rejimida pul TUGMANI BOSGAN odamning kassasiga tushardi — direktor Fayruzaning
+zakazini yakunlasa, pul direktorda ko'rinardi va Fayruza topshira olmasdi.
+`crm/kirim.ts` va `crm/yakunlash.ts` endi kassani `sotuvchiId` (mas'ul)
+bo'yicha tanlaydi. Sotuvchi attributsiyasi qoidasi o'zgarmadi — kassa
+endi o'shanga ERGASHADI.
+
+**Huquq: "kassa ko'rinmasin" o'z kassasini yashirmaydi.** `kassa.jami`
+biznesning UMUMIY kassasini yopadi, xodimning o'zinikini emas. Ikki nozik
+joy bor edi:
+1. Panel `kassa.korish` talab qilmaydi — "Mening kassam" sahifasidagi
+   qoida bilan bir xil: faqat so'rov yuborgan odamning kassasi qaytadi.
+2. `POST /api/kassa-transfer` `pul.berish` talab qilardi, SELLER rolida esa
+   u yo'q — ya'ni sotuvchi o'z kassasini umuman topshira olmasdi. Endi
+   o'z kassasini topshirish (`ozKassaTopshirishimi`) huquqsiz o'tadi;
+   birovning kassasidan pul chiqarish esa avvalgidek ikki qatlamda
+   (route huquqi + `kassaTransferYarat` egalik tekshiruvi) yopiq.
+
+**Nima o'rganildi.** "Ko'rish huquqi yo'q" bilan "amal huquqi yo'q" ni bir
+xil huquq kodi orqali boshqarish xato edi: topshirish — imtiyoz emas,
+majburiyat. Huquq yozayotganda "buni qilmasa nima bo'ladi?" savoli
+"buni ko'rsa nima bo'ladi?" dan muhimroq.

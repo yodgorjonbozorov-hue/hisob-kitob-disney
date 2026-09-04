@@ -10,10 +10,12 @@ import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
 import { crmFormaKategoriyalari } from "@/lib/services/xodimKategoriya";
 import { sotuvchilarRoyxati, sotuvchiMajburiymi } from "@/lib/services/zakazSotuvchi";
 import { hasPermission } from "@/lib/permissions/tekshir";
-import { kunlikBuyurtmalar, kategoriyaStatistikasi } from "@/lib/crm/statistika";
+import { crmYuqoriPanel } from "@/lib/crm/yuqoriPanel";
+import { transactionScopeUserId } from "@/lib/auth/visibility";
+import { listAccounts } from "@/lib/queries/accounts";
 import { todayTashkentDateOnlyString, utcDateToDateOnlyString } from "@/lib/date";
 import { CrmClient } from "./CrmClient";
-import { BugungiPanel } from "./BugungiPanel";
+import { YuqoriPanel } from "./YuqoriPanel";
 
 /**
  * CRM — ZAKAZ DOSKASI.
@@ -68,8 +70,9 @@ export default async function CrmPage({
       board,
       kategoriyalar,
       xodimlar,
-      kunlik,
-      kategoriyaStat,
+      yuqoriPanel,
+      chiqimKategoriyalari,
+      kassalar,
       xodimKategoriyalari,
       sotuvchilar,
       sotuvchiMajburiy,
@@ -92,8 +95,22 @@ export default async function CrmPage({
         select: { id: true, ism: true },
         orderBy: { ism: "asc" },
       }),
-      kunlikBuyurtmalar(businessId, bugun),
-      kategoriyaStatistikasi(businessId),
+      // YUQORI PANEL: xodimning O'Z kassasi + tez chiqim (lib/crm/yuqoriPanel.ts).
+      crmYuqoriPanel(
+        businessId,
+        { userId: session.userId, ism: session.ism ?? "Xodim" },
+        transactionScopeUserId(session),
+        bugun
+      ),
+      // Tez chiqim formasi uchun CHIQIM kategoriyalari (yuqoridagi ro'yxat
+      // kirim turida — u zakaz kategoriyasi uchun).
+      prisma.category.findMany({
+        where: { businessId, turi: "chiqim", isActive: true },
+        select: { id: true, nomi: true },
+        orderBy: [{ tartib: "asc" }, { nomi: "asc" }],
+      }),
+      // Kassalar — faqat NOM (qoldiq olinmaydi: kassa maxfiyligi).
+      listAccounts(businessId, true),
       // Xodim kategoriyalari (Sotuvchi/Diktor/...) — zakaz-xodim biriktiruvi.
       crmFormaKategoriyalari(businessId),
       // SOTUVCHI: faqat shu biznesning faol sotuvchilari (forma va filtr).
@@ -105,6 +122,13 @@ export default async function CrmPage({
     ]);
 
     const ismlar = new Map(xodimlar.map((x) => [x.id, x.ism]));
+
+    // TEZ CHIQIM formasidagi kassa ro'yxati: xodimning O'Z kassasi BIRINCHI
+    // (default tanlov) — chiqim odatda qo'ldagi naqddan qilinadi. Qoldiq
+    // uzatilmaydi, faqat nom (kassa maxfiyligi).
+    const chiqimKassalari = [...kassalar]
+      .sort((a, b) => Number(b.userId === session.userId) - Number(a.userId === session.userId))
+      .map((k) => ({ id: k.id, nomi: k.nomi }));
 
     // TO'LOV HOLATI bazada ustun emas (summa va tolangan'dan hisoblanadi),
     // shuning uchun bu filtr o'qishdan keyin qo'llanadi.
@@ -122,22 +146,11 @@ export default async function CrmPage({
           </p>
         </div>
 
-        <BugungiPanel
-          kunlik={{
-            sana: kunlik.sana,
-            jami: kunlik.jami,
-            kirimga: kunlik.kirimga,
-            kutilmoqda: kunlik.kutilmoqda,
-            soni: kunlik.soni,
-            qatorlar: kunlik.buyurtmalar.map((b) => ({
-              id: b.id,
-              nomi: b.nomi,
-              kategoriya: b.kategoriya,
-              summa: b.summa,
-              kirimBor: Boolean(b.transactionId),
-            })),
-          }}
-          kategoriyalar={kategoriyaStat}
+        <YuqoriPanel
+          boshlangich={yuqoriPanel}
+          kategoriyalar={chiqimKategoriyalari}
+          kassalar={chiqimKassalari}
+          bugun={bugun}
         />
 
         <CrmClient
