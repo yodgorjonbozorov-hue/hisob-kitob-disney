@@ -56,6 +56,17 @@ export interface SotuvJami {
   zakazlar: number;
 }
 
+/**
+ * ZAKAZ KALITI — yozuv qaysi REAL zakazga tegishli.
+ *
+ * Aralash to'lovli zakaz har kanal uchun alohida kirim yozadi, shuning uchun
+ * "zakaz soni" yozuvlarni emas, SHU kalitni sanaydi. CRM bilan bog'liq
+ * bo'lmagan yozuv o'z-o'zicha bitta zakaz.
+ */
+function zakazKaliti(t: { id: string; crmZakazTolovi?: { dealId: string } | null }): string {
+  return t.crmZakazTolovi?.dealId ?? t.id;
+}
+
 /** Yozuv qaysi foydalanuvchiga tegishli — biriktirish qoidasining yagona joyi. */
 function kimniki(t: { sotuvchiId: string | null; userId: string }): string {
   return t.sotuvchiId ?? t.userId;
@@ -71,6 +82,8 @@ interface XomYozuv {
   userId: string;
   category: { nomi: string } | null;
   crmBuyurtma: { nomi: string; debt: { status: string } | null } | null;
+  /** Aralash to'lov qatori orqali bog'langan zakaz (kanal bo'yicha kirim). */
+  crmZakazTolovi: { dealId: string; deal: { debt: { status: string } | null } } | null;
 }
 
 /**
@@ -115,6 +128,10 @@ async function oyYozuvlari(
       // Zakazning qarz qoldig'i: qisman to'langan zakazning to'langan qismi
       // ham bonusga kirmasligi kerak (yuqoridagi izoh).
       crmBuyurtma: { select: { nomi: true, debt: { select: { status: true } } } },
+      // ARALASH TO'LOV: bir zakaz bir necha kanal bilan to'langan bo'lsa har
+      // kanal alohida kirim yozuvi bo'ladi. Zakaz SONI shu bog'lanish orqali
+      // bir marta sanaladi (summa esa yozuvlar yig'indisi — u to'g'ri).
+      crmZakazTolovi: { select: { dealId: true, deal: { select: { debt: { select: { status: true } } } } } },
     },
     orderBy: [{ sana: "desc" }, { createdAt: "desc" }],
   })) as XomYozuv[];
@@ -134,8 +151,9 @@ async function oyYozuvlari(
   return rows
     .filter((r) => {
       // Qisman to'langan CRM zakazi: qarzi hali yopilmagan bo'lsa, uning
-      // to'langan qismi ham bonusga kirmaydi.
-      const zakazQarzi = r.crmBuyurtma?.debt?.status;
+      // to'langan qismi ham bonusga kirmaydi. Aralash to'lovda bog'lanish
+      // `Deal.transactionId` da emas, to'lov QATORIDA bo'ladi.
+      const zakazQarzi = r.crmBuyurtma?.debt?.status ?? r.crmZakazTolovi?.deal?.debt?.status;
       if (zakazQarzi !== undefined && zakazQarzi !== "PAID") return false;
 
       const holat = tolovHolati.get(r.id);
@@ -157,11 +175,20 @@ export async function sotuvJamlari(
 ): Promise<Map<string, SotuvJami>> {
   const rows = await oyYozuvlari(businessId, oy);
   const jam = new Map<string, SotuvJami>();
+  // ZAKAZ SONI — YOZUV soni EMAS: aralash to'lovli zakaz bir necha kirim
+  // yozuvi qoldiradi, lekin u BITTA zakaz (`lib/crm/tolovlar.ts`).
+  const sanalgan = new Map<string, Set<string>>();
   for (const r of rows) {
     const kim = kimniki(r);
     const m = jam.get(kim) ?? { summa: 0, zakazlar: 0 };
     m.summa += r.summa;
-    m.zakazlar += 1;
+    const kalit = zakazKaliti(r);
+    const korilgan = sanalgan.get(kim) ?? new Set<string>();
+    if (!korilgan.has(kalit)) {
+      korilgan.add(kalit);
+      m.zakazlar += 1;
+    }
+    sanalgan.set(kim, korilgan);
     jam.set(kim, m);
   }
   return jam;

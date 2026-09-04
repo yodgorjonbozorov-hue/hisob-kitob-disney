@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ASOSIY_USTUNLAR,
-  holatVaqti,
   kirimUlushi,
   qarzUlushi,
   zakazUstuni,
@@ -15,21 +14,16 @@ import { BuyurtmaSheet } from "./BuyurtmaSheet";
 import { DoskaFiltr } from "./DoskaFiltr";
 import { YakunlashTasdiq } from "./YakunlashTasdiq";
 import { ZakazUstuni } from "./ZakazUstuni";
+import { useUstunSahifalari } from "./useUstunSahifalari";
+import { useOptimistikKochish } from "./useOptimistikKochish";
 import type {
   BuyurtmaDTO,
   KategoriyaDTO,
   SotuvchiDTO,
+  UstunSahifaDTO,
   XodimDTO,
   XodimKategoriyaDTO,
 } from "./turlar";
-
-/** Server javobigacha ko'rsatiladigan mahalliy o'zgarish. */
-interface MahalliyOzgarish {
-  holat: string;
-  sana: string | null;
-  /** Ustun ichidagi tartib vaqti (ISO) — "hozir". */
-  holatAt: string;
-}
 
 /**
  * CRM ZAKAZ DOSKASI.
@@ -41,13 +35,11 @@ interface MahalliyOzgarish {
  * Sudrab tashlash (drag & drop) ishlashda davom etadi; mobilda esa ayni
  * o'tishlar tafsilot oynasidagi tugmalarda (10-talab).
  *
- * OPTIMISTIK KO'CHISH: `router.refresh()` server javobini kutadi, shuning
- * uchun holat o'zgargach karta bir zumga eski ustunida turib qolardi. Shu
- * bois o'zgarish MAHALLIY ravishda ham yoziladi — zakaz darhol yangi
- * ustunning ENG TEPASIDA paydo bo'ladi (`holatAt` = hozir).
+ * Ikki mantiq alohida hooklarda: ustun sahifalari ("Yana ko'rsatish" —
+ * `useUstunSahifalari`) va optimistik ko'chish (`useOptimistikKochish`).
  */
 export function CrmClient({
-  buyurtmalar,
+  sahifalar,
   kategoriyalar,
   xodimlar,
   xodimKategoriyalari,
@@ -59,7 +51,8 @@ export function CrmClient({
   meId,
   bugun,
 }: {
-  buyurtmalar: BuyurtmaDTO[];
+  /** Har ustunning BIRINCHI sahifasi (server tomonda kesilgan, 10 tadan). */
+  sahifalar: UstunSahifaDTO[];
   kategoriyalar: KategoriyaDTO[];
   xodimlar: XodimDTO[];
   /** Xodim kategoriyalari (Diktor/Dekorator/...) — bajaruvchi biriktiruvi. */
@@ -67,71 +60,41 @@ export function CrmClient({
   /** Sotuvchilar — forma selektori va doska filtri uchun. */
   sotuvchilar: SotuvchiDTO[];
   sotuvchiMajburiy: boolean;
-  /** `crm.jamoa` — mavjud zakaz jamoasini o'zgartirish huquqi. */
+  /** `crm.jamoa` va `crm.baho` huquqlari. */
   jamoaHuquqi: boolean;
-  /** `crm.baho` — sifat nazorati huquqi. */
   bahoYozaOladi: boolean;
-  filtr: {
-    from: string;
-    to: string;
-    masulId: string;
-    sotuvchiId: string;
-    categoryId: string;
-    tolov: string;
-  };
+  /** Joriy filtr — "Yana ko'rsatish" so'roviga ham AYNI shu uzatiladi. */
+  filtr: Record<"from" | "to" | "masulId" | "sotuvchiId" | "categoryId" | "tolov", string>;
   meId: string;
   /** Bugungi sana "YYYY-MM-DD" (Asia/Tashkent, server tomondan). */
   bugun: string;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  // Bosh sahifadagi "+ Yangi → Buyurtma" shu havola bilan keladi: forma
-  // shu yerda qoladi, dashboard uni QAYTA yozmaydi.
+  // "+ Yangi → Buyurtma" (bosh sahifa) va "zakazni ochish" (xodim
+  // samaradorligi) havolalari — forma/oyna shu yerda ochiladi.
   const yangiSoralgan = searchParams.get("yangi") === "1";
-  // Xodim samaradorligi sahifasidan "zakazni ochish" havolasi (?buyurtma=ID).
   const buyurtmaId = searchParams.get("buyurtma");
+  // USTUN SAHIFALARI VA "Yana ko'rsatish" — alohida hookda.
+  const { holat: ustunHolati, zakazlar: yuklangan, yuklanayotgan, yanaKorsatish, sahifaXatosi } =
+    useUstunSahifalari(sahifalar, filtr);
+  // OPTIMISTIK KO'CHISH (server javobigacha) — alohida hookda.
+  const { zakazlar, mahalliyYoz } = useOptimistikKochish(yuklangan);
+
   const [yangiOchiq, setYangiOchiq] = useState(yangiSoralgan);
+  // Xodim samaradorligi sahifasidan kelgan havola (?buyurtma=ID) — zakaz
+  // yuklangan sahifada bo'lsa oyna darhol ochiladi.
   const [tanlangan, setTanlangan] = useState<BuyurtmaDTO | null>(
-    () => buyurtmalar.find((x) => x.id === buyurtmaId) ?? null
+    () => zakazlar.find((x) => x.id === buyurtmaId) ?? null
   );
   const [yakunlanadi, setYakunlanadi] = useState<BuyurtmaDTO | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [xato, setXato] = useState<string | null>(null);
-  /**
-   * MAHALLIY (optimistik) o'zgarishlar — server javobi yetib kelgunicha.
-   * Kalit — zakaz id'si.
-   */
-  const [mahalliy, setMahalliy] = useState<Record<string, MahalliyOzgarish>>({});
-
-  /**
-   * Doska ko'rsatadigan RO'YXAT: serverdan kelgan ma'lumot ustiga mahalliy
-   * o'zgarish qo'yiladi. Mahalliy nusxa O'Z-O'ZIDAN chiqadi (tozalash
-   * effekti kerak emas): server ayni holatni ko'rsatgan yoki undan YANGIROQ
-   * o'zgarish yozgan bo'lsa — serverning so'zi oxirgi.
-   */
-  const zakazlar = buyurtmalar.map((b) => {
-    const m = mahalliy[b.id];
-    if (!m) return b;
-    const serverYetdi = m.holat === b.holat && m.sana === b.sana;
-    const serverYangiroq = holatVaqti(b) >= Date.parse(m.holatAt);
-    if (serverYetdi || serverYangiroq) return b;
-    return { ...b, holat: m.holat, sana: m.sana, holatAt: m.holatAt };
-  });
-
-  /** Zakazni mahalliy ravishda yangi holatga qo'yadi (tartib vaqti — hozir). */
-  function mahalliyYoz(b: BuyurtmaDTO, holat: string, sana: string | null = b.sana) {
-    setMahalliy((oldingi) => ({
-      ...oldingi,
-      [b.id]: { holat, sana, holatAt: new Date().toISOString() },
-    }));
-  }
-
   const ustuni = (b: BuyurtmaDTO): Ustun => zakazUstuni(b.holat, b.sana, bugun);
 
   /**
-   * USTUNGA KO'CHIRISH. "Yutildi" bu yerda darhol bajarilmaydi — pul
-   * yozadigan amal hech qachon sudrab tashlash bilan bo'lmasin: tasdiq
-   * oynasi ochiladi va u yerda kirim/qarz taqsimoti ko'rsatiladi.
+   * USTUNGA KO'CHIRISH. "Yutildi" darhol bajarilmaydi — pul yozadigan amal
+   * sudrab tashlash bilan bo'lmasin: tasdiq oynasi kirim/qarzni ko'rsatadi.
    */
   async function ustungaKochirish(id: string, ustun: Ustun) {
     setXato(null);
@@ -160,7 +123,7 @@ export function CrmClient({
       setXato((await res.json()).error ?? "Xatolik yuz berdi");
       return;
     }
-    // Optimistik: "Bugungi" — HOLAT emas, sana o'zgarishi (pipeline qoidasi).
+    // "Bugungi" — HOLAT emas, sana o'zgarishi (pipeline qoidasi).
     if (ustun === "BUGUNGI") mahalliyYoz(b, b.holat, bugun);
     else mahalliyYoz(b, ustun === "JARAYONDA" ? "JARAYONDA" : "KUTILMOQDA");
     setTanlangan(null);
@@ -194,7 +157,9 @@ export function CrmClient({
         >
           + Yangi zakaz
         </button>
-        {xato && <p className="text-expense text-sm">{xato}</p>}
+        {(xato ?? sahifaXatosi) && (
+          <p className="text-expense text-sm">{xato ?? sahifaXatosi}</p>
+        )}
       </div>
 
       <DoskaFiltr
@@ -205,7 +170,7 @@ export function CrmClient({
         bugun={bugun}
       />
 
-      {/* Kanban — mobilda gorizontal svayp bilan yuriladi (16-talab). */}
+      {/* Kanban — mobilda gorizontal svayp (16-talab), har ustun 10 tadan. */}
       <div className="flex gap-3 overflow-x-auto pb-3 -mx-1 px-1 snap-x snap-mandatory">
         {ASOSIY_USTUNLAR.map((u) => (
           <div key={u} className="snap-start">
@@ -213,6 +178,11 @@ export function CrmClient({
               ustun={u}
               bugun={bugun}
               zakazlar={zakazlar.filter((b) => ustuni(b) === u)}
+              soni={ustunHolati[u]?.jami ?? 0}
+              summa={ustunHolati[u]?.summa ?? 0}
+              yanaBormi={Boolean(ustunHolati[u]?.kursor)}
+              yuklanmoqda={yuklanayotgan === u}
+              onYana={() => yanaKorsatish(u)}
               onDrop={() => dragId && ustungaKochirish(dragId, u)}
               onTanlash={setTanlangan}
               onDragStart={setDragId}
@@ -249,11 +219,9 @@ export function CrmClient({
           onYoqotildi={() => yoqotildi(tanlangan.id)}
           onTahrirlandi={(yangi) => {
             // Ochiq oyna serverdan kelgan snapshot ustida ishlaydi — yangi
-            // qiymatlar darhol ko'rinsin (doskaning o'zini `router.refresh()`
-            // yangilaydi).
-            // Yutilgan zakazda to'lov belgilanganda server kirim/qarzni
-            // DARHOL yozadi — oynadagi moliya bloki ham shuni ko'rsatsin
-            // (raqamlar serverdagi AYNI qoidadan: kirimUlushi/qarzUlushi).
+            // qiymatlar darhol ko'rinsin. Yutilgan zakazda to'lov belgilansa
+            // server kirim/qarzni darhol yozadi, shuning uchun moliya bloki
+            // ham shu yerda yangilanadi (AYNI qoidadan: kirimUlushi/qarzUlushi).
             const kirimSumma = yangi.transactionId ? kirimUlushi(yangi.summa, yangi.tolangan) : 0;
             const qarzQoldiq = yangi.debtId ? qarzUlushi(yangi.summa, yangi.tolangan, yangi.tolovTuri) : 0;
             setTanlangan({ ...tanlangan, ...yangi, kirimSumma, qarzQoldiq });

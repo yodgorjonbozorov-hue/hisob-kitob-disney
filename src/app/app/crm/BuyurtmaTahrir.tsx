@@ -5,26 +5,30 @@ import { Select } from "@/components/ui/Select";
 import { parseSomInput } from "@/lib/format";
 import {
   TolovMaydonlari,
-  tolanganHisobla,
-  tolovTuriHisobla,
-  tolovXatosi,
-  type PulKanali,
-  type TolovTanlov,
+  qatorlarniTozala,
+  tolovlarXatosi,
+  type TolovQatori,
 } from "./TolovMaydonlari";
 import type { BuyurtmaDTO, KategoriyaDTO } from "./turlar";
 
 /**
- * Saqlangan zakazdan forma tanlovini tiklaydi — SERVER bilan AYNI qoida
- * (`lib/crm/pipeline.ts` → `tolovHolati`). "Qarzga" faqat foydalanuvchi
- * uni tanlagan bo'lsa (`tolovTuri = "qarz"`); to'lovi belgilanmagan zakaz
- * "tanlanmagan" bo'lib ochiladi — forma jimgina "Qarzga" ga o'tkazib
- * qo'ymaydi (avvalgi xato: narxni tuzatib saqlash zakazni qarzga aylantirardi).
+ * Saqlangan zakazdan TO'LOV QATORLARINI tiklaydi.
+ *
+ * Aralash to'lovli zakazda qatorlar bazadan keladi. Eski (bir kanalli)
+ * zakazda qator yo'q — pul `tolangan`/`tolovTuri` da turadi, shuning uchun
+ * u bitta qator qilib ko'rsatiladi va forma ikkala yo'lni bir xil tahrir
+ * qiladi. To'lovi belgilanmagan zakaz BO'SH ochiladi: forma uni jimgina
+ * qarzga yoki naqdga aylantirib qo'ymaydi.
  */
-function boshlangichTanlov(b: BuyurtmaDTO): TolovTanlov {
-  if (b.summa > 0 && b.tolangan >= b.summa) return "toliq";
-  if (b.tolangan > 0) return "qisman";
-  if (b.tolovTuri === "qarz") return "qarz";
-  return "tanlanmagan";
+function boshlangichQatorlar(b: BuyurtmaDTO): TolovQatori[] {
+  if (b.tolovlar.length > 0) {
+    return b.tolovlar.map((t) => ({ kanal: t.kanal, summa: String(t.summa) }));
+  }
+  if (b.tolangan > 0) {
+    const kanal = b.tolovTuri && b.tolovTuri !== "qarz" ? b.tolovTuri : "naqd";
+    return [{ kanal, summa: String(b.tolangan) }];
+  }
+  return [];
 }
 
 const INPUT =
@@ -64,27 +68,28 @@ export function BuyurtmaTahrir({
 }) {
   const [categoryId, setCategoryId] = useState(b.categoryId ?? "");
   const [summa, setSumma] = useState(b.summa > 0 ? String(b.summa) : "");
-  const [tolovTanlov, setTolovTanlov] = useState<TolovTanlov>(() => boshlangichTanlov(b));
-  const [qisman, setQisman] = useState(b.tolangan > 0 ? String(b.tolangan) : "");
-  const [kanal, setKanal] = useState<PulKanali>(b.tolovTuri === "click" ? "click" : "naqd");
+  const [tolovQatorlari, setTolovQatorlari] = useState<TolovQatori[]>(() => boshlangichQatorlar(b));
+  const [qarzga, setQarzga] = useState(b.tolovTuri === "qarz" && b.tolangan === 0);
   const [loading, setLoading] = useState(false);
   const [xato, setXato] = useState<string | null>(null);
 
   const yangiSumma = summa ? parseSomInput(summa) : 0;
-  const yangiTolangan = tolanganHisobla(tolovTanlov, yangiSumma, qisman ? parseSomInput(qisman) : 0);
-  const yangiTolovTuri = tolovTuriHisobla(tolovTanlov, kanal);
+  const tolovSatrlari = qatorlarniTozala(tolovQatorlari);
+  const yangiTolangan = tolovSatrlari.reduce((s, t) => s + t.summa, 0);
+  const yangiQarzga = tolovSatrlari.length === 0 && qarzga;
   const ozgardi =
     categoryId !== (b.categoryId ?? "") ||
     yangiSumma !== b.summa ||
     yangiTolangan !== b.tolangan ||
-    yangiTolovTuri !== (b.tolovTuri ?? null);
+    yangiQarzga !== (b.tolovTuri === "qarz") ||
+    JSON.stringify(tolovSatrlari) !== JSON.stringify(qatorlarniTozala(boshlangichQatorlar(b)));
 
   async function saqlash() {
     if (!categoryId) {
       setXato("Kategoriya tanlansin");
       return;
     }
-    const tolovXato = tolovXatosi(tolovTanlov, yangiSumma, yangiTolangan);
+    const tolovXato = tolovlarXatosi(yangiSumma, tolovSatrlari);
     if (tolovXato) {
       setXato(tolovXato);
       return;
@@ -97,8 +102,9 @@ export function BuyurtmaTahrir({
       body: JSON.stringify({
         categoryId,
         summa: yangiSumma,
-        tolangan: yangiTolangan,
-        tolovTuri: yangiTolovTuri,
+        tolovlar: tolovSatrlari,
+        // QARZGA — faqat to'lovsiz zakazda va faqat foydalanuvchi tanlasa.
+        tolovTuri: yangiQarzga ? "qarz" : null,
       }),
     });
     setLoading(false);
@@ -112,7 +118,7 @@ export function BuyurtmaTahrir({
       kategoriya: kategoriyalar.find((k) => k.id === categoryId)?.nomi ?? "",
       summa: yangiSumma,
       tolangan: yangiTolangan,
-      tolovTuri: yangiTolovTuri,
+      tolovTuri: yangiQarzga ? "qarz" : tolovSatrlari.length === 1 ? tolovSatrlari[0].kanal : tolovSatrlari.length > 1 ? "aralash" : null,
       transactionId: javob.transactionId ?? b.transactionId,
       debtId: javob.debtId ?? b.debtId,
     });
@@ -147,14 +153,11 @@ export function BuyurtmaTahrir({
         </label>
       </div>
       <TolovMaydonlari
-        tanlov={tolovTanlov}
-        onTanlov={setTolovTanlov}
-        qisman={qisman}
-        onQisman={setQisman}
-        kanal={kanal}
-        onKanal={setKanal}
+        qatorlar={tolovQatorlari}
+        onQatorlar={setTolovQatorlari}
         narx={yangiSumma}
-        tolangan={yangiTolangan}
+        qarzga={qarzga}
+        onQarzga={setQarzga}
       />
 
       {xato && <p className="text-expense text-sm">{xato}</p>}

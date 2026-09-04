@@ -545,6 +545,19 @@ CREATE TABLE "Deal" (
 );
 
 -- CreateTable
+CREATE TABLE "DealTolov" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "dealId" TEXT NOT NULL,
+    "kanal" TEXT NOT NULL,
+    "summa" INTEGER NOT NULL,
+    "transactionId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "DealTolov_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "Task" (
     "id" TEXT NOT NULL,
     "businessId" TEXT NOT NULL,
@@ -1667,6 +1680,12 @@ CREATE INDEX "Deal_businessId_holat_holatAt_idx" ON "Deal"("businessId", "holat"
 CREATE INDEX "Deal_categoryId_idx" ON "Deal"("categoryId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "DealTolov_transactionId_key" ON "DealTolov"("transactionId");
+
+-- CreateIndex
+CREATE INDEX "DealTolov_businessId_dealId_idx" ON "DealTolov"("businessId", "dealId");
+
+-- CreateIndex
 CREATE INDEX "Task_businessId_holat_idx" ON "Task"("businessId", "holat");
 
 -- CreateIndex
@@ -2208,6 +2227,15 @@ ALTER TABLE "Deal" ADD CONSTRAINT "Deal_transactionId_fkey" FOREIGN KEY ("transa
 
 -- AddForeignKey
 ALTER TABLE "Deal" ADD CONSTRAINT "Deal_debtId_fkey" FOREIGN KEY ("debtId") REFERENCES "Debt"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "DealTolov" ADD CONSTRAINT "DealTolov_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "DealTolov" ADD CONSTRAINT "DealTolov_dealId_fkey" FOREIGN KEY ("dealId") REFERENCES "Deal"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "DealTolov" ADD CONSTRAINT "DealTolov_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Task" ADD CONSTRAINT "Task_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;

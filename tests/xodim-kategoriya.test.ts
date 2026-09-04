@@ -254,14 +254,7 @@ test("dublikat yakunlash: kirim IKKINCHI marta yozilmaydi", async () => {
   assert.equal(soni, 1, "moliyaviy natija baribir +500 000 (bitta yozuv)");
 });
 
-test("kirim yozilgach zakaz xodimlari QULFLANADI (tarix o'zgarmaydi)", async () => {
-  await assert.rejects(
-    A(() => xk.zakazXodimlariniSaqlash(tA.business.id, deal1.id, [{ categoryId: kSotuvchi.id, employeeId: vali.id }])),
-    BadRequestError
-  );
-  const biriktiruvlar = await A(() => xk.zakazXodimlari(tA.business.id, deal1.id));
-  assert.equal(biriktiruvlar.length, 3, "tarixiy biriktiruv joyida");
-});
+
 
 // ---------- Analitika ----------
 
@@ -434,4 +427,60 @@ test("huquq matritsasi: samaradorlik hisoboti faqat boshqaruvchiga", async () =>
   assert.ok(!effektivHuquqlar({ rol: "CASHIER" }).has("hisobot.korish"));
   assert.ok(effektivHuquqlar({ rol: "OWNER" }).has("hisobot.korish"));
   assert.ok(effektivHuquqlar({ rol: "ADMIN" }).has("hisobot.korish"));
+});
+
+// ---------------------------------------------------------------------------
+// OXIRGI: pul yozadigan test — umumiy fixture'ning raqamlarini buzmasin
+// (yuqoridagi analitika testlari qat'iy summalarga tayanadi).
+// ---------------------------------------------------------------------------
+
+test("kirim yozilgach ATTRIBUTION tahrirlanadi, PUL esa tegilmaydi", async () => {
+  // QOIDA O'ZGARDI: ilgari kirim yozilgan zakazning jamoasi butunlay
+  // qulflanardi. Endi biriktiruv (kim ishlagan) tuzatiladi — tarixiy KPI
+  // aynan shundan hisoblanadi va uni tuzatmasdan xodim o'z zakazlarini
+  // to'ldirib chiqa olmaydi. Pul maydonlari esa alohida yo'lda
+  // (PATCH /api/crm/deals/[id]) qulflangan.
+  //
+  // Tekshiruv ALOHIDA zakazda: `deal1` — quyidagi analitika testlarining
+  // umumiy fixture'i, uni o'zgartirish ularning taxminini buzardi.
+  const d = await A(() =>
+    crm.createDeal({
+      businessId: tA.business.id,
+      nomi: "Attribution tuzatish",
+      summa: 200_000,
+      tolangan: 200_000,
+      tolovTuri: "naqd",
+      categoryId: katBantik.id,
+      sana: bugun,
+      userId: tA.user.id,
+      stageId: wonStage.id,
+      xodimlar: [{ categoryId: kSotuvchi.id, employeeId: ali.id }],
+    })
+  );
+  assert.ok(d.transactionId, "WON bosqichida yaratilgan zakazga kirim darhol yozildi");
+  const pulOldin = await A(() =>
+    prisma.transaction.aggregate({
+      where: { businessId: tA.business.id, turi: "kirim", deletedAt: null },
+      _sum: { summa: true },
+      _count: { _all: true },
+    })
+  );
+
+  await A(() => xk.zakazXodimlariniSaqlash(tA.business.id, d.id, [{ categoryId: kSotuvchi.id, employeeId: vali.id }]));
+  const biriktiruvlar = await A(() => xk.zakazXodimlari(tA.business.id, d.id));
+  assert.equal(biriktiruvlar.length, 1);
+  assert.equal(biriktiruvlar[0].ism, "Vali", "attribution tuzatildi");
+
+  const pulKeyin = await A(() =>
+    prisma.transaction.aggregate({
+      where: { businessId: tA.business.id, turi: "kirim", deletedAt: null },
+      _sum: { summa: true },
+      _count: { _all: true },
+    })
+  );
+  assert.deepEqual(pulKeyin, pulOldin, "pul yozuvlariga tegilmadi");
+
+  // `deal1` (analitika fixture'i) o'z holicha qoladi.
+  const eskisi = await A(() => xk.zakazXodimlari(tA.business.id, deal1.id));
+  assert.equal(eskisi.length, 3, "tarixiy biriktiruv joyida");
 });

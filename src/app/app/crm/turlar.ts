@@ -72,6 +72,27 @@ export interface ZakazXodimDTO {
   baho: number | null;
 }
 
+/** Zakazning bitta to'lov qatori (kanal + summa). */
+export interface ZakazTolovDTO {
+  id: string;
+  /** "naqd" | "click" | "terminal" | "boshqa". */
+  kanal: string;
+  summa: number;
+}
+
+/**
+ * DOSKA USTUNINING BIR SAHIFASI (server tomonda kesilgan, 10 tadan).
+ * `kursor` — "Yana ko'rsatish" uchun kalit; `null` bo'lsa boshqa zakaz yo'q.
+ * `jami`/`summa` — SAHIFADAN emas, butun ustundan (sarlavha raqamlari).
+ */
+export interface UstunSahifaDTO {
+  ustun: string;
+  zakazlar: BuyurtmaDTO[];
+  kursor: string | null;
+  jami: number;
+  summa: number;
+}
+
 export interface BuyurtmaDTO {
   id: string;
   /** Xizmat/zakaz nomi. */
@@ -114,6 +135,11 @@ export interface BuyurtmaDTO {
   kirimSumma: number;
   /** Ochilgan qarzning qoldig'i (qarz yozuvidan). */
   qarzQoldiq: number;
+  /**
+   * ARALASH TO'LOV qatorlari (naqd + click + terminal...). Bo'sh — bir
+   * kanalli eski zakaz: pul `tolangan`/`tolovTuri` da.
+   */
+  tolovlar: ZakazTolovDTO[];
   /** Zakazni olgan sotuvchi (biriktirilmagan bo'lsa null). */
   sotuvchi: ZakazSotuvchiDTO | null;
 }

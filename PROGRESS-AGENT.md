@@ -6023,3 +6023,46 @@ Fayruzada o'zgarish yo'q; dekorator esa rad etiladi).
 uchun ikki xil mexanizm yozildi. Ish boshlashdan oldin `git fetch` bilan
 main'ning holatini tekshirish — merge'da ish tashlab yuborilishining oldini
 oladi.
+
+## 2026-09-04 — Aralash to'lov va doska sahifalashi
+
+**1. BITTA ZAKAZDA BIR NECHA TO'LOV KANALI.** Yangi jadval `DealTolov`
+(migratsiya `20260904120000_zakaz_aralash_tolov`): kanal + summa.
+`Deal.tolangan` — shu qatorlar YIG'INDISI, `Deal.tolovTuri` esa bir kanalli
+zakazda o'sha kanal, ko'p kanalda "aralash".
+
+Eng muhim qaror: **har kanal uchun ALOHIDA kirim tranzaksiyasi**. Sabab
+oddiy — bitta `Transaction` da bitta `accountId` bo'ladi, ya'ni bitta yozuv
+pulni ikki kassaga bo'la olmaydi. Endi naqd qism naqd kassaga, click/terminal
+qismi karta/hisob kassasiga tushadi ("naqd kassa faqat naqd qismga oshsin").
+Dublikatga qarshi himoya qator darajasida: `DealTolov.transactionId` UNIQUE
++ tranzaksiya ichida `transactionId: null` sharti.
+
+QARZ — KANAL EMAS. U zakaz summasidan qolgan qism (`qarzUlushi`), shuning
+uchun kanallar ro'yxatida "qarz" yo'q. To'lov qatori umuman bo'lmasa zakaz
+to'lovsiz qoladi va Yutildi hech narsa yozmaydi (oldingi tuzatish saqlandi);
+"Qarzga" belgisi esa butun summani qarzdorlikka yozadi.
+
+MOLIYA LUG'ATI KENGAYTIRILMADI: `Transaction.tolovTuri` avvalgidek
+"naqd" | "click" | "qarz" | null bo'lib qoldi (`lib/tolovBolimi.ts` shunga
+qurilgan — hisobotlar, kunlik kassa, filtrlar). Terminal va "boshqa" — naqd
+EMAS, demak karta/hisob yo'nalishi; kanalning O'ZI `DealTolov.kanal` da
+saqlanadi va kirim izohida ko'rinadi.
+
+ZAKAZ SONI BUZILMADI: bir zakaz endi bir necha kirim yozuvi qoldiradi,
+shuning uchun `lib/kpi/sotuv.ts` va `lib/queries/xodimStatistika.ts` da
+sanoq YOZUV emas, ZAKAZ bo'yicha (summa esa avvalgidek yozuvlardan).
+
+**2. DOSKA SAHIFALASHI.** Har ustun 10 tadan zakaz ko'rsatadi, "Yana
+ko'rsatish" keyingi 10 tasini SERVERDAN oladi (`/api/crm/board?ustun=&kursor=`).
+Ilgari 500 ta zakaz bir yo'la yuklanardi. Tartib ustun ma'nosiga qarab
+(`ustunOrderBy` — `zakazlarniTartibla` ning SQL ko'rinishi): tarix
+ustunlarida `holatAt` kamayish bo'yicha, reja ustunlarida sana o'sish
+bo'yicha. Sarlavhadagi "N ta • summa" sahifadan emas, butun ustundan.
+
+**Nima o'rganildi.** `main` da `zakazXodimlariniSaqlash` dagi kirim qulfi
+ataylab olib tashlangan edi, lekin `tests/xodim-kategoriya.test.ts` dagi
+eski test qoidani hali ham talab qilardi — suite RED holda deploy bo'lgan.
+Merge paytida men u faylni ishga tushirmagandim. Xulosa: merge'dan keyin
+o'zgargan MODUL bo'yicha barcha suitalar yugurtiriladi, faqat o'zim
+tegingan fayllar emas.
