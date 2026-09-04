@@ -73,6 +73,9 @@ export async function getXodimlarJamoaKpi(
     prisma.dealEmployee.findMany({
       where: {
         businessId,
+        // FAQAT TASDIQLANGAN: mashina taxmin qilgan biriktiruv (masalan eski
+        // migratsiya) odam tasdiqlamaguncha statistikaga kirmaydi.
+        tasdiqlangan: true,
         deal: {
           deletedAt: null,
           OR: [{ sana: { gte, lt } }, { sana: null, createdAt: { gte, lt } }],

@@ -5,6 +5,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { INPUT_CLASS } from "@/components/ui/fieldStyles";
+import { parseSomInput } from "@/lib/format";
 import { KATEGORIYA_TURLARI, KATEGORIYA_TURI_NOMI, type KategoriyaTuri } from "@/lib/validation/xodimKategoriya";
 import type { KategoriyaDTO } from "@/lib/services/xodimKategoriya";
 import { XodimAvatar } from "../XodimAvatar";
@@ -44,6 +45,7 @@ export function KategoriyaModal({
   );
   const [zakazga, setZakazga] = useState(kategoriya?.zakazgaBiriktiriladi ?? true);
   const [kopXodim, setKopXodim] = useState(kategoriya?.kopXodim ?? false);
+  const [zakazHaqi, setZakazHaqi] = useState(String(kategoriya?.zakazHaqi ?? 0));
   const [xato, setXato] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -56,7 +58,10 @@ export function KategoriyaModal({
       {
         method: kategoriya ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nomi, turi, zakazgaBiriktiriladi: zakazga, kopXodim }),
+        body: JSON.stringify({
+          nomi, turi, zakazgaBiriktiriladi: zakazga, kopXodim,
+          zakazHaqi: zakazHaqi ? parseSomInput(zakazHaqi) : 0,
+        }),
       }
     );
     setLoading(false);
@@ -147,6 +152,23 @@ export function KategoriyaModal({
           </label>
         )}
 
+        {turi !== "sotuvchi" && (
+          <label className="block space-y-1">
+            <span className="block text-xs text-muted">Bir zakaz uchun haq (so&apos;m)</span>
+            <input
+              value={zakazHaqi}
+              onChange={(e) => setZakazHaqi(e.target.value)}
+              inputMode="numeric"
+              placeholder="0"
+              className={INPUT_CLASS}
+            />
+            <span className="block text-2xs text-faint">
+              Xodimning oyligiga shu lavozimdagi TASDIQLANGAN zakaz soni &times; haq bo&apos;lib
+              qo&apos;shiladi. 0 — zakaz soniga qarab to&apos;lanmaydi. Tizim hisobi shart emas.
+            </span>
+          </label>
+        )}
+
         {xato && <p className="text-expense text-sm">{xato}</p>}
         <div className="flex gap-2 justify-end pt-1">
           <Button variant="secondary" onClick={onClose}>
@@ -157,94 +179,6 @@ export function KategoriyaModal({
           </Button>
         </div>
       </form>
-    </Modal>
-  );
-}
-
-export interface XodimTanlovDTO {
-  id: string;
-  ism: string;
-  rasmUrl: string | null;
-}
-
-/** Kategoriya a'zoligini tanlash — checkbox ro'yxati (to'liq almashtiradi). */
-export function AzolarModal({
-  kategoriya,
-  xodimlar,
-  onClose,
-  onDone,
-}: {
-  kategoriya: KategoriyaDTO;
-  xodimlar: XodimTanlovDTO[];
-  onClose: () => void;
-  onDone: () => void;
-}) {
-  const [tanlangan, setTanlangan] = useState<Set<string>>(
-    () => new Set(kategoriya.azolar.map((a) => a.id))
-  );
-  const [xato, setXato] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  function almash(id: string) {
-    setTanlangan((old) => {
-      const yangi = new Set(old);
-      if (yangi.has(id)) yangi.delete(id);
-      else yangi.add(id);
-      return yangi;
-    });
-  }
-
-  async function saqlash() {
-    setLoading(true);
-    setXato(null);
-    const res = await fetch(`/api/hr/kategoriyalar/${kategoriya.id}/azolar`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ employeeIds: [...tanlangan] }),
-    });
-    setLoading(false);
-    if (!res.ok) {
-      setXato((await res.json()).error ?? "Xatolik yuz berdi");
-      return;
-    }
-    onDone();
-  }
-
-  return (
-    <Modal open onClose={onClose} title={`${kategoriya.nomi} — a'zolar`} size="lg">
-      <div className="space-y-3">
-        {xodimlar.length === 0 ? (
-          <p className="text-sm text-muted">
-            Faol xodim yo&apos;q. Avval Xodimlar bo&apos;limida xodim qo&apos;shing.
-          </p>
-        ) : (
-          <ul className="divide-y divide-line max-h-[50vh] overflow-y-auto">
-            {xodimlar.map((x) => (
-              <li key={x.id}>
-                <label className="flex items-center gap-3 py-2.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={tanlangan.has(x.id)}
-                    onChange={() => almash(x.id)}
-                    className="accent-brand w-4 h-4"
-                  />
-                  <XodimAvatar ism={x.ism} rasmUrl={x.rasmUrl} size="sm" />
-                  <span className="text-sm text-fg">{x.ism}</span>
-                </label>
-              </li>
-            ))}
-          </ul>
-        )}
-        {xato && <p className="text-expense text-sm">{xato}</p>}
-        <div className="flex gap-2 justify-end">
-          <Button variant="secondary" onClick={onClose}>
-            Bekor
-          </Button>
-          <Button onClick={saqlash} loading={loading} disabled={xodimlar.length === 0}>
-            Saqlash ({tanlangan.size})
-          </Button>
-        </div>
-      </div>
     </Modal>
   );
 }

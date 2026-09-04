@@ -50,11 +50,21 @@ async function main() {
   });
 
   // Qatnashuvlar — `getXodimlarJamoaKpi` bilan ayni manba va ayni shartlar.
-  const qatnashuvlar = await rawPrisma.dealEmployee.findMany({
+  // FAQAT TASDIQLANGAN — haqiqiy KPI so'rovi (`getXodimlarJamoaKpi`) bilan
+  // AYNI shart. Tasdiqsizlari alohida sanaladi: ular hisobda emas, lekin
+  // formada taklif bo'lib turadi, ya'ni "yo'qolgan" emas.
+  const hammasi = await rawPrisma.dealEmployee.findMany({
     where: { businessId: biznes.id, categoryId: { in: lavozimIdlar }, deal: { deletedAt: null } },
-    select: { employeeId: true, baho: true, deal: { select: { holat: true, summa: true } } },
+    select: {
+      employeeId: true, baho: true, tasdiqlangan: true,
+      deal: { select: { holat: true, summa: true } },
+    },
   });
+  const qatnashuvlar = hammasi.filter((q) => q.tasdiqlangan);
+  const tasdiqsiz = hammasi.length - qatnashuvlar.length;
 
+  console.log("");
+  console.log(`Tasdiqlanmagan biriktiruvlar (hisobda EMAS, formada taklif): ${tasdiqsiz} ta`);
   console.log("");
   console.log("| EMPLOYEE                  | ISM        | LAVOZIM  | JAMI | YUTILGAN | YO'QOTILGAN | SUMMA | BAHO |");
   console.log("|---------------------------|------------|----------|------|----------|-------------|-------|------|");
@@ -79,11 +89,11 @@ async function main() {
 
   console.log("");
   console.log(`Zakazlar: jami ${jamiZakaz} · sotuvchi biriktirilgan ${sotuvchiliZakaz} · sotuvchisiz ${jamiZakaz - sotuvchiliZakaz}`);
-  console.log(`Qatnashuv yozuvlari (sotuvchi lavozimi): ${qatnashuvlar.length}`);
+  console.log(`Qatnashuv yozuvlari: tasdiqlangan ${qatnashuvlar.length} · tasdiqsiz ${tasdiqsiz} · jami ${hammasi.length}`);
   console.log(
-    qatnashuvlar.length === sotuvchiliZakaz
-      ? "DUBLIKAT YO'Q: qatnashuv soni = sotuvchili zakaz soni (bir zakazga bitta sotuvchi)."
-      : "DIQQAT: qatnashuv soni sotuvchili zakaz sonidan farq qiladi — tekshiring."
+    hammasi.length === sotuvchiliZakaz
+      ? "DUBLIKAT YO'Q: biriktiruv soni = sotuvchili zakaz soni (bir zakazga bitta sotuvchi)."
+      : "DIQQAT: biriktiruv soni sotuvchili zakaz sonidan farq qiladi — tekshiring."
   );
   console.log("Kompaniya zakaz soni jamoa kattaligidan MUSTAQIL: yuqoridagi 'jami' Deal jadvalidan.");
   console.log("HOLAT: OK — faqat o'qildi.");

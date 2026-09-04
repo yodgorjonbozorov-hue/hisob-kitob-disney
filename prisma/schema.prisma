@@ -1134,6 +1134,19 @@ model Deal {
   sana          DateTime?
   muddat        DateTime?
   yopilganAt    DateTime?
+  /// HOLAT OXIRGI MARTA QACHON O'ZGARGAN (yaratilganda — yaratilish vaqti).
+  /// Doska ustunlari SHU maydon bo'yicha tartiblanadi: eng oxirgi holatga
+  /// o'tgan zakaz ustunning ENG TEPASIDA turadi (`lib/crm/pipeline.ts` →
+  /// `zakazlarniTartibla`).
+  ///
+  /// `createdAt` YETARLI EMAS: eski zakaz bugun "Yutildi" ga o'tsa ham u
+  /// yaratilish sanasi bo'yicha pastda qolib ketardi. `yopilganAt` ham
+  /// yetarli emas — u faqat YUTILDI/YOQOTILDI da yoziladi, JARAYONDA da
+  /// null bo'lib qolardi. Shu bois BARCHA o'tishlar shu yerga yoziladi.
+  ///
+  /// Null — faqat migratsiyagacha yaratilgan eski yozuvda; o'qish paytida
+  /// `yopilganAt ?? createdAt` ga qaytiladi (migratsiya ham shunday to'ldiradi).
+  holatAt       DateTime?
   /// Shu buyurtmadan yozilgan KIRIM tranzaksiyasi.
   /// UNIQUE — bitta buyurtma hech qachon ikkita kirim yarata olmaydi.
   /// Himoya BAZA darajasida: frontend holatiga ham, faqat kod tekshiruviga
@@ -1169,13 +1182,6 @@ model Deal {
   debt          Debt?          @relation("CrmBuyurtmaQarzi", fields: [debtId], references: [id], onDelete: SetNull)
   izoh          String?
   createdAt     DateTime       @default(now())
-  /// OXIRGI O'ZGARISH — doska tartibi shu bo'yicha (yangi yaratilgan yoki
-  /// holati hozirgina o'zgargan zakaz ro'yxat BOSHIDA turadi). Prisma har
-  /// yozuvda o'zi yangilaydi (`@updatedAt`, updateMany'da ham). Nullable —
-  /// SQLite'da mavjud jadvalga NOT NULL ustun qo'shib bo'lmaydi (Debt bilan
-  /// bir xil yo'l); migratsiya eski qatorlarni `yopilganAt`/`createdAt`
-  /// bilan to'ldiradi, shuning uchun amalda null bo'lmaydi.
-  updatedAt     DateTime?      @updatedAt
   deletedAt     DateTime?
   activities    Activity[]
   tasks         Task[]
@@ -1191,8 +1197,8 @@ model Deal {
   /// CRM doskasining asosiy kesimi: holat + sana (ustunlar shu ikkovidan
   /// hisoblanadi).
   @@index([businessId, holat, sana])
-  /// Doska tartibi: oxirgi o'zgarish bo'yicha (yangi/yangilangan tepada).
-  @@index([businessId, updatedAt])
+  /// Ustun ichidagi tartib: holat + o'sha holatga o'tgan vaqt (eng yangisi tepada).
+  @@index([businessId, holat, holatAt])
   @@index([categoryId])
 }
 
@@ -1400,19 +1406,19 @@ model Employee {
   /// false — GPS yoziladi, lekin ish joyi radiusi TEKSHIRILMAYDI (dala xodimi).
   radiusTalab    Boolean       @default(true)
 
-  attendances   Attendance[]
-  payrolls      Payroll[]
-  advances      PayrollAdvance[]
-  checks        AttendanceCheck[]
-  selfies       AttendanceSelfie[]
-  penalties     EmployeePenalty[]
-  bonuses       EmployeeBonus[]
-  plans         EmployeePlan[]
-  vazifalar     Task[]
+  attendances      Attendance[]
+  payrolls         Payroll[]
+  advances         PayrollAdvance[]
+  checks           AttendanceCheck[]
+  selfies          AttendanceSelfie[]
+  penalties        EmployeePenalty[]
+  bonuses          EmployeeBonus[]
+  plans            EmployeePlan[]
+  vazifalar        Task[]
   /// Kategoriya a'zoliklari (Sotuvchi/Diktor/... — bir xodim bir nechtasida bo'la oladi).
-  kategoriyalar EmployeeCategoryMember[]
+  kategoriyalar    EmployeeCategoryMember[]
   /// Zakazlarda qatnashuvlari (CRM buyurtma biriktiruvlari).
-  zakazlari     DealEmployee[]
+  zakazlari        DealEmployee[]
   /// KPI moduli: biriktirilgan vazifalar, ball tarixi, sotuv plani, oyliklar.
   kpiBiriktiruvlar KpiTaskAssignment[]
   kpiBallLoglari   KpiPointLog[]
@@ -1784,23 +1790,28 @@ model EmployeePlan {
 ///   "ijrochi"  — bajarilgan ish soni KPI (Diktor/Shofer/Videochi kabi).
 /// O'CHIRISH YO'Q — faqat `aktiv=false` (tarixiy biriktiruvlar saqlansin).
 model EmployeeCategory {
-  id         String   @id @default(cuid())
-  businessId String
-  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  nomi       String
-  turi       String   @default("ijrochi")
-  aktiv      Boolean  @default(true)
-  tartib     Int      @default(0)
+  id                   String   @id @default(cuid())
+  businessId           String
+  business             Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  nomi                 String
+  turi                 String   @default("ijrochi")
+  aktiv                Boolean  @default(true)
+  tartib               Int      @default(0)
   /// ZAKAZGA BIRIKTIRISH MUMKINMI. `false` — lavozim faqat HR ro'yxati uchun
   /// (masalan Administrator): CRM "Yangi zakaz" formasida chiqmaydi.
-  zakazgaBiriktiriladi Boolean @default(true)
+  zakazgaBiriktiriladi Boolean  @default(true)
   /// BIR ZAKAZGA BIR NECHTA XODIM (multi-select): Videochi, Bezakchi kabi
   /// lavozimlarda yoqiladi. `false` — bir zakazda shu lavozimdan BITTA xodim
   /// (server ham majburlaydi). Baza tuzilmasi ikkalasini ham sig'diradi —
   /// bayroq faqat biznes qoidasi, sxema cheklovi emas.
-  kopXodim   Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  kopXodim             Boolean  @default(false)
+  /// IJROCHI OYLIGI: shu lavozimda BIR zakazga chiqqani uchun haq (so'm).
+  /// 0 — bu lavozim zakaz soniga qarab to'lanmaydi. Oylik hisobi
+  /// TASDIQLANGAN biriktiruvlardan chiqadi (`DealEmployee.tasdiqlangan`),
+  /// ya'ni xodimning tizim hisobi (`Employee.userId`) bo'lishi SHART EMAS.
+  zakazHaqi            Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   azolar        EmployeeCategoryMember[]
   biriktiruvlar DealEmployee[]
@@ -1835,27 +1846,37 @@ model EmployeeCategoryMember {
 /// Kategoriya/xodimga `Restrict` — tarixiy biriktiruv tasodifan yo'qolmasin
 /// (ikkalasi ham amalda soft o'chiriladi, hard delete bloklanadi).
 model DealEmployee {
-  id         String           @id @default(cuid())
-  businessId String
-  business   Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  dealId     String
-  deal       Deal             @relation(fields: [dealId], references: [id], onDelete: Cascade)
-  categoryId String
-  category   EmployeeCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  employeeId String
-  employee   Employee         @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  id                String           @id @default(cuid())
+  businessId        String
+  business          Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  dealId            String
+  deal              Deal             @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  categoryId        String
+  category          EmployeeCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  employeeId        String
+  employee          Employee         @relation(fields: [employeeId], references: [id], onDelete: Restrict)
   /// SIFAT NAZORATI: shu xodimning shu zakazdagi ishiga baho (1..10).
   /// Null — baholanmagan. Xodim profilidagi "O'rtacha baho" shu ustunning
   /// AVG'i — alohida hisoblagich saqlanmaydi (haqiqat manbai — biriktiruv).
-  baho       Int?
-  bahoIzoh   String?
-  bahoAt     DateTime?
-  createdAt  DateTime         @default(now())
+  baho              Int?
+  bahoIzoh          String?
+  bahoAt            DateTime?
+  /// ATTRIBUTION TASDIG'I. `true` — odam tanlagan (yoki tanlanganini
+  /// tasdiqlagan). `false` — mashina taxmin qilgan TAKLIF: formada
+  /// oldindan ko'rinadi, lekin KPI va oylikka KIRMAYDI. Avtomatik
+  /// migratsiya yozgan biriktiruvni shu bayroq bilan "kutilmoqda" holatiga
+  /// olib qo'yish mumkin — o'chirish shart emas, tarix yo'qolmaydi.
+  tasdiqlangan      Boolean          @default(true)
+  /// Kim tasdiqladi (User.id). Null — hali hech kim.
+  tasdiqlaganUserId String?
+  createdAt         DateTime         @default(now())
 
   @@unique([dealId, categoryId, employeeId])
   /// Kategoriya analitikasi (davr kesimida xodim reytingi) — asosiy o'qish.
   @@index([businessId, categoryId, employeeId])
   @@index([businessId, employeeId])
+  /// Oylik hisobi: xodimning davr ichidagi TASDIQLANGAN qatnashuvlari.
+  @@index([businessId, employeeId, tasdiqlangan])
   @@index([dealId])
   @@index([categoryId])
   @@index([employeeId])
@@ -2380,25 +2401,25 @@ model SupportMessage {
 /// KPI SOZLAMALARI — bir biznesga bitta yozuv (HrSetting uslubi).
 /// Qattiq kodlangan qiymat YO'Q: har biznes o'z planini va qoidasini sozlaydi.
 model KpiSetting {
-  id         String   @id @default(cuid())
-  businessId String   @unique
-  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  id              String   @id @default(cuid())
+  businessId      String   @unique
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   /// MAVSUM oylari — vergul bilan ajratilgan oy raqamlari (1-12).
   /// Default: mart, may–dekabr (aprel va yanvar-fevral mavsumsiz).
-  mavsumOylar     String @default("3,5,6,7,8,9,10,11,12")
+  mavsumOylar     String   @default("3,5,6,7,8,9,10,11,12")
   /// Mavsum oyidagi standart sotuv plani (so'm).
-  mavsumPlan      Int    @default(100000000)
+  mavsumPlan      Int      @default(100000000)
   /// Mavsumsiz oydagi standart sotuv plani (so'm).
-  mavsumsizPlan   Int    @default(80000000)
+  mavsumsizPlan   Int      @default(80000000)
   /// Plan bajarilsa beriladigan qo'shimcha (so'm).
-  planBonus       Int    @default(1000000)
+  planBonus       Int      @default(1000000)
   /// Har vazifa har oy shu balldan boshlanadi.
-  boshlangichBall Int    @default(100)
+  boshlangichBall Int      @default(100)
   /// ODDIY jarimalarda bir vazifa uchun BIR KUNDA maksimal ayirish (ball).
   /// KRITIK (ishonch) holatlari bu limitga KIRMAYDI.
-  kunlikLimit     Int    @default(5)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  kunlikLimit     Int      @default(5)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 /// PROGRESSIV SOTUV BONUSI INTERVALI.
@@ -2520,39 +2541,39 @@ model KpiPenaltyPreset {
 /// `oy` — ball qaysi oyga tegishli ("YYYY-MM"). Ball keyingi oyga
 /// KO'CHMAYDI: yangi oy yana boshlang'ich balldan boshlanadi.
 model KpiPointLog {
-  id         String   @id @default(cuid())
-  businessId String
-  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  employeeId String
-  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  taskId     String
-  task       KpiTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  id              String   @id @default(cuid())
+  businessId      String
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employeeId      String
+  employee        Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  taskId          String
+  task            KpiTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
   /// "YYYY-MM" — `sana` dan kelib chiqadi, lekin so'rovlar shu ustun bo'yicha
   /// kesiladi (indeks bilan bitta o'qishda butun oy ko'tariladi).
-  oy         String
-  sana       DateTime
+  oy              String
+  sana            DateTime
   /// Manfiy — ayirish, musbat — qaytarish. Nol bo'lmaydi.
-  ball       Int
+  ball            Int
   /// Yozuv yozilgan paytdagi ball (audit ko'rinishi: 100 → 97).
-  ballOldin  Int
-  ballKeyin  Int
-  sabab      String
-  izoh       String?
+  ballOldin       Int
+  ballKeyin       Int
+  sabab           String
+  izoh            String?
   /// "jarima" | "qaytarish"
-  turi       String   @default("jarima")
+  turi            String   @default("jarima")
   /// Ishonch/kritik holat — kunlik limitga kirmaydi.
-  kritik     Boolean  @default(false)
+  kritik          Boolean  @default(false)
   /// Qaysi presetdan olingan (qo'lda kiritilgan bo'lsa null).
-  presetId   String?
+  presetId        String?
   /// Qaytarish yozuvi bo'lsa — qaysi yozuvni bekor qiladi.
   /// @unique — bitta yozuv IKKI marta qaytarilmaydi (baza darajasidagi kafolat).
-  bekorQilinganId String? @unique
+  bekorQilinganId String?  @unique
   /// Kim yozdi (User.id). FK ataylab yo'q — foydalanuvchi o'chirilsa ham
   /// audit tarixi buzilmasin.
-  userId     String
+  userId          String
   /// Kim yozgani — snapshot ism (tarixda "Rahbar: Umar" ko'rinadi).
-  userIsm    String?
-  createdAt  DateTime @default(now())
+  userIsm         String?
+  createdAt       DateTime @default(now())
 
   /// Asosiy o'qish: bitta xodimning bitta oydagi barcha ball harakati.
   @@index([businessId, employeeId, oy])
@@ -2597,24 +2618,24 @@ model KpiSalesTarget {
 /// u boshqa hisob sxemasi (kunlik/oylik stavka, avans, davomat jarimasi).
 /// Bu esa KPI sxemasi (vazifa haqi + sotuv bonusi + plan bonusi).
 model KpiPayroll {
-  id         String   @id @default(cuid())
-  businessId String
-  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  employeeId String
-  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  id             String    @id @default(cuid())
+  businessId     String
+  business       Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employeeId     String
+  employee       Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   /// "YYYY-MM"
-  oy         String
+  oy             String
   /// Snapshot paytidagi hisoblangan sotuv (so'm).
-  sotuv       Int @default(0)
+  sotuv          Int       @default(0)
   /// Snapshot paytidagi sotuv plani (so'm).
-  plan        Int @default(0)
-  vazifaHaqi  Int @default(0)
-  sotuvBonusi Int @default(0)
-  planBonusi  Int @default(0)
+  plan           Int       @default(0)
+  vazifaHaqi     Int       @default(0)
+  sotuvBonusi    Int       @default(0)
+  planBonusi     Int       @default(0)
   /// Tasdiqdan keyingi tuzatishlar yig'indisi (KpiPayrollAdjustment).
-  tuzatish    Int @default(0)
+  tuzatish       Int       @default(0)
   /// vazifaHaqi + sotuvBonusi + planBonusi + tuzatish.
-  jami        Int @default(0)
+  jami           Int       @default(0)
   /// "HISOBLANDI" | "TASDIQLANDI" | "TOLANDI".
   /// Yozuv umuman bo'lmasa — "QORALAMA" (DTO darajasida).
   holat          String    @default("HISOBLANDI")
@@ -2626,9 +2647,9 @@ model KpiPayroll {
   tolanganSumma  Int?
   izoh           String?
   /// Kim yopgan (User.id) — FK ataylab yo'q.
-  userId     String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  userId         String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   qatorlar    KpiPayrollItem[]
   tuzatishlar KpiPayrollAdjustment[]
@@ -2641,14 +2662,14 @@ model KpiPayroll {
 /// Vazifa nomi va oylik haqi SNAPSHOT sifatida ko'chiriladi: keyin vazifa
 /// nomi yoki narxi o'zgarsa yopilgan oy hisoboti o'zgarmaydi.
 model KpiPayrollItem {
-  id         String     @id @default(cuid())
-  businessId String
-  business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  payrollId  String
-  payroll    KpiPayroll @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+  id          String     @id @default(cuid())
+  businessId  String
+  business    Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  payrollId   String
+  payroll     KpiPayroll @relation(fields: [payrollId], references: [id], onDelete: Cascade)
   /// Vazifa yumshoq o'chirilsa ham havola qoladi; hard delete'da null.
   taskId      String?
-  task        KpiTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  task        KpiTask?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
   taskNomi    String
   oylikHaq    Int
   ball        Int

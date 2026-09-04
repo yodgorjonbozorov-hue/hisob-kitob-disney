@@ -474,18 +474,136 @@ test("jamoa huquqi: huquqsiz foydalanuvchi faqat o'z (yakunlanmagan) zakazini o'
   const ruxsat = (dealId: string, userId: string, huquqBor = false) =>
     A(() => jamoa.jamoaOzgartiraOladimi({ businessId: tA.business.id, dealId, userId, huquqBor }));
   assert.equal(await ruxsat(ozi.id, dostonUser.id), true, "o'z zakazi, ochiq");
-  assert.equal(await ruxsat(panda.id, dostonUser.id), false, "Panda yutilgan — huquqsiz o'zgartirilmaydi");
+  // YUTILDI endi to'siq emas: eski zakaz attributionini tuzatish ish oqimi.
+  assert.equal(await ruxsat(panda.id, dostonUser.id), true, "yutilgan bo'lsa ham O'Z zakazi — tuzatsa bo'ladi");
   assert.equal(await ruxsat(ozi.id, tA.user.id), false, "boshqaning zakazi, huquq yo'q");
   assert.equal(await ruxsat(ozi.id, tA.user.id, true), true, "crm.jamoa bilan — ha");
 });
 
-test("kirim yozilgach jamoa qulflanadi (tarix o'zgarmaydi)", async () => {
+test("kirim yozilgach jamoa OCHIQ qoladi, pul yozuvi esa tegilmaydi", async () => {
+  // AVVAL: kirim yozilgan zakaz jamoasi butunlay qulflangan edi. ENDI
+  // attribution tuzatish qo'llab-quvvatlanadi (xodimlar tarixni to'ldirib
+  // chiqadi), pul esa alohida yo'lda qulf: bu funksiya `Transaction` ga
+  // umuman tegmaydi.
   const crmKirim = await import("@/lib/crm/kirim");
   await A(() => crmKirim.kirimgaKochirish({ businessId: tA.business.id, dealId: panda.id, userId: tA.user.id }));
-  await assert.rejects(
-    A(() => jamoa.zakazXodimlariniSaqlash(tA.business.id, panda.id, [], tA.user.id)),
-    BadRequestError
+  const oldin = await A(() =>
+    prisma.transaction.aggregate({
+      where: { businessId: tA.business.id, turi: "kirim", deletedAt: null },
+      _sum: { summa: true },
+      _count: true,
+    })
   );
-  const soni = await A(() => prisma.transaction.count({ where: { businessId: tA.business.id, turi: "kirim", deletedAt: null } }));
-  assert.equal(soni, 1, "kirim bitta — jamoa soniga ko'paymaydi");
+
+  const hozirgi = await A(() => jamoa.zakazXodimlari(tA.business.id, panda.id));
+  const ijrochilar = hozirgi
+    .filter((x: any) => x.kategoriyaTuri !== "sotuvchi")
+    .map((x: any) => ({ categoryId: x.categoryId, employeeId: x.employeeId }));
+  await A(() =>
+    jamoa.zakazXodimlariniSaqlash(
+      tA.business.id,
+      panda.id,
+      [...ijrochilar, { categoryId: kBezakchi.id, employeeId: akmal.id }],
+      tA.user.id
+    )
+  );
+  const keyin = await A(() => jamoa.zakazXodimlari(tA.business.id, panda.id));
+  assert.ok(
+    keyin.some((x: any) => x.categoryId === kBezakchi.id && x.employeeId === akmal.id),
+    "kirimli zakazga bezakchi qo'shildi"
+  );
+
+  const kirimKeyin = await A(() =>
+    prisma.transaction.aggregate({
+      where: { businessId: tA.business.id, turi: "kirim", deletedAt: null },
+      _sum: { summa: true },
+      _count: true,
+    })
+  );
+  assert.equal(kirimKeyin._count, oldin._count, "kirim yozuvlari soni o'zgarmadi");
+  assert.equal(kirimKeyin._sum.summa, oldin._sum.summa, "kirim summasi o'zgarmadi");
+});
+
+test("avto-tanlash yo'q: sotuvchi yuborilmasa zakaz SOTUVCHISIZ tug'iladi", async () => {
+  // dostonUser sotuvchi lavozimida (kSotuvchi a'zosi), lekin `sotuvchiId`
+  // yuborilmagani uchun server uni O'ZI tanlab qo'ymasligi kerak: umumiy
+  // kompyuterda kirgan hisob zakazni kim sotganini bildirmaydi.
+  const deal = await A(() =>
+    crm.createDeal({
+      businessId: tA.business.id, nomi: "Sotuvchisiz zakaz", summa: 200_000, categoryId: katBantik.id,
+      sana: bugun, userId: dostonUser.id,
+    })
+  );
+  const biriktiruvlar = await A(() => jamoa.zakazXodimlari(tA.business.id, deal.id));
+  assert.equal(
+    biriktiruvlar.filter((x: any) => x.kategoriyaTuri === "sotuvchi").length,
+    0,
+    "kirgan foydalanuvchidan sotuvchi TAXMIN QILINMAYDI"
+  );
+});
+
+test("kirim yozilgan zakazda ham xodim attribution tahrirlanadi (pul tegilmaydi)", async () => {
+  const deal = await A(() =>
+    crm.createDeal({
+      businessId: tA.business.id, nomi: "Kirimli tarixiy zakaz", summa: 400_000, tolangan: 400_000,
+      categoryId: katBantik.id, sana: bugun, stageId: wonStage.id, userId: tA.user.id, sotuvchiId: doston.id,
+    })
+  );
+  // WON bosqichida yaratilgan va to'liq to'langan zakazga kirim DARHOL
+  // yoziladi (`lib/crm/yakunlash.ts`) — alohida "kirimga o'tkazish" yo'q.
+  assert.ok(deal.transactionId, "yaratilishi bilan kirim yozildi");
+  const kirimOldin = await A(() =>
+    prisma.transaction.aggregate({ where: { businessId: tA.business.id, turi: "kirim", deletedAt: null }, _sum: { summa: true }, _count: true })
+  );
+
+  // Endi ijrochilarni to'ldirib chiqamiz — bu ATTRIBUTION tuzatishi.
+  await A(() =>
+    jamoa.zakazXodimlariniSaqlash(tA.business.id, deal.id, [
+      { categoryId: kVideochi.id, employeeId: sardor.id },
+      { categoryId: kVideochi.id, employeeId: bekzod.id },
+    ], tA.user.id)
+  );
+  const biriktiruvlar = await A(() => jamoa.zakazXodimlari(tA.business.id, deal.id));
+  assert.equal(biriktiruvlar.filter((x: any) => x.categoryId === kVideochi.id).length, 2, "kirimli zakazga videochi qo'shildi");
+  assert.ok(
+    biriktiruvlar.some((x: any) => x.kategoriyaTuri === "sotuvchi" && x.employeeId === doston.id),
+    "sotuvchi saqlanib qoldi"
+  );
+
+  const kirimKeyin = await A(() =>
+    prisma.transaction.aggregate({ where: { businessId: tA.business.id, turi: "kirim", deletedAt: null }, _sum: { summa: true }, _count: true })
+  );
+  assert.equal(kirimKeyin._count, kirimOldin._count, "kirim yozuvlari soni o'zgarmadi");
+  assert.equal(kirimKeyin._sum.summa, kirimOldin._sum.summa, "kirim summasi o'zgarmadi");
+});
+
+test("tasdiqlanmagan biriktiruv KPI'ga kirmaydi; saqlansa TASDIQLANADI", async () => {
+  const deal = await A(() =>
+    crm.createDeal({
+      businessId: tA.business.id, nomi: "Taxmin qilingan zakaz", summa: 150_000, categoryId: katBantik.id,
+      sana: bugun, stageId: wonStage.id, userId: tA.user.id, sotuvchiId: doston.id,
+    })
+  );
+  // Mashina TAXMINI: tasdiqlanmagan videochi biriktiruvi (migratsiya naqshi).
+  await rawPrisma.dealEmployee.create({
+    data: { businessId: tA.business.id, dealId: deal.id, categoryId: kVideochi.id, employeeId: ilhom.id, tasdiqlangan: false },
+  });
+  const oldin = (await kpi(ilhom.id, kVideochi.id)).jami;
+
+  const yana = (await kpi(ilhom.id, kVideochi.id)).jami;
+  assert.equal(yana, oldin, "tasdiqlanmagan qator KPI'ni oshirmadi");
+
+  // Odam ochib SAQLADI — ayni tanlov qoldirildi, demak tasdiqladi.
+  await A(() =>
+    jamoa.zakazXodimlariniSaqlash(tA.business.id, deal.id, [
+      { categoryId: kVideochi.id, employeeId: ilhom.id },
+    ], tA.user.id)
+  );
+  const qator = await rawPrisma.dealEmployee.findFirst({
+    where: { businessId: tA.business.id, dealId: deal.id, categoryId: kVideochi.id, employeeId: ilhom.id },
+    select: { tasdiqlangan: true, tasdiqlaganUserId: true },
+  });
+  assert.equal(qator?.tasdiqlangan, true, "saqlash tasdiqladi");
+  assert.equal(qator?.tasdiqlaganUserId, tA.user.id, "kim tasdiqlagani yozildi");
+  assert.equal((await kpi(ilhom.id, kVideochi.id)).jami, oldin + 1, "tasdiqlangach KPI'ga kirdi");
 });

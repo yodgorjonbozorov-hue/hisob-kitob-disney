@@ -22,6 +22,8 @@ export const kategoriyaCreateSchema = z.object({
   zakazgaBiriktiriladi: z.boolean().optional(),
   /** Bir zakazga bir nechta xodim (multi-select). */
   kopXodim: z.boolean().optional(),
+  /** Ijrochi oyligi: bir zakazga chiqqani uchun haq (so'm). 0 — hisoblanmaydi. */
+  zakazHaqi: z.number().int().min(0).max(100_000_000).optional(),
 });
 
 export const kategoriyaPatchSchema = z.object({
@@ -31,6 +33,7 @@ export const kategoriyaPatchSchema = z.object({
   tartib: z.number().int().min(0).max(1000).optional(),
   zakazgaBiriktiriladi: z.boolean().optional(),
   kopXodim: z.boolean().optional(),
+  zakazHaqi: z.number().int().min(0).max(100_000_000).optional(),
 });
 
 /** A'zolikni TO'LIQ almashtirish — tanlangan xodimlar ro'yxati. */

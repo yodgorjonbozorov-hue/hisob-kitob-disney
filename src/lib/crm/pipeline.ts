@@ -154,3 +154,74 @@ export function qarzUlushi(summa: number, tolangan: number, tolovTuri: string | 
   if (holat !== "QISMAN" && holat !== "QARZ") return 0;
   return Math.max(0, summa - kirimUlushi(summa, tolangan));
 }
+
+// ---------------------------------------------------------------------------
+// Ustun ichidagi tartib
+// ---------------------------------------------------------------------------
+
+/**
+ * Tartiblash uchun kerak bo'ladigan MINIMAL maydonlar. Server (Prisma `Date`)
+ * ham, brauzer (ISO matn) ham ayni funksiyani chaqiradi — shuning uchun vaqt
+ * ikkala ko'rinishda qabul qilinadi.
+ */
+export interface TartibZakaz {
+  holat: string;
+  sana: string | null;
+  /** Holat oxirgi marta o'zgargan vaqt (`Deal.holatAt`). */
+  holatAt?: string | Date | null;
+  /** Yopilgan vaqt — eski yozuvlar uchun zaxira manba. */
+  yopilganAt?: string | Date | null;
+  createdAt: string | Date;
+}
+
+function vaqtMs(v: string | Date | null | undefined): number | null {
+  if (!v) return null;
+  const ms = v instanceof Date ? v.getTime() : Date.parse(v);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+/**
+ * ZAKAZ QACHON JORIY HOLATIGA O'TGAN (ms).
+ *
+ * Manbalar tartibi migratsiyadagi to'ldirish qoidasi bilan AYNI:
+ * `holatAt` → `yopilganAt` → `createdAt`. Shu bois migratsiya qo'llanmagan
+ * (yoki eski) yozuv ham to'g'ri joyda turadi, "0" bo'lib tepaga/pastga
+ * otilib ketmaydi.
+ */
+export function holatVaqti(z: TartibZakaz): number {
+  return vaqtMs(z.holatAt) ?? vaqtMs(z.yopilganAt) ?? vaqtMs(z.createdAt) ?? 0;
+}
+
+/**
+ * USTUN ICHIDAGI TARTIB — ikki xil mantiq, ustunning MA'NOSIGA qarab.
+ *
+ * YUTILDI / YOQOTILDI / JARAYONDA — TARIX ustunlari: zakaz shu holatga
+ * o'tgani muhim voqea. Eng oxirgi o'tgani ENG TEPADA (kamayish tartibi),
+ * chunki odam endigina bosgan zakazni darhol ko'rishi kerak. Zakaz sanasi
+ * bu yerda tartibga TA'SIR QILMAYDI: eski sanali zakaz bugun yutilsa ham
+ * tepada turadi.
+ *
+ * KUTILAYOTGAN / BUGUNGI — REJA ustunlari: bu yerda "qachon bajarish kerak"
+ * muhim, "qachon holat o'zgargani" emas. Shuning uchun avvalgi qoida
+ * saqlanadi (7-talab): kechikkanlar eng tepada, keyin yaqin kun.
+ *
+ * Teng qiymatlarda holat vaqti bo'yicha (yangi tepada) — tartib barqaror
+ * bo'lsin, har render'da kartalar joyini almashtirmasin.
+ */
+export function zakazlarniTartibla<T extends TartibZakaz>(zakazlar: T[], ustun: Ustun, bugun: string): T[] {
+  const yangiOldin = (a: T, b: T) => holatVaqti(b) - holatVaqti(a);
+
+  if (ustun === "YUTILDI" || ustun === "YOQOTILDI" || ustun === "JARAYONDA") {
+    return [...zakazlar].sort(yangiOldin);
+  }
+
+  return [...zakazlar].sort((a, b) => {
+    const ka = kechikkanKun(a.holat, a.sana, bugun);
+    const kb = kechikkanKun(b.holat, b.sana, bugun);
+    if (ka !== kb) return kb - ka;
+    const sa = a.sana ?? "9999-99-99";
+    const sb = b.sana ?? "9999-99-99";
+    if (sa !== sb) return sa.localeCompare(sb);
+    return yangiOldin(a, b);
+  });
+}

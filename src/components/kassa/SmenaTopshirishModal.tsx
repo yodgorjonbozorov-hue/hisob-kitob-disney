@@ -26,6 +26,7 @@ export interface TopshirishNishoni {
 export function SmenaTopshirishModal({
   qoldiq,
   nishonlar,
+  sarlavha = "Smenani topshirish",
   onClose,
   onDone,
 }: {
@@ -33,6 +34,8 @@ export function SmenaTopshirishModal({
   qoldiq: number;
   /** Kimga topshirish mumkin — boshqa faol kassalar. */
   nishonlar: TopshirishNishoni[];
+  /** Oyna sarlavhasi — chaqirilgan joyning tili bilan mos ("Kassa topshirish"). */
+  sarlavha?: string;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -91,7 +94,7 @@ export function SmenaTopshirishModal({
 
   if (tasdiq) {
     return (
-      <Modal open onClose={() => setTasdiq(false)} title="Smenani topshirasizmi?">
+      <Modal open onClose={() => setTasdiq(false)} title={`${sarlavha}ni tasdiqlaysizmi?`}>
         <div className="space-y-4">
           <div className="rounded-xl bg-surface-2 border border-line p-4 space-y-2 text-sm">
             <div className="flex justify-between">
@@ -141,7 +144,7 @@ export function SmenaTopshirishModal({
   }
 
   return (
-    <Modal open onClose={onClose} title="Smenani topshirish">
+    <Modal open onClose={onClose} title={sarlavha}>
       <form
         onSubmit={(e) => {
           e.preventDefault();

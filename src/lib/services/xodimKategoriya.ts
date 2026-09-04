@@ -30,6 +30,8 @@ export interface KategoriyaDTO {
   tartib: number;
   /** Zakaz formasida chiqadimi. */
   zakazgaBiriktiriladi: boolean;
+  /** Ijrochi oyligi: bir zakaz uchun haq (so'm). 0 — hisoblanmaydi. */
+  zakazHaqi: number;
   /** Bir zakazga bir nechta xodim (multi-select). */
   kopXodim: boolean;
   azolar: KategoriyaAzoDTO[];
@@ -55,6 +57,7 @@ export async function listKategoriyalar(businessId: string): Promise<KategoriyaD
     aktiv: k.aktiv,
     tartib: k.tartib,
     zakazgaBiriktiriladi: k.zakazgaBiriktiriladi,
+    zakazHaqi: k.zakazHaqi,
     kopXodim: k.kopXodim,
     azolar: k.azolar
       .filter((a) => !a.employee.deletedAt)
@@ -107,6 +110,7 @@ export async function createKategoriya(businessId: string, data: KategoriyaCreat
       turi: data.turi,
       tartib,
       zakazgaBiriktiriladi: data.zakazgaBiriktiriladi ?? true,
+      zakazHaqi: data.zakazHaqi ?? 0,
       kopXodim: data.kopXodim ?? false,
     },
   });
@@ -132,6 +136,7 @@ export async function updateKategoriya(businessId: string, id: string, data: Kat
       ...(data.aktiv !== undefined ? { aktiv: data.aktiv } : {}),
       ...(data.tartib !== undefined ? { tartib: data.tartib } : {}),
       ...(data.zakazgaBiriktiriladi !== undefined ? { zakazgaBiriktiriladi: data.zakazgaBiriktiriladi } : {}),
+      ...(data.zakazHaqi !== undefined ? { zakazHaqi: data.zakazHaqi } : {}),
       ...(data.kopXodim !== undefined ? { kopXodim: data.kopXodim } : {}),
     },
   });

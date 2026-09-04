@@ -79,8 +79,10 @@ export function BuyurtmaModal({
   const [tolovTanlov, setTolovTanlov] = useState<TolovTanlov>("toliq");
   const [tolangan, setTolangan] = useState("");
   const [tolovTuri, setTolovTuri] = useState<PulKanali>("naqd");
-  // SOTUVCHI boshlang'ich qiymati — "Tanlanmagan" (avto-tanlash YO'Q):
-  // bitta kompyuterda ochiq turgan hisob sotuvchini aniqlamaydi.
+  // AVTO-TANLASH YO'Q (ataylab): Disney Navoiy sotuv bo'limida BITTA umumiy
+  // kompyuter ishlatiladi, ya'ni tizimga kirgan hisob zakazni kim sotganini
+  // BILDIRMAYDI. Default "Tanlanmagan" — sotuvchini har safar odam tanlaydi.
+  // Kirgan foydalanuvchi faqat `Deal.createdBy` va auditga yoziladi.
   const [sotuvchiId, setSotuvchiId] = useState("");
   const [jamoa, setJamoa] = useState<ZakazXodimTanlov>({});
   const [xato, setXato] = useState<string | null>(null);

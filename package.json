@@ -86,6 +86,7 @@
     "test:crm": "node -r ts-node/register tests/crm.test.ts",
     "test:crm-pipeline": "node -r ts-node/register tests/crm-pipeline.test.ts",
     "test:crm-sotuvchi": "node -r ts-node/register tests/crm-sotuvchi.test.ts",
+    "test:crm-xodim-kassa": "node -r ts-node/register tests/crm-xodim-kassa.test.ts",
     "test:xodim-statistika": "node -r ts-node/register tests/xodim-statistika.test.ts",
     "test:xodim-kategoriya": "node -r ts-node/register tests/xodim-kategoriya.test.ts",
     "test:zakaz-jamoasi": "node -r ts-node/register tests/zakaz-jamoasi.test.ts",
@@ -135,7 +136,8 @@
     "test:launch": "node -r ts-node/register tests/toliq-ishga-tushirish.test.ts",
     "sotuvchi:kpi-tekshir": "node -r ts-node/register scripts/sotuvchi-kpi-tekshir.ts",
     "lavozim:audit": "node -r ts-node/register scripts/lavozim-audit.ts",
-    "sotuvchi:attribution-audit": "node -r ts-node/register scripts/sotuvchi-attribution-audit.ts"
+    "sotuvchi:attribution-audit": "node -r ts-node/register scripts/sotuvchi-attribution-audit.ts",
+    "attribution:tasdiqsiz": "node -r ts-node/register scripts/attribution-tasdiqsiz.ts"
   },
   "prisma": {
     "seed": "node -r ts-node/register prisma/seed.ts"

@@ -5856,9 +5856,119 @@ uchun jamoa kattaligiga bog'liq emas.
    `git rev-parse --short HEAD` emas, AYNAN `origin/main` tekshirilishi
    kerak; commit qaysi tarmoqda ekani `git status -sb` bilan aniqlanadi.
 
-## 2026-09-03 — CRM: to'lov holati faqat tanlovdan, Yutildi → darhol kirim, tartib
+## 2026-09-03 — "Kirgan foydalanuvchi = sotuvchi" taxmini olib tashlandi
 
-Uchta xato tuzatildi (`claude/crm-order-fixes-uf63o4`):
+**Muammo qayerdan chiqdi.** Disney Navoiy sotuv bo'limi bitta umumiy
+kompyuterdan, Fayruza hisobidan ishlaydi. Kod esa ikki joyda "kim kirgan
+bo'lsa, o'sha sotgan" deb taxmin qilardi: formada (`useState(ozimSotuvchi)`)
+va serverda (`sotuvchiniQosh` ichidagi `else if (ozi)`). Natijada butun
+sotuv statistikasi bir odamga yig'ilib borardi.
+
+Buni AUDIT o'lchab ko'rsatdi: migratsiya 45 ta biriktiruv yozgan edi, bir
+soatdan keyin sanoq 47 ga chiqdi — ikkitasi yangi zakazlardan, avtomatik.
+Ya'ni muammo tarixiy emas, o'sha payt DAVOM ETAYOTGAN edi.
+
+**Yechim — o'chirish emas, TASDIQ bayrog'i.** `DealEmployee.tasdiqlangan`:
+odam tanlagani `true`, mashina taxmini `false`. Tasdiqlanmagan qator KPI va
+oylikka kirmaydi, lekin formada ko'rinadi — noto'g'ri attributionni
+YO'QOTMASDAN hisobdan chiqarish mumkin, odam ochib saqlasa tasdiqlanadi.
+
+**Ijrochi oyligi.** `kpi/qatnashuv.ts` — `EmployeeCategory.zakazHaqi` x
+tasdiqlangan qatnashuv soni. Kaliti `Employee.id`, `User.id` EMAS.
+
+**Nima o'rganildi (uch xato).**
+1. Avvalgi migratsiya "mas'ul = sotuvchi" deb yozgan edi. Bu SEMANTIK
+   jihatdan to'g'ri ko'rinardi (`Employee.userId = Deal.masulId` + sotuvchi
+   lavozimi a'zosi), lekin biznes konteksti — umumiy kompyuter — buni
+   bekor qildi. Sxema tekshiruvi to'g'ri bo'lgani ma'lumot to'g'ri degani
+   emas; ish jarayonini so'rash kerak edi.
+2. Yangi test qo'shganda uni fayl O'RTASIGA joyladim: keyingi testlar
+   umumiy fixture'ning qat'iy sonlariga tayanadi (sardor 2 videochi,
+   doston 1 400 000 sotuv) va uchtasi yiqildi. Bunday faylda yangi test
+   OXIRGA qo'yiladi yoki nisbiy (oldin/keyin) tekshiradi.
+3. `zakazXodimlariniSaqlash` da erta qaytish sharti (`ochiriladigan` va
+   `qoshiladigan` bo'sh bo'lsa qaytadi) yangi `tasdiqlanadigan` holatini
+   qamramay qoldi — funksiya jimgina hech narsa qilmadi va test buni
+   ushladi. Yangi "ish bor" holati qo'shilganda BARCHA erta chiqish
+   shartlari qayta ko'riladi.
+
+## 2026-09-04 — Doska ustuni tartibi: "eng oxirgi holatga o'tgan — eng tepada"
+
+**Muammo.** "Yutildi" ustuni zakaz SANASI bo'yicha o'sish tartibida
+saralanardi (`ZakazUstuni.tsx`), shu bois endigina yutilgan zakaz ustunning
+ENG PASTIGA tushib ketardi — sotuvchi o'zi hozir bosgan zakazni ko'rmasdi.
+
+**Nega mavjud maydonlar yetmadi.** `createdAt` — zakaz qachon YARATILGANI
+(eski zakaz bugun yutilsa pastda qolardi). `yopilganAt` bor va YUTILDI uchun
+to'g'ri, lekin u faqat yopilgan holatlarda yoziladi — JARAYONDA ustunida
+null bo'lib qolardi. Shu bois BITTA umumiy maydon qo'shildi: `Deal.holatAt`
+— holat oxirgi marta qachon o'zgargani (yaratilishda ham yoziladi).
+Migratsiya eski yozuvlarni `COALESCE(yopilganAt, createdAt)` bilan to'ldiradi,
+o'qish qatlami ham AYNI zaxira zanjirini takrorlaydi (`holatVaqti`), shuning
+uchun migratsiya qo'llanmagan baza ham to'g'ri tartib beradi.
+
+**Tartib qoidasi ikki xil — ustunning MA'NOSIGA qarab** (`pipeline.ts` →
+`zakazlarniTartibla`, sof funksiya, server va brauzer uchun bitta):
+  · YUTILDI / YOQOTILDI / JARAYONDA — TARIX ustunlari: `holatAt` kamayish
+    tartibi (eng oxirgi o'tgan — tepada);
+  · KUTILAYOTGAN / BUGUNGI — REJA ustunlari: eski qoida saqlandi
+    (kechikkanlar tepada, keyin yaqin kun). Bu yerda "qachon bajarish kerak"
+    muhim, "qachon holat o'zgargani" emas — 7-talab buzilmadi.
+
+**Frontend refreshsiz.** `router.refresh()` server javobini kutadi, shuning
+uchun `CrmClient` mahalliy (optimistik) qatlam yuritadi: holat o'zgargach
+karta darhol yangi ustunning tepasida paydo bo'ladi. Mahalliy nusxa
+O'Z-O'ZIDAN chiqadi — tozalash effekti yo'q: server ayni holatni ko'rsatgan
+YOKI undan yangiroq `holatAt` yozgan bo'lsa serverning so'zi oxirgi.
+
+**Nima o'rganildi.** Ustunlar bir xil ko'rinsa ham bir xil MANTIQDA emas:
+"eng yangisi tepada" reja ustunlariga ko'r-ko'rona qo'llanganda kechikkan
+zakazni ko'zdan yashirib qo'yardi. Tartib qoidasi ustun turiga bog'lanadi.
+## 2026-09-04 — CRM yuqori paneli: statistika o'rniga xodim kassasi va chiqim
+
+**Nima o'zgardi.** Buyurtmalar sahifasining tepasidagi ikki statistika bloki
+("Bugungi buyurtmalar" va "Kategoriya bo'yicha") olib tashlandi. O'rnida ish
+qiladigan ikki karta turadi: **Xodim kassasi** (kirim / chiqim / kassada +
+"Kassa topshirish") va **Chiqim** (bugungi jami, oxirgi uchta yozuv +
+"+ Chiqim qilish"). Statistika funksiyalari (`lib/crm/statistika.ts`)
+o'chirilmadi — ular testlar bilan qoplangan va boshqa joyda kerak bo'lishi
+mumkin; faqat sahifadan uzildi.
+
+**Parallel tizim YARATILMADI.** Mavjud infratuzilma UI'ga ulandi:
+kassa raqami `getMeningKassam` (Account ledgeri, "Mening kassam" bilan ayni
+manba), topshirish `AccountTransfer(turi = "smena")`, chiqim esa oddiy
+`/api/transactions`. Shu sababli kassa qoldig'i, smena reseti, tasdiqlash
+moduli va kunlik hisobot avvalgidek ishlaydi.
+
+**Kirim endi ZAKAZ MAS'ULINING kassasiga tushadi.** Ilgari shaxsiy kassa
+rejimida pul TUGMANI BOSGAN odamning kassasiga tushardi — direktor Fayruzaning
+zakazini yakunlasa, pul direktorda ko'rinardi va Fayruza topshira olmasdi.
+`crm/kirim.ts` va `crm/yakunlash.ts` endi kassani `sotuvchiId` (mas'ul)
+bo'yicha tanlaydi. Sotuvchi attributsiyasi qoidasi o'zgarmadi — kassa
+endi o'shanga ERGASHADI.
+
+**Huquq: "kassa ko'rinmasin" o'z kassasini yashirmaydi.** `kassa.jami`
+biznesning UMUMIY kassasini yopadi, xodimning o'zinikini emas. Ikki nozik
+joy bor edi:
+1. Panel `kassa.korish` talab qilmaydi — "Mening kassam" sahifasidagi
+   qoida bilan bir xil: faqat so'rov yuborgan odamning kassasi qaytadi.
+2. `POST /api/kassa-transfer` `pul.berish` talab qilardi, SELLER rolida esa
+   u yo'q — ya'ni sotuvchi o'z kassasini umuman topshira olmasdi. Endi
+   o'z kassasini topshirish (`ozKassaTopshirishimi`) huquqsiz o'tadi;
+   birovning kassasidan pul chiqarish esa avvalgidek ikki qatlamda
+   (route huquqi + `kassaTransferYarat` egalik tekshiruvi) yopiq.
+
+**Nima o'rganildi.** "Ko'rish huquqi yo'q" bilan "amal huquqi yo'q" ni bir
+xil huquq kodi orqali boshqarish xato edi: topshirish — imtiyoz emas,
+majburiyat. Huquq yozayotganda "buni qilmasa nima bo'ladi?" savoli
+"buni ko'rsa nima bo'ladi?" dan muhimroq.
+
+## 2026-09-04 — CRM: to'lov holati faqat tanlovdan va Yutildi → darhol kirim
+
+`claude/crm-order-fixes-uf63o4` tarmog'i. Uchta so'ralgan tuzatishdan
+IKKITASI shu yerda; uchinchisi (doska tartibi) main'da mustaqil ravishda
+`holatAt` bilan hal qilingan edi — merge'da mening `updatedAt` variantim
+OLIB TASHLANDI (bitta ish uchun ikkita mexanizm — ikkinchi haqiqat manbai).
 
 1. **Qarzga avtomatik o'tmaydi.** `tolovHolati` (`lib/crm/pipeline.ts`)
    `tolangan = 0` ni "Qarzga" deb o'qirdi: bot orqali kelgan lead, narxsiz
@@ -5876,63 +5986,40 @@ Uchta xato tuzatildi (`claude/crm-order-fixes-uf63o4`):
    chaqiradi: kirim/qarz o'zi yoziladi, alohida "kirimga o'tkazish" yo'q.
    Eski `kirimgaKochirish` (butun summa) qarz ochilgan yoki qarzga/qisman
    tanlangan zakazni rad etadi — bir zakaz ikki marta sanalmasin.
-3. **Yangi/yangilangan zakaz tepada.** `Deal.updatedAt` (nullable, Prisma
-   `@updatedAt`; migratsiya `20260903090000_crm_zakaz_updatedat` eski
-   qatorlarni `COALESCE(yopilganAt, createdAt)` bilan to'ldiradi). Doska
-   `updatedAt DESC`, ustun ichida kechikkanlar oldinda, keyin `updatedAt`
-   (mobil va desktop bitta `ZakazUstuni`).
 
 Testlar: `tests/crm-pipeline.test.ts` — A1–A3 (avto-qarz yo'q, qarz faqat
-tanlovda), B1–B6 (darhol kirim: keyin belgilangan to'lov, eski yo'l,
-WON'da yaratish, dublikat yo'q, eski yo'l rad etadi), C1–C2 (tartib).
+tanlovda), B1–B6 (darhol kirim, dublikat yo'q, eski yo'l rad etadi).
 
 **Nima o'rganildi.** "Hisoblanadigan holat" ikkinchi haqiqat manbaidan
 qutqaradi, lekin hisob formulasi ham tanlovni ifodalashi shart: `0 so'm`
 "pul kelmadi" degani, "qarzga berildi" degani emas. Tanlov belgisi
 (`tolovTuri="qarz"`) allaqachon bazada bor edi — formula uni o'qimasdi.
 
-## 2026-09-04 — Sotuvchi tanlash: "kirgan hisob = sotuvchi" qoidasi olib tashlandi
+## 2026-09-04 — Sotuvchi tanlash: huquq to'sig'i va `Deal.createdBy`
 
-Disney Navoiy ishxonasida BITTA kompyuter bor va Balansa bitta hisobda
-(Fayruza) ochiq turadi. Tizim esa tizimga kirgan foydalanuvchini sotuvchi
-deb hisoblardi — sotuv KPI'si haqiqatda kim sotganidan qat'i nazar o'sha
-hisobga yozilardi. Uchta joyda tuzatildi:
+Ayni kuni main'da avto-tanlash mustaqil ravishda olib tashlangan edi
+(yuqoridagi yozuv). Bu tarmoqda unga QO'SHIMCHA ikki narsa:
 
-1. **Avto-tanlash olib tashlandi.** `sotuvchiniQosh` (`lib/crm/service.ts`)
-   tanlov bo'lmasa `avtoSotuvchi` (foydalanuvchining o'z sotuvchi profili)
-   ni yozardi; forma ham shu qiymat bilan ochilardi. Endi boshlang'ich
-   qiymat — "Tanlanmagan", tanlov bo'lmasa sotuvchi BIRIKTIRILMAYDI
-   (biznes sozlamasi majburiy qilsa — aniq xato). `avtoSotuvchi` funksiyasi
-   o'chirilmadi: u `hr/men` sahifasida boshqa maqsadda ishlatiladi.
-2. **Huquq to'sig'i olib tashlandi.** `crm.sotuvchi` huquqi bo'lmagan
-   foydalanuvchi zakazni faqat O'Z nomiga yoza olardi (server ham,
-   dropdown ham qulflanardi). Bitta ochiq hisob sharoitida bu qoida
-   ma'nosiz: kod katalogdan chiqarildi, POST/PATCH route'lardagi tekshiruv
-   ham. Cheklov RO'YXATNING O'ZIDA qoldi — `sotuvchiTekshir` har chaqiruvda
-   xodim shu biznesniki, faol va sotuvchi lavozimi a'zosi ekanini
-   tekshiradi, ya'ni mijoz yuborgan `sotuvchiId` ga baribir ishonilmaydi.
-3. **`Deal.createdBy` ustuni** (migratsiya `20260904090000_crm_zakaz_createdby`).
-   Kiritgan odam endi alohida saqlanadi. `masulId` bu javobni bera olmaydi:
-   sotuvchi tanlanganda/almashtirilganda u sotuvchining tizim hisobiga
-   sinxronlanadi. Backfill FAQAT dalildan — faoliyat lentasidagi "Buyurtma
-   yaratildi" yozuvining `userId` si; yozuv bo'lmasa NULL qoladi
-   (`masulId` dan taxmin qilinmaydi, aks holda yolg'on javob yozilardi).
+1. **`crm.sotuvchi` huquq to'sig'i olib tashlandi.** Huquqsiz foydalanuvchi
+   zakazni faqat O'Z nomiga yoza olardi — dropdown ham qulflanardi. Bitta
+   umumiy kompyuter sharoitida "boshqa sotuvchini tanlash" imtiyoz emas,
+   kundalik amal: kod katalogdan, POST/PATCH route'lardan va
+   `sotuvchiniQosh` dan chiqarildi. Cheklov RO'YXATNING O'ZIDA qoldi —
+   `sotuvchiTekshir` har chaqiruvda xodim shu biznesniki, faol va sotuvchi
+   lavozimi a'zosi ekanini tekshiradi.
+2. **`Deal.createdBy`** (migratsiya `20260904100000_crm_zakaz_createdby`) —
+   kiritgan odam sotuvchidan alohida saqlanadi. `masulId` bu javobni bera
+   olmaydi: sotuvchi tanlanganda u sotuvchining tizim hisobiga
+   sinxronlanadi. Backfill FAQAT dalildan — "Buyurtma yaratildi" faoliyat
+   yozuvining `userId` si; yozuv bo'lmasa NULL (masulId dan taxmin
+   qilinmaydi, aks holda yolg'on javob yozilardi).
 
-Sotuv KPI'si `DealEmployee` (turi="sotuvchi") dan o'qiladi, ya'ni tanlangan
-sotuvchining tizim hisobi bo'lishi SHART EMAS: Suxrob tanlansa KPI unga
-yoziladi. Foydalanuvchi darajasidagi eski "Xodimlar statistikasi"
-(`Transaction.sotuvchiId`) esa `masulId` ga tayanadi — sotuvchiga tizim
-hisobi bog'lanmagan bo'lsa u kiritgan odamda qoladi (mavjud xulq, tegilmadi).
+Testlar: `tests/crm-sotuvchi.test.ts` — TEST 1 (tanlovsiz zakazda sotuvchi
+yo'q, `createdBy` bor), TEST 3 (`createdBy` sotuvchi almashganda ham
+o'zgarmaydi), TEST 9 (Fayruza hisobidan Suxrob tanlanadi → KPI Suxrobga,
+Fayruzada o'zgarish yo'q; dekorator esa rad etiladi).
 
-Testlar: `tests/crm-sotuvchi.test.ts` — TEST 1 endi teskarisini tekshiradi
-(tanlovsiz zakazda sotuvchi yo'q, `createdBy` bor), TEST 3 `createdBy`
-ustunini ham tasdiqlaydi, TEST 9 "Fayruza hisobidan Suxrob tanlanadi →
-KPI Suxrobga, Fayruzada o'zgarish yo'q" (dekorator esa baribir rad etiladi),
-majburiy sozlama testiga "o'z profili bor foydalanuvchi ham tanlashi shart"
-holati qo'shildi.
-
-**Nima o'rganildi.** Qulaylik uchun qo'yilgan avto-tanlash (4-talab) ish
-joyining haqiqiy sharoitida ma'lumot buzuvchiga aylandi: bitta ochiq hisob
-"kim kirgan" degan savolni "kim sotdi" javobiga aylantirib qo'ydi. Huquq
-modeli ham shu noto'g'ri taxminga qurilgan edi — "boshqa sotuvchini
-tanlash" imtiyoz emas, kundalik amal ekan.
+**Nima o'rganildi.** Ikki sessiya bir muammoni parallel tuzatdi va tartib
+uchun ikki xil mexanizm yozildi. Ish boshlashdan oldin `git fetch` bilan
+main'ning holatini tekshirish — merge'da ish tashlab yuborilishining oldini
+oladi.

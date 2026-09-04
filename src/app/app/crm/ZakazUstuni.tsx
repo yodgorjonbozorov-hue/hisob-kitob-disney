@@ -1,7 +1,7 @@
 "use client";
 
 import { formatMoney } from "@/lib/format";
-import { kechikkanKun, USTUN_NOMI, type Ustun } from "@/lib/crm/pipeline";
+import { kechikkanKun, USTUN_NOMI, zakazlarniTartibla, type Ustun } from "@/lib/crm/pipeline";
 import { BuyurtmaKarta } from "./BuyurtmaKarta";
 import type { BuyurtmaDTO } from "./turlar";
 
@@ -17,11 +17,10 @@ const USTUN_RANG: Record<Ustun, string> = {
  * DOSKA USTUNI (8-talab): sarlavhada nomi, zakaz soni va umumiy summa —
  * joriy filtr bo'yicha.
  *
- * TARTIB: KECHIKKAN zakazlar eng tepada (7-talab: eski bajarilmagan zakaz
- * ko'zdan yo'qolmasin), qolgani OXIRGI O'ZGARISH bo'yicha — yangi yaratilgan
- * yoki holati hozirgina o'zgargan zakaz ustun boshida (Yutildiga hozirgina
- * o'tkazilgan zakaz oxiriga tushib ketmaydi). Mobil va desktop bir xil:
- * ustun komponenti bitta.
+ * TARTIB `lib/crm/pipeline.ts` da (sof funksiya, server bilan bir xil):
+ * YUTILDI/JARAYONDA/YO'QOTILDI — eng oxirgi shu holatga o'tgan zakaz ENG
+ * TEPADA; KUTILAYOTGAN/BUGUNGI — kechikkanlar tepada, keyin yaqin kun
+ * (7-talab: eski bajarilmagan zakaz ko'zdan yo'qolmasin).
  */
 export function ZakazUstuni({
   ustun,
@@ -43,13 +42,7 @@ export function ZakazUstuni({
   const jami = zakazlar.reduce((a, b) => a + b.summa, 0);
   const kechikkanlar = zakazlar.filter((b) => kechikkanKun(b.holat, b.sana, bugun) > 0).length;
 
-  // Kechikkanlar oldinda, keyin oxirgi o'zgarish bo'yicha (yangi tepada).
-  const tartiblangan = [...zakazlar].sort((a, b) => {
-    const ka = kechikkanKun(a.holat, a.sana, bugun);
-    const kb = kechikkanKun(b.holat, b.sana, bugun);
-    if (ka !== kb) return kb - ka;
-    return b.updatedAt.localeCompare(a.updatedAt);
-  });
+  const tartiblangan = zakazlarniTartibla(zakazlar, ustun, bugun);
 
   return (
     <div

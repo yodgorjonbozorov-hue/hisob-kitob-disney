@@ -190,12 +190,11 @@ export async function getBoard(businessId: string, filtr: DoskaFiltr = {}) {
         transaction: { select: { id: true, summa: true, deletedAt: true } },
         debt: { select: { id: true, jamiSumma: true, tolangan: true, status: true } },
       },
-      // YANGI / HOZIRGINA O'ZGARGAN zakaz ro'yxat BOSHIDA: tartib oxirgi
-      // o'zgarish bo'yicha (`updatedAt` — Prisma har yozuvda yangilaydi).
-      // Ustun ichidagi tartib (kechikkanlar oldinda) brauzerda, ayni
-      // qoida bilan (`ZakazUstuni`). `updatedAt` migratsiyada to'ldirilgan,
-      // null qolmaydi; `createdAt` — teng vaqtlar uchun zaxira.
-      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      // USTUN ICHIDAGI TARTIB bu yerda EMAS: uni `zakazlarniTartibla`
+      // (`lib/crm/pipeline.ts`) hisoblaydi — "Yutildi"ga endigina o'tgan
+      // zakaz ustun tepasida turadi. Bu yerdagi tartib faqat 500 lik
+      // oynani barqaror qiladi.
+      orderBy: [{ sana: "asc" }, { createdAt: "desc" }],
       take: 500, // sog'lom chegara; arxiv alohida filtr bilan ochiladi
     }),
   ]);
@@ -238,6 +237,8 @@ export async function holatniOzgartirish(params: {
       holat: params.holat,
       stageId: bosqichlar[params.holat],
       yopilganAt: yopiqHolat(params.holat) ? new Date() : null,
+      // Doska ustunidagi tartib shu vaqtdan (eng yangi o'tish — eng tepada).
+      holatAt: new Date(),
     },
   });
 
@@ -407,28 +408,27 @@ async function kontaktTop(params: YangiBuyurtma): Promise<string | null> {
 }
 
 /**
- * ZAKAZ SOTUVCHISINI ANIQLASH (6-talab) va uni biriktiruvlar ro'yxatiga
- * qo'shish.
+ * ZAKAZ SOTUVCHISINI ANIQLASH va uni biriktiruvlar ro'yxatiga qo'shish.
  *
  * TANLASH TARTIBI:
  *  1. `sotuvchiId` — birinchi darajali maydon (forma shuni yuboradi);
  *  2. `xodimlar` ro'yxatidagi SOTUVCHI turidagi kategoriya qatori — ESKI
  *     yo'l, buzilmasin (bot/eski integratsiyalar shu ko'rinishda yuboradi).
- * Hech biri bo'lmasa sotuvchi BIRIKTIRILMAYDI (biznes sozlamasi majburiy
- * qilsa — aniq xato).
+ * Hech biri bo'lmasa sotuvchi TANLANMAGAN bo'lib qoladi; biznes sozlamasi
+ * majburiy qilsa — aniq xato.
  *
- * AVTO-TANLASH ATAYLAB YO'Q. Ilgari tanlov bo'lmasa foydalanuvchining o'z
- * sotuvchi profili yozilardi. Disney Navoiy ishxonasida bitta kompyuter bor
- * va Balansa bitta hisobda ochiq turadi, ya'ni bu qoida sotuvni HAR DOIM
- * o'sha hisobga yozib, KPI'ni yolg'onga aylantirardi. Endi sotuvni kim
- * qilgan bo'lsa — o'sha qo'lda tanlanadi; kiritgan odam esa `Deal.createdBy`
- * da alohida saqlanadi.
+ * AVTO-TANLASH ATAYLAB YO'Q. Umumiy kompyuterdan ishlaydigan bo'limda
+ * (Disney Navoiy sotuv bo'limi) tizimga kirgan hisob zakazni KIM SOTGANINI
+ * bildirmaydi: bitta hisobdan hamma kiritadi. Kirgan foydalanuvchidan
+ * sotuvchini taxmin qilish butun sotuv statistikasini bir odamga yig'ib
+ * qo'yardi. Kirgan odam `Deal.createdBy` da alohida saqlanadi.
  *
- * HUQUQ TEKSHIRUVI YO'Q (ayni sabab): CRM'ga kira olgan har bir xodim
- * biznesning HAR QAYSI faol sotuvchisini tanlay oladi. Cheklov ro'yxatning
- * O'ZIDA qoladi — server har chaqiruvda xodim shu biznesniki, faol va
- * sotuvchi kategoriyasi a'zosi ekanini tekshiradi (`sotuvchiTekshir`),
- * ya'ni mijoz yuborgan qiymatga ISHONILMAYDI.
+ * HUQUQ TEKSHIRUVI HAM YO'Q (ayni sabab): CRM'ga kira olgan har bir xodim
+ * biznesning HAR QAYSI faol sotuvchisini tanlay oladi — "boshqa sotuvchini
+ * tanlash" imtiyoz emas, kundalik amal. Cheklov RO'YXATNING O'ZIDA qoladi:
+ * server har chaqiruvda xodim shu biznesniki, faol va sotuvchi kategoriyasi
+ * a'zosi ekanini tekshiradi (`sotuvchiTekshir`), ya'ni mijoz yuborgan
+ * qiymatga baribir ISHONILMAYDI.
  */
 async function sotuvchiniQosh(params: YangiBuyurtma): Promise<ZakazXodimInput[]> {
   const boshqalar = params.xodimlar ?? [];
@@ -522,6 +522,8 @@ export async function createDeal(params: YangiBuyurtma) {
       tolovTuri: params.tolovTuri ?? null,
       holat,
       yopilganAt: yopiqHolat(holat) ? new Date() : null,
+      // Yaratilish — zakazning BIRINCHI holati, shu bois tartib vaqti ham shu.
+      holatAt: new Date(),
       categoryId,
       stageId,
       contactId,
@@ -626,7 +628,7 @@ export async function moveDeal(params: {
 
   const updated = await prisma.deal.update({
     where: { id: deal.id },
-    data: { stageId: stage.id, holat, yopilganAt: yopilyapti ? new Date() : null },
+    data: { stageId: stage.id, holat, yopilganAt: yopilyapti ? new Date() : null, holatAt: new Date() },
   });
 
   await prisma.activity.create({

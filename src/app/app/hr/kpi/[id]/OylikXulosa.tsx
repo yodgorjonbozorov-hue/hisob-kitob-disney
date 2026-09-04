@@ -104,6 +104,36 @@ export function OylikXulosa({
           </dd>
         </div>
 
+        {hisob.qatnashuv && hisob.qatnashuv.jami > 0 && (
+          <div>
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-muted">
+                Zakaz qatnashuvi
+                <span className="text-faint text-2xs"> · {hisob.qatnashuv.jami} ta zakaz</span>
+              </dt>
+              <dd>
+                <Money value={hisob.qatnashuvHaqi} size="sm" />
+              </dd>
+            </div>
+            <ul className="mt-1 space-y-1">
+              {hisob.qatnashuv.lavozimlar.map((l) => (
+                <li key={l.categoryId} className="flex items-baseline justify-between gap-2 text-2xs text-faint">
+                  <span className="truncate">
+                    {l.nomi} · {l.jami} ta ({l.bajarildi} bajarildi, {l.bekor} bekor)
+                    {l.ortachaBaho !== null && ` · baho ${l.ortachaBaho}`}
+                  </span>
+                  <span className="tnum shrink-0">{l.summa.toLocaleString("uz-UZ")}</span>
+                </li>
+              ))}
+            </ul>
+            {hisob.yakuniy && (
+              <p className="mt-1 text-2xs text-faint">
+                Oy yopilgan — qatnashuv faqat ko&apos;rsatiladi, yakuniy summaga qo&apos;shilmaydi.
+              </p>
+            )}
+          </div>
+        )}
+
         {tuzatishlar.length > 0 && (
           <div>
             <div className="flex items-baseline justify-between gap-3">

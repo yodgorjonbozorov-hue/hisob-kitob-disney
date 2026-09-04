@@ -3,6 +3,7 @@ import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { runBusinessTx } from "@/lib/db/businessTx";
 import { createTransactionTx } from "@/lib/services/transactionService";
 import { ensureCategoryTx } from "@/lib/services/inventory";
+import { shaxsiyKassaId } from "@/lib/services/kassaTanlash";
 import { kunlikSinxron } from "@/lib/services/kunlik";
 import { utcDateToDateOnlyString, todayDateOnlyString } from "@/lib/date";
 import { tolovHolati } from "@/lib/crm/pipeline";
@@ -101,13 +102,22 @@ export async function kirimgaKochirish(params: KirimgaKochirishParams) {
     const categoryId =
       deal.categoryId ?? (await ensureCategoryTx(tx, params.businessId, ZAXIRA_KATEGORIYA, "kirim"));
 
+    // KASSA — ZAKAZ MAS'ULINIKI, tugmani bosgan odamniki emas (sotuvchi
+    // statistikasi bilan AYNI qoida). Shaxsiy kassa rejimida naqd pul
+    // zakazni olgan xodimning kassasiga tushadi va u shu pulni topshiradi.
+    // Rejim o'chiq bo'lsa `null` qaytadi — eski xatti-harakat saqlanadi
+    // (`createTransactionTx` odatdagi kassani tanlaydi).
+    const accountId =
+      params.accountId ??
+      (await shaxsiyKassaId(tx, params.businessId, sotuvchiId, params.tolovTuri ?? null));
+
     const created = await createTransactionTx(tx, params.userId, params.businessId, {
       turi: "kirim",
       categoryId,
       summa: deal.summa,
       sana,
       izoh,
-      accountId: params.accountId ?? null,
+      accountId,
       tolovTuri: params.tolovTuri ?? null,
       sotuvchiId,
     });

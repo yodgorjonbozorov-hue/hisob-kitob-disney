@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ASOSIY_USTUNLAR, kirimUlushi, qarzUlushi, zakazUstuni, type Ustun } from "@/lib/crm/pipeline";
+import {
+  ASOSIY_USTUNLAR,
+  holatVaqti,
+  kirimUlushi,
+  qarzUlushi,
+  zakazUstuni,
+  type Ustun,
+} from "@/lib/crm/pipeline";
 import { BuyurtmaModal } from "./BuyurtmaModal";
 import { BuyurtmaSheet } from "./BuyurtmaSheet";
 import { DoskaFiltr } from "./DoskaFiltr";
@@ -16,6 +23,14 @@ import type {
   XodimKategoriyaDTO,
 } from "./turlar";
 
+/** Server javobigacha ko'rsatiladigan mahalliy o'zgarish. */
+interface MahalliyOzgarish {
+  holat: string;
+  sana: string | null;
+  /** Ustun ichidagi tartib vaqti (ISO) — "hozir". */
+  holatAt: string;
+}
+
 /**
  * CRM ZAKAZ DOSKASI.
  *
@@ -25,6 +40,11 @@ import type {
  *
  * Sudrab tashlash (drag & drop) ishlashda davom etadi; mobilda esa ayni
  * o'tishlar tafsilot oynasidagi tugmalarda (10-talab).
+ *
+ * OPTIMISTIK KO'CHISH: `router.refresh()` server javobini kutadi, shuning
+ * uchun holat o'zgargach karta bir zumga eski ustunida turib qolardi. Shu
+ * bois o'zgarish MAHALLIY ravishda ham yoziladi — zakaz darhol yangi
+ * ustunning ENG TEPASIDA paydo bo'ladi (`holatAt` = hozir).
  */
 export function CrmClient({
   buyurtmalar,
@@ -77,6 +97,34 @@ export function CrmClient({
   const [yakunlanadi, setYakunlanadi] = useState<BuyurtmaDTO | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [xato, setXato] = useState<string | null>(null);
+  /**
+   * MAHALLIY (optimistik) o'zgarishlar — server javobi yetib kelgunicha.
+   * Kalit — zakaz id'si.
+   */
+  const [mahalliy, setMahalliy] = useState<Record<string, MahalliyOzgarish>>({});
+
+  /**
+   * Doska ko'rsatadigan RO'YXAT: serverdan kelgan ma'lumot ustiga mahalliy
+   * o'zgarish qo'yiladi. Mahalliy nusxa O'Z-O'ZIDAN chiqadi (tozalash
+   * effekti kerak emas): server ayni holatni ko'rsatgan yoki undan YANGIROQ
+   * o'zgarish yozgan bo'lsa — serverning so'zi oxirgi.
+   */
+  const zakazlar = buyurtmalar.map((b) => {
+    const m = mahalliy[b.id];
+    if (!m) return b;
+    const serverYetdi = m.holat === b.holat && m.sana === b.sana;
+    const serverYangiroq = holatVaqti(b) >= Date.parse(m.holatAt);
+    if (serverYetdi || serverYangiroq) return b;
+    return { ...b, holat: m.holat, sana: m.sana, holatAt: m.holatAt };
+  });
+
+  /** Zakazni mahalliy ravishda yangi holatga qo'yadi (tartib vaqti — hozir). */
+  function mahalliyYoz(b: BuyurtmaDTO, holat: string, sana: string | null = b.sana) {
+    setMahalliy((oldingi) => ({
+      ...oldingi,
+      [b.id]: { holat, sana, holatAt: new Date().toISOString() },
+    }));
+  }
 
   const ustuni = (b: BuyurtmaDTO): Ustun => zakazUstuni(b.holat, b.sana, bugun);
 
@@ -87,7 +135,7 @@ export function CrmClient({
    */
   async function ustungaKochirish(id: string, ustun: Ustun) {
     setXato(null);
-    const b = tanlangan?.id === id ? tanlangan : buyurtmalar.find((x) => x.id === id);
+    const b = zakazlar.find((x) => x.id === id) ?? (tanlangan?.id === id ? tanlangan : undefined);
     if (!b) return;
     if (ustuni(b) === ustun) return;
 
@@ -112,6 +160,9 @@ export function CrmClient({
       setXato((await res.json()).error ?? "Xatolik yuz berdi");
       return;
     }
+    // Optimistik: "Bugungi" — HOLAT emas, sana o'zgarishi (pipeline qoidasi).
+    if (ustun === "BUGUNGI") mahalliyYoz(b, b.holat, bugun);
+    else mahalliyYoz(b, ustun === "JARAYONDA" ? "JARAYONDA" : "KUTILMOQDA");
     setTanlangan(null);
     router.refresh();
   }
@@ -128,6 +179,8 @@ export function CrmClient({
       setXato((await res.json()).error ?? "Xatolik yuz berdi");
       return;
     }
+    const b = zakazlar.find((x) => x.id === id);
+    if (b) mahalliyYoz(b, "YOQOTILDI");
     setTanlangan(null);
     router.refresh();
   }
@@ -159,7 +212,7 @@ export function CrmClient({
             <ZakazUstuni
               ustun={u}
               bugun={bugun}
-              zakazlar={buyurtmalar.filter((b) => ustuni(b) === u)}
+              zakazlar={zakazlar.filter((b) => ustuni(b) === u)}
               onDrop={() => dragId && ustungaKochirish(dragId, u)}
               onTanlash={setTanlangan}
               onDragStart={setDragId}
@@ -214,6 +267,9 @@ export function CrmClient({
           b={yakunlanadi}
           onClose={() => setYakunlanadi(null)}
           onDone={() => {
+            // Endigina yutilgan zakaz "Yutildi" ustunining ENG TEPASIDA
+            // ko'rinsin — `router.refresh()` javobini kutmasdan.
+            mahalliyYoz(yakunlanadi, "YUTILDI");
             setYakunlanadi(null);
             router.refresh();
           }}

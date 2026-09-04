@@ -1,0 +1,85 @@
+# DISNEY NAVOIY — MASHINA YOZGAN SOTUVCHI ATTRIBUTIONINI TASDIQSIZ QILISH.
+#
+# `tasdiqsiz: HA` bo'lsa avtomatik migratsiya yozgan sotuvchi biriktiruvlari
+# `tasdiqlangan = false` bo'ladi: KPI va oylikdan chiqadi, lekin O'CHMAYDI —
+# formada taklif bo'lib ko'rinadi va odam saqlasa qaytib tasdiqlanadi.
+# Bo'sh bo'lsa — faqat quruq hisobot.
+#
+# MOLIYAGA TEGMAYDI: skript Deal/Transaction/Debt/Sale/kassani o'qimaydi ham.
+# Yozishdan oldin shartsiz zaxira; yetkazilmasa exit 1.
+name: Disney attribution (tasdiqsiz qilish)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tasdiqsiz:
+        description: 'Mashina yozgan biriktiruvni TASDIQSIZ qilish uchun "HA"'
+        required: false
+        default: ""
+
+concurrency:
+  group: disney-attribution
+  cancel-in-progress: false
+
+env:
+  BUSINESS_ID: biz_disney_navoiy
+
+jobs:
+  bajar:
+    name: Zaxira + attribution tasdig'i
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Bog'liqliklar
+        run: npm ci
+
+      - name: OLDINGI holat (faqat o'qish)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: node scripts/production-holat.mjs
+
+      - name: ZAXIRA -> Telegram (majburiy, yozishdan oldin)
+        if: inputs.tasdiqsiz == 'HA'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          BACKUP_CHAT_ID: ${{ secrets.BACKUP_CHAT_ID }}
+          BACKUP_BOT_TOKEN: ${{ secrets.BACKUP_BOT_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: node scripts/zaxira-majburiy.mjs "Disney attribution tasdiqsiz qilishdan oldin"
+
+      - name: Attribution tasdig'i
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: |
+          node -r ts-node/register scripts/attribution-tasdiqsiz.ts \
+            ${{ inputs.tasdiqsiz == 'HA' && '--qollash' || '' }}
+
+      # Qayta yurgizish: ikkinchi marta 0 chiqishi kerak (idempotent).
+      - name: Keyin qayta quruq tekshiruv (idempotentlik)
+        if: inputs.tasdiqsiz == 'HA'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: node -r ts-node/register scripts/attribution-tasdiqsiz.ts
+
+      - name: Sotuvchi KPI (tasdiqsizdan keyin)
+        if: always()
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: node -r ts-node/register scripts/sotuvchi-kpi-tekshir.ts
+
+      - name: KEYINGI holat (moliya izi o'zgarmagani tekshiriladi)
+        if: always()
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: node scripts/production-holat.mjs

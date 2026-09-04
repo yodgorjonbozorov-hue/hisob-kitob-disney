@@ -138,9 +138,13 @@ export async function zakazXodimlariniSaqlash(
     select: { id: true, contactId: true, transactionId: true },
   });
   if (!deal) throw new ForbiddenError("Buyurtma topilmadi");
-  if (deal.transactionId) {
-    throw new BadRequestError("Kirim yozilgan buyurtmaning jamoasi o'zgartirilmaydi");
-  }
+  // KIRIM QULFI ATAYLAB YO'Q. Bu funksiya FAQAT xodim biriktiruvini
+  // (attribution) o'zgartiradi: pul, kirim, to'lov, kassa va moliyaviy
+  // ledger'ga umuman tegmaydi — quyidagi tranzaksiyada faqat `DealEmployee`
+  // va `Activity` bor. Eski, yakunlangan zakazda ham "kim ishlagan" ni
+  // tuzatib bo'lishi SHART: tarixiy KPI shu biriktiruvdan hisoblanadi va
+  // uni tuzatmasdan xodim o'z zakazlarini to'ldirib chiqa olmaydi.
+  // Pul maydonlari alohida yo'lda (PATCH /api/crm/deals/[id]) qulflangan.
 
   const royxat = await zakazXodimlariniTekshir(businessId, items);
 
@@ -150,6 +154,7 @@ export async function zakazXodimlariniSaqlash(
       id: true,
       categoryId: true,
       employeeId: true,
+      tasdiqlangan: true,
       employee: { select: { ism: true } },
       category: { select: { turi: true } },
     },
@@ -172,9 +177,13 @@ export async function zakazXodimlariniSaqlash(
     (r) => !yangiKalitlar.has(kalit(r)) && (kiruvchiSotuvchi || r.category.turi !== "sotuvchi")
   );
   const qoshiladigan = royxat.filter((r) => !eskiKalitlar.has(kalit(r)));
+  // ODAM TASDIG'I: saqlashda qoldirilgan, lekin hali tasdiqlanmagan qator
+  // TASDIQLANADI — mashina taklifini odam ko'rib chiqib qoldirdi degani.
+  // Shundan keyin u KPI va oylikka kiradi.
+  const tasdiqlanadigan = hozirgi.filter((r) => yangiKalitlar.has(kalit(r)) && !r.tasdiqlangan);
 
   // Hech narsa o'zgarmagan — bazaga tegilmaydi (42-stsenariy: dublikat yo'q).
-  if (ochiriladigan.length === 0 && qoshiladigan.length === 0) {
+  if (ochiriladigan.length === 0 && qoshiladigan.length === 0 && tasdiqlanadigan.length === 0) {
     return zakazXodimlari(businessId, dealId);
   }
 
@@ -194,7 +203,21 @@ export async function zakazXodimlariniSaqlash(
     }
     for (const r of qoshiladigan) {
       await tx.dealEmployee.create({
-        data: { businessId, dealId, categoryId: r.categoryId, employeeId: r.employeeId },
+        // Odam tanladi — darhol TASDIQLANGAN.
+        data: {
+          businessId,
+          dealId,
+          categoryId: r.categoryId,
+          employeeId: r.employeeId,
+          tasdiqlangan: true,
+          tasdiqlaganUserId: userId ?? null,
+        },
+      });
+    }
+    if (tasdiqlanadigan.length) {
+      await tx.dealEmployee.updateMany({
+        where: { businessId, dealId, id: { in: tasdiqlanadigan.map((r) => r.id) } },
+        data: { tasdiqlangan: true, tasdiqlaganUserId: userId ?? null },
       });
     }
     if (userId) {
@@ -202,6 +225,9 @@ export async function zakazXodimlariniSaqlash(
       if (ochiriladigan.length) qismlar.push(`chiqdi: ${ochiriladigan.map((r) => r.employee.ism).join(", ")}`);
       if (qoshiladigan.length) {
         qismlar.push(`qo'shildi: ${qoshiladigan.map((r) => ismXarita.get(r.employeeId) ?? "?").join(", ")}`);
+      }
+      if (tasdiqlanadigan.length) {
+        qismlar.push(`tasdiqlandi: ${tasdiqlanadigan.map((r) => r.employee.ism).join(", ")}`);
       }
       await tx.activity.create({
         data: {
@@ -263,5 +289,9 @@ export async function jamoaOzgartiraOladimi(params: {
     where: { id: params.dealId, businessId: params.businessId, deletedAt: null },
     select: { masulId: true, holat: true },
   });
-  return Boolean(deal && deal.masulId === params.userId && deal.holat !== "YUTILDI");
+  // YUTILDI cheklovi ATAYLAB OLIB TASHLANDI: eski, yakunlangan zakazlarda
+  // "kim ishlagan" ni tuzatish endi qo'llab-quvvatlanadigan ish oqimi
+  // (xodimlar tarixni o'zlari to'ldirib chiqadi). Amal pulga tegmaydi va
+  // har o'zgarish zakaz lentasi hamda audit jurnaliga yoziladi.
+  return Boolean(deal && deal.masulId === params.userId);
 }

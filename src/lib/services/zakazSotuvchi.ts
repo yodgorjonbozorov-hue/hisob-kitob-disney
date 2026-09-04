@@ -246,7 +246,15 @@ export async function sotuvchiniOzgartirish(params: {
       where: { businessId, dealId, category: { turi: SOTUVCHI_TURI } },
     });
     await tx.dealEmployee.create({
-      data: { businessId, dealId, categoryId: yangi.categoryId, employeeId: yangi.id },
+      // Sotuvchini ODAM tanladi — TASDIQLANGAN (mashina taxmini emas).
+      data: {
+        businessId,
+        dealId,
+        categoryId: yangi.categoryId,
+        employeeId: yangi.id,
+        tasdiqlangan: true,
+        tasdiqlaganUserId: userId,
+      },
     });
     if (sotuvchiUser) {
       await tx.deal.updateMany({ where: { id: dealId, businessId }, data: { masulId: sotuvchiUser.id } });

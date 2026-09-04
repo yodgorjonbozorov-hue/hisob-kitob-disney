@@ -94,10 +94,15 @@ export interface BuyurtmaDTO {
    */
   sana: string | null;
   /**
-   * OXIRGI O'ZGARISH (ISO). Doska tartibi shu bo'yicha: yangi yaratilgan
-   * yoki holati hozirgina o'zgargan zakaz ustun BOSHIDA turadi.
+   * ZAKAZ QACHON JORIY HOLATIGA O'TGAN (ISO). Doska ustuni ichidagi tartib
+   * SHU maydondan hisoblanadi — "Yutildi"ga endigina o'tgan zakaz eng tepada
+   * turadi (`lib/crm/pipeline.ts` → `zakazlarniTartibla`).
    */
-  updatedAt: string;
+  holatAt: string | null;
+  /** Yopilgan vaqt (ISO) — `holatAt` yo'q eski yozuvlar uchun zaxira. */
+  yopilganAt: string | null;
+  /** Yaratilish vaqti (ISO) — oxirgi zaxira tartib kaliti. */
+  createdAt: string;
   izoh: string | null;
   masulId: string;
   masulIsm: string | null;
@@ -111,23 +116,6 @@ export interface BuyurtmaDTO {
   qarzQoldiq: number;
   /** Zakazni olgan sotuvchi (biriktirilmagan bo'lsa null). */
   sotuvchi: ZakazSotuvchiDTO | null;
-}
-
-export interface KunlikXulosaDTO {
-  sana: string;
-  jami: number;
-  kirimga: number;
-  kutilmoqda: number;
-  soni: number;
-}
-
-export interface KategoriyaStatDTO {
-  categoryId: string | null;
-  nomi: string;
-  soni: number;
-  jami: number;
-  kirimga: number;
-  kutilmoqda: number;
 }
 
 /**
