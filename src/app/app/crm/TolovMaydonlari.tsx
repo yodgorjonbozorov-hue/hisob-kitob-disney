@@ -1,134 +1,154 @@
 "use client";
 
 import { Select } from "@/components/ui/Select";
-import { formatMoney } from "@/lib/format";
-import { kirimUlushi, qarzUlushi } from "@/lib/crm/pipeline";
+import { formatMoney, parseSomInput } from "@/lib/format";
+import { TOLOV_KANALLARI, TOLOV_KANAL_NOMI, type TolovSatri } from "@/lib/crm/tolovlar";
 
 const INPUT =
   "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand";
 
 /**
- * To'lov tanlovi — `tolangan` summani BELGILAYDI (6-talab).
- * "tanlanmagan" — foydalanuvchi hali tanlamagan (tahrir formasida saqlangan
- * zakazning haqiqiy holatini ko'rsatish uchun; yangi zakazda taklif etilmaydi).
+ * TO'LOVLAR BLOKI — bitta zakaz bir necha KANAL bilan to'lanishi mumkin.
+ *
+ * Misol: 1 000 000 lik zakaz — naqd 300 000 + click 400 000 + terminal
+ * 200 000, qolgan 100 000 esa QARZ.
+ *
+ * QARZ QATOR EMAS (`lib/crm/tolovlar.ts` bilan bir xil qoida): u zakaz
+ * summasidan QOLGAN qism. Shuning uchun kanallar ro'yxatida "qarz" yo'q va
+ * pastda faqat "Qoldiq" ko'rsatiladi — u Yutildi bosilganda qarzdorlikka
+ * yoziladi.
+ *
+ * TO'LOV QATORI UMUMAN BO'LMASA zakaz "to'lovi tanlanmagan" bo'lib qoladi
+ * va Yutildi hech qanday moliyaviy yozuv yaratmaydi. To'lovsiz zakazni
+ * ataylab qarzga yozish uchun "Qarzga" belgisi bor — qarz FAQAT
+ * foydalanuvchi tanlovi bilan ochiladi.
  */
-export type TolovTanlov = "toliq" | "qisman" | "qarz" | "tanlanmagan";
 
-/** Pul kanali — kirim tranzaksiyasiga o'sha ko'rinishda uzatiladi. */
-export type PulKanali = "naqd" | "click";
-
-/**
- * TANLOVDAN TO'LANGAN SUMMA: to'liq — butun narx, qarzga — 0, qisman —
- * kiritilgan raqam. To'lov holati (to'liq/qisman/qarz) serverda ham AYNI
- * ikkovidan — narx va to'langan — hisoblanadi, ya'ni formadagi tanlov
- * ikkinchi haqiqat manbaiga aylanmaydi.
- */
-export function tolanganHisobla(tanlov: TolovTanlov, narx: number, qismanSumma: number): number {
-  if (tanlov === "toliq") return narx;
-  if (tanlov === "qarz" || tanlov === "tanlanmagan") return 0;
-  return qismanSumma;
+/** Forma qatori: summa XOM MATN (foydalanuvchi kiritayotgan holat). */
+export interface TolovQatori {
+  kanal: string;
+  summa: string;
 }
 
-/**
- * Serverga yuboriladigan pul kanali: "Qarzga" tanlovi `tolovTuri = "qarz"`
- * bilan saqlanadi — to'lov holati (`lib/crm/pipeline.ts`) "Qarzga" ni
- * AYNAN shu belgidan o'qiydi, `tolangan = 0` dan emas. Tanlanmagan — null.
- */
-export function tolovTuriHisobla(tanlov: TolovTanlov, kanal: PulKanali): string | null {
-  if (tanlov === "qarz") return "qarz";
-  if (tanlov === "tanlanmagan") return null;
-  return kanal;
+/** Bo'sh qatorlarni tashlab, serverga yuboriladigan ko'rinishga o'tkazadi. */
+export function qatorlarniTozala(qatorlar: TolovQatori[]): TolovSatri[] {
+  return qatorlar
+    .map((q) => ({ kanal: q.kanal, summa: q.summa ? parseSomInput(q.summa) : 0 }))
+    .filter((q) => q.summa > 0);
 }
 
-/** Forma xatosi: qisman to'lovda summa kiritilishi shart (0 — tanlov emas). */
-export function tolovXatosi(tanlov: TolovTanlov, narx: number, tolangan: number): string | null {
-  if (tanlov === "qisman" && tolangan <= 0) return "Qisman to'lov summasini kiriting";
-  if (tolangan > narx) return "To'langan summa zakaz narxidan ko'p bo'lmasligi kerak";
+/** Saqlashdan oldingi tekshiruv (server ham AYNI qoidani majburlaydi). */
+export function tolovlarXatosi(narx: number, satrlar: TolovSatri[]): string | null {
+  const jami = satrlar.reduce((s, t) => s + t.summa, 0);
+  if (jami > narx) return "To'lovlar yig'indisi zakaz summasidan ko'p bo'lmasligi kerak";
   return null;
 }
 
-/**
- * TO'LOV MAYDONLARI: to'lov turi, qisman summa, pul kanali va pul qayerga
- * tushishining oldindan ko'rinishi (5-talab).
- */
 export function TolovMaydonlari({
-  tanlov,
-  onTanlov,
-  qisman,
-  onQisman,
-  kanal,
-  onKanal,
+  qatorlar,
+  onQatorlar,
   narx,
-  tolangan,
+  qarzga,
+  onQarzga,
 }: {
-  tanlov: TolovTanlov;
-  onTanlov: (v: TolovTanlov) => void;
-  /** Qisman to'lov summasi (xom matn — foydalanuvchi kiritgani). */
-  qisman: string;
-  onQisman: (v: string) => void;
-  kanal: PulKanali;
-  onKanal: (v: PulKanali) => void;
+  qatorlar: TolovQatori[];
+  onQatorlar: (v: TolovQatori[]) => void;
   narx: number;
-  /** Hisoblangan to'langan summa. */
-  tolangan: number;
+  /** To'lov qatori bo'lmaganda: butun summa qarzdorlikka yozilsinmi. */
+  qarzga: boolean;
+  onQarzga: (v: boolean) => void;
 }) {
+  const satrlar = qatorlarniTozala(qatorlar);
+  const tolangan = satrlar.reduce((s, t) => s + t.summa, 0);
+  const qoldiq = Math.max(0, narx - tolangan);
+  const oshib = tolangan > narx;
+
+  function ozgartir(i: number, yangi: Partial<TolovQatori>) {
+    onQatorlar(qatorlar.map((q, idx) => (idx === i ? { ...q, ...yangi } : q)));
+  }
+
   return (
-    <>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <div className="space-y-1">
-          <label className="block text-xs text-muted" htmlFor="bm-tolov">To&apos;lov turi</label>
-          <Select
-            id="bm-tolov"
-            value={tanlov}
-            onChange={(v) => onTanlov(v as TolovTanlov)}
-            options={[
-              // Saqlangan zakazda tanlov bo'lmasa — hozirgi holat ko'rinsin.
-              ...(tanlov === "tanlanmagan" ? [{ value: "tanlanmagan", label: "Tanlanmagan" }] : []),
-              { value: "toliq", label: "To'liq to'langan" },
-              { value: "qisman", label: "Qisman to'langan" },
-              { value: "qarz", label: "Qarzga" },
-            ]}
-          />
-        </div>
-        {tanlov === "qisman" && (
-          <label className="block space-y-1">
-            <span className="text-xs text-muted">To&apos;langan summa (so&apos;m)</span>
-            <input
-              value={qisman}
-              onChange={(e) => onQisman(e.target.value)}
-              placeholder="200000"
-              inputMode="numeric"
-              className={INPUT}
-            />
-          </label>
-        )}
-        {tanlov !== "qarz" && tanlov !== "tanlanmagan" && (
-          <div className="space-y-1">
-            <label className="block text-xs text-muted" htmlFor="bm-kanal">Pul kanali</label>
-            <Select
-              id="bm-kanal"
-              value={kanal}
-              onChange={(v) => onKanal(v as PulKanali)}
-              options={[
-                { value: "naqd", label: "Naqd" },
-                { value: "click", label: "Click / karta" },
-              ]}
-            />
-          </div>
-        )}
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-2xs uppercase tracking-wide text-faint">To&apos;lovlar</span>
+        <button
+          type="button"
+          onClick={() => onQatorlar([...qatorlar, { kanal: "naqd", summa: "" }])}
+          className="text-brand text-xs font-medium"
+        >
+          + To&apos;lov qo&apos;shish
+        </button>
       </div>
 
-      {narx > 0 && tanlov === "tanlanmagan" && (
-        <p className="text-2xs text-debt-fg">
-          To&apos;lov tanlanmagan — Yutildi bosilganda kirim ham, qarz ham yozilmaydi.
+      {qatorlar.length === 0 ? (
+        <p className="text-2xs text-faint">
+          To&apos;lov qo&apos;shilmagan — zakaz to&apos;lovsiz saqlanadi.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {qatorlar.map((q, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <div className="w-32 shrink-0">
+                <Select
+                  value={q.kanal}
+                  onChange={(v) => ozgartir(i, { kanal: v })}
+                  aria-label="To'lov kanali"
+                  options={TOLOV_KANALLARI.map((k) => ({ value: k, label: TOLOV_KANAL_NOMI[k] }))}
+                />
+              </div>
+              <input
+                value={q.summa}
+                onChange={(e) => ozgartir(i, { summa: e.target.value })}
+                placeholder="200000"
+                inputMode="numeric"
+                aria-label="To'lov summasi"
+                className={INPUT}
+              />
+              <button
+                type="button"
+                onClick={() => onQatorlar(qatorlar.filter((_, idx) => idx !== i))}
+                aria-label="To'lovni o'chirish"
+                className="shrink-0 px-2 py-2 text-muted hover:text-expense"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {narx > 0 && (
+        <div className="text-2xs tnum space-y-0.5">
+          <p className={oshib ? "text-expense font-medium" : "text-muted"}>
+            To&apos;langan: {formatMoney(tolangan)}
+          </p>
+          <p className={qoldiq > 0 ? "text-debt-fg" : "text-muted"}>Qoldiq: {formatMoney(qoldiq)}</p>
+          {oshib && (
+            <p className="text-expense">
+              To&apos;lovlar yig&apos;indisi zakaz summasidan ko&apos;p bo&apos;lmasligi kerak.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* QARZ — kanal emas, QOLDIQ. Qator bo'lsa qoldiq o'zi qarzdorlikka
+          yoziladi; qatorsiz zakazda esa qarz FAQAT shu belgi bilan ochiladi. */}
+      {narx > 0 && qoldiq > 0 && satrlar.length > 0 && (
+        <p className="text-2xs text-faint">
+          Yutildi bosilganda: Kirim {formatMoney(tolangan)} · Qarzdorlik {formatMoney(qoldiq)}
         </p>
       )}
-      {narx > 0 && tanlov !== "tanlanmagan" && (
-        <p className="text-2xs text-faint tnum">
-          Yutildi bosilganda: Kirim {formatMoney(kirimUlushi(narx, tolangan))} · Qarzdorlik{" "}
-          {formatMoney(qarzUlushi(narx, tolangan, tolovTuriHisobla(tanlov, kanal)))}
-        </p>
+      {narx > 0 && satrlar.length === 0 && (
+        <label className="flex items-center gap-2 text-xs text-muted">
+          <input
+            type="checkbox"
+            checked={qarzga}
+            onChange={(e) => onQarzga(e.target.checked)}
+            className="w-5 h-5"
+          />
+          Qarzga: butun summa ({formatMoney(narx)}) qarzdorlikka yozilsin
+        </label>
       )}
-    </>
+    </div>
   );
 }

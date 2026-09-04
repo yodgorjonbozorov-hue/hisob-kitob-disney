@@ -14,11 +14,9 @@ import {
 } from "./ZakazJamoasi";
 import {
   TolovMaydonlari,
-  tolanganHisobla,
-  tolovTuriHisobla,
-  tolovXatosi,
-  type PulKanali,
-  type TolovTanlov,
+  qatorlarniTozala,
+  tolovlarXatosi,
+  type TolovQatori,
 } from "./TolovMaydonlari";
 import { ZakazAsosiy } from "./ZakazAsosiy";
 import { ZakazNarxSana } from "./ZakazNarxSana";
@@ -76,9 +74,11 @@ export function BuyurtmaModal({
   const [sana, setSana] = useState(bugun);
   const [izoh, setIzoh] = useState("");
   const [masulId, setMasulId] = useState(meId);
-  const [tolovTanlov, setTolovTanlov] = useState<TolovTanlov>("toliq");
-  const [tolangan, setTolangan] = useState("");
-  const [tolovTuri, setTolovTuri] = useState<PulKanali>("naqd");
+  // TO'LOVLAR — bir zakazda bir necha kanal (naqd + click + terminal).
+  // Bo'sh boshlanadi: to'lov qatori qo'shilmasa zakaz "to'lovsiz" saqlanadi
+  // va Yutildi hech qanday moliyaviy yozuv yaratmaydi.
+  const [tolovQatorlari, setTolovQatorlari] = useState<TolovQatori[]>([]);
+  const [qarzga, setQarzga] = useState(false);
   // AVTO-TANLASH YO'Q (ataylab): Disney Navoiy sotuv bo'limida BITTA umumiy
   // kompyuter ishlatiladi, ya'ni tizimga kirgan hisob zakazni kim sotganini
   // BILDIRMAYDI. Default "Tanlanmagan" — sotuvchini har safar odam tanlaydi.
@@ -94,9 +94,9 @@ export function BuyurtmaModal({
   const ijrochilar = ijroKategoriyalari(xodimKategoriyalari);
 
   const narx = summa ? parseSomInput(summa) : 0;
-  // TO'LANGAN SUMMA tanlovdan chiqadi: to'liq — butun narx, qarzga — 0,
-  // qisman — kiritilgan raqam. Server ham AYNI shu ikkovidan hisoblaydi.
-  const tolanganSumma = tolanganHisobla(tolovTanlov, narx, tolangan ? parseSomInput(tolangan) : 0);
+  // TO'LOV — qatorlar yig'indisi. Server ham AYNI qoidadan hisoblaydi
+  // (`lib/crm/tolovlar.ts`), ya'ni forma ikkinchi haqiqat manbai emas.
+  const tolovSatrlari = qatorlarniTozala(tolovQatorlari);
 
   async function saqlash(e: React.FormEvent) {
     e.preventDefault();
@@ -113,7 +113,7 @@ export function BuyurtmaModal({
       setXato("Buyurtmani olgan sotuvchini tanlang");
       return;
     }
-    const tolovXato = tolovXatosi(tolovTanlov, narx, tolanganSumma);
+    const tolovXato = tolovlarXatosi(narx, tolovSatrlari);
     if (tolovXato) return setXato(tolovXato);
     setLoading(true);
     setXato(null);
@@ -124,8 +124,9 @@ export function BuyurtmaModal({
         nomi,
         categoryId,
         summa: narx,
-        tolangan: tolanganSumma,
-        tolovTuri: tolovTuriHisobla(tolovTanlov, tolovTuri),
+        tolovlar: tolovSatrlari,
+        // QARZGA — faqat to'lovsiz zakazda va faqat foydalanuvchi tanlasa.
+        tolovTuri: tolovSatrlari.length === 0 && qarzga ? "qarz" : null,
         kontaktIsm: kontaktIsm || null,
         kontaktTel: kontaktTel || null,
         sana,
@@ -171,14 +172,11 @@ export function BuyurtmaModal({
         <ZakazNarxSana summa={summa} onSumma={setSumma} sana={sana} onSana={setSana} bugun={bugun} />
 
         <TolovMaydonlari
-          tanlov={tolovTanlov}
-          onTanlov={setTolovTanlov}
-          qisman={tolangan}
-          onQisman={setTolangan}
-          kanal={tolovTuri}
-          onKanal={setTolovTuri}
+          qatorlar={tolovQatorlari}
+          onQatorlar={setTolovQatorlari}
           narx={narx}
-          tolangan={tolanganSumma}
+          qarzga={qarzga}
+          onQarzga={setQarzga}
         />
 
         <Bolim nomi="Sotuvchi" />

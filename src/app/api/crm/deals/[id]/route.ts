@@ -3,7 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { withTenant } from "@/lib/auth/tenant";
 import { ForbiddenError, BadRequestError } from "@/lib/auth/guard";
 import { resolveActiveBusinessId } from "@/lib/business";
-import { moveDeal, biznesXodimi, holatniOzgartirish, bugungaKochirish } from "@/lib/crm/service";
+import {
+  moveDeal,
+  biznesXodimi,
+  holatniOzgartirish,
+  bugungaKochirish,
+  zakazTolovlariniAlmashtirish,
+} from "@/lib/crm/service";
 import { zakazniYakunlash } from "@/lib/crm/yakunlash";
 import { buyurtmaPatchSchema } from "@/lib/validation/crm";
 import { dashboardYangilandi } from "@/lib/cache";
@@ -74,7 +80,8 @@ export const PATCH = withTenant<{ params: { id: string } }>(
       data.categoryId !== undefined ||
       data.masulId !== undefined ||
       data.tolangan !== undefined ||
-      data.tolovTuri !== undefined;
+      data.tolovTuri !== undefined ||
+      data.tolovlar !== undefined;
 
     if (maydonlar) {
       const existing = await prisma.deal.findFirst({
@@ -95,6 +102,7 @@ export const PATCH = withTenant<{ params: { id: string } }>(
         (existing.transactionId || existing.debtId) &&
         (data.tolangan !== undefined ||
           data.tolovTuri !== undefined ||
+          data.tolovlar !== undefined ||
           (data.summa !== undefined && data.summa !== existing.summa))
       ) {
         throw new BadRequestError(
@@ -125,19 +133,38 @@ export const PATCH = withTenant<{ params: { id: string } }>(
       if (data.izoh !== undefined) patch.izoh = data.izoh;
       if (data.masulId !== undefined) patch.masulId = data.masulId;
       if (data.sana !== undefined) patch.sana = data.sana ? dateOnlyStringToUTCDate(data.sana) : null;
-      if (data.tolangan !== undefined) patch.tolangan = data.tolangan;
-      if (data.tolovTuri !== undefined) patch.tolovTuri = data.tolovTuri;
+      // ARALASH TO'LOV berilganda `tolangan`/`tolovTuri` bu yerda YOZILMAYDI:
+      // ularni qatorlardan `zakazTolovlariniAlmashtirish` hisoblab, qatorlar
+      // bilan BITTA tranzaksiyada yozadi (ikki xil raqam bo'lmasin).
+      if (data.tolovlar === undefined && data.tolangan !== undefined) patch.tolangan = data.tolangan;
+      if (data.tolovlar === undefined && data.tolovTuri !== undefined) patch.tolovTuri = data.tolovTuri;
       if (data.categoryId !== undefined) {
         patch.category = data.categoryId ? { connect: { id: data.categoryId } } : { disconnect: true };
       }
       await prisma.deal.update({ where: { id: params.id }, data: patch });
+
+      // ARALASH TO'LOV qatorlari — atomik (qatorlar + yig'indi bir tranzaksiyada).
+      // Tekshiruv yozishdan OLDIN bo'lgani uchun bu qadam faqat baza xatosida
+      // yiqiladi; narx esa yuqorida allaqachon shu qatorlarga qarshi tekshirilgan.
+      if (data.tolovlar !== undefined) {
+        await zakazTolovlariniAlmashtirish({
+          businessId,
+          dealId: params.id,
+          tolovlar: data.tolovlar,
+          tolovTuri: data.tolovTuri ?? null,
+          summa: yangiSumma,
+        });
+      }
 
       // YUTILGAN, lekin moliyasi hali yozilmagan zakazda (to'lov endi
       // belgilandi) kirim/qarz DARHOL yoziladi — foydalanuvchi alohida
       // "kirimga o'tkazish" bosmaydi. Idempotent: mavjud yozuv takrorlanmaydi.
       // `holat` ham kelgan bo'lsa quyidagi blok o'zi hal qiladi.
       const tolovOzgardi =
-        data.tolangan !== undefined || data.tolovTuri !== undefined || data.summa !== undefined;
+        data.tolangan !== undefined ||
+        data.tolovTuri !== undefined ||
+        data.tolovlar !== undefined ||
+        data.summa !== undefined;
       if (existing.holat === "YUTILDI" && !existing.transactionId && !existing.debtId && tolovOzgardi && !data.holat) {
         await zakazniYakunlash({ businessId, dealId: params.id, userId: user.userId });
       }

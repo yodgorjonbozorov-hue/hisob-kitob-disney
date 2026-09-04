@@ -96,6 +96,8 @@ export const ZAXIRA_JADVALLARI = [
   "employeeCategory",
   "employeeCategoryMember",
   "dealEmployee",
+  // `dealTolov` — deal VA transaction dan KEYIN (ikkalasiga FK bilan bog'liq).
+  "dealTolov",
   // Zakaz sifat nazorati — `deal`dan KEYIN (dealId FK).
   "dealFeedback",
   "attendance",

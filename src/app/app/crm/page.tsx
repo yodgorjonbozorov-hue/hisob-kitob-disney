@@ -3,8 +3,9 @@ import { runWithTenant } from "@/lib/db/tenantContext";
 import { requireModulePage } from "@/lib/modules/guard";
 import { prisma } from "@/lib/prisma";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
-import { getBoard } from "@/lib/crm/service";
-import { tolovHolati, type TolovHolat } from "@/lib/crm/pipeline";
+import { doskaSahifalari } from "@/lib/crm/service";
+import { ustunSahifaDTO } from "@/lib/crm/dto";
+import { ASOSIY_USTUNLAR } from "@/lib/crm/pipeline";
 import { doskaFiltrSchema } from "@/lib/validation/crm";
 import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
 import { crmFormaKategoriyalari } from "@/lib/services/xodimKategoriya";
@@ -13,7 +14,7 @@ import { hasPermission } from "@/lib/permissions/tekshir";
 import { crmYuqoriPanel } from "@/lib/crm/yuqoriPanel";
 import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { listAccounts } from "@/lib/queries/accounts";
-import { todayTashkentDateOnlyString, utcDateToDateOnlyString } from "@/lib/date";
+import { todayTashkentDateOnlyString } from "@/lib/date";
 import { CrmClient } from "./CrmClient";
 import { YuqoriPanel } from "./YuqoriPanel";
 
@@ -67,7 +68,7 @@ export default async function CrmPage({
     const filtr = filtrParsed.success ? filtrParsed.data : {};
 
     const [
-      board,
+      sahifalar,
       kategoriyalar,
       xodimlar,
       yuqoriPanel,
@@ -79,7 +80,10 @@ export default async function CrmPage({
       jamoaHuquqi,
       bahoYozaOladi,
     ] = await Promise.all([
-      getBoard(businessId, filtr),
+      // DOSKA — har ustunning BIRINCHI sahifasi (10 tadan). Qolgani
+      // "Yana ko'rsatish" bilan server tomondan keladi: 500 ta zakazni
+      // yuklab brauzerda yashirish YO'Q (mobil uchun ham yengil).
+      doskaSahifalari(businessId, filtr, bugun, [...ASOSIY_USTUNLAR]),
       // KATEGORIYA MANBAI BITTA: Kirim modulining kategoriyalari.
       prisma.category.findMany({
         where: { businessId, turi: "kirim", isActive: true },
@@ -129,12 +133,6 @@ export default async function CrmPage({
       .sort((a, b) => Number(b.userId === session.userId) - Number(a.userId === session.userId))
       .map((k) => ({ id: k.id, nomi: k.nomi }));
 
-    // TO'LOV HOLATI bazada ustun emas (summa va tolangan'dan hisoblanadi),
-    // shuning uchun bu filtr o'qishdan keyin qo'llanadi.
-    const zakazlar = filtr.tolov
-      ? board.deals.filter((d) => tolovHolati(d.summa, d.tolangan, d.tolovTuri) === (filtr.tolov as TolovHolat))
-      : board.deals;
-
     return (
       <div className="space-y-4">
         <div>
@@ -176,41 +174,7 @@ export default async function CrmPage({
           bahoYozaOladi={bahoYozaOladi}
           meId={session.userId}
           bugun={bugun}
-          buyurtmalar={zakazlar.map((d) => ({
-            id: d.id,
-            nomi: d.nomi,
-            summa: d.summa,
-            tolangan: d.tolangan,
-            tolovTuri: d.tolovTuri,
-            holat: d.holat,
-            stageId: d.stageId,
-            categoryId: d.categoryId,
-            kategoriya: d.category?.nomi ?? null,
-            kontakt: d.contact?.ism ?? null,
-            tel: d.contact?.tel ?? null,
-            sana: d.sana ? utcDateToDateOnlyString(d.sana) : null,
-            // Ustun ichidagi tartib vaqtlari (ISO) — brauzer ham server bilan
-            // AYNI qoidadan tartiblaydi (`lib/crm/pipeline.ts`).
-            holatAt: d.holatAt ? d.holatAt.toISOString() : null,
-            yopilganAt: d.yopilganAt ? d.yopilganAt.toISOString() : null,
-            createdAt: d.createdAt.toISOString(),
-            izoh: d.izoh,
-            masulId: d.masulId,
-            masulIsm: ismlar.get(d.masulId) ?? null,
-            transactionId: d.transactionId,
-            debtId: d.debtId,
-            // Kirim/qarz raqami YOZUVNING O'ZIDAN: o'chirilgan tranzaksiya
-            // doskada eski summa bo'lib qolmasin.
-            kirimSumma: d.transaction && !d.transaction.deletedAt ? d.transaction.summa : 0,
-            qarzQoldiq: d.debt ? Math.max(0, d.debt.jamiSumma - d.debt.tolangan) : 0,
-            sotuvchi: board.sotuvchilar.get(d.id)
-              ? {
-                  employeeId: board.sotuvchilar.get(d.id)!.employeeId,
-                  ism: board.sotuvchilar.get(d.id)!.ism,
-                  isActive: board.sotuvchilar.get(d.id)!.isActive,
-                }
-              : null,
-          }))}
+          sahifalar={sahifalar.map((x) => ustunSahifaDTO(x, ismlar))}
         />
       </div>
     );

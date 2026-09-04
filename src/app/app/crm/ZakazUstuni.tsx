@@ -17,6 +17,11 @@ const USTUN_RANG: Record<Ustun, string> = {
  * DOSKA USTUNI (8-talab): sarlavhada nomi, zakaz soni va umumiy summa —
  * joriy filtr bo'yicha.
  *
+ * SAHIFALASH: ustunda bir vaqtda 10 tadan zakaz ko'rinadi, qolgani
+ * "Yana ko'rsatish" bilan SERVERDAN keladi (`/api/crm/board`). Sarlavhadagi
+ * raqamlar esa butun ustunniki — ular sahifadan emas, bazadagi jamdan
+ * (`jami`/`summa`), aks holda "10 ta" degan yolg'on son ko'rinardi.
+ *
  * TARTIB `lib/crm/pipeline.ts` da (sof funksiya, server bilan bir xil):
  * YUTILDI/JARAYONDA/YO'QOTILDI — eng oxirgi shu holatga o'tgan zakaz ENG
  * TEPADA; KUTILAYOTGAN/BUGUNGI — kechikkanlar tepada, keyin yaqin kun
@@ -26,6 +31,11 @@ export function ZakazUstuni({
   ustun,
   zakazlar,
   bugun,
+  soni,
+  summa,
+  yanaBormi,
+  yuklanmoqda,
+  onYana,
   onDrop,
   onTanlash,
   onDragStart,
@@ -34,12 +44,19 @@ export function ZakazUstuni({
   ustun: Ustun;
   zakazlar: BuyurtmaDTO[];
   bugun: string;
+  /** Ustundagi JAMI zakaz soni (sahifadan emas, bazadan). */
+  soni: number;
+  /** Ustundagi jami summa. */
+  summa: number;
+  /** Serverda yana zakaz bormi ("Yana ko'rsatish" tugmasi). */
+  yanaBormi: boolean;
+  yuklanmoqda: boolean;
+  onYana: () => void;
   onDrop: () => void;
   onTanlash: (b: BuyurtmaDTO) => void;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
 }) {
-  const jami = zakazlar.reduce((a, b) => a + b.summa, 0);
   const kechikkanlar = zakazlar.filter((b) => kechikkanKun(b.holat, b.sana, bugun) > 0).length;
 
   const tartiblangan = zakazlarniTartibla(zakazlar, ustun, bugun);
@@ -53,7 +70,7 @@ export function ZakazUstuni({
       <div className="px-1.5 pb-2 space-y-0.5">
         <p className="text-sm font-semibold text-fg">{USTUN_NOMI[ustun]}</p>
         <p className="text-2xs text-faint tnum">
-          {zakazlar.length} ta{jami > 0 ? ` • ${formatMoney(jami)}` : ""}
+          {soni} ta{summa > 0 ? ` • ${formatMoney(summa)}` : ""}
         </p>
         {kechikkanlar > 0 && (
           <p className="text-2xs text-expense font-medium">🔴 {kechikkanlar} ta kechikkan</p>
@@ -74,6 +91,15 @@ export function ZakazUstuni({
               onDragEnd={onDragEnd}
             />
           ))
+        )}
+        {yanaBormi && (
+          <button
+            onClick={onYana}
+            disabled={yuklanmoqda}
+            className="w-full rounded-lg border border-line bg-surface text-xs font-medium py-2 text-brand disabled:opacity-50"
+          >
+            {yuklanmoqda ? "Yuklanmoqda..." : "Yana ko'rsatish"}
+          </button>
         )}
       </div>
     </div>

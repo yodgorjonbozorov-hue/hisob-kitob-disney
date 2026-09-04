@@ -67,6 +67,38 @@ function bazaWhere(businessId: string, from: string, to: string, tolovIdlar: str
   };
 }
 
+/**
+ * XODIM KESIMIDA ORTIQCHA SANALGAN YOZUVLAR SONI (aralash to'lov).
+ *
+ * Bitta zakaz N ta kanal bilan to'langan bo'lsa N ta kirim yozuvi bor,
+ * lekin zakaz BITTA. Shu funksiya har xodim uchun (N − 1) yig'indisini
+ * qaytaradi — jamlagich shuni ayiradi.
+ */
+async function aralashOrtiqchasi(
+  businessId: string,
+  where: Prisma.TransactionWhereInput
+): Promise<Map<string, number>> {
+  const satrlar = await prisma.dealTolov.findMany({
+    where: { businessId, transaction: { is: where } },
+    select: { dealId: true, transaction: { select: { sotuvchiId: true, userId: true } } },
+  });
+  const korilgan = new Map<string, Set<string>>();
+  const soni = new Map<string, number>();
+  for (const s of satrlar) {
+    if (!s.transaction) continue;
+    const kim = s.transaction.sotuvchiId ?? s.transaction.userId;
+    soni.set(kim, (soni.get(kim) ?? 0) + 1);
+    const set = korilgan.get(kim) ?? new Set<string>();
+    set.add(s.dealId);
+    korilgan.set(kim, set);
+  }
+  const natija = new Map<string, number>();
+  for (const [kim, jami] of soni) {
+    natija.set(kim, jami - (korilgan.get(kim)?.size ?? 0));
+  }
+  return natija;
+}
+
 export async function getXodimlarStatistika(params: {
   businessId: string;
   from: string;
@@ -91,6 +123,18 @@ export async function getXodimlarStatistika(params: {
     m.zakazlar += g._count._all;
     m.summa += g._sum.summa ?? 0;
     jam.set(kim, m);
+  }
+
+  // ARALASH TO'LOV TUZATISHI: bir zakaz bir necha kanal bilan to'langan
+  // bo'lsa har kanal alohida kirim yozuvi (naqd kassa faqat naqd qismga
+  // oshsin). SUMMA to'g'ri, lekin ZAKAZ SONI oshib ketardi — shuning uchun
+  // bitta zakazning ortiqcha yozuvlari sanoqdan chiqariladi.
+  for (const [kim, ortiqcha] of await aralashOrtiqchasi(
+    params.businessId,
+    bazaWhere(params.businessId, params.from, params.to, tolovIdlar)
+  )) {
+    const m = jam.get(kim);
+    if (m) m.zakazlar = Math.max(0, m.zakazlar - ortiqcha);
   }
 
   // Ismlar: nofaol/o'chirilgan xodim yozuvni YO'QOTMAYDI — nomi bilan qoladi.
@@ -176,7 +220,13 @@ export async function getXodimDetal(params: XodimDetalParams) {
     prisma.transaction.count({ where }),
   ]);
 
-  const zakazlar = agg._count._all;
+  // Aralash to'lovli zakaz bir necha yozuv qoldiradi — zakaz soni bitta
+  // (yuqoridagi `aralashOrtiqchasi` bilan AYNI qoida).
+  const ortiqcha = [...(await aralashOrtiqchasi(params.businessId, where)).values()].reduce(
+    (s, n) => s + n,
+    0
+  );
+  const zakazlar = Math.max(0, agg._count._all - ortiqcha);
   const summa = agg._sum.summa ?? 0;
 
   return {

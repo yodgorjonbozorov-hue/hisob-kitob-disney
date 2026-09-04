@@ -183,6 +183,7 @@ model Business {
   contacts           Contact[]
   stages             Stage[]
   deals              Deal[]
+  zakazTolovlari     DealTolov[]
   crmActivities      Activity[]
   tasks              Task[]
   productExpenses    ProductExpense[]
@@ -600,6 +601,11 @@ model Transaction {
   /// ortida ko'pi bilan bitta buyurtma turadi. Kirim ro'yxatidagi
   /// "Manba: CRM" belgisi shu bog'lanishdan o'qiladi.
   crmBuyurtma     Deal?            @relation("CrmBuyurtmaKirimi")
+  /// ARALASH TO'LOV qatori — shu kirim qaysi zakaz to'lov qatoridan yozilgan.
+  /// Bir zakazda bir necha kanal bo'lsa, HAR KANAL uchun alohida kirim
+  /// yoziladi (kassa/ledger to'g'ri bo'lsin), qator esa uni bir marta
+  /// bog'laydi (UNIQUE — dublikat kirim bo'lmaydi).
+  crmZakazTolovi  DealTolov?       @relation("CrmZakazTolovKirimi")
 
   // KOMPOZIT INDEKSLAR: SQLite bitta so'rovda bitta indeks ishlatadi, shuning uchun
   // 6 ta bitta-ustunli indeks deyarli foydasiz edi (va har yozuvni sekinlashtirardi).
@@ -1187,6 +1193,9 @@ model Deal {
   tasks         Task[]
   /// Zakazda qatnashgan xodimlar (kategoriya kesimida).
   xodimlar      DealEmployee[]
+  /// ARALASH TO'LOV qatorlari (naqd + click + terminal...). Bo'sh bo'lishi
+  /// mumkin — bir kanalli eski zakazda pul `tolangan`/`tolovTuri` da.
+  tolovlar      DealTolov[]
   /// Sifat nazorati — mijoz fikri (bir zakazga bitta).
   feedback      DealFeedback?
 
@@ -1200,6 +1209,39 @@ model Deal {
   /// Ustun ichidagi tartib: holat + o'sha holatga o'tgan vaqt (eng yangisi tepada).
   @@index([businessId, holat, holatAt])
   @@index([categoryId])
+}
+
+/// ZAKAZ TO'LOV QATORI — bitta zakaz bir necha KANAL bilan to'lanishi mumkin
+/// (naqd 300k + click 400k + terminal 200k), qolgani esa qarzdorlik.
+///
+/// NEGA ALOHIDA JADVAL. `Deal.tolovTuri` bitta matn — u "aralash to'lov" ni
+/// ifodalay olmaydi. Muhimi pul QAYSI KASSAGA tushishi: naqd qism naqd
+/// kassaga, click/terminal esa karta/hisob kassasiga. Bitta tranzaksiyada
+/// bitta `accountId` bo'lgani uchun HAR KANAL uchun alohida kirim yoziladi
+/// va shu qator uni bog'laydi.
+///
+/// `Deal.tolangan` — shu qatorlar YIG'INDISI (bir kanalli eski zakazlarda
+/// qatorlarsiz, faqat `tolangan`/`tolovTuri`). Yig'indi zakaz summasidan
+/// oshmaydi — xizmat qatlami majburlaydi (`lib/crm/tolovlar.ts`).
+model DealTolov {
+  id            String       @id @default(cuid())
+  businessId    String
+  business      Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  dealId        String
+  deal          Deal         @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  /// Pul kanali: "naqd" | "click" | "terminal" | "boshqa".
+  /// QARZ bu yerda YO'Q — qarz to'lov kanali emas, QOLGAN summa
+  /// (`lib/crm/pipeline.ts` → `qarzUlushi`).
+  kanal         String
+  summa         Int
+  /// Shu qatordan yozilgan KIRIM tranzaksiyasi. UNIQUE — bitta qator
+  /// hech qachon ikkita kirim yarata olmaydi (Deal.transactionId bilan
+  /// bir xil himoya: kafolat BAZA darajasida).
+  transactionId String?      @unique
+  transaction   Transaction? @relation("CrmZakazTolovKirimi", fields: [transactionId], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now())
+
+  @@index([businessId, dealId])
 }
 
 // ==== Vazifalar moduli (BOS-3) ====

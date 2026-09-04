@@ -66,6 +66,17 @@ export async function kirimgaKochirish(params: KirimgaKochirishParams) {
   if (deal.debtId) {
     throw new BadRequestError("Bu zakaz bo'yicha qarz yozilgan — pul qarz to'lovi orqali kirimga tushadi");
   }
+  // ARALASH TO'LOV (naqd + click + terminal) bu yo'ldan o'tmaydi: bu yerda
+  // butun summa BITTA kassaga yozilardi, ya'ni naqd kassa click puliga ham
+  // oshib ketardi. Bunday zakaz "Yutildi" orqali kanal-kanal yoziladi.
+  const tolovSatrSoni = await prisma.dealTolov.count({
+    where: { businessId: params.businessId, dealId: deal.id },
+  });
+  if (tolovSatrSoni > 0) {
+    throw new BadRequestError(
+      "Zakazda to'lov qatorlari bor — moliya \"Yutildi\" orqali kanal bo'yicha yoziladi"
+    );
+  }
   // Foydalanuvchi "Qarzga" yoki qisman to'lovni tanlagan bo'lsa, bu eski
   // "butun summa kirim" yo'li uning tanloviga zid. Moliya "Yutildi" orqali
   // yoziladi: to'langan qism kirim, qolgani qarz (`lib/crm/yakunlash.ts`).

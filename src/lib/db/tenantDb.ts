@@ -121,6 +121,7 @@ const BUSINESS_SCOPED = new Set([
   "EmployeeCategory",
   "EmployeeCategoryMember",
   "DealEmployee",
+  "DealTolov",
   // Zakaz sifat nazorati (mijoz fikri) — biznesga bog'langan.
   "DealFeedback",
   // Xodimlar KPI / ball / oylik moduli

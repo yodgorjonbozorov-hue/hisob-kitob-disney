@@ -1,17 +1,28 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { dateOnlyStringToUTCDate, todayTashkentDateOnlyString, utcDateToDateOnlyString } from "@/lib/date";
+import { runBusinessTx } from "@/lib/db/businessTx";
 import { kirimgaKochirish } from "@/lib/crm/kirim";
 // Aylanma import (yakunlash.ts ham shu fayldan `pipelineBosqichlari` ni oladi)
 // xavfsiz: ikkala tomon ham faqat CHAQIRUV vaqtida murojaat qiladi.
 import { zakazniYakunlash } from "@/lib/crm/yakunlash";
 import {
+  tolovHolati,
   yopiqHolat,
   zakazUstuni,
+  type TolovHolat,
   type Ustun,
   type ZakazHolat,
 } from "@/lib/crm/pipeline";
 import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
+import {
+  tolovlarJami,
+  tolovlarniTekshir,
+  tolovSatrlariniYoz,
+  tolovTuriBelgisi,
+  type TolovSatri,
+} from "@/lib/crm/tolovlar";
 import {
   sotuvchiUserIdTop,
   zakazXodimlariniSaqlash,
@@ -135,6 +146,12 @@ export interface DoskaFiltr {
    * zakazni olib kelib brauzerda saralash emas.
    */
   sotuvchiId?: string | null;
+  /**
+   * TO'LOV HOLATI ("TOLANGAN" | "QISMAN" | "QARZ" | "TANLANMAGAN").
+   * BAZADA ifodalanmaydi (`summa` va `tolangan` ustunlarini solishtiradi),
+   * shuning uchun o'qishdan keyin qo'llanadi.
+   */
+  tolov?: TolovHolat | null;
   /** Arxiv (yo'qotilgan) zakazlar ham qaytsinmi. */
   yoqotilgan?: boolean;
 }
@@ -202,6 +219,203 @@ export async function getBoard(businessId: string, filtr: DoskaFiltr = {}) {
   return { stages, deals, sotuvchilar };
 }
 
+/** Doskada bir marta ko'rsatiladigan zakazlar soni ("Yana ko'rsatish" qadami). */
+export const DOSKA_SAHIFA = 10;
+
+/** Doska so'rovlarida takrorlanadigan bog'lanishlar (kirim/qarz raqamlari uchun). */
+const ZAKAZ_INCLUDE = {
+  contact: { select: { id: true, ism: true, tel: true } },
+  category: { select: { id: true, nomi: true } },
+  // Kirim/qarz summasi YOZUVNING O'ZIDAN o'qiladi: o'chirilgan yoki
+  // tahrirlangan tranzaksiya doskada eski raqam bo'lib qolmasin.
+  transaction: { select: { id: true, summa: true, deletedAt: true } },
+  debt: { select: { id: true, jamiSumma: true, tolangan: true, status: true } },
+  // ARALASH TO'LOV qatorlari: har kanal alohida kirim yozadi, shuning uchun
+  // kartadagi "Kirim" raqami qatorlardan yig'iladi.
+  tolovlar: {
+    select: {
+      id: true,
+      kanal: true,
+      summa: true,
+      transaction: { select: { id: true, summa: true, deletedAt: true } },
+    },
+    orderBy: { createdAt: "asc" },
+  },
+} satisfies Prisma.DealInclude;
+
+/** Filtrning BAZADA ifodalanadigan qismi (to'lov holati bundan tashqarida). */
+function filtrWhere(businessId: string, filtr: DoskaFiltr): Prisma.DealWhereInput {
+  return {
+    businessId,
+    deletedAt: null,
+    ...(filtr.masulId ? { masulId: filtr.masulId } : {}),
+    ...(filtr.categoryId ? { categoryId: filtr.categoryId } : {}),
+    // SOTUVCHI FILTRI — biriktiruv jadvali orqali, bazada.
+    ...(filtr.sotuvchiId
+      ? {
+          xodimlar: {
+            some: { businessId, employeeId: filtr.sotuvchiId, category: { turi: SOTUVCHI_TURI } },
+          },
+        }
+      : {}),
+    ...sanaShart(filtr.from, filtr.to),
+  };
+}
+
+/**
+ * USTUN SHARTI — `zakazUstuni` ning SQL ko'rinishi.
+ *
+ * Ikkalasi AYNI qoidani ifodalaydi, shuning uchun ular yonma-yon turadi:
+ * "Bugungi" — alohida holat emas, `KUTILMOQDA` + `sana = bugun`.
+ */
+function ustunWhere(ustun: Ustun, bugun: string): Prisma.DealWhereInput {
+  const bugunUTC = dateOnlyStringToUTCDate(bugun);
+  if (ustun === "YUTILDI") return { holat: "YUTILDI" };
+  if (ustun === "YOQOTILDI") return { holat: "YOQOTILDI" };
+  if (ustun === "JARAYONDA") return { holat: "JARAYONDA" };
+  if (ustun === "BUGUNGI") return { holat: "KUTILMOQDA", sana: bugunUTC };
+  return { holat: "KUTILMOQDA", NOT: { sana: bugunUTC } };
+}
+
+/**
+ * USTUN TARTIBI — `zakazlarniTartibla` ning SQL ko'rinishi.
+ *
+ *   TARIX ustunlari (Yutildi/Jarayonda/Yo'qotildi) — holatga oxirgi o'tgan
+ *   zakaz ENG TEPADA (`holatAt` kamayish tartibida);
+ *   REJA ustunlari (Kutilayotgan/Bugungi) — yaqin kun tepada, ya'ni
+ *   kechikkanlar birinchi bo'lib chiqadi (`sana` o'sish tartibida).
+ *
+ * Oxirgi kalit — `id`: teng qiymatlarda tartib BARQAROR bo'lsin, aks holda
+ * "Yana ko'rsatish" bir zakazni ikki marta yoki umuman ko'rsatmasligi mumkin.
+ */
+function ustunOrderBy(ustun: Ustun): Prisma.DealOrderByWithRelationInput[] {
+  if (ustun === "KUTILAYOTGAN" || ustun === "BUGUNGI") {
+    return [{ sana: "asc" }, { holatAt: "desc" }, { id: "desc" }];
+  }
+  return [{ holatAt: "desc" }, { createdAt: "desc" }, { id: "desc" }];
+}
+
+export interface UstunSahifa {
+  ustun: Ustun;
+  deals: Awaited<ReturnType<typeof zakazlarniOqi>>;
+  /** Keyingi sahifa kaliti (oxirgi zakaz id'si). `null` — boshqa zakaz yo'q. */
+  kursor: string | null;
+  /** Ustundagi JAMI zakaz soni (sahifadan qat'i nazar) — sarlavha uchun. */
+  jami: number;
+  /** Ustundagi jami summa. */
+  summa: number;
+  sotuvchilar: Awaited<ReturnType<typeof zakazSotuvchilari>>;
+}
+
+async function zakazlarniOqi(where: Prisma.DealWhereInput, orderBy: Prisma.DealOrderByWithRelationInput[], take: number, kursor?: string | null) {
+  return prisma.deal.findMany({
+    where,
+    include: ZAKAZ_INCLUDE,
+    orderBy,
+    take,
+    ...(kursor ? { cursor: { id: kursor }, skip: 1 } : {}),
+  });
+}
+
+/**
+ * BITTA USTUNNING BIR SAHIFASI — server tomonda kesilgan (10 tadan).
+ *
+ * NEGA SERVER TOMONDA: ilgari doska 500 ta zakazni bir yo'la olib kelib
+ * brauzerda ko'rsatardi — sahifa cho'zilib ketar, mobil qurilmada esa
+ * ortiqcha ma'lumot yuklanardi. Endi har ustun O'Z kesimini kursor bilan
+ * oladi, "Yana ko'rsatish" esa keyingi 10 tasini so'raydi.
+ *
+ * TO'LOV HOLATI filtri (`filtr.tolov`) BAZADA ifodalanmaydi — u `summa` va
+ * `tolangan` ustunlarini SOLISHTIRADI, Prisma esa ustunni ustunga
+ * taqqoslay olmaydi. Shu sabab u o'qishdan keyin qo'llanadi va sahifa
+ * to'lguncha bir necha bo'lak o'qiladi (chegara bilan, cheksiz aylanish yo'q).
+ */
+export async function ustunSahifasi(
+  businessId: string,
+  ustun: Ustun,
+  filtr: DoskaFiltr,
+  opts: { bugun: string; kursor?: string | null; limit?: number }
+): Promise<UstunSahifa> {
+  const limit = Math.min(50, Math.max(1, opts.limit ?? DOSKA_SAHIFA));
+  const where: Prisma.DealWhereInput = {
+    ...filtrWhere(businessId, filtr),
+    ...ustunWhere(ustun, opts.bugun),
+  };
+  const orderBy = ustunOrderBy(ustun);
+
+  let deals: Awaited<ReturnType<typeof zakazlarniOqi>> = [];
+  let kursor = opts.kursor ?? null;
+  let tugadi = false;
+
+  if (!filtr.tolov) {
+    deals = await zakazlarniOqi(where, orderBy, limit, kursor);
+    tugadi = deals.length < limit;
+  } else {
+    // To'lov holati filtri: sahifa to'lguncha bo'laklab o'qiymiz.
+    const bolak = limit * 3;
+    for (let i = 0; i < 5 && deals.length < limit; i++) {
+      const xom = await zakazlarniOqi(where, orderBy, bolak, kursor);
+      if (xom.length === 0) {
+        tugadi = true;
+        break;
+      }
+      kursor = xom[xom.length - 1].id;
+      deals = deals.concat(
+        xom.filter((d) => tolovHolati(d.summa, d.tolangan, d.tolovTuri) === (filtr.tolov as TolovHolat))
+      );
+      if (xom.length < bolak) {
+        tugadi = true;
+        break;
+      }
+    }
+    deals = deals.slice(0, limit);
+  }
+
+  // JAMI: sarlavhadagi "N ta • summa" sahifadan EMAS, butun ustundan.
+  // To'lov filtri bazada ifodalanmagani uchun u chegaralangan o'qish bilan
+  // sanaladi (500 — doskaning avvalgi chegarasi bilan bir xil).
+  let jami: number;
+  let summa: number;
+  if (!filtr.tolov) {
+    const agg = await prisma.deal.aggregate({ where, _count: { _all: true }, _sum: { summa: true } });
+    jami = agg._count._all;
+    summa = agg._sum.summa ?? 0;
+  } else {
+    const hammasi = await prisma.deal.findMany({
+      where,
+      select: { summa: true, tolangan: true, tolovTuri: true },
+      take: 500,
+    });
+    const mos = hammasi.filter(
+      (d) => tolovHolati(d.summa, d.tolangan, d.tolovTuri) === (filtr.tolov as TolovHolat)
+    );
+    jami = mos.length;
+    summa = mos.reduce((s, d) => s + d.summa, 0);
+  }
+
+  const oxirgi = deals.length > 0 ? deals[deals.length - 1].id : null;
+  const sotuvchilar = await zakazSotuvchilari(businessId, deals.map((d) => d.id));
+  return {
+    ustun,
+    deals,
+    kursor: tugadi || deals.length === 0 ? null : oxirgi,
+    jami,
+    summa,
+    sotuvchilar,
+  };
+}
+
+/** Doskaning BOSHLANG'ICH holati: har ustunning birinchi sahifasi. */
+export async function doskaSahifalari(
+  businessId: string,
+  filtr: DoskaFiltr,
+  bugun: string,
+  ustunlar: Ustun[]
+): Promise<UstunSahifa[]> {
+  await ensureStages(businessId);
+  return Promise.all(ustunlar.map((u) => ustunSahifasi(businessId, u, filtr, { bugun })));
+}
+
 /**
  * ZAKAZNI BOSHQA HOLATGA O'TKAZISH — PULSIZ o'tishlar uchun
  * (KUTILMOQDA ↔ JARAYONDA ↔ YOQOTILDI).
@@ -254,6 +468,56 @@ export async function holatniOzgartirish(params: {
   });
 
   return updated;
+}
+
+/**
+ * ZAKAZ TO'LOVLARINI ALMASHTIRISH (aralash to'lov).
+ *
+ * ATOMIK: qatorlar va `Deal.tolangan` BITTA tranzaksiyada yoziladi
+ * (`runBusinessTx` — loyiha qoidasi). Aks holda qatorlar yangilanib
+ * yig'indi eskiligicha qolsa, doska bir raqamni, qatorlar boshqasini
+ * ko'rsatardi.
+ *
+ * MOLIYAGA O'TGAN zakaz QULFLANADI: kirim yoki qarz yozilgan bo'lsa pul
+ * allaqachon kassada/qarzdorlikda — uni CRM formasidan o'zgartirish ikki
+ * hisobni zid holatga tushirardi (summa/kategoriya bilan bir xil qoida).
+ */
+export async function zakazTolovlariniAlmashtirish(params: {
+  businessId: string;
+  dealId: string;
+  /** Yangi qatorlar (bo'sh massiv — to'lov qatorlari olib tashlanadi). */
+  tolovlar: TolovSatri[];
+  /** Qatorsiz holatdagi tanlov: "qarz" — qolgani qarzdorlikka. */
+  tolovTuri?: string | null;
+  /** Yangi narx berilgan bo'lsa — tekshiruv AYNI shu narxga qarshi. */
+  summa?: number;
+}): Promise<{ tolangan: number; tolovTuri: string | null }> {
+  const deal = await prisma.deal.findFirst({
+    where: { id: params.dealId, businessId: params.businessId, deletedAt: null },
+    select: { id: true, summa: true, transactionId: true, debtId: true },
+  });
+  if (!deal) throw new ForbiddenError("Zakaz topilmadi");
+  if (deal.transactionId || deal.debtId) {
+    throw new BadRequestError(
+      "Moliyaga o'tgan zakazning to'lovi o'zgartirilmaydi — Kirim yoki Qarzdorlik bo'limidan tuzating"
+    );
+  }
+
+  const summa = params.summa ?? deal.summa;
+  tolovlarniTekshir(summa, params.tolovlar);
+  const tolangan = tolovlarJami(params.tolovlar);
+  const tolovTuri = tolovTuriBelgisi(params.tolovlar, params.tolovTuri);
+
+  await runBusinessTx(params.businessId, async (tx) => {
+    // Tranzaksiya ichida xom `tx` — HAR so'rovga `businessId` sharti QO'LDA.
+    await tolovSatrlariniYoz(tx, params.businessId, params.dealId, params.tolovlar);
+    await tx.deal.updateMany({
+      where: { id: params.dealId, businessId: params.businessId, deletedAt: null },
+      data: { tolangan, tolovTuri },
+    });
+  });
+
+  return { tolangan, tolovTuri };
 }
 
 /**
@@ -336,8 +600,14 @@ export interface YangiBuyurtma {
    * `tolangan >= summa` — to'liq, `0 < tolangan < summa` — qisman, 0 — qarzga.
    */
   tolangan?: number;
-  /** Pul kanali: "naqd" | "click" | "qarz". */
+  /** Pul kanali: "naqd" | "click" | "qarz" (bir kanalli eski yo'l). */
   tolovTuri?: string | null;
+  /**
+   * ARALASH TO'LOV qatorlari (naqd + click + terminal...). Berilsa —
+   * to'lovning YAGONA manbai: `tolangan` yig'indidan, `tolovTuri` esa
+   * kanallardan hisoblanadi (`lib/crm/tolovlar.ts`).
+   */
+  tolovlar?: TolovSatri[];
   /**
    * ZAKAZNI OLGAN SOTUVCHI (Employee.id) — FAQAT QO'LDA tanlanadi.
    * Berilmasa sotuvchi biriktirilmaydi (biznes sozlamasi majburiy qilsa
@@ -478,10 +748,20 @@ export async function createDeal(params: YangiBuyurtma) {
   const holat: ZakazHolat = berilganStage ? bosqichdanHolat(berilganStage) : "KUTILMOQDA";
 
   const summa = params.summa ?? 0;
-  const tolangan = Math.max(0, Math.min(params.tolangan ?? 0, summa));
-  if ((params.tolangan ?? 0) > summa) {
+  // ARALASH TO'LOV: qatorlar berilgan bo'lsa to'lov YAGONA shulardan
+  // hisoblanadi — forma yuborgan `tolangan` ga ishonilmaydi (ikki xil
+  // raqam paydo bo'lmasin).
+  const tolovSatrlari = params.tolovlar ?? null;
+  if (tolovSatrlari) tolovlarniTekshir(summa, tolovSatrlari);
+  const tolangan = tolovSatrlari
+    ? tolovlarJami(tolovSatrlari)
+    : Math.max(0, Math.min(params.tolangan ?? 0, summa));
+  if (!tolovSatrlari && (params.tolangan ?? 0) > summa) {
     throw new BadRequestError("To'langan summa zakaz narxidan ko'p bo'lmasligi kerak");
   }
+  const tolovTuri = tolovSatrlari
+    ? tolovTuriBelgisi(tolovSatrlari, params.tolovTuri)
+    : params.tolovTuri ?? null;
 
   const categoryId = params.categoryId ? await kirimKategoriyasi(params.businessId, params.categoryId) : null;
 
@@ -519,7 +799,7 @@ export async function createDeal(params: YangiBuyurtma) {
       nomi: params.nomi.trim(),
       summa,
       tolangan,
-      tolovTuri: params.tolovTuri ?? null,
+      tolovTuri,
       holat,
       yopilganAt: yopiqHolat(holat) ? new Date() : null,
       // Yaratilish — zakazning BIRINCHI holati, shu bois tartib vaqti ham shu.
@@ -545,6 +825,12 @@ export async function createDeal(params: YangiBuyurtma) {
   // Zakaz xodimlari — kategoriya/a'zolik tekshiruvi bilan (xizmat qatlami).
   if (xodimlar.length) {
     await zakazXodimlariniSaqlash(params.businessId, deal.id, xodimlar);
+  }
+
+  // ARALASH TO'LOV qatorlari. `Deal.tolangan` allaqachon shu yig'indidan
+  // yozilgan — qatorlar va yig'indi bir manbadan chiqadi.
+  if (tolovSatrlari?.length) {
+    await tolovSatrlariniYoz(prisma, params.businessId, deal.id, tolovSatrlari);
   }
 
   await prisma.activity.create({

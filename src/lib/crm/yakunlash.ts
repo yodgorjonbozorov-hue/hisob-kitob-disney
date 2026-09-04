@@ -11,6 +11,7 @@ import { utcDateToDateOnlyString, todayTashkentDateOnlyString, dateOnlyStringToU
 import { kirimIzohi } from "@/lib/crm/kirim";
 import { pipelineBosqichlari } from "@/lib/crm/service";
 import { kirimUlushi, qarzUlushi, tolovHolati, type TolovHolat } from "@/lib/crm/pipeline";
+import { kirimSatrlari, satrIzohi } from "@/lib/crm/tolovlar";
 
 /**
  * ZAKAZNI YUTILDI QILISH — CRM va MOLIYA o'rtasidagi yagona yakuniy ko'prik.
@@ -21,6 +22,9 @@ import { kirimUlushi, qarzUlushi, tolovHolati, type TolovHolat } from "@/lib/crm
  *
  *   to'liq to'langan  → butun summa KIRIM;
  *   qisman to'langan  → to'langan qism KIRIM, qolgani QARZDORLIK;
+ *   aralash to'lov    → HAR KANAL uchun alohida KIRIM (naqd qism naqd
+ *                       kassaga, click/terminal karta/hisob kassasiga),
+ *                       qolgani QARZDORLIK;
  *   qarzga            → kirim YO'Q, butun summa QARZDORLIK —
  *                       FAQAT foydalanuvchi "Qarzga" ni tanlaganda;
  *   to'lov tanlanmagan→ kirim ham, qarz ham YO'Q (holat YUTILDI bo'ladi).
@@ -96,11 +100,23 @@ export async function zakazniYakunlash(params: YakunlashParams): Promise<Yakunla
   const kirimSumma = kirimUlushi(deal.summa, deal.tolangan);
   const qarzSumma = qarzUlushi(deal.summa, deal.tolangan, deal.tolovTuri);
 
+  // ARALASH TO'LOV: har kanal uchun alohida kirim yoziladi. Qatorlarsiz
+  // (eski) zakazda bitta sun'iy qator qaytadi — pastdagi kod ikki xil
+  // yo'lni bilishi shart emas (`lib/crm/tolovlar.ts`).
+  const tolovSatrlari = await prisma.dealTolov.findMany({
+    where: { businessId: params.businessId, dealId: deal.id },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, kanal: true, summa: true, transactionId: true },
+  });
+  const satrlar = kirimSatrlari(deal, tolovSatrlari, kirimSumma);
+  const kopKanal = satrlar.length > 1;
+
   // IDEMPOTENTLIK. Yakunlangan va moliyasi yozilgan zakazda hech narsa
-  // qayta yozilmaydi — mavjud natija qaytadi (8-test: ikki marta bosilsa
-  // ham bitta kirim).
+  // qayta yozilmaydi — mavjud natija qaytadi (6-test: ikki marta bosilsa
+  // ham bitta kirim). HAR QATOR alohida tekshiriladi.
   const moliyaYozilgan =
-    (kirimSumma === 0 || deal.transactionId !== null) && (qarzSumma === 0 || deal.debtId !== null);
+    satrlar.every((s) => s.summa === 0 || s.transactionId !== null) &&
+    (qarzSumma === 0 || deal.debtId !== null);
   if (deal.holat === "YUTILDI" && moliyaYozilgan) {
     return {
       dealId: deal.id,
@@ -131,41 +147,61 @@ export async function zakazniYakunlash(params: YakunlashParams): Promise<Yakunla
     // yoziladi (lib/db/businessTx.ts).
     let transactionId = deal.transactionId;
     let debtId = deal.debtId;
-    /** Shu chaqiruvda yozilgan kirim — kunlik sinxron uchun (tx dan tashqarida). */
-    let yangiKirim: Awaited<ReturnType<typeof createTransactionTx>> | null = null;
+    /** Shu chaqiruvda yozilgan kirimlar — kunlik sinxron uchun (tx dan tashqarida). */
+    const yangiKirimlar: Array<Awaited<ReturnType<typeof createTransactionTx>>> = [];
 
-    if (kirimSumma > 0 && !transactionId) {
+    for (const satr of satrlar) {
+      if (satr.summa <= 0 || satr.transactionId) continue;
       const categoryId =
         deal.categoryId ?? (await ensureCategoryTx(tx, params.businessId, ZAXIRA_KATEGORIYA, "kirim"));
-      // QARZ kanali kirimga uzatilmaydi: bu yerda yoziladigan summa
-      // HAQIQATDA olingan pul, qolgani alohida qarz yozuvi bo'ladi.
-      const tolovTuri = deal.tolovTuri === "qarz" ? null : deal.tolovTuri;
       // KASSA — ZAKAZ MAS'ULINIKI (sotuvchi bilan AYNI qoida): zakazni
       // yutgan xodimning kassasi ko'payadi va u shu pulni topshiradi.
       // Shaxsiy kassa rejimi o'chiq bo'lsa `null` — eski xatti-harakat.
+      // NAQD bo'lmagan qism bu yerda hech qachon shaxsiy kassaga tushmaydi
+      // (`shaxsiyKassaId` faqat naqdga ishlaydi), demak click/terminal puli
+      // karta/hisob kassasiga boradi.
       const accountId =
-        params.accountId ??
-        (await shaxsiyKassaId(tx, params.businessId, sotuvchiId, tolovTuri));
+        (satrlar.length === 1 ? params.accountId : null) ??
+        (await shaxsiyKassaId(tx, params.businessId, sotuvchiId, satr.tolovTuri));
       const created = await createTransactionTx(tx, params.userId, params.businessId, {
         turi: "kirim",
         categoryId,
-        summa: kirimSumma,
+        summa: satr.summa,
         sana,
-        izoh,
+        izoh: satrIzohi(izoh, satr.kanal, kopKanal),
         accountId,
-        tolovTuri,
+        // QARZ kanali kirimga uzatilmaydi: bu yerda yoziladigan summa
+        // HAQIQATDA olingan pul, qolgani alohida qarz yozuvi bo'ladi.
+        tolovTuri: satr.tolovTuri,
         sotuvchiId,
       });
       // ATOMIK BOG'LASH: `transactionId: null` sharti — poyga himoyasi.
-      const bogland = await tx.deal.updateMany({
-        where: { id: deal.id, businessId: params.businessId, transactionId: null, deletedAt: null },
-        data: { transactionId: created.id },
-      });
+      // Ikki so'rov bir vaqtda kelsa ikkinchisining butun tranzaksiyasi
+      // qaytariladi, ya'ni dublikat kirim BAZAGA TUSHMAYDI.
+      const bogland = satr.satrId
+        ? await tx.dealTolov.updateMany({
+            where: { id: satr.satrId, businessId: params.businessId, transactionId: null },
+            data: { transactionId: created.id },
+          })
+        : await tx.deal.updateMany({
+            where: { id: deal.id, businessId: params.businessId, transactionId: null, deletedAt: null },
+            data: { transactionId: created.id },
+          });
       if (bogland.count !== 1) {
         throw new BadRequestError("Bu zakaz bo'yicha kirim allaqachon yozilgan");
       }
-      transactionId = created.id;
-      yangiKirim = created;
+      // ORQAGA MOSLIK: `Deal.transactionId` — "kirim yozilganmi" degan
+      // savolning eski javobi (ZakazMoliya, jamoa qulfi, KPI). Aralash
+      // to'lovda u BIRINCHI kirimga bog'lanadi; to'liq summa esa
+      // qatorlardan yig'iladi.
+      if (!transactionId) {
+        await tx.deal.updateMany({
+          where: { id: deal.id, businessId: params.businessId, transactionId: null, deletedAt: null },
+          data: { transactionId: created.id },
+        });
+        transactionId = created.id;
+      }
+      yangiKirimlar.push(created);
     }
 
     if (qarzSumma > 0 && !debtId) {
@@ -227,15 +263,17 @@ export async function zakazniYakunlash(params: YakunlashParams): Promise<Yakunla
       },
     });
 
-    return { transactionId, debtId, yangiKirim };
+    return { transactionId, debtId, yangiKirimlar };
   });
 
   // KUNLIK hisobot sinxroni tranzaksiyadan TASHQARIDA: `kunlikSinxron` o'zi
   // `runBusinessTx` ochadi, ichkarida chaqirilsa SQLite yozuv qulfida
   // deadlock bo'lardi (`lib/crm/kirim.ts` bilan bir xil sabab).
-  if (natija.yangiKirim) {
+  if (natija.yangiKirimlar.length > 0) {
     const kim = await prisma.user.findFirst({ where: { id: params.userId }, select: { ism: true } });
-    await kunlikSinxron(natija.yangiKirim, kim?.ism ?? null);
+    for (const kirim of natija.yangiKirimlar) {
+      await kunlikSinxron(kirim, kim?.ism ?? null);
+    }
   }
 
   return {
