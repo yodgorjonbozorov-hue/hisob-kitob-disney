@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ASOSIY_USTUNLAR, holatVaqti, zakazUstuni, type Ustun } from "@/lib/crm/pipeline";
+import {
+  ASOSIY_USTUNLAR,
+  holatVaqti,
+  kirimUlushi,
+  qarzUlushi,
+  zakazUstuni,
+  type Ustun,
+} from "@/lib/crm/pipeline";
 import { BuyurtmaModal } from "./BuyurtmaModal";
 import { BuyurtmaSheet } from "./BuyurtmaSheet";
 import { DoskaFiltr } from "./DoskaFiltr";
@@ -46,7 +53,6 @@ export function CrmClient({
   xodimKategoriyalari,
   sotuvchilar,
   sotuvchiMajburiy,
-  sotuvchiOzgartira,
   jamoaHuquqi,
   bahoYozaOladi,
   filtr,
@@ -60,9 +66,7 @@ export function CrmClient({
   xodimKategoriyalari: XodimKategoriyaDTO[];
   /** Sotuvchilar — forma selektori va doska filtri uchun. */
   sotuvchilar: SotuvchiDTO[];
-  /** Joriy foydalanuvchining sotuvchi profili (avto-tanlash). */
   sotuvchiMajburiy: boolean;
-  sotuvchiOzgartira: boolean;
   /** `crm.jamoa` — mavjud zakaz jamoasini o'zgartirish huquqi. */
   jamoaHuquqi: boolean;
   /** `crm.baho` — sifat nazorati huquqi. */
@@ -225,7 +229,6 @@ export function CrmClient({
           xodimKategoriyalari={xodimKategoriyalari}
           sotuvchilar={sotuvchilar}
           sotuvchiMajburiy={sotuvchiMajburiy}
-          sotuvchiOzgartira={sotuvchiOzgartira}
           meId={meId}
           bugun={bugun}
           onClose={() => setYangiOchiq(false)}
@@ -239,7 +242,6 @@ export function CrmClient({
           kategoriyalar={kategoriyalar}
           xodimKategoriyalari={xodimKategoriyalari}
           sotuvchilar={sotuvchilar}
-          sotuvchiOzgartira={sotuvchiOzgartira}
           jamoaHuquqi={jamoaHuquqi}
           bahoYozaOladi={bahoYozaOladi}
           meId={meId}
@@ -249,7 +251,12 @@ export function CrmClient({
             // Ochiq oyna serverdan kelgan snapshot ustida ishlaydi — yangi
             // qiymatlar darhol ko'rinsin (doskaning o'zini `router.refresh()`
             // yangilaydi).
-            setTanlangan({ ...tanlangan, ...yangi });
+            // Yutilgan zakazda to'lov belgilanganda server kirim/qarzni
+            // DARHOL yozadi — oynadagi moliya bloki ham shuni ko'rsatsin
+            // (raqamlar serverdagi AYNI qoidadan: kirimUlushi/qarzUlushi).
+            const kirimSumma = yangi.transactionId ? kirimUlushi(yangi.summa, yangi.tolangan) : 0;
+            const qarzQoldiq = yangi.debtId ? qarzUlushi(yangi.summa, yangi.tolangan, yangi.tolovTuri) : 0;
+            setTanlangan({ ...tanlangan, ...yangi, kirimSumma, qarzQoldiq });
             router.refresh();
           }}
           onClose={() => setTanlangan(null)}

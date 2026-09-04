@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { withTenant } from "@/lib/auth/tenant";
 import { resolveActiveBusinessId } from "@/lib/business";
-import { hasPermission } from "@/lib/permissions/tekshir";
 import { createDeal } from "@/lib/crm/service";
 import { buyurtmaSchema } from "@/lib/validation/crm";
 import { dashboardYangilandi } from "@/lib/cache";
@@ -17,13 +16,14 @@ export const POST = withTenant(
       return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
     }
 
-    // SOTUVCHI TANLASH HUQUQI (5/27-talab): huquqsiz foydalanuvchi zakazni
-    // faqat O'Z nomiga yozadi — xizmat qatlami buni majburlaydi.
-    const sotuvchiTanlashHuquqi = await hasPermission(user.userId, "crm.sotuvchi");
+    // SOTUVCHI — foydalanuvchi tanlovi. Alohida huquq TALAB QILINMAYDI:
+    // ishxonada bitta kompyuter va bitta ochiq hisob bo'lgani uchun zakazni
+    // kiritgan odam ko'pincha sotuvchi EMAS. Cheklov ro'yxatning o'zida:
+    // xizmat qatlami xodim shu biznesning FAOL sotuvchisi ekanini tekshiradi.
+    // Kim kiritgani `userId` (→ `Deal.createdBy`) bilan alohida yoziladi.
     const deal = await createDeal({
       businessId,
       userId: user.userId,
-      sotuvchiTanlashHuquqi,
       ...parsed.data,
     });
     // Dashboard "Bugungi holat" bloki bugungi buyurtmalarni sanaydi.

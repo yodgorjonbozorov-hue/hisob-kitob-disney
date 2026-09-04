@@ -37,7 +37,7 @@ export const GET = withTenant(
     // TO'LOV HOLATI bazada ustun emas (u `summa` va `tolangan` dan
     // hisoblanadi), shuning uchun filtri o'qishdan keyin qo'llanadi.
     const deals = parsed.data.tolov
-      ? board.deals.filter((d) => tolovHolati(d.summa, d.tolangan) === parsed.data.tolov)
+      ? board.deals.filter((d) => tolovHolati(d.summa, d.tolangan, d.tolovTuri) === parsed.data.tolov)
       : board.deals;
     // Map JSON'ga tushmaydi — oddiy obyektga aylantiriladi.
     return NextResponse.json({ stages: board.stages, deals, sotuvchilar: Object.fromEntries(board.sotuvchilar) });

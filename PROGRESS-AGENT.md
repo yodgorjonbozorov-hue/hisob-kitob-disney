@@ -5962,3 +5962,64 @@ joy bor edi:
 xil huquq kodi orqali boshqarish xato edi: topshirish — imtiyoz emas,
 majburiyat. Huquq yozayotganda "buni qilmasa nima bo'ladi?" savoli
 "buni ko'rsa nima bo'ladi?" dan muhimroq.
+
+## 2026-09-04 — CRM: to'lov holati faqat tanlovdan va Yutildi → darhol kirim
+
+`claude/crm-order-fixes-uf63o4` tarmog'i. Uchta so'ralgan tuzatishdan
+IKKITASI shu yerda; uchinchisi (doska tartibi) main'da mustaqil ravishda
+`holatAt` bilan hal qilingan edi — merge'da mening `updatedAt` variantim
+OLIB TASHLANDI (bitta ish uchun ikkita mexanizm — ikkinchi haqiqat manbai).
+
+1. **Qarzga avtomatik o'tmaydi.** `tolovHolati` (`lib/crm/pipeline.ts`)
+   `tolangan = 0` ni "Qarzga" deb o'qirdi: bot orqali kelgan lead, narxsiz
+   yaratilgan yoki eski (tolovTuri NULL) zakaz foydalanuvchi tanlamasa ham
+   qarzga ko'rinar, YUTILDI bosilganda `qarzUlushi` unga butun summaga QARZ
+   ochardi. Tahrir formasi ham (`boshlangichTanlov`) shunday zakazni
+   "Qarzga" bilan ochib, narxni tuzatib saqlashda jimgina `tolovTuri="qarz"`
+   yozardi. Endi "Qarzga" faqat `tolovTuri === "qarz"` (foydalanuvchi
+   tanlovi); tanlov yo'q — `TANLANMAGAN` (⚪ "To'lov tanlanmagan"), qarz
+   ham, kirim ham yozilmaydi. Qisman → qolgani qarz (o'zgarmadi).
+2. **Yutildi → darhol kirim.** WON bosqichga sudrash (`moveDeal`) va WON
+   bosqichida yaratish (`createDeal`) holatni yozib moliyani yozmasdi —
+   endi ikkalasi `zakazniYakunlash` orqali (atomik, idempotent). Yutilgan,
+   lekin to'lovi keyin belgilangan zakazda API PATCH yakunlashni qayta
+   chaqiradi: kirim/qarz o'zi yoziladi, alohida "kirimga o'tkazish" yo'q.
+   Eski `kirimgaKochirish` (butun summa) qarz ochilgan yoki qarzga/qisman
+   tanlangan zakazni rad etadi — bir zakaz ikki marta sanalmasin.
+
+Testlar: `tests/crm-pipeline.test.ts` — A1–A3 (avto-qarz yo'q, qarz faqat
+tanlovda), B1–B6 (darhol kirim, dublikat yo'q, eski yo'l rad etadi).
+
+**Nima o'rganildi.** "Hisoblanadigan holat" ikkinchi haqiqat manbaidan
+qutqaradi, lekin hisob formulasi ham tanlovni ifodalashi shart: `0 so'm`
+"pul kelmadi" degani, "qarzga berildi" degani emas. Tanlov belgisi
+(`tolovTuri="qarz"`) allaqachon bazada bor edi — formula uni o'qimasdi.
+
+## 2026-09-04 — Sotuvchi tanlash: huquq to'sig'i va `Deal.createdBy`
+
+Ayni kuni main'da avto-tanlash mustaqil ravishda olib tashlangan edi
+(yuqoridagi yozuv). Bu tarmoqda unga QO'SHIMCHA ikki narsa:
+
+1. **`crm.sotuvchi` huquq to'sig'i olib tashlandi.** Huquqsiz foydalanuvchi
+   zakazni faqat O'Z nomiga yoza olardi — dropdown ham qulflanardi. Bitta
+   umumiy kompyuter sharoitida "boshqa sotuvchini tanlash" imtiyoz emas,
+   kundalik amal: kod katalogdan, POST/PATCH route'lardan va
+   `sotuvchiniQosh` dan chiqarildi. Cheklov RO'YXATNING O'ZIDA qoldi —
+   `sotuvchiTekshir` har chaqiruvda xodim shu biznesniki, faol va sotuvchi
+   lavozimi a'zosi ekanini tekshiradi.
+2. **`Deal.createdBy`** (migratsiya `20260904100000_crm_zakaz_createdby`) —
+   kiritgan odam sotuvchidan alohida saqlanadi. `masulId` bu javobni bera
+   olmaydi: sotuvchi tanlanganda u sotuvchining tizim hisobiga
+   sinxronlanadi. Backfill FAQAT dalildan — "Buyurtma yaratildi" faoliyat
+   yozuvining `userId` si; yozuv bo'lmasa NULL (masulId dan taxmin
+   qilinmaydi, aks holda yolg'on javob yozilardi).
+
+Testlar: `tests/crm-sotuvchi.test.ts` — TEST 1 (tanlovsiz zakazda sotuvchi
+yo'q, `createdBy` bor), TEST 3 (`createdBy` sotuvchi almashganda ham
+o'zgarmaydi), TEST 9 (Fayruza hisobidan Suxrob tanlanadi → KPI Suxrobga,
+Fayruzada o'zgarish yo'q; dekorator esa rad etiladi).
+
+**Nima o'rganildi.** Ikki sessiya bir muammoni parallel tuzatdi va tartib
+uchun ikki xil mexanizm yozildi. Ish boshlashdan oldin `git fetch` bilan
+main'ning holatini tekshirish — merge'da ish tashlab yuborilishining oldini
+oladi.

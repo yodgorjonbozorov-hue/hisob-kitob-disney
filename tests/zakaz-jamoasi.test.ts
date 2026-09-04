@@ -543,14 +543,15 @@ test("avto-tanlash yo'q: sotuvchi yuborilmasa zakaz SOTUVCHISIZ tug'iladi", asyn
 });
 
 test("kirim yozilgan zakazda ham xodim attribution tahrirlanadi (pul tegilmaydi)", async () => {
-  const crmKirim = await import("@/lib/crm/kirim");
   const deal = await A(() =>
     crm.createDeal({
       businessId: tA.business.id, nomi: "Kirimli tarixiy zakaz", summa: 400_000, tolangan: 400_000,
       categoryId: katBantik.id, sana: bugun, stageId: wonStage.id, userId: tA.user.id, sotuvchiId: doston.id,
     })
   );
-  await A(() => crmKirim.kirimgaKochirish({ businessId: tA.business.id, dealId: deal.id, userId: tA.user.id }));
+  // WON bosqichida yaratilgan va to'liq to'langan zakazga kirim DARHOL
+  // yoziladi (`lib/crm/yakunlash.ts`) — alohida "kirimga o'tkazish" yo'q.
+  assert.ok(deal.transactionId, "yaratilishi bilan kirim yozildi");
   const kirimOldin = await A(() =>
     prisma.transaction.aggregate({ where: { businessId: tA.business.id, turi: "kirim", deletedAt: null }, _sum: { summa: true }, _count: true })
   );

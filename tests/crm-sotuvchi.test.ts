@@ -5,7 +5,7 @@
  * tanlash, createdBy ↔ sotuvchi farqi, konversiya, qarzga sotilgan zakaz
  * (yutilgan ≠ puli kelgan), to'liq to'langach bonus bazasiga tushishi,
  * biznesler aro biriktirishning rad etilishi, nofaol sotuvchi tarixi,
- * sotuvchini almashtirish huquqi, majburiy sotuvchi sozlamasi, o'chirilgan
+ * sotuvchini almashtirish, majburiy sotuvchi sozlamasi, o'chirilgan
  * zakazning statistikaga kirmasligi va reyting tartibi.
  *
  * Ishga tushirish: npm run test:crm-sotuvchi
@@ -68,7 +68,6 @@ async function zakaz(opts: {
   userId: string;
   sotuvchiId?: string | null;
   stageId?: string | null;
-  huquq?: boolean;
   /** Oldindan olingan pul (pipeline: to'lov holati shundan hisoblanadi). */
   tolangan?: number;
   tolovTuri?: string | null;
@@ -85,7 +84,6 @@ async function zakaz(opts: {
       userId: opts.userId,
       sotuvchiId: opts.sotuvchiId ?? undefined,
       stageId: opts.stageId ?? undefined,
-      ...(opts.huquq === undefined ? {} : { sotuvchiTanlashHuquqi: opts.huquq }),
     })
   );
 }
@@ -198,19 +196,30 @@ test("dropdown: faqat faol sotuvchilar — dekorator va direktor chiqmaydi", asy
   assert.ok(!royxat.some((s: any) => s.ism === "Doston"), "dekorator sotuvchi ro'yxatiga tushmaydi");
 });
 
-// ---------- TEST 1: avto-tanlash ----------
+// ---------- TEST 1: AVTO-TANLASH YO'Q (kirgan hisob ≠ sotuvchi) ----------
 
-test("TEST 1: Fayruza o'z hisobidan zakaz yaratdi → sotuvchi avtomatik Fayruza", async () => {
-  const d = await zakaz({ nomi: "Onajon Dekor", summa: 400_000, userId: fayruzaUser.id });
-  const sotuvchi = await A(() => zs.zakazSotuvchisi(tA.business.id, d.id));
-  assert.equal(sotuvchi.employeeId, fayruza.id, "sotuvchi o'zini qayta tanlamaydi");
-  assert.equal(d.masulId, fayruzaUser.id, "mas'ul ham sotuvchiga sinxronlandi");
+test("TEST 1: Fayruza hisobidan tanlovsiz zakaz → sotuvchi BIRIKTIRILMAYDI", async () => {
+  // Ishxonada bitta kompyuter va Balansa Fayruza hisobida ochiq turadi.
+  // Ilgari bu zakazni jimgina Fayruzaga yozardi — endi yozmaydi.
+  const d = await zakaz({ nomi: "Tanlovsiz zakaz", summa: 120_000, userId: fayruzaUser.id });
+  assert.equal(
+    await A(() => zs.zakazSotuvchisi(tA.business.id, d.id)),
+    null,
+    "sotuvchi avtomatik yozilmaydi"
+  );
+  assert.equal(d.createdBy, fayruzaUser.id, "kiritgan odam esa yoziladi");
+
+  // Sotuvchi QO'LDA tanlansa — o'shanga yoziladi.
+  const q = await zakaz({ nomi: "Onajon Dekor", summa: 400_000, userId: fayruzaUser.id, sotuvchiId: fayruza.id });
+  const sotuvchi = await A(() => zs.zakazSotuvchisi(tA.business.id, q.id));
+  assert.equal(sotuvchi.employeeId, fayruza.id);
+  assert.equal(q.masulId, fayruzaUser.id, "mas'ul sotuvchining hisobiga sinxronlandi");
 });
 
 // ---------- TEST 2: owner boshqa sotuvchini tanlaydi ----------
 
 test("TEST 2: Direktor zakaz kiritdi, sotuvchi Suhrob → statistika Suhrobga", async () => {
-  await zakaz({ nomi: "Panda Masha", summa: 300_000, userId: tA.user.id, sotuvchiId: suhrob.id, huquq: true });
+  await zakaz({ nomi: "Panda Masha", summa: 300_000, userId: tA.user.id, sotuvchiId: suhrob.id });
   const s = await kpi(suhrob.id);
   assert.equal(s.olingan.soni, 1);
   assert.equal(s.olingan.summa, 300_000);
@@ -224,14 +233,19 @@ test("TEST 3: createdBy Direktor, sotuvchi Fayruza → zakaz Fayruzaga hisoblana
     summa: 250_000,
     userId: tA.user.id,
     sotuvchiId: fayruza.id,
-    huquq: true,
   });
 
-  // CRM'ga kim kiritgani — faoliyat lentasida (createdBy).
+  // CRM'ga kim kiritgani — ALOHIDA ustunda (sotuvchi bilan almashmaydi).
+  assert.equal(d.createdBy, tA.user.id, "createdBy — kiritgan odam (Direktor)");
   const act = await A(() =>
     prisma.activity.findFirst({ where: { businessId: tA.business.id, dealId: d.id, turi: "tizim" } })
   );
-  assert.equal(act.userId, tA.user.id, "CRM'ga Direktor kiritdi");
+  assert.equal(act.userId, tA.user.id, "faoliyat lentasi ham shuni ko'rsatadi");
+
+  // Sotuvchi Fayruza — mas'ul uning hisobiga o'tdi, createdBy esa TEGILMADI.
+  const saqlangan = await A(() => prisma.deal.findFirst({ where: { id: d.id } }));
+  assert.equal(saqlangan.masulId, fayruzaUser.id, "mas'ul sotuvchiga sinxronlandi");
+  assert.equal(saqlangan.createdBy, tA.user.id, "kiritgan odam o'zgarmadi");
 
   const f = await kpi(fayruza.id);
   assert.equal(f.olingan.soni, 2, "Fayruzada 2 ta zakaz (avto + shu)");
@@ -246,11 +260,11 @@ test("TEST 3: createdBy Direktor, sotuvchi Fayruza → zakaz Fayruzaga hisoblana
 
 test("TEST 4: 10 zakaz (7 yutildi, 3 yo'qotildi) → konversiya 70%", async () => {
   for (let i = 0; i < 7; i++) {
-    const d = await zakaz({ nomi: `R-won-${i}`, summa: 100_000, userId: tA.user.id, sotuvchiId: rustam.id, huquq: true });
+    const d = await zakaz({ nomi: `R-won-${i}`, summa: 100_000, userId: tA.user.id, sotuvchiId: rustam.id });
     await A(() => prisma.deal.update({ where: { id: d.id }, data: { holat: "YUTILDI", stageId: wonStage.id } }));
   }
   for (let i = 0; i < 3; i++) {
-    const d = await zakaz({ nomi: `R-lost-${i}`, summa: 100_000, userId: tA.user.id, sotuvchiId: rustam.id, huquq: true });
+    const d = await zakaz({ nomi: `R-lost-${i}`, summa: 100_000, userId: tA.user.id, sotuvchiId: rustam.id });
     await A(() => prisma.deal.update({ where: { id: d.id }, data: { holat: "YOQOTILDI", stageId: lostStage.id } }));
   }
   const r = await kpi(rustam.id);
@@ -261,7 +275,7 @@ test("TEST 4: 10 zakaz (7 yutildi, 3 yo'qotildi) → konversiya 70%", async () =
 });
 
 test("konversiya maxrajida JARAYONDAGI zakaz qatnashmaydi", async () => {
-  const d = await zakaz({ nomi: "R-ochiq", summa: 500_000, userId: tA.user.id, sotuvchiId: rustam.id, huquq: true, stageId: openStage.id });
+  const d = await zakaz({ nomi: "R-ochiq", summa: 500_000, userId: tA.user.id, sotuvchiId: rustam.id, stageId: openStage.id });
   const r = await kpi(rustam.id);
   assert.equal(r.jarayonda.soni, 1);
   assert.equal(r.konversiya, 70, "ochiq zakaz konversiyani pasaytirmaydi");
@@ -282,7 +296,6 @@ test("TEST 5: 700k qarzga yopildi → yutilgan 700k, puli kelgan 0, bonus 0", as
     summa: 700_000,
     userId: tA.user.id,
     sotuvchiId: suhrob.id,
-    huquq: true,
     tolangan: 0,
     tolovTuri: "qarz",
   });
@@ -343,7 +356,6 @@ test("naqd yopilgan zakaz darhol 'puli kelgan' bo'ladi", async () => {
     summa: 200_000,
     userId: tA.user.id,
     sotuvchiId: fayruza.id,
-    huquq: true,
     tolangan: 200_000,
     tolovTuri: "naqd",
   });
@@ -360,7 +372,6 @@ test("qisman to'langan zakaz: kirim + qarz, bonus bazasi hali 0", async () => {
     summa: 500_000,
     userId: tA.user.id,
     sotuvchiId: rustam.id,
-    huquq: true,
     tolangan: 200_000,
     tolovTuri: "naqd",
   });
@@ -379,7 +390,7 @@ test("qisman to'langan zakaz: kirim + qarz, bonus bazasi hali 0", async () => {
 
 test("TEST 7: boshqa biznes xodimini sotuvchi qilib bo'lmaydi", async () => {
   await assert.rejects(
-    zakaz({ nomi: "Chet zakaz", summa: 100_000, userId: tA.user.id, sotuvchiId: sardorA2.id, huquq: true }),
+    zakaz({ nomi: "Chet zakaz", summa: 100_000, userId: tA.user.id, sotuvchiId: sardorA2.id }),
     ForbiddenError,
     "A2 biznesining xodimi A biznesining zakaziga biriktirilmaydi"
   );
@@ -393,7 +404,7 @@ test("tenant izolyatsiyasi: B kontekstida A sotuvchilari ko'rinmaydi", async () 
 // ---------- TEST 8: nofaol sotuvchi ----------
 
 test("TEST 8: nofaol sotuvchi dropdownda yo'q, tarixi esa saqlanadi", async () => {
-  const d = await zakaz({ nomi: "Nodira zakazi", summa: 150_000, userId: tA.user.id, sotuvchiId: nofaol.id, huquq: true });
+  const d = await zakaz({ nomi: "Nodira zakazi", summa: 150_000, userId: tA.user.id, sotuvchiId: nofaol.id });
   await rawPrisma.employee.update({ where: { id: nofaol.id }, data: { isActive: false } });
 
   const royxat = await A(() => zs.sotuvchilarRoyxati(tA.business.id));
@@ -407,23 +418,34 @@ test("TEST 8: nofaol sotuvchi dropdownda yo'q, tarixi esa saqlanadi", async () =
   assert.equal(n.olingan.soni, 1, "tarixiy statistika yo'qolmadi");
 
   await assert.rejects(
-    zakaz({ nomi: "Yangi nofaol", summa: 100_000, userId: tA.user.id, sotuvchiId: nofaol.id, huquq: true }),
+    zakaz({ nomi: "Yangi nofaol", summa: 100_000, userId: tA.user.id, sotuvchiId: nofaol.id }),
     BadRequestError,
     "nofaol xodimga yangi zakaz yozilmaydi"
   );
 });
 
-// ---------- TEST 9: sotuvchini almashtirish huquqi ----------
+// ---------- TEST 9: sotuvchini tanlash — alohida huquqsiz ----------
 
-test("TEST 9: huquqsiz foydalanuvchi boshqa sotuvchini tanlay olmaydi", async () => {
-  await assert.rejects(
-    zakaz({ nomi: "Ruxsatsiz", summa: 100_000, userId: fayruzaUser.id, sotuvchiId: suhrob.id, huquq: false }),
-    ForbiddenError
-  );
-  // O'z nomiga yozish esa huquqsiz ham ishlaydi.
-  const d = await zakaz({ nomi: "O'ziniki", summa: 100_000, userId: fayruzaUser.id, sotuvchiId: fayruza.id, huquq: false });
+test("TEST 9: Fayruza hisobidan Suhrob sotuvchi qilib tanlanadi (alohida huquq kerak emas)", async () => {
+  const suhrobOldin = (await kpi(suhrob.id)).olingan.soni;
+  const fayruzaOldin = (await kpi(fayruza.id)).olingan.soni;
+
+  // Bitta kompyuter, bitta ochiq hisob: kirgan odam sotuvchini ERKIN tanlaydi.
+  const d = await zakaz({ nomi: "Suhrob sotdi", summa: 100_000, userId: fayruzaUser.id, sotuvchiId: suhrob.id });
   const s = await A(() => zs.zakazSotuvchisi(tA.business.id, d.id));
-  assert.equal(s.employeeId, fayruza.id);
+  assert.equal(s.employeeId, suhrob.id, "kartada sotuvchi — Suhrob");
+  assert.equal(d.createdBy, fayruzaUser.id, "kiritgan odam — Fayruza hisobi");
+
+  // KPI Suhrobga yoziladi, Fayruzaga EMAS.
+  assert.equal((await kpi(suhrob.id)).olingan.soni, suhrobOldin + 1);
+  assert.equal((await kpi(fayruza.id)).olingan.soni, fayruzaOldin, "kirgan hisob egasiga yozilmadi");
+
+  // Cheklov ro'yxatda qoladi: sotuvchi lavozimida bo'lmagan xodim rad etiladi.
+  await assert.rejects(
+    zakaz({ nomi: "Dekorator sotuvchi emas", summa: 100_000, userId: fayruzaUser.id, sotuvchiId: doston.id }),
+    ForbiddenError,
+    "dekorator sotuvchi qilib tanlanmaydi"
+  );
 });
 
 test("sotuvchini almashtirish: audit izi va kirim sotuvchisi sinxronlanadi", async () => {
@@ -432,7 +454,6 @@ test("sotuvchini almashtirish: audit izi va kirim sotuvchisi sinxronlanadi", asy
     summa: 500_000,
     userId: tA.user.id,
     sotuvchiId: fayruza.id,
-    huquq: true,
     tolangan: 500_000,
     tolovTuri: "naqd",
   });
@@ -500,14 +521,20 @@ test("sozlama: sotuvchi majburiy bo'lsa tanlanmagan zakaz rad etiladi", async ()
   });
   assert.equal(await A(() => zs.sotuvchiMajburiymi(tA.business.id)), true);
 
-  // Direktorning xodim profili yo'q — avto-tanlash ishlamaydi.
   await assert.rejects(
-    zakaz({ nomi: "Sotuvchisiz", summa: 100_000, userId: tA.user.id, huquq: true }),
+    zakaz({ nomi: "Sotuvchisiz", summa: 100_000, userId: tA.user.id }),
+    (e: any) => e instanceof BadRequestError && e.message === "Buyurtmani olgan sotuvchini tanlang"
+  );
+
+  // O'Z sotuvchi profili BOR foydalanuvchi ham tanlashi shart — ochiq hisob
+  // sotuvchi o'rniga o'tmaydi (avto-tanlash yo'q).
+  await assert.rejects(
+    zakaz({ nomi: "Fayruza tanlamadi", summa: 100_000, userId: fayruzaUser.id }),
     (e: any) => e instanceof BadRequestError && e.message === "Buyurtmani olgan sotuvchini tanlang"
   );
 
   // Sotuvchi tanlansa — o'tadi.
-  const d = await zakaz({ nomi: "Sotuvchili", summa: 100_000, userId: tA.user.id, sotuvchiId: rustam.id, huquq: true });
+  const d = await zakaz({ nomi: "Sotuvchili", summa: 100_000, userId: tA.user.id, sotuvchiId: rustam.id });
   assert.ok(d.id);
 
   await rawPrisma.hrSetting.updateMany({

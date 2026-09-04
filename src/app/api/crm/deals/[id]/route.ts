@@ -16,7 +16,7 @@ import {
 } from "@/lib/services/zakazJamoasi";
 import { zakazBahosi } from "@/lib/services/zakazBaho";
 import { sotuvchiniOzgartirish, zakazSotuvchisi } from "@/lib/services/zakazSotuvchi";
-import { hasPermission, requirePermission } from "@/lib/permissions/tekshir";
+import { hasPermission } from "@/lib/permissions/tekshir";
 import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
 import type { Prisma } from "@prisma/client";
 
@@ -79,7 +79,7 @@ export const PATCH = withTenant<{ params: { id: string } }>(
     if (maydonlar) {
       const existing = await prisma.deal.findFirst({
         where: { id: params.id, businessId, deletedAt: null },
-        select: { id: true, transactionId: true, debtId: true, summa: true, tolangan: true },
+        select: { id: true, holat: true, transactionId: true, debtId: true, summa: true, tolangan: true },
       });
       if (!existing) throw new ForbiddenError("Buyurtma topilmadi");
 
@@ -131,13 +131,25 @@ export const PATCH = withTenant<{ params: { id: string } }>(
         patch.category = data.categoryId ? { connect: { id: data.categoryId } } : { disconnect: true };
       }
       await prisma.deal.update({ where: { id: params.id }, data: patch });
+
+      // YUTILGAN, lekin moliyasi hali yozilmagan zakazda (to'lov endi
+      // belgilandi) kirim/qarz DARHOL yoziladi — foydalanuvchi alohida
+      // "kirimga o'tkazish" bosmaydi. Idempotent: mavjud yozuv takrorlanmaydi.
+      // `holat` ham kelgan bo'lsa quyidagi blok o'zi hal qiladi.
+      const tolovOzgardi =
+        data.tolangan !== undefined || data.tolovTuri !== undefined || data.summa !== undefined;
+      if (existing.holat === "YUTILDI" && !existing.transactionId && !existing.debtId && tolovOzgardi && !data.holat) {
+        await zakazniYakunlash({ businessId, dealId: params.id, userId: user.userId });
+      }
     }
 
-    // SOTUVCHINI ALMASHTIRISH (10/27-talab) — faqat `crm.sotuvchi` huquqi
-    // bilan. Oddiy sotuvchi zakazni boshqa sotuvchiga o'tkaza olmaydi.
-    // Amal atomik va audit jurnaliga yoziladi (xizmat qatlami).
+    // SOTUVCHINI ALMASHTIRISH (10-talab) — CRM'ga kira olgan har bir xodim
+    // uchun ochiq: bitta kompyuterda ochiq turgan hisob sotuvchini
+    // ANIQLAMAYDI, shuning uchun noto'g'ri yozilgan sotuvchini tuzatish
+    // kundalik amal. Cheklov xizmat qatlamida: faqat shu biznesning FAOL
+    // sotuvchisi tanlanadi. Amal atomik va audit jurnaliga yoziladi
+    // (kim edi → kimga o'tdi → kim o'zgartirdi → qachon).
     if (data.sotuvchiId !== undefined) {
-      await requirePermission(user.userId, "crm.sotuvchi");
       await sotuvchiniOzgartirish({
         businessId,
         dealId: params.id,

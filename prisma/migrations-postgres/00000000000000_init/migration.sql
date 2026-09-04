@@ -526,10 +526,12 @@ CREATE TABLE "Deal" (
     "categoryId" TEXT,
     "stageId" TEXT NOT NULL,
     "masulId" TEXT NOT NULL,
+    "createdBy" TEXT,
     "manba" TEXT,
     "sana" TIMESTAMP(3),
     "muddat" TIMESTAMP(3),
     "yopilganAt" TIMESTAMP(3),
+    "holatAt" TIMESTAMP(3),
     "transactionId" TEXT,
     "holat" TEXT NOT NULL DEFAULT 'KUTILMOQDA',
     "tolangan" INTEGER NOT NULL DEFAULT 0,
@@ -885,6 +887,7 @@ CREATE TABLE "EmployeeCategory" (
     "tartib" INTEGER NOT NULL DEFAULT 0,
     "zakazgaBiriktiriladi" BOOLEAN NOT NULL DEFAULT true,
     "kopXodim" BOOLEAN NOT NULL DEFAULT false,
+    "zakazHaqi" INTEGER NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -912,6 +915,8 @@ CREATE TABLE "DealEmployee" (
     "baho" INTEGER,
     "bahoIzoh" TEXT,
     "bahoAt" TIMESTAMP(3),
+    "tasdiqlangan" BOOLEAN NOT NULL DEFAULT true,
+    "tasdiqlaganUserId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "DealEmployee_pkey" PRIMARY KEY ("id")
@@ -1656,6 +1661,9 @@ CREATE INDEX "Deal_businessId_sana_idx" ON "Deal"("businessId", "sana");
 CREATE INDEX "Deal_businessId_holat_sana_idx" ON "Deal"("businessId", "holat", "sana");
 
 -- CreateIndex
+CREATE INDEX "Deal_businessId_holat_holatAt_idx" ON "Deal"("businessId", "holat", "holatAt");
+
+-- CreateIndex
 CREATE INDEX "Deal_categoryId_idx" ON "Deal"("categoryId");
 
 -- CreateIndex
@@ -1843,6 +1851,9 @@ CREATE INDEX "DealEmployee_businessId_categoryId_employeeId_idx" ON "DealEmploye
 
 -- CreateIndex
 CREATE INDEX "DealEmployee_businessId_employeeId_idx" ON "DealEmployee"("businessId", "employeeId");
+
+-- CreateIndex
+CREATE INDEX "DealEmployee_businessId_employeeId_tasdiqlangan_idx" ON "DealEmployee"("businessId", "employeeId", "tasdiqlangan");
 
 -- CreateIndex
 CREATE INDEX "DealEmployee_dealId_idx" ON "DealEmployee"("dealId");

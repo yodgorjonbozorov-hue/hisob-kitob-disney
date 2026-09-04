@@ -2,7 +2,7 @@
 
 import { formatMoney, formatDateUZ } from "@/lib/format";
 import { Badge } from "@/components/ui/Badge";
-import { kechikkanKun, tolovHolati, TOLOV_HOLAT_NOMI, type Ustun } from "@/lib/crm/pipeline";
+import { kechikkanKun, tolovHolati, TOLOV_HOLAT_NOMI, type TolovHolat, type Ustun } from "@/lib/crm/pipeline";
 import type { BuyurtmaDTO } from "./turlar";
 
 /** Ustun bo'yicha workflow belgisi — kartada zakaz qayerda turgani ko'rinsin. */
@@ -14,10 +14,12 @@ const USTUN_BELGISI: Record<Ustun, { matn: string; tone: "kirim" | "warning" | "
   YOQOTILDI: { matn: "⚫ Yo'qotildi", tone: "neutral" },
 };
 
-const TOLOV_BELGISI: Record<string, { matn: string; tone: "kirim" | "warning" | "chiqim" }> = {
+/** To'lov belgisi — FAQAT foydalanuvchi tanlovidan (`tolovHolati`). Sheet ham shu rangdan. */
+export const TOLOV_BELGISI: Record<TolovHolat, { matn: string; tone: "kirim" | "warning" | "chiqim" | "neutral" }> = {
   TOLANGAN: { matn: "🟢 To'langan", tone: "kirim" },
   QISMAN: { matn: "🟠 Qisman to'langan", tone: "warning" },
   QARZ: { matn: "🔴 Qarzga", tone: "chiqim" },
+  TANLANMAGAN: { matn: "⚪ To'lov tanlanmagan", tone: "neutral" },
 };
 
 /**
@@ -44,7 +46,7 @@ export function BuyurtmaKarta({
   onDragEnd: () => void;
 }) {
   const kechikkan = kechikkanKun(b.holat, b.sana, bugun);
-  const tolov = tolovHolati(b.summa, b.tolangan);
+  const tolov = tolovHolati(b.summa, b.tolangan, b.tolovTuri);
   const belgi = USTUN_BELGISI[ustun];
 
   return (

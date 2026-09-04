@@ -5,8 +5,11 @@ import { Select } from "@/components/ui/Select";
 import type { SotuvchiDTO, ZakazSotuvchiDTO } from "./turlar";
 
 /**
- * ZAKAZ TAFSILOTIDAGI SOTUVCHI (10-talab): joriy sotuvchi + huquqi bo'lsa
- * "O'zgartirish".
+ * ZAKAZ TAFSILOTIDAGI SOTUVCHI (10-talab): joriy sotuvchi + "O'zgartirish".
+ *
+ * O'zgartirish CRM'ga kira olgan HAR BIR xodimga ochiq: bitta kompyuterda
+ * ochiq turgan hisob sotuvchini aniqlamaydi, shuning uchun noto'g'ri
+ * yozilgan sotuvchini tuzatish kundalik amal (server ham shu qoidada).
  *
  * O'zgartirish serverda ATOMIK bajariladi va audit jurnaliga yoziladi
  * (kim edi → kimga o'tdi → kim o'zgartirdi → qachon), shuning uchun bu yerda
@@ -19,15 +22,12 @@ export function ZakazSotuvchisiBlok({
   dealId,
   sotuvchi,
   sotuvchilar,
-  ozgartira,
   onSaqlandi,
 }: {
   dealId: string;
   /** null — hali yuklanmagan yoki biriktirilmagan. */
   sotuvchi: ZakazSotuvchiDTO | null;
   sotuvchilar: SotuvchiDTO[];
-  /** `crm.sotuvchi` huquqi (27-talab). */
-  ozgartira: boolean;
   onSaqlandi: () => void;
 }) {
   const [tahrir, setTahrir] = useState(false);
@@ -57,7 +57,7 @@ export function ZakazSotuvchisiBlok({
     <div className="rounded-xl border border-line bg-surface-2/30 p-3 space-y-2">
       <div className="flex items-center justify-between gap-2">
         <p className="text-2xs uppercase tracking-wide text-faint">Zakazni olgan sotuvchi</p>
-        {ozgartira && sotuvchilar.length > 0 && !tahrir && (
+        {sotuvchilar.length > 0 && !tahrir && (
           <button
             onClick={() => {
               setTanlov(sotuvchi?.employeeId ?? "");

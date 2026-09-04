@@ -2,6 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { dateOnlyStringToUTCDate, todayTashkentDateOnlyString, utcDateToDateOnlyString } from "@/lib/date";
 import { kirimgaKochirish } from "@/lib/crm/kirim";
+// Aylanma import (yakunlash.ts ham shu fayldan `pipelineBosqichlari` ni oladi)
+// xavfsiz: ikkala tomon ham faqat CHAQIRUV vaqtida murojaat qiladi.
+import { zakazniYakunlash } from "@/lib/crm/yakunlash";
 import {
   yopiqHolat,
   zakazUstuni,
@@ -15,7 +18,6 @@ import {
   zakazXodimlariniTekshir,
 } from "@/lib/services/zakazJamoasi";
 import {
-  avtoSotuvchi,
   sotuvchiKategoriyaIdlari,
   sotuvchiMajburiymi,
   sotuvchiTekshir,
@@ -188,6 +190,10 @@ export async function getBoard(businessId: string, filtr: DoskaFiltr = {}) {
         transaction: { select: { id: true, summa: true, deletedAt: true } },
         debt: { select: { id: true, jamiSumma: true, tolangan: true, status: true } },
       },
+      // USTUN ICHIDAGI TARTIB bu yerda EMAS: uni `zakazlarniTartibla`
+      // (`lib/crm/pipeline.ts`) hisoblaydi — "Yutildi"ga endigina o'tgan
+      // zakaz ustun tepasida turadi. Bu yerdagi tartib faqat 500 lik
+      // oynani barqaror qiladi.
       orderBy: [{ sana: "asc" }, { createdAt: "desc" }],
       take: 500, // sog'lom chegara; arxiv alohida filtr bilan ochiladi
     }),
@@ -333,17 +339,13 @@ export interface YangiBuyurtma {
   /** Pul kanali: "naqd" | "click" | "qarz". */
   tolovTuri?: string | null;
   /**
-   * ZAKAZNI OLGAN SOTUVCHI (Employee.id). Berilmasa — foydalanuvchining
-   * o'z sotuvchi profili (avto-tanlash).
+   * ZAKAZNI OLGAN SOTUVCHI (Employee.id) — FAQAT QO'LDA tanlanadi.
+   * Berilmasa sotuvchi biriktirilmaydi (biznes sozlamasi majburiy qilsa
+   * xato qaytadi). AVTO-TANLASH YO'Q: bitta kompyuterda bitta hisob ochiq
+   * turgani "kirgan foydalanuvchi = sotuvchi" degani emas.
    */
   sotuvchiId?: string | null;
-  /**
-   * `crm.sotuvchi` huquqi bor-yo'qligi — HTTP route HAR DOIM ochiq uzatadi.
-   * `false` bo'lsa foydalanuvchi zakazni faqat O'Z nomiga yoza oladi
-   * (5/27-talab). `undefined` — sessiyasiz ichki chaqiruv (test, skript,
-   * bot): u yerda foydalanuvchi tanlovi emas, server mantig'i ishlaydi.
-   */
-  sotuvchiTanlashHuquqi?: boolean;
+  /** Zakazni CRM'ga kiritgan foydalanuvchi (`createdBy`) — sotuvchidan alohida. */
   userId: string;
 }
 
@@ -419,8 +421,14 @@ async function kontaktTop(params: YangiBuyurtma): Promise<string | null> {
  * (Disney Navoiy sotuv bo'limi) tizimga kirgan hisob zakazni KIM SOTGANINI
  * bildirmaydi: bitta hisobdan hamma kiritadi. Kirgan foydalanuvchidan
  * sotuvchini taxmin qilish butun sotuv statistikasini bir odamga yig'ib
- * qo'yardi. `avtoSotuvchi()` endi faqat HUQUQ tekshiruvida ishlatiladi
- * ("o'zini tanlayaptimi yoki boshqani").
+ * qo'yardi. Kirgan odam `Deal.createdBy` da alohida saqlanadi.
+ *
+ * HUQUQ TEKSHIRUVI HAM YO'Q (ayni sabab): CRM'ga kira olgan har bir xodim
+ * biznesning HAR QAYSI faol sotuvchisini tanlay oladi — "boshqa sotuvchini
+ * tanlash" imtiyoz emas, kundalik amal. Cheklov RO'YXATNING O'ZIDA qoladi:
+ * server har chaqiruvda xodim shu biznesniki, faol va sotuvchi kategoriyasi
+ * a'zosi ekanini tekshiradi (`sotuvchiTekshir`), ya'ni mijoz yuborgan
+ * qiymatga baribir ISHONILMAYDI.
  */
 async function sotuvchiniQosh(params: YangiBuyurtma): Promise<ZakazXodimInput[]> {
   const boshqalar = params.xodimlar ?? [];
@@ -431,16 +439,10 @@ async function sotuvchiniQosh(params: YangiBuyurtma): Promise<ZakazXodimInput[]>
   const ijrochilar = boshqalar.filter((x) => !sotuvKategoriyalar.has(x.categoryId));
   const royxatdagi = boshqalar.find((x) => sotuvKategoriyalar.has(x.categoryId));
 
-  const ozi = await avtoSotuvchi(params.businessId, params.userId);
   const soralgan = params.sotuvchiId ?? royxatdagi?.employeeId ?? null;
 
   let tanlangan: { id: string; categoryId: string } | null = null;
   if (soralgan) {
-    // HUQUQ: `false` — huquq TEKSHIRILDI va yo'q (route shuni uzatadi);
-    // `undefined` — sessiyasiz ichki chaqiruv (test/skript), cheklanmaydi.
-    if (params.sotuvchiTanlashHuquqi === false && soralgan !== ozi?.id) {
-      throw new ForbiddenError("Boshqa sotuvchini tanlash uchun sizda huquq yo'q");
-    }
     const s = await sotuvchiTekshir(params.businessId, soralgan);
     tanlangan = { id: s.id, categoryId: s.categoryId };
   }
@@ -526,6 +528,9 @@ export async function createDeal(params: YangiBuyurtma) {
       stageId,
       contactId,
       masulId,
+      // KIRITGAN ODAM — sotuvchidan ALOHIDA maydon. `masulId` bunga javob
+      // bermaydi: u sotuvchining tizim hisobiga sinxronlanadi (pastda).
+      createdBy: params.userId,
       manba: params.manba ?? "qolda",
       sana: params.sana ? dateOnlyStringToUTCDate(params.sana) : null,
       muddat: params.muddat ? dateOnlyStringToUTCDate(params.muddat) : null,
@@ -553,15 +558,37 @@ export async function createDeal(params: YangiBuyurtma) {
     },
   });
 
+  // To'g'ridan-to'g'ri YUTILDI bosqichida yaratilgan (eski yo'l: import,
+  // tarixiy yozuv) zakazning moliyasi ham DARHOL yoziladi — "yutilgan, lekin
+  // kirimi yo'q" holat paydo bo'lmasin. To'lov tanlanmagan bo'lsa hech
+  // narsa yozilmaydi (yakunlash.ts qoidasi).
+  if (holat === "YUTILDI") {
+    await zakazniYakunlash({ businessId: params.businessId, dealId: deal.id, userId: params.userId });
+    const yangilangan = await prisma.deal.findFirst({
+      where: { id: deal.id, businessId: params.businessId },
+      include: {
+        contact: { select: { id: true, ism: true, tel: true } },
+        category: { select: { id: true, nomi: true } },
+      },
+    });
+    return yangilangan ?? deal;
+  }
+
   return deal;
 }
 
 /**
- * Buyurtmani boshqa holatga (bosqichga) ko'chirish.
+ * Buyurtmani boshqa holatga (bosqichga) ko'chirish — ESKI YO'L (bosqichga
+ * sudrash / `stageId` bilan PATCH).
  *
- * WON bosqichda `kirimYoz` berilsa kirim SHU YERDA emas, `kirimgaKochirish`
- * orqali yoziladi — dublikatga qarshi himoya (baza cheklovi + atomik
- * tranzaksiya) YAGONA joyda tursin.
+ * WON bosqich = YUTILDI: moliya (to'langan qism kirim, qolgani qarz) SHU
+ * YERDA emas, `zakazniYakunlash` orqali — atomik va idempotent, dublikatga
+ * qarshi himoya YAGONA joyda tursin. Shunda "yutilgan, lekin kirimi yo'q"
+ * zakaz bu yo'ldan ham paydo bo'lmaydi.
+ *
+ * `kirimYoz` (eski xulq): to'lovi TANLANMAGAN zakazda butun summa kirimga
+ * (`kirimgaKochirish`). To'lovi belgilangan zakazda u ahamiyatsiz — moliya
+ * allaqachon tanlovga ko'ra yozilgan.
  */
 export async function moveDeal(params: {
   businessId: string;
@@ -585,6 +612,20 @@ export async function moveDeal(params: {
   const holat = bosqichdanHolat(stage);
   const yopilyapti = yopiqHolat(holat);
 
+  if (holat === "YUTILDI") {
+    // YUTILDI → holat, kirim va qarz BITTA tranzaksiyada (yakunlash.ts).
+    // Takror chaqiruv yangi yozuv yaratmaydi.
+    await zakazniYakunlash({ businessId: params.businessId, dealId: deal.id, userId: params.userId });
+    const hozir = await prisma.deal.findFirst({
+      where: { id: deal.id, businessId: params.businessId },
+      select: { transactionId: true, debtId: true, summa: true },
+    });
+    if (params.kirimYoz && hozir && !hozir.transactionId && !hozir.debtId && hozir.summa > 0) {
+      await kirimgaKochirish({ businessId: params.businessId, dealId: deal.id, userId: params.userId });
+    }
+    return prisma.deal.findFirst({ where: { id: deal.id, businessId: params.businessId } });
+  }
+
   const updated = await prisma.deal.update({
     where: { id: deal.id },
     data: { stageId: stage.id, holat, yopilganAt: yopilyapti ? new Date() : null, holatAt: new Date() },
@@ -600,13 +641,6 @@ export async function moveDeal(params: {
       userId: params.userId,
     },
   });
-
-  // Yutildi + kirim yozish so'ralgan bo'lsa — bitta yo'ldan (dublikat himoyasi
-  // o'sha yerda). Allaqachon ko'chirilgan bo'lsa jimgina o'tiladi.
-  if (stage.turi === "WON" && params.kirimYoz && !deal.transactionId && deal.summa > 0) {
-    await kirimgaKochirish({ businessId: params.businessId, dealId: deal.id, userId: params.userId });
-    return prisma.deal.findFirst({ where: { id: deal.id, businessId: params.businessId } });
-  }
 
   return updated;
 }

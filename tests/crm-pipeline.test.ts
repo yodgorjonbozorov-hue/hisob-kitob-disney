@@ -12,6 +12,16 @@
  *   8. Yutildi ikki marta → faqat bitta kirim (idempotentlik)
  * Qo'shimcha: tenant izolyatsiyasi, bosqich sinxroni, moliyaviy qulf.
  *
+ * TUZATISHLAR (2026-09-03):
+ *   A. YUTILDI qarzni AVTOMATIK ochmaydi — "Qarzga" faqat foydalanuvchi
+ *      tanlaganda (`tolovTuri = "qarz"`); to'lov tanlanmagan zakazda kirim
+ *      ham, qarz ham yozilmaydi.
+ *   B. YUTILDI → DARHOL kirim: eski yo'l (bosqichga sudrash, WON bosqichda
+ *      yaratish) ham yakunlash orqali; yutilgan zakazda to'lov keyin
+ *      belgilansa kirim o'zi yoziladi; dublikat yo'q.
+ *   C. TARTIB: yangi yaratilgan yoki holati hozirgina o'zgargan zakaz
+ *      ro'yxat boshida (`updatedAt` DESC).
+ *
  * Ishga tushirish: npm run test:crm-pipeline
  */
 process.env.DATABASE_URL = "file:./prisma/test-crm-pipeline.db";
@@ -43,7 +53,10 @@ const kun = (bugun: string, delta: number) =>
   new Date(Date.parse(`${bugun}T00:00:00.000Z`) + delta * KUN_MS).toISOString().slice(0, 10);
 
 /** Zakaz yaratish qisqartmasi. */
-async function zakaz(nomi: string, opts: { summa?: number; tolangan?: number; sana: string; tolovTuri?: string }) {
+async function zakaz(
+  nomi: string,
+  opts: { summa?: number; tolangan?: number; sana: string; tolovTuri?: string | null; stageId?: string }
+) {
   return A(() =>
     crm.createDeal({
       businessId: tA.business.id,
@@ -51,12 +64,23 @@ async function zakaz(nomi: string, opts: { summa?: number; tolangan?: number; sa
       categoryId: kat.id,
       summa: opts.summa ?? 0,
       tolangan: opts.tolangan ?? 0,
-      tolovTuri: opts.tolovTuri ?? "naqd",
+      // `null` — to'lov tanlanmagan (bot lead / eski yozuv); berilmasa naqd.
+      tolovTuri: opts.tolovTuri === undefined ? "naqd" : opts.tolovTuri,
       sana: opts.sana,
+      stageId: opts.stageId,
       kontaktIsm: `Mijoz ${nomi}`,
       userId: tA.user.id,
     })
   );
+}
+
+/** Zakazning kirim va qarz yozuvlari soni (izoh bo'yicha). */
+async function moliyaSoni(nomi: string) {
+  const kirim = await A(() =>
+    prisma.transaction.count({ where: { businessId: tA.business.id, izoh: { contains: nomi }, deletedAt: null } })
+  );
+  const qarz = await A(() => prisma.debt.count({ where: { businessId: tA.business.id, izoh: { contains: nomi } } }));
+  return { kirim, qarz };
 }
 
 /** Zakazning joriy doska ustuni (server hisobi bilan bir xil). */
@@ -119,16 +143,26 @@ test("USTUN QOIDASI: sana va holatdan hisoblanadi, saqlanmaydi", () => {
   assert.equal(zakazUstuni("YOQOTILDI", "2026-09-02", "2026-09-02"), "YOQOTILDI");
 });
 
-test("TO'LOV HOLATI: summa va to'langandan hisoblanadi", () => {
+test("TO'LOV HOLATI: faqat foydalanuvchi tanlovidan — 'Qarzga' tolovTuri='qarz' bilan", () => {
   const { tolovHolati, kirimUlushi, qarzUlushi } = pipeline;
-  assert.equal(tolovHolati(500_000, 500_000), "TOLANGAN");
-  assert.equal(tolovHolati(500_000, 200_000), "QISMAN");
-  assert.equal(tolovHolati(500_000, 0), "QARZ");
+  assert.equal(tolovHolati(500_000, 500_000, "naqd"), "TOLANGAN");
+  assert.equal(tolovHolati(500_000, 200_000, "click"), "QISMAN");
+  assert.equal(tolovHolati(500_000, 0, "qarz"), "QARZ");
+  // ESKI XATO: tolangan = 0 o'zi "Qarzga" edi. Endi tanlov yo'q — holat yo'q.
+  assert.equal(tolovHolati(500_000, 0, null), "TANLANMAGAN");
+  assert.equal(tolovHolati(500_000, 0, "naqd"), "TANLANMAGAN");
+  assert.equal(tolovHolati(0, 0, "naqd"), "TANLANMAGAN", "narxsiz zakaz qarzga emas");
+  // Pul olingan bo'lsa u "qarz" belgisidan ustun.
+  assert.equal(tolovHolati(500_000, 200_000, "qarz"), "QISMAN");
+
   assert.equal(kirimUlushi(500_000, 200_000), 200_000);
-  assert.equal(qarzUlushi(500_000, 200_000), 300_000);
+  assert.equal(qarzUlushi(500_000, 200_000, "naqd"), 300_000, "qisman — qolgani qarz");
+  assert.equal(qarzUlushi(500_000, 0, "qarz"), 500_000, "qarzga tanlangan — butun summa qarz");
+  assert.equal(qarzUlushi(500_000, 0, null), 0, "tanlanmagan — qarz OCHILMAYDI");
+  assert.equal(qarzUlushi(500_000, 0, "naqd"), 0, "naqd, lekin pul olinmagan — qarz emas");
   // To'langan summadan oshib ketsa ham kirim summadan oshmaydi.
   assert.equal(kirimUlushi(500_000, 900_000), 500_000);
-  assert.equal(qarzUlushi(500_000, 900_000), 0);
+  assert.equal(qarzUlushi(500_000, 900_000, "naqd"), 0);
 });
 
 // ---------------------------------------------------------------------------
@@ -293,8 +327,8 @@ test("TEST 8: yutildi ikki marta bosilsa ham FAQAT bitta kirim va bitta qarz", a
 
 test("DUBLIKAT QARZ BAZADA: bitta qarzni ikki zakazga bog'lab bo'lmaydi", async () => {
   const bugun = todayTashkentDateOnlyString();
-  const bir = await zakaz("Qarz bogi 1", { summa: 100_000, sana: bugun });
-  const ikki = await zakaz("Qarz bogi 2", { summa: 100_000, sana: bugun });
+  const bir = await zakaz("Qarz bogi 1", { summa: 100_000, sana: bugun, tolovTuri: "qarz" });
+  const ikki = await zakaz("Qarz bogi 2", { summa: 100_000, sana: bugun, tolovTuri: "qarz" });
   const n = await A(() => yakunlash.zakazniYakunlash({ businessId: tA.business.id, dealId: bir.id, userId: tA.user.id }));
 
   // Ilova kodini CHETLAB O'TIB bazaga yozishga urinish: UNIQUE cheklov
@@ -373,6 +407,156 @@ test("FILTR: sana oralig'i va sotuvchi bo'yicha kesiladi", async () => {
 
   const begona = await A(() => crm.getBoard(tA.business.id, { masulId: tB.user.id }));
   assert.equal(begona.deals.length, 0, "boshqa xodim filtri bo'sh natija beradi");
+});
+
+// ---------------------------------------------------------------------------
+// A. YUTILDI QARZNI AVTOMATIK OCHMAYDI
+// ---------------------------------------------------------------------------
+
+test("A1: to'lovi tanlanmagan zakaz Yutildi — qarz ham, kirim ham YOZILMAYDI", async () => {
+  const bugun = todayTashkentDateOnlyString();
+  // Bot orqali kelgan lead / eski yozuv: tolovTuri yo'q, tolangan 0.
+  const d = await zakaz("Tanlanmagan lead", { summa: 500_000, tolangan: 0, sana: bugun, tolovTuri: null });
+  assert.equal(pipeline.tolovHolati(d.summa, d.tolangan, d.tolovTuri), "TANLANMAGAN");
+
+  const n = await A(() => yakunlash.zakazniYakunlash({ businessId: tA.business.id, dealId: d.id, userId: tA.user.id }));
+  assert.equal(n.yangiYakun, true);
+  assert.equal(n.kirimSumma, 0);
+  assert.equal(n.qarzSumma, 0, "qarz avtomatik ochilmaydi");
+  assert.equal(n.debtId, null);
+  assert.equal(n.transactionId, null);
+
+  const keyin = await A(() => prisma.deal.findFirst({ where: { id: d.id } }));
+  assert.equal(keyin.holat, "YUTILDI", "biznes yakuni baribir yoziladi");
+  assert.equal(keyin.debtId, null);
+  assert.deepEqual(await moliyaSoni("Tanlanmagan lead"), { kirim: 0, qarz: 0 });
+});
+
+test("A2: naqd tanlangan, lekin pul kiritilmagan (tolangan 0) — qarzga aylanmaydi", async () => {
+  const bugun = todayTashkentDateOnlyString();
+  const d = await zakaz("Naqd, pul yo'q", { summa: 300_000, tolangan: 0, sana: bugun, tolovTuri: "naqd" });
+  const n = await A(() => yakunlash.zakazniYakunlash({ businessId: tA.business.id, dealId: d.id, userId: tA.user.id }));
+  assert.equal(n.qarzSumma, 0);
+  assert.equal(n.debtId, null);
+  assert.deepEqual(await moliyaSoni("Naqd, pul yo'q"), { kirim: 0, qarz: 0 });
+});
+
+test("A3: 'Qarzga' FAQAT foydalanuvchi tanlaganda — Debt to'g'ri, kirim yo'q", async () => {
+  const bugun = todayTashkentDateOnlyString();
+  const d = await zakaz("Qarzga tanlandi", { summa: 700_000, tolangan: 0, sana: bugun, tolovTuri: "qarz" });
+  assert.equal(pipeline.tolovHolati(d.summa, d.tolangan, d.tolovTuri), "QARZ");
+  const n = await A(() => yakunlash.zakazniYakunlash({ businessId: tA.business.id, dealId: d.id, userId: tA.user.id }));
+  assert.equal(n.qarzSumma, 700_000);
+  assert.equal(n.kirimSumma, 0);
+  const keyin = await A(() => prisma.deal.findFirst({ where: { id: d.id }, include: { debt: true } }));
+  assert.equal(keyin.debt.jamiSumma, 700_000);
+  assert.equal(keyin.debt.tolangan, 0);
+  assert.equal(keyin.debt.status, "OPEN");
+  assert.deepEqual(await moliyaSoni("Qarzga tanlandi"), { kirim: 0, qarz: 1 });
+});
+
+// ---------------------------------------------------------------------------
+// B. YUTILDI → DARHOL KIRIM (barcha yo'llardan, dublikatsiz)
+// ---------------------------------------------------------------------------
+
+test("B1: yutilgan zakazda to'lov KEYIN belgilansa — kirim darhol, alohida tugmasiz, dublikatsiz", async () => {
+  const bugun = todayTashkentDateOnlyString();
+  const d = await zakaz("Keyin to'landi", { summa: 400_000, tolangan: 0, sana: bugun, tolovTuri: null });
+  await A(() => yakunlash.zakazniYakunlash({ businessId: tA.business.id, dealId: d.id, userId: tA.user.id }));
+  assert.deepEqual(await moliyaSoni("Keyin to'landi"), { kirim: 0, qarz: 0 });
+
+  // Foydalanuvchi tafsilot oynasida "To'liq to'langan / naqd" ni tanlab
+  // saqladi (API PATCH aynan shu yozuvni qiladi, so'ng yakunlashni chaqiradi).
+  await A(() => prisma.deal.update({ where: { id: d.id }, data: { tolangan: 400_000, tolovTuri: "naqd" } }));
+  const n = await A(() => yakunlash.zakazniYakunlash({ businessId: tA.business.id, dealId: d.id, userId: tA.user.id }));
+  assert.equal(n.yangiYakun, true, "moliya endi yoziladi");
+  assert.equal(n.kirimSumma, 400_000);
+  assert.ok(n.transactionId);
+  assert.equal(n.debtId, null);
+
+  // Takror — hech narsa yozilmaydi.
+  const qayta = await A(() => yakunlash.zakazniYakunlash({ businessId: tA.business.id, dealId: d.id, userId: tA.user.id }));
+  assert.equal(qayta.yangiYakun, false);
+  assert.equal(qayta.transactionId, n.transactionId);
+  assert.deepEqual(await moliyaSoni("Keyin to'landi"), { kirim: 1, qarz: 0 });
+});
+
+test("B2: yutilgan zakazda keyin QISMAN belgilansa — to'langan qism kirim, qolgani qarz", async () => {
+  const bugun = todayTashkentDateOnlyString();
+  const d = await zakaz("Keyin qisman", { summa: 600_000, tolangan: 0, sana: bugun, tolovTuri: null });
+  await A(() => yakunlash.zakazniYakunlash({ businessId: tA.business.id, dealId: d.id, userId: tA.user.id }));
+  await A(() => prisma.deal.update({ where: { id: d.id }, data: { tolangan: 250_000, tolovTuri: "click" } }));
+  const n = await A(() => yakunlash.zakazniYakunlash({ businessId: tA.business.id, dealId: d.id, userId: tA.user.id }));
+  assert.equal(n.kirimSumma, 250_000);
+  assert.equal(n.qarzSumma, 350_000);
+  const keyin = await A(() =>
+    prisma.deal.findFirst({ where: { id: d.id }, include: { transaction: true, debt: true } })
+  );
+  assert.equal(keyin.transaction.summa, 250_000);
+  assert.equal(keyin.transaction.tolovTuri, "click");
+  assert.equal(keyin.debt.jamiSumma, 350_000);
+  assert.deepEqual(await moliyaSoni("Keyin qisman"), { kirim: 1, qarz: 1 });
+});
+
+test("B3: ESKI YO'L — WON bosqichga sudrash ham kirimni DARHOL yozadi, takrorida dublikat yo'q", async () => {
+  const bugun = todayTashkentDateOnlyString();
+  const won = await A(() => prisma.stage.findFirst({ where: { businessId: tA.business.id, turi: "WON" } }));
+  const d = await zakaz("Sudrab yutildi", { summa: 350_000, tolangan: 350_000, sana: bugun });
+
+  await A(() => crm.moveDeal({ businessId: tA.business.id, dealId: d.id, stageId: won.id, userId: tA.user.id }));
+  const bir = await A(() => prisma.deal.findFirst({ where: { id: d.id }, include: { transaction: true } }));
+  assert.equal(bir.holat, "YUTILDI");
+  assert.ok(bir.transactionId, "kirim darhol yozildi — alohida 'kirimga o'tkazish' kerak emas");
+  assert.equal(bir.transaction.summa, 350_000);
+
+  await A(() => crm.moveDeal({ businessId: tA.business.id, dealId: d.id, stageId: won.id, kirimYoz: true, userId: tA.user.id }));
+  assert.deepEqual(await moliyaSoni("Sudrab yutildi"), { kirim: 1, qarz: 0 });
+});
+
+test("B4: ESKI YO'L — WON + kirimYoz 'Qarzga' zakazda butun summani kirimga YOZMAYDI", async () => {
+  const bugun = todayTashkentDateOnlyString();
+  const won = await A(() => prisma.stage.findFirst({ where: { businessId: tA.business.id, turi: "WON" } }));
+  const d = await zakaz("Sudrab qarzga", { summa: 450_000, tolangan: 0, sana: bugun, tolovTuri: "qarz" });
+  await A(() =>
+    crm.moveDeal({ businessId: tA.business.id, dealId: d.id, stageId: won.id, kirimYoz: true, userId: tA.user.id })
+  );
+  const keyin = await A(() => prisma.deal.findFirst({ where: { id: d.id }, include: { debt: true } }));
+  assert.equal(keyin.transactionId, null, "qarzga savdo kirim yozmaydi");
+  assert.equal(keyin.debt.jamiSumma, 450_000);
+  assert.deepEqual(await moliyaSoni("Sudrab qarzga"), { kirim: 0, qarz: 1 });
+
+  // Eski "kirimga o'tkazish" ham qarz ochilgan zakazni rad etadi — ikki
+  // marta sanalmasin.
+  const crmKirim = await import("@/lib/crm/kirim");
+  await assert.rejects(
+    A(() => crmKirim.kirimgaKochirish({ businessId: tA.business.id, dealId: d.id, userId: tA.user.id })),
+    BadRequestError
+  );
+});
+
+test("B5: 'kirimga o'tkazish' (eski yo'l) qarzga/qisman tanlangan zakazni rad etadi", async () => {
+  const bugun = todayTashkentDateOnlyString();
+  const crmKirim = await import("@/lib/crm/kirim");
+  const qarz = await zakaz("Eski yo'l qarz", { summa: 100_000, tolangan: 0, sana: bugun, tolovTuri: "qarz" });
+  await assert.rejects(
+    A(() => crmKirim.kirimgaKochirish({ businessId: tA.business.id, dealId: qarz.id, userId: tA.user.id })),
+    BadRequestError
+  );
+  const qisman = await zakaz("Eski yo'l qisman", { summa: 100_000, tolangan: 40_000, sana: bugun });
+  await assert.rejects(
+    A(() => crmKirim.kirimgaKochirish({ businessId: tA.business.id, dealId: qisman.id, userId: tA.user.id })),
+    BadRequestError
+  );
+  assert.deepEqual(await moliyaSoni("Eski yo'l"), { kirim: 0, qarz: 0 });
+});
+
+test("B6: to'g'ridan-to'g'ri WON bosqichida yaratilgan zakaz — kirim darhol", async () => {
+  const bugun = todayTashkentDateOnlyString();
+  const won = await A(() => prisma.stage.findFirst({ where: { businessId: tA.business.id, turi: "WON" } }));
+  const d = await zakaz("Yutilgan holda yaratildi", { summa: 200_000, tolangan: 200_000, sana: bugun, stageId: won.id });
+  assert.equal(d.holat, "YUTILDI");
+  assert.ok(d.transactionId, "yaratilishi bilan kirim yozildi");
+  assert.deepEqual(await moliyaSoni("Yutilgan holda yaratildi"), { kirim: 1, qarz: 0 });
 });
 
 // ---------------------------------------------------------------------------

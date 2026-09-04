@@ -76,7 +76,6 @@ export default async function CrmPage({
       xodimKategoriyalari,
       sotuvchilar,
       sotuvchiMajburiy,
-      sotuvchiOzgartira,
       jamoaHuquqi,
       bahoYozaOladi,
     ] = await Promise.all([
@@ -113,10 +112,10 @@ export default async function CrmPage({
       listAccounts(businessId, true),
       // Xodim kategoriyalari (Sotuvchi/Diktor/...) — zakaz-xodim biriktiruvi.
       crmFormaKategoriyalari(businessId),
-      // SOTUVCHI: faqat shu biznesning faol sotuvchilari (forma va filtr).
+      // SOTUVCHI: shu biznesning BARCHA faol sotuvchilari (forma va filtr) —
+      // kim kirgan bo'lsa ham bir xil ro'yxat, avto-tanlash yo'q.
       sotuvchilarRoyxati(businessId),
       sotuvchiMajburiymi(businessId),
-      hasPermission(session.userId, "crm.sotuvchi"),
       hasPermission(session.userId, "crm.jamoa"),
       hasPermission(session.userId, "crm.baho"),
     ]);
@@ -133,7 +132,7 @@ export default async function CrmPage({
     // TO'LOV HOLATI bazada ustun emas (summa va tolangan'dan hisoblanadi),
     // shuning uchun bu filtr o'qishdan keyin qo'llanadi.
     const zakazlar = filtr.tolov
-      ? board.deals.filter((d) => tolovHolati(d.summa, d.tolangan) === (filtr.tolov as TolovHolat))
+      ? board.deals.filter((d) => tolovHolati(d.summa, d.tolangan, d.tolovTuri) === (filtr.tolov as TolovHolat))
       : board.deals;
 
     return (
@@ -173,7 +172,6 @@ export default async function CrmPage({
           }))}
           sotuvchilar={sotuvchilar}
           sotuvchiMajburiy={sotuvchiMajburiy}
-          sotuvchiOzgartira={sotuvchiOzgartira}
           jamoaHuquqi={jamoaHuquqi}
           bahoYozaOladi={bahoYozaOladi}
           meId={session.userId}

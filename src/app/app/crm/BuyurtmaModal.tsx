@@ -15,6 +15,8 @@ import {
 import {
   TolovMaydonlari,
   tolanganHisobla,
+  tolovTuriHisobla,
+  tolovXatosi,
   type PulKanali,
   type TolovTanlov,
 } from "./TolovMaydonlari";
@@ -48,7 +50,6 @@ export function BuyurtmaModal({
   xodimKategoriyalari,
   sotuvchilar,
   sotuvchiMajburiy,
-  sotuvchiOzgartira,
   meId,
   bugun,
   onClose,
@@ -57,12 +58,10 @@ export function BuyurtmaModal({
   xodimlar: XodimDTO[];
   /** Xodim lavozimlari (Animator/Shofyor/...) — "Zakaz jamoasi". */
   xodimKategoriyalari: XodimKategoriyaDTO[];
-  /** Sotuvchilar (faol, sotuvchi lavozimi a'zolari). */
+  /** Sotuvchilar (faol, sotuvchi lavozimi a'zolari) — hamma uchun bir xil ro'yxat. */
   sotuvchilar: SotuvchiDTO[];
   /** Biznes sozlamasi: sotuvchi majburiymi. */
   sotuvchiMajburiy: boolean;
-  /** `crm.sotuvchi` huquqi — yo'q bo'lsa maydon qulflanadi. */
-  sotuvchiOzgartira: boolean;
   meId: string;
   /** Bugungi sana "YYYY-MM-DD" (server tomondan — brauzer vaqt mintaqasi emas). */
   bugun: string;
@@ -83,7 +82,7 @@ export function BuyurtmaModal({
   // AVTO-TANLASH YO'Q (ataylab): Disney Navoiy sotuv bo'limida BITTA umumiy
   // kompyuter ishlatiladi, ya'ni tizimga kirgan hisob zakazni kim sotganini
   // BILDIRMAYDI. Default "Tanlanmagan" — sotuvchini har safar odam tanlaydi.
-  // Kirgan foydalanuvchi faqat createdBy/audit uchun (`Activity.userId`).
+  // Kirgan foydalanuvchi faqat `Deal.createdBy` va auditga yoziladi.
   const [sotuvchiId, setSotuvchiId] = useState("");
   const [jamoa, setJamoa] = useState<ZakazXodimTanlov>({});
   const [xato, setXato] = useState<string | null>(null);
@@ -114,10 +113,8 @@ export function BuyurtmaModal({
       setXato("Buyurtmani olgan sotuvchini tanlang");
       return;
     }
-    if (tolanganSumma > narx) {
-      setXato("To'langan summa zakaz narxidan ko'p bo'lmasligi kerak");
-      return;
-    }
+    const tolovXato = tolovXatosi(tolovTanlov, narx, tolanganSumma);
+    if (tolovXato) return setXato(tolovXato);
     setLoading(true);
     setXato(null);
     const res = await fetch("/api/crm/deals", {
@@ -128,7 +125,7 @@ export function BuyurtmaModal({
         categoryId,
         summa: narx,
         tolangan: tolanganSumma,
-        tolovTuri: tolovTanlov === "qarz" ? "qarz" : tolovTuri,
+        tolovTuri: tolovTuriHisobla(tolovTanlov, tolovTuri),
         kontaktIsm: kontaktIsm || null,
         kontaktTel: kontaktTel || null,
         sana,
@@ -192,7 +189,6 @@ export function BuyurtmaModal({
             value={sotuvchiId}
             onChange={setSotuvchiId}
             majburiy={sotuvchiMajburiy}
-            ozgartira={sotuvchiOzgartira}
           />
         ) : (
           <div className="space-y-1">

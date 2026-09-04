@@ -1116,6 +1116,16 @@ model Deal {
   stageId       String
   stage         Stage          @relation(fields: [stageId], references: [id], onDelete: Restrict)
   masulId       String // mas'ul xodim (foydalanuvchi)
+  /// ZAKAZNI CRM'GA KIM KIRITDI (User.id) — SOTUVCHIDAN ALOHIDA saqlanadi.
+  ///
+  /// Nega alohida ustun: ishxonada bitta kompyuter bor va Balansa bitta
+  /// hisobda ochiq turadi, ya'ni "tizimga kirgan foydalanuvchi = sotuvchi"
+  /// DEGANI EMAS. Sotuvchi `DealEmployee` (turi="sotuvchi") da, kiritgan
+  /// odam esa shu yerda. `masulId` bu savolga javob bera olmaydi: sotuvchi
+  /// almashtirilganda u sotuvchining hisobiga sinxronlanadi.
+  /// null — eski yozuvlar (migratsiya faoliyat lentasidan to'ldiradi,
+  /// lenta yozuvi bo'lmasa noma'lum bo'lib qoladi — taxmin qilinmaydi).
+  createdBy     String?
   manba         String? // "qolda" | "telegram" | ...
   /// Buyurtma sanasi (UTC-yarim tun, `lib/date.ts`). "Bugungi buyurtmalar"
   /// paneli va kategoriya statistikasi shu maydon bo'yicha kesiladi.

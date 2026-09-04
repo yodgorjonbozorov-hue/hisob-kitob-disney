@@ -47,10 +47,13 @@ export const HUQUQLAR: Huquq[] = [
   { code: "xarid.korish", label: "Xarid buyurtmalarini ko'rish", guruh: "Xarid" },
   { code: "xarid.qabul", label: "Xarid qabul qilish va to'lash", guruh: "Xarid" },
   // CRM
-  // DIQQAT: bu huquq zakaz SOTUVCHISINI tanlash/almashtirishga tegishli.
-  // Usiz ham sotuvchi zakaz yarata oladi — lekin faqat O'Z nomiga
-  // (sotuvni boshqa xodimga yozib qo'yish boshqaruvchi qarori).
-  { code: "crm.sotuvchi", label: "Zakaz sotuvchisini tanlash/o'zgartirish", guruh: "CRM" },
+  // ZAKAZ SOTUVCHISI uchun huquq kodi ATAYLAB YO'Q (avval "crm.sotuvchi"
+  // bor edi). Sabab: ishxonada bitta kompyuter va bitta ochiq hisob —
+  // "kirgan foydalanuvchi = sotuvchi" emas, shuning uchun sotuvchini qo'lda
+  // tanlash CRM'ga kira olgan har bir xodimning kundalik amali. Cheklov
+  // ro'yxatning o'zida qoladi: faqat shu biznesning FAOL sotuvchilari
+  // (`lib/services/zakazSotuvchi.ts`). Eski rollarda qolib ketgan kod
+  // zararsiz — u endi hech narsani ochmaydi va yopmaydi.
   // Zakaz JAMOASI (animator, shofyor, videochi...) — YARATISHDA har kim
   // o'z zakaziga jamoani yozadi; MAVJUD zakazning jamoasini o'zgartirish
   // esa shu huquq bilan (yoki zakaz o'zining mas'uli bo'lsa, yakunlangunga
