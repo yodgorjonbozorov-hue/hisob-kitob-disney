@@ -231,6 +231,8 @@ export async function holatniOzgartirish(params: {
       holat: params.holat,
       stageId: bosqichlar[params.holat],
       yopilganAt: yopiqHolat(params.holat) ? new Date() : null,
+      // Doska ustunidagi tartib shu vaqtdan (eng yangi o'tish — eng tepada).
+      holatAt: new Date(),
     },
   });
 
@@ -518,6 +520,8 @@ export async function createDeal(params: YangiBuyurtma) {
       tolovTuri: params.tolovTuri ?? null,
       holat,
       yopilganAt: yopiqHolat(holat) ? new Date() : null,
+      // Yaratilish — zakazning BIRINCHI holati, shu bois tartib vaqti ham shu.
+      holatAt: new Date(),
       categoryId,
       stageId,
       contactId,
@@ -583,7 +587,7 @@ export async function moveDeal(params: {
 
   const updated = await prisma.deal.update({
     where: { id: deal.id },
-    data: { stageId: stage.id, holat, yopilganAt: yopilyapti ? new Date() : null },
+    data: { stageId: stage.id, holat, yopilganAt: yopilyapti ? new Date() : null, holatAt: new Date() },
   });
 
   await prisma.activity.create({

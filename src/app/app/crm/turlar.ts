@@ -93,6 +93,16 @@ export interface BuyurtmaDTO {
    * ko'rinadigan asosiy sana). `createdAt` bilan aralashtirilmaydi.
    */
   sana: string | null;
+  /**
+   * ZAKAZ QACHON JORIY HOLATIGA O'TGAN (ISO). Doska ustuni ichidagi tartib
+   * SHU maydondan hisoblanadi — "Yutildi"ga endigina o'tgan zakaz eng tepada
+   * turadi (`lib/crm/pipeline.ts` → `zakazlarniTartibla`).
+   */
+  holatAt: string | null;
+  /** Yopilgan vaqt (ISO) — `holatAt` yo'q eski yozuvlar uchun zaxira. */
+  yopilganAt: string | null;
+  /** Yaratilish vaqti (ISO) — oxirgi zaxira tartib kaliti. */
+  createdAt: string;
   izoh: string | null;
   masulId: string;
   masulIsm: string | null;

@@ -5891,3 +5891,36 @@ tasdiqlangan qatnashuv soni. Kaliti `Employee.id`, `User.id` EMAS.
    qamramay qoldi — funksiya jimgina hech narsa qilmadi va test buni
    ushladi. Yangi "ish bor" holati qo'shilganda BARCHA erta chiqish
    shartlari qayta ko'riladi.
+
+## 2026-09-04 — Doska ustuni tartibi: "eng oxirgi holatga o'tgan — eng tepada"
+
+**Muammo.** "Yutildi" ustuni zakaz SANASI bo'yicha o'sish tartibida
+saralanardi (`ZakazUstuni.tsx`), shu bois endigina yutilgan zakaz ustunning
+ENG PASTIGA tushib ketardi — sotuvchi o'zi hozir bosgan zakazni ko'rmasdi.
+
+**Nega mavjud maydonlar yetmadi.** `createdAt` — zakaz qachon YARATILGANI
+(eski zakaz bugun yutilsa pastda qolardi). `yopilganAt` bor va YUTILDI uchun
+to'g'ri, lekin u faqat yopilgan holatlarda yoziladi — JARAYONDA ustunida
+null bo'lib qolardi. Shu bois BITTA umumiy maydon qo'shildi: `Deal.holatAt`
+— holat oxirgi marta qachon o'zgargani (yaratilishda ham yoziladi).
+Migratsiya eski yozuvlarni `COALESCE(yopilganAt, createdAt)` bilan to'ldiradi,
+o'qish qatlami ham AYNI zaxira zanjirini takrorlaydi (`holatVaqti`), shuning
+uchun migratsiya qo'llanmagan baza ham to'g'ri tartib beradi.
+
+**Tartib qoidasi ikki xil — ustunning MA'NOSIGA qarab** (`pipeline.ts` →
+`zakazlarniTartibla`, sof funksiya, server va brauzer uchun bitta):
+  · YUTILDI / YOQOTILDI / JARAYONDA — TARIX ustunlari: `holatAt` kamayish
+    tartibi (eng oxirgi o'tgan — tepada);
+  · KUTILAYOTGAN / BUGUNGI — REJA ustunlari: eski qoida saqlandi
+    (kechikkanlar tepada, keyin yaqin kun). Bu yerda "qachon bajarish kerak"
+    muhim, "qachon holat o'zgargani" emas — 7-talab buzilmadi.
+
+**Frontend refreshsiz.** `router.refresh()` server javobini kutadi, shuning
+uchun `CrmClient` mahalliy (optimistik) qatlam yuritadi: holat o'zgargach
+karta darhol yangi ustunning tepasida paydo bo'ladi. Mahalliy nusxa
+O'Z-O'ZIDAN chiqadi — tozalash effekti yo'q: server ayni holatni ko'rsatgan
+YOKI undan yangiroq `holatAt` yozgan bo'lsa serverning so'zi oxirgi.
+
+**Nima o'rganildi.** Ustunlar bir xil ko'rinsa ham bir xil MANTIQDA emas:
+"eng yangisi tepada" reja ustunlariga ko'r-ko'rona qo'llanganda kechikkan
+zakazni ko'zdan yashirib qo'yardi. Tartib qoidasi ustun turiga bog'lanadi.

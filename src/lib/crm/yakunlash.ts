@@ -182,7 +182,9 @@ export async function zakazniYakunlash(params: YakunlashParams): Promise<Yakunla
 
     await tx.deal.updateMany({
       where: { id: deal.id, businessId: params.businessId, deletedAt: null },
-      data: { holat: "YUTILDI", stageId: bosqichlar.YUTILDI, yopilganAt: new Date() },
+      // `holatAt` — doska "Yutildi" ustunidagi tartib kaliti: endigina
+      // yutilgan zakaz ustunning ENG TEPASIDA turadi.
+      data: { holat: "YUTILDI", stageId: bosqichlar.YUTILDI, yopilganAt: new Date(), holatAt: new Date() },
     });
 
     const holat = tolovHolati(deal.summa, deal.tolangan);

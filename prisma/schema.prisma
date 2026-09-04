@@ -1124,6 +1124,19 @@ model Deal {
   sana          DateTime?
   muddat        DateTime?
   yopilganAt    DateTime?
+  /// HOLAT OXIRGI MARTA QACHON O'ZGARGAN (yaratilganda — yaratilish vaqti).
+  /// Doska ustunlari SHU maydon bo'yicha tartiblanadi: eng oxirgi holatga
+  /// o'tgan zakaz ustunning ENG TEPASIDA turadi (`lib/crm/pipeline.ts` →
+  /// `zakazlarniTartibla`).
+  ///
+  /// `createdAt` YETARLI EMAS: eski zakaz bugun "Yutildi" ga o'tsa ham u
+  /// yaratilish sanasi bo'yicha pastda qolib ketardi. `yopilganAt` ham
+  /// yetarli emas — u faqat YUTILDI/YOQOTILDI da yoziladi, JARAYONDA da
+  /// null bo'lib qolardi. Shu bois BARCHA o'tishlar shu yerga yoziladi.
+  ///
+  /// Null — faqat migratsiyagacha yaratilgan eski yozuvda; o'qish paytida
+  /// `yopilganAt ?? createdAt` ga qaytiladi (migratsiya ham shunday to'ldiradi).
+  holatAt       DateTime?
   /// Shu buyurtmadan yozilgan KIRIM tranzaksiyasi.
   /// UNIQUE — bitta buyurtma hech qachon ikkita kirim yarata olmaydi.
   /// Himoya BAZA darajasida: frontend holatiga ham, faqat kod tekshiruviga
@@ -1174,6 +1187,8 @@ model Deal {
   /// CRM doskasining asosiy kesimi: holat + sana (ustunlar shu ikkovidan
   /// hisoblanadi).
   @@index([businessId, holat, sana])
+  /// Ustun ichidagi tartib: holat + o'sha holatga o'tgan vaqt (eng yangisi tepada).
+  @@index([businessId, holat, holatAt])
   @@index([categoryId])
 }
 

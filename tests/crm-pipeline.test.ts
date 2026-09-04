@@ -374,3 +374,92 @@ test("FILTR: sana oralig'i va sotuvchi bo'yicha kesiladi", async () => {
   const begona = await A(() => crm.getBoard(tA.business.id, { masulId: tB.user.id }));
   assert.equal(begona.deals.length, 0, "boshqa xodim filtri bo'sh natija beradi");
 });
+
+// ---------------------------------------------------------------------------
+// USTUN ICHIDAGI TARTIB — eng oxirgi holatga o'tgan zakaz ENG TEPADA
+// ---------------------------------------------------------------------------
+
+test("TARTIB: 'Yutildi' ustuni holat vaqti bo'yicha KAMAYISH tartibida", () => {
+  const { zakazlarniTartibla } = pipeline;
+  // Uch zakaz ketma-ket yutildi: 09:45 → 10:20 → 11:05.
+  // SANA ataylab teskari tartibda: sana bo'yicha saralash NOTO'G'RI javob
+  // berardi (eng yangi yutilgani eng pastda qolardi) — aynan shu tuzatilyapti.
+  const A_ = { holat: "YUTILDI", sana: "2026-09-01", holatAt: "2026-09-04T09:45:00.000Z", createdAt: "2026-08-01T00:00:00.000Z" };
+  const B_ = { holat: "YUTILDI", sana: "2026-09-02", holatAt: "2026-09-04T10:20:00.000Z", createdAt: "2026-08-02T00:00:00.000Z" };
+  const C_ = { holat: "YUTILDI", sana: "2026-09-03", holatAt: "2026-09-04T11:05:00.000Z", createdAt: "2026-08-03T00:00:00.000Z" };
+
+  const tartib = zakazlarniTartibla([A_, B_, C_], "YUTILDI", "2026-09-04");
+  assert.deepEqual(
+    tartib.map((z: any) => z.holatAt),
+    [C_.holatAt, B_.holatAt, A_.holatAt],
+    "eng oxirgi yutilgan zakaz eng tepada bo'lishi kerak"
+  );
+
+  // JARAYONDA ham ayni qoida: holatga oxirgi o'tgan tepada.
+  const j1 = { holat: "JARAYONDA", sana: "2026-09-10", holatAt: "2026-09-04T08:00:00.000Z", createdAt: "2026-08-01T00:00:00.000Z" };
+  const j2 = { holat: "JARAYONDA", sana: "2026-09-05", holatAt: "2026-09-04T12:00:00.000Z", createdAt: "2026-08-01T00:00:00.000Z" };
+  assert.deepEqual(
+    zakazlarniTartibla([j1, j2], "JARAYONDA", "2026-09-04").map((z: any) => z.holatAt),
+    [j2.holatAt, j1.holatAt]
+  );
+
+  // KUTILAYOTGAN — REJA ustuni: eski qoida saqlanadi (kechikkan tepada,
+  // keyin yaqin kun). Holat vaqti bu yerda tartibni O'ZGARTIRMAYDI.
+  const k1 = { holat: "KUTILMOQDA", sana: "2026-09-01", holatAt: "2026-09-04T08:00:00.000Z", createdAt: "2026-08-01T00:00:00.000Z" };
+  const k2 = { holat: "KUTILMOQDA", sana: "2026-09-20", holatAt: "2026-09-04T12:00:00.000Z", createdAt: "2026-08-01T00:00:00.000Z" };
+  assert.deepEqual(
+    zakazlarniTartibla([k2, k1], "KUTILAYOTGAN", "2026-09-04").map((z: any) => z.sana),
+    ["2026-09-01", "2026-09-20"],
+    "kechikkan zakaz kutilayotgan ustunning tepasida qoladi"
+  );
+});
+
+test("TARTIB: eski yozuvda `holatAt` yo'q bo'lsa `yopilganAt`/`createdAt` ga qaytiladi", () => {
+  const { holatVaqti } = pipeline;
+  assert.equal(holatVaqti({ holat: "YUTILDI", sana: null, holatAt: "2026-09-04T11:00:00.000Z", yopilganAt: "2026-09-04T09:00:00.000Z", createdAt: "2026-08-01T00:00:00.000Z" }), Date.parse("2026-09-04T11:00:00.000Z"));
+  assert.equal(holatVaqti({ holat: "YUTILDI", sana: null, holatAt: null, yopilganAt: "2026-09-04T09:00:00.000Z", createdAt: "2026-08-01T00:00:00.000Z" }), Date.parse("2026-09-04T09:00:00.000Z"));
+  assert.equal(holatVaqti({ holat: "KUTILMOQDA", sana: null, createdAt: "2026-08-01T00:00:00.000Z" }), Date.parse("2026-08-01T00:00:00.000Z"));
+});
+
+test("YAKUNLASH `holatAt` yozadi — endigina yutilgan zakaz doskada tepaga chiqadi", async () => {
+  const bugun = todayTashkentDateOnlyString();
+  // Sana bo'yicha tartib bilan YUTILISH tartibi ataylab TESKARI: sana bo'yicha
+  // A → B → C, yutilish bo'yicha esa kutilgan natija C → B → A.
+  const a = await zakaz("Tartib A", { summa: 100_000, tolangan: 100_000, sana: kun(bugun, -3) });
+  const b = await zakaz("Tartib B", { summa: 100_000, tolangan: 100_000, sana: kun(bugun, -2) });
+  const c = await zakaz("Tartib C", { summa: 100_000, tolangan: 100_000, sana: kun(bugun, -1) });
+
+  const oldin = Date.now();
+  for (const d of [a, b, c]) {
+    await A(() => yakunlash.zakazniYakunlash({ businessId: tA.business.id, dealId: d.id, userId: tA.user.id }));
+  }
+
+  const yozuv = await A(() => prisma.deal.findFirst({ where: { id: a.id } }));
+  assert.ok(yozuv.holatAt, "yakunlash `holatAt` yozishi shart");
+  assert.ok(yozuv.holatAt.getTime() >= oldin, "`holatAt` — yakunlash vaqti");
+
+  // Vaqtlarni aniq belgilaymiz: test soniya ichida bajarilgani uchun
+  // yozilgan vaqtlar teng bo'lib qolishi mumkin (tartib esa aniq sinalsin).
+  const vaqt = (soat: string) => new Date(`${bugun}T${soat}:00.000Z`);
+  await rawPrisma.deal.update({ where: { id: a.id }, data: { holatAt: vaqt("09:45") } });
+  await rawPrisma.deal.update({ where: { id: b.id }, data: { holatAt: vaqt("10:20") } });
+  await rawPrisma.deal.update({ where: { id: c.id }, data: { holatAt: vaqt("11:05") } });
+
+  const doska = await A(() => crm.getBoard(tA.business.id));
+  const yutilgan = doska.deals.filter((d: any) => [a.id, b.id, c.id].includes(d.id));
+  const tartib = pipeline
+    .zakazlarniTartibla(
+      yutilgan.map((d: any) => ({
+        id: d.id,
+        holat: d.holat,
+        sana: d.sana ? d.sana.toISOString().slice(0, 10) : null,
+        holatAt: d.holatAt,
+        yopilganAt: d.yopilganAt,
+        createdAt: d.createdAt,
+      })),
+      "YUTILDI",
+      bugun
+    )
+    .map((d: any) => d.id);
+  assert.deepEqual(tartib, [c.id, b.id, a.id], "eng oxirgi yutilgan zakaz eng tepada");
+});

@@ -178,6 +178,11 @@ export default async function CrmPage({
             kontakt: d.contact?.ism ?? null,
             tel: d.contact?.tel ?? null,
             sana: d.sana ? utcDateToDateOnlyString(d.sana) : null,
+            // Ustun ichidagi tartib vaqtlari (ISO) — brauzer ham server bilan
+            // AYNI qoidadan tartiblaydi (`lib/crm/pipeline.ts`).
+            holatAt: d.holatAt ? d.holatAt.toISOString() : null,
+            yopilganAt: d.yopilganAt ? d.yopilganAt.toISOString() : null,
+            createdAt: d.createdAt.toISOString(),
             izoh: d.izoh,
             masulId: d.masulId,
             masulIsm: ismlar.get(d.masulId) ?? null,
