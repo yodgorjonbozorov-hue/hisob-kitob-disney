@@ -18,7 +18,6 @@ import {
   zakazXodimlariniTekshir,
 } from "@/lib/services/zakazJamoasi";
 import {
-  avtoSotuvchi,
   sotuvchiKategoriyaIdlari,
   sotuvchiMajburiymi,
   sotuvchiTekshir,
@@ -339,17 +338,13 @@ export interface YangiBuyurtma {
   /** Pul kanali: "naqd" | "click" | "qarz". */
   tolovTuri?: string | null;
   /**
-   * ZAKAZNI OLGAN SOTUVCHI (Employee.id). Berilmasa — foydalanuvchining
-   * o'z sotuvchi profili (avto-tanlash).
+   * ZAKAZNI OLGAN SOTUVCHI (Employee.id) — FAQAT QO'LDA tanlanadi.
+   * Berilmasa sotuvchi biriktirilmaydi (biznes sozlamasi majburiy qilsa
+   * xato qaytadi). AVTO-TANLASH YO'Q: bitta kompyuterda bitta hisob ochiq
+   * turgani "kirgan foydalanuvchi = sotuvchi" degani emas.
    */
   sotuvchiId?: string | null;
-  /**
-   * `crm.sotuvchi` huquqi bor-yo'qligi — HTTP route HAR DOIM ochiq uzatadi.
-   * `false` bo'lsa foydalanuvchi zakazni faqat O'Z nomiga yoza oladi
-   * (5/27-talab). `undefined` — sessiyasiz ichki chaqiruv (test, skript,
-   * bot): u yerda foydalanuvchi tanlovi emas, server mantig'i ishlaydi.
-   */
-  sotuvchiTanlashHuquqi?: boolean;
+  /** Zakazni CRM'ga kiritgan foydalanuvchi (`createdBy`) — sotuvchidan alohida. */
   userId: string;
 }
 
@@ -412,18 +407,28 @@ async function kontaktTop(params: YangiBuyurtma): Promise<string | null> {
 }
 
 /**
- * ZAKAZ SOTUVCHISINI ANIQLASH (4/5/6/27-talab) va uni biriktiruvlar
- * ro'yxatiga qo'shish.
+ * ZAKAZ SOTUVCHISINI ANIQLASH (6-talab) va uni biriktiruvlar ro'yxatiga
+ * qo'shish.
  *
  * TANLASH TARTIBI:
- *  1. `sotuvchiId` — yangi, birinchi darajali maydon (forma shuni yuboradi);
+ *  1. `sotuvchiId` — birinchi darajali maydon (forma shuni yuboradi);
  *  2. `xodimlar` ro'yxatidagi SOTUVCHI turidagi kategoriya qatori — ESKI
- *     yo'l, buzilmasin (bot/eski integratsiyalar shu ko'rinishda yuboradi);
- *  3. AVTO-TANLASH: foydalanuvchining o'z sotuvchi profili (4-talab).
- * Hech biri bo'lmasa va biznes sozlamasi majburiy qilsa — aniq xato.
+ *     yo'l, buzilmasin (bot/eski integratsiyalar shu ko'rinishda yuboradi).
+ * Hech biri bo'lmasa sotuvchi BIRIKTIRILMAYDI (biznes sozlamasi majburiy
+ * qilsa — aniq xato).
  *
- * Har holatda server xodimni to'liq tekshiradi (biznes, faollik, sotuvchi
- * kategoriyasi a'zoligi) — mijoz yuborgan qiymatga ISHONILMAYDI.
+ * AVTO-TANLASH ATAYLAB YO'Q. Ilgari tanlov bo'lmasa foydalanuvchining o'z
+ * sotuvchi profili yozilardi. Disney Navoiy ishxonasida bitta kompyuter bor
+ * va Balansa bitta hisobda ochiq turadi, ya'ni bu qoida sotuvni HAR DOIM
+ * o'sha hisobga yozib, KPI'ni yolg'onga aylantirardi. Endi sotuvni kim
+ * qilgan bo'lsa — o'sha qo'lda tanlanadi; kiritgan odam esa `Deal.createdBy`
+ * da alohida saqlanadi.
+ *
+ * HUQUQ TEKSHIRUVI YO'Q (ayni sabab): CRM'ga kira olgan har bir xodim
+ * biznesning HAR QAYSI faol sotuvchisini tanlay oladi. Cheklov ro'yxatning
+ * O'ZIDA qoladi — server har chaqiruvda xodim shu biznesniki, faol va
+ * sotuvchi kategoriyasi a'zosi ekanini tekshiradi (`sotuvchiTekshir`),
+ * ya'ni mijoz yuborgan qiymatga ISHONILMAYDI.
  */
 async function sotuvchiniQosh(params: YangiBuyurtma): Promise<ZakazXodimInput[]> {
   const boshqalar = params.xodimlar ?? [];
@@ -434,20 +439,11 @@ async function sotuvchiniQosh(params: YangiBuyurtma): Promise<ZakazXodimInput[]>
   const ijrochilar = boshqalar.filter((x) => !sotuvKategoriyalar.has(x.categoryId));
   const royxatdagi = boshqalar.find((x) => sotuvKategoriyalar.has(x.categoryId));
 
-  const ozi = await avtoSotuvchi(params.businessId, params.userId);
   const soralgan = params.sotuvchiId ?? royxatdagi?.employeeId ?? null;
 
   let tanlangan: { id: string; categoryId: string } | null = null;
   if (soralgan) {
-    // HUQUQ: `false` — huquq TEKSHIRILDI va yo'q (route shuni uzatadi);
-    // `undefined` — sessiyasiz ichki chaqiruv (test/skript), cheklanmaydi.
-    if (params.sotuvchiTanlashHuquqi === false && soralgan !== ozi?.id) {
-      throw new ForbiddenError("Boshqa sotuvchini tanlash uchun sizda huquq yo'q");
-    }
     const s = await sotuvchiTekshir(params.businessId, soralgan);
-    tanlangan = { id: s.id, categoryId: s.categoryId };
-  } else if (ozi) {
-    const s = await sotuvchiTekshir(params.businessId, ozi.id);
     tanlangan = { id: s.id, categoryId: s.categoryId };
   }
 
@@ -530,6 +526,9 @@ export async function createDeal(params: YangiBuyurtma) {
       stageId,
       contactId,
       masulId,
+      // KIRITGAN ODAM — sotuvchidan ALOHIDA maydon. `masulId` bunga javob
+      // bermaydi: u sotuvchining tizim hisobiga sinxronlanadi (pastda).
+      createdBy: params.userId,
       manba: params.manba ?? "qolda",
       sana: params.sana ? dateOnlyStringToUTCDate(params.sana) : null,
       muddat: params.muddat ? dateOnlyStringToUTCDate(params.muddat) : null,

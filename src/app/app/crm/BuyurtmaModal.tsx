@@ -49,9 +49,7 @@ export function BuyurtmaModal({
   xodimlar,
   xodimKategoriyalari,
   sotuvchilar,
-  ozimSotuvchi,
   sotuvchiMajburiy,
-  sotuvchiOzgartira,
   meId,
   bugun,
   onClose,
@@ -60,14 +58,10 @@ export function BuyurtmaModal({
   xodimlar: XodimDTO[];
   /** Xodim lavozimlari (Animator/Shofyor/...) — "Zakaz jamoasi". */
   xodimKategoriyalari: XodimKategoriyaDTO[];
-  /** Sotuvchilar (faol, sotuvchi lavozimi a'zolari). */
+  /** Sotuvchilar (faol, sotuvchi lavozimi a'zolari) — hamma uchun bir xil ro'yxat. */
   sotuvchilar: SotuvchiDTO[];
-  /** Joriy foydalanuvchining sotuvchi profili — avto-tanlash. */
-  ozimSotuvchi: string | null;
   /** Biznes sozlamasi: sotuvchi majburiymi. */
   sotuvchiMajburiy: boolean;
-  /** `crm.sotuvchi` huquqi — yo'q bo'lsa maydon qulflanadi. */
-  sotuvchiOzgartira: boolean;
   meId: string;
   /** Bugungi sana "YYYY-MM-DD" (server tomondan — brauzer vaqt mintaqasi emas). */
   bugun: string;
@@ -85,8 +79,9 @@ export function BuyurtmaModal({
   const [tolovTanlov, setTolovTanlov] = useState<TolovTanlov>("toliq");
   const [tolangan, setTolangan] = useState("");
   const [tolovTuri, setTolovTuri] = useState<PulKanali>("naqd");
-  // AVTO-TANLASH: sotuvchi o'z hisobidan kirsa o'zi tanlangan holda ochiladi.
-  const [sotuvchiId, setSotuvchiId] = useState(ozimSotuvchi ?? "");
+  // SOTUVCHI boshlang'ich qiymati — "Tanlanmagan" (avto-tanlash YO'Q):
+  // bitta kompyuterda ochiq turgan hisob sotuvchini aniqlamaydi.
+  const [sotuvchiId, setSotuvchiId] = useState("");
   const [jamoa, setJamoa] = useState<ZakazXodimTanlov>({});
   const [xato, setXato] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -192,7 +187,6 @@ export function BuyurtmaModal({
             value={sotuvchiId}
             onChange={setSotuvchiId}
             majburiy={sotuvchiMajburiy}
-            ozgartira={sotuvchiOzgartira}
           />
         ) : (
           <div className="space-y-1">

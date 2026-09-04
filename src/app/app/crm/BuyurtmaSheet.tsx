@@ -52,7 +52,6 @@ export function BuyurtmaSheet({
   kategoriyalar,
   xodimKategoriyalari,
   sotuvchilar,
-  sotuvchiOzgartira,
   jamoaHuquqi,
   bahoYozaOladi,
   meId,
@@ -70,8 +69,6 @@ export function BuyurtmaSheet({
   xodimKategoriyalari: XodimKategoriyaDTO[];
   /** Sotuvchilar ro'yxati — sotuvchini almashtirish uchun. */
   sotuvchilar: SotuvchiDTO[];
-  /** `crm.sotuvchi` huquqi (27-talab). */
-  sotuvchiOzgartira: boolean;
   /** `crm.jamoa` huquqi — mavjud zakaz jamoasini o'zgartirish. */
   jamoaHuquqi: boolean;
   /** `crm.baho` huquqi — sifat nazorati. */
@@ -195,7 +192,6 @@ export function BuyurtmaSheet({
           dealId={b.id}
           sotuvchi={sotuvchi}
           sotuvchilar={sotuvchilar}
-          ozgartira={sotuvchiOzgartira}
           onSaqlandi={() => {
             void yuklash();
             router.refresh();

@@ -16,7 +16,7 @@ import {
 } from "@/lib/services/zakazJamoasi";
 import { zakazBahosi } from "@/lib/services/zakazBaho";
 import { sotuvchiniOzgartirish, zakazSotuvchisi } from "@/lib/services/zakazSotuvchi";
-import { hasPermission, requirePermission } from "@/lib/permissions/tekshir";
+import { hasPermission } from "@/lib/permissions/tekshir";
 import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
 import type { Prisma } from "@prisma/client";
 
@@ -141,11 +141,13 @@ export const PATCH = withTenant<{ params: { id: string } }>(
       }
     }
 
-    // SOTUVCHINI ALMASHTIRISH (10/27-talab) — faqat `crm.sotuvchi` huquqi
-    // bilan. Oddiy sotuvchi zakazni boshqa sotuvchiga o'tkaza olmaydi.
-    // Amal atomik va audit jurnaliga yoziladi (xizmat qatlami).
+    // SOTUVCHINI ALMASHTIRISH (10-talab) — CRM'ga kira olgan har bir xodim
+    // uchun ochiq: bitta kompyuterda ochiq turgan hisob sotuvchini
+    // ANIQLAMAYDI, shuning uchun noto'g'ri yozilgan sotuvchini tuzatish
+    // kundalik amal. Cheklov xizmat qatlamida: faqat shu biznesning FAOL
+    // sotuvchisi tanlanadi. Amal atomik va audit jurnaliga yoziladi
+    // (kim edi → kimga o'tdi → kim o'zgartirdi → qachon).
     if (data.sotuvchiId !== undefined) {
-      await requirePermission(user.userId, "crm.sotuvchi");
       await sotuvchiniOzgartirish({
         businessId,
         dealId: params.id,

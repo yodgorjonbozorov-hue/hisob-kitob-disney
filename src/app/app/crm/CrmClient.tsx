@@ -32,9 +32,7 @@ export function CrmClient({
   xodimlar,
   xodimKategoriyalari,
   sotuvchilar,
-  ozimSotuvchi,
   sotuvchiMajburiy,
-  sotuvchiOzgartira,
   jamoaHuquqi,
   bahoYozaOladi,
   filtr,
@@ -48,10 +46,7 @@ export function CrmClient({
   xodimKategoriyalari: XodimKategoriyaDTO[];
   /** Sotuvchilar — forma selektori va doska filtri uchun. */
   sotuvchilar: SotuvchiDTO[];
-  /** Joriy foydalanuvchining sotuvchi profili (avto-tanlash). */
-  ozimSotuvchi: string | null;
   sotuvchiMajburiy: boolean;
-  sotuvchiOzgartira: boolean;
   /** `crm.jamoa` — mavjud zakaz jamoasini o'zgartirish huquqi. */
   jamoaHuquqi: boolean;
   /** `crm.baho` — sifat nazorati huquqi. */
@@ -180,9 +175,7 @@ export function CrmClient({
           xodimlar={xodimlar}
           xodimKategoriyalari={xodimKategoriyalari}
           sotuvchilar={sotuvchilar}
-          ozimSotuvchi={ozimSotuvchi}
           sotuvchiMajburiy={sotuvchiMajburiy}
-          sotuvchiOzgartira={sotuvchiOzgartira}
           meId={meId}
           bugun={bugun}
           onClose={() => setYangiOchiq(false)}
@@ -196,7 +189,6 @@ export function CrmClient({
           kategoriyalar={kategoriyalar}
           xodimKategoriyalari={xodimKategoriyalari}
           sotuvchilar={sotuvchilar}
-          sotuvchiOzgartira={sotuvchiOzgartira}
           jamoaHuquqi={jamoaHuquqi}
           bahoYozaOladi={bahoYozaOladi}
           meId={meId}

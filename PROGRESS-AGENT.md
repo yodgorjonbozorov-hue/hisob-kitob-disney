@@ -5890,3 +5890,49 @@ WON'da yaratish, dublikat yo'q, eski yo'l rad etadi), C1–C2 (tartib).
 qutqaradi, lekin hisob formulasi ham tanlovni ifodalashi shart: `0 so'm`
 "pul kelmadi" degani, "qarzga berildi" degani emas. Tanlov belgisi
 (`tolovTuri="qarz"`) allaqachon bazada bor edi — formula uni o'qimasdi.
+
+## 2026-09-04 — Sotuvchi tanlash: "kirgan hisob = sotuvchi" qoidasi olib tashlandi
+
+Disney Navoiy ishxonasida BITTA kompyuter bor va Balansa bitta hisobda
+(Fayruza) ochiq turadi. Tizim esa tizimga kirgan foydalanuvchini sotuvchi
+deb hisoblardi — sotuv KPI'si haqiqatda kim sotganidan qat'i nazar o'sha
+hisobga yozilardi. Uchta joyda tuzatildi:
+
+1. **Avto-tanlash olib tashlandi.** `sotuvchiniQosh` (`lib/crm/service.ts`)
+   tanlov bo'lmasa `avtoSotuvchi` (foydalanuvchining o'z sotuvchi profili)
+   ni yozardi; forma ham shu qiymat bilan ochilardi. Endi boshlang'ich
+   qiymat — "Tanlanmagan", tanlov bo'lmasa sotuvchi BIRIKTIRILMAYDI
+   (biznes sozlamasi majburiy qilsa — aniq xato). `avtoSotuvchi` funksiyasi
+   o'chirilmadi: u `hr/men` sahifasida boshqa maqsadda ishlatiladi.
+2. **Huquq to'sig'i olib tashlandi.** `crm.sotuvchi` huquqi bo'lmagan
+   foydalanuvchi zakazni faqat O'Z nomiga yoza olardi (server ham,
+   dropdown ham qulflanardi). Bitta ochiq hisob sharoitida bu qoida
+   ma'nosiz: kod katalogdan chiqarildi, POST/PATCH route'lardagi tekshiruv
+   ham. Cheklov RO'YXATNING O'ZIDA qoldi — `sotuvchiTekshir` har chaqiruvda
+   xodim shu biznesniki, faol va sotuvchi lavozimi a'zosi ekanini
+   tekshiradi, ya'ni mijoz yuborgan `sotuvchiId` ga baribir ishonilmaydi.
+3. **`Deal.createdBy` ustuni** (migratsiya `20260904090000_crm_zakaz_createdby`).
+   Kiritgan odam endi alohida saqlanadi. `masulId` bu javobni bera olmaydi:
+   sotuvchi tanlanganda/almashtirilganda u sotuvchining tizim hisobiga
+   sinxronlanadi. Backfill FAQAT dalildan — faoliyat lentasidagi "Buyurtma
+   yaratildi" yozuvining `userId` si; yozuv bo'lmasa NULL qoladi
+   (`masulId` dan taxmin qilinmaydi, aks holda yolg'on javob yozilardi).
+
+Sotuv KPI'si `DealEmployee` (turi="sotuvchi") dan o'qiladi, ya'ni tanlangan
+sotuvchining tizim hisobi bo'lishi SHART EMAS: Suxrob tanlansa KPI unga
+yoziladi. Foydalanuvchi darajasidagi eski "Xodimlar statistikasi"
+(`Transaction.sotuvchiId`) esa `masulId` ga tayanadi — sotuvchiga tizim
+hisobi bog'lanmagan bo'lsa u kiritgan odamda qoladi (mavjud xulq, tegilmadi).
+
+Testlar: `tests/crm-sotuvchi.test.ts` — TEST 1 endi teskarisini tekshiradi
+(tanlovsiz zakazda sotuvchi yo'q, `createdBy` bor), TEST 3 `createdBy`
+ustunini ham tasdiqlaydi, TEST 9 "Fayruza hisobidan Suxrob tanlanadi →
+KPI Suxrobga, Fayruzada o'zgarish yo'q" (dekorator esa baribir rad etiladi),
+majburiy sozlama testiga "o'z profili bor foydalanuvchi ham tanlashi shart"
+holati qo'shildi.
+
+**Nima o'rganildi.** Qulaylik uchun qo'yilgan avto-tanlash (4-talab) ish
+joyining haqiqiy sharoitida ma'lumot buzuvchiga aylandi: bitta ochiq hisob
+"kim kirgan" degan savolni "kim sotdi" javobiga aylantirib qo'ydi. Huquq
+modeli ham shu noto'g'ri taxminga qurilgan edi — "boshqa sotuvchini
+tanlash" imtiyoz emas, kundalik amal ekan.

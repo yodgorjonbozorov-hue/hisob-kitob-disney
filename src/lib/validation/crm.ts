@@ -73,8 +73,10 @@ export const buyurtmaPatchSchema = z.object({
   tolangan: z.number().int().min(0).optional(),
   tolovTuri: z.enum(["naqd", "click", "qarz"]).optional().nullable(),
   /**
-   * SOTUVCHINI ALMASHTIRISH (Employee.id) — `crm.sotuvchi` huquqi talab
-   * qilinadi va o'zgarish audit jurnaliga yoziladi (10/27-talab).
+   * SOTUVCHINI ALMASHTIRISH (Employee.id) — alohida huquq talab QILINMAYDI
+   * (kirgan hisob sotuvchini aniqlamaydi), lekin server xodim shu biznesning
+   * faol sotuvchisi ekanini tekshiradi va o'zgarish audit jurnaliga
+   * yoziladi (10-talab).
    */
   sotuvchiId: z.string().trim().min(1).optional(),
   /** Zakaz xodimlarini TO'LIQ almashtirish (kirim yozilgach qulflanadi). */

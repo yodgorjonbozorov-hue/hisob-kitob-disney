@@ -526,6 +526,7 @@ CREATE TABLE "Deal" (
     "categoryId" TEXT,
     "stageId" TEXT NOT NULL,
     "masulId" TEXT NOT NULL,
+    "createdBy" TEXT,
     "manba" TEXT,
     "sana" TIMESTAMP(3),
     "muddat" TIMESTAMP(3),
