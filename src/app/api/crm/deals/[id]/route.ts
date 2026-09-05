@@ -16,7 +16,6 @@ import {
 import { zakazniYakunlash } from "@/lib/crm/yakunlash";
 import { buyurtmaPatchSchema } from "@/lib/validation/crm";
 import { dashboardYangilandi } from "@/lib/cache";
-import { logAudit } from "@/lib/services/audit";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import {
   jamoaOzgartiraOladimi,
@@ -293,10 +292,11 @@ export const PATCH = withTenant<{ params: { id: string } }>(
  * HUQUQ SERVERDA: `requireManager` — frontenddagi tugmani yashirish himoya
  * emas, oddiy xodim bu yo'lni to'g'ridan-to'g'ri chaqira olmaydi.
  *
- * Yozuv bazadan yo'qolmaydi (`deletedAt` + `deletedBy`), audit esa avtomatik
- * yoziladi (lib/db/tenantDb.ts extension'i `updateMany` ni ushlaydi). Bu
- * yerdagi qo'shimcha `logAudit` — BIZNES hodisasi nomi bilan: jurnalda
- * "zakaz o'chirildi" qatori xom ustun o'zgarishidan ajralib tursin.
+ * Yozuv bazadan yo'qolmaydi (`deletedAt` + `deletedBy`). Audit ikki qatlamda:
+ * avtomatik (lib/db/tenantDb.ts `updateMany` ni ushlaydi) va biznes hodisasi
+ * sifatida — "delete" amali va aniq `entityId` bilan. Ikkinchisi xizmat
+ * qatlamida yoziladi, shuning uchun zakaz qayerdan o'chirilsa ham jurnalda
+ * bir xil ko'rinadi.
  */
 export const DELETE = withTenant<{ params: { id: string } }>(
   async (_request, { params }, { session: user }) => {
@@ -305,16 +305,10 @@ export const DELETE = withTenant<{ params: { id: string } }>(
     const businessId = await resolveActiveBusinessId(user);
     if (!businessId) return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });
 
-    const deal = await zakazniOchirish({ businessId, dealId: params.id, userId: user.userId });
-
-    await logAudit({
-      businessId,
-      action: "delete",
-      entity: "deal",
-      entityId: deal.id,
-      before: { nomi: deal.nomi, summa: deal.summa, holat: deal.holat },
-      after: { deletedBy: user.userId },
-    });
+    // Audit xizmat qatlamida yoziladi (`lib/crm/service.ts`) — u yerda
+    // bo'lgani uchun zakaz qayerdan o'chirilsa ham jurnalga "delete" bo'lib
+    // aniq `entityId` bilan tushadi.
+    await zakazniOchirish({ businessId, dealId: params.id, userId: user.userId });
 
     dashboardYangilandi(businessId);
     return NextResponse.json({ ok: true });

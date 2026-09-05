@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { dateOnlyStringToUTCDate, todayTashkentDateOnlyString, utcDateToDateOnlyString } from "@/lib/date";
 import { runBusinessTx } from "@/lib/db/businessTx";
+import { logAudit } from "@/lib/services/audit";
 import { kirimgaKochirish } from "@/lib/crm/kirim";
 // Aylanma import (yakunlash.ts ham shu fayldan `pipelineBosqichlari` ni oladi)
 // xavfsiz: ikkala tomon ham faqat CHAQIRUV vaqtida murojaat qiladi.
@@ -548,6 +549,20 @@ export async function zakazniOchirish(params: {
     data: { deletedAt: new Date(), deletedBy: params.userId },
   });
   if (upd.count !== 1) throw new BadRequestError("Zakaz allaqachon o'chirilgan");
+
+  // BIZNES HODISASI SIFATIDA audit — route'da emas, SHU YERDA. Avtomatik
+  // audit (lib/db/tenantDb.ts) `updateMany` ni ushlaydi, lekin u bitta
+  // yozuvning id'sini bilmaydi va jurnalda "update" bo'lib ko'rinadi.
+  // "Zakaz o'chirildi" qatori esa aniq `entityId` bilan va `delete` amali
+  // bilan turishi kerak — jurnalni o'qiydigan odam uni qidiradi.
+  await logAudit({
+    businessId: params.businessId,
+    action: "delete",
+    entity: "deal",
+    entityId: deal.id,
+    before: { nomi: deal.nomi, summa: deal.summa, holat: deal.holat },
+    after: { deletedBy: params.userId },
+  });
 
   return deal;
 }
