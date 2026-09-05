@@ -125,6 +125,11 @@ export interface BuyurtmaDTO {
   /** Yaratilish vaqti (ISO) — oxirgi zaxira tartib kaliti. */
   createdAt: string;
   izoh: string | null;
+  /**
+   * YO'QOTISH SABABI — faqat YOQOTILDI holatidagi zakazda to'la bo'ladi.
+   * `izoh` bilan aralashtirilmaydi: `izoh` — zakazning o'z tavsifi.
+   */
+  yoqotishSababi: string | null;
   masulId: string;
   masulIsm: string | null;
   /** Bog'langan kirim tranzaksiyasi — null bo'lsa kirim hali yozilmagan. */

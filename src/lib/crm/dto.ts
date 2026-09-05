@@ -53,6 +53,9 @@ export function zakazDTO(
     yopilganAt: d.yopilganAt ? d.yopilganAt.toISOString() : null,
     createdAt: d.createdAt.toISOString(),
     izoh: d.izoh,
+    // YO'QOTILGAN ZAKAZ KARTASI (direktor arxivi): sabab va yo'qotilgan
+    // sana. Sana alohida maydon emas — u `yopilganAt` (yuqorida).
+    yoqotishSababi: d.yoqotishSababi,
     masulId: d.masulId,
     masulIsm,
     transactionId: d.transactionId,

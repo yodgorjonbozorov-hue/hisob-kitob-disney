@@ -5,12 +5,13 @@ import { prisma } from "@/lib/prisma";
 import { resolveActiveBusinessId, getActiveBusiness } from "@/lib/business";
 import { doskaSahifalari } from "@/lib/crm/service";
 import { ustunSahifaDTO } from "@/lib/crm/dto";
-import { ASOSIY_USTUNLAR } from "@/lib/crm/pipeline";
+import { ASOSIY_USTUNLAR, USTUNLAR, type Ustun } from "@/lib/crm/pipeline";
 import { doskaFiltrSchema } from "@/lib/validation/crm";
 import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
 import { crmFormaKategoriyalari } from "@/lib/services/xodimKategoriya";
 import { sotuvchilarRoyxati, sotuvchiMajburiymi } from "@/lib/services/zakazSotuvchi";
 import { hasPermission } from "@/lib/permissions/tekshir";
+import { isManager } from "@/lib/auth/roles";
 import { crmYuqoriPanel } from "@/lib/crm/yuqoriPanel";
 import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { listAccounts } from "@/lib/queries/accounts";
@@ -67,6 +68,19 @@ export default async function CrmPage({
     });
     const filtr = filtrParsed.success ? filtrParsed.data : {};
 
+    /*
+     * DOSKA USTUNLARI ROLGA QARAB.
+     *
+     * Oddiy xodimda avvalgi to'rtta ustun qoladi — telefonda gorizontal
+     * svayp shunga moslangan va "Yo'qotildi" kundalik ishda shovqin.
+     * DIREKTOR/ADMINISTRATOR esa beshinchisini ham ko'radi: yo'qotilgan
+     * zakaz o'chib ketmasligi kerak, u yerda sabab va sotuvchi turadi.
+     * Ustun ro'yxati SERVERDA hisoblanadi — brauzerga faqat kerakli
+     * sahifalar jo'natiladi.
+     */
+    const boshqaruvchi = isManager(session.rol);
+    const ustunlar: Ustun[] = boshqaruvchi ? [...USTUNLAR] : [...ASOSIY_USTUNLAR];
+
     const [
       sahifalar,
       kategoriyalar,
@@ -83,7 +97,7 @@ export default async function CrmPage({
       // DOSKA — har ustunning BIRINCHI sahifasi (10 tadan). Qolgani
       // "Yana ko'rsatish" bilan server tomondan keladi: 500 ta zakazni
       // yuklab brauzerda yashirish YO'Q (mobil uchun ham yengil).
-      doskaSahifalari(businessId, filtr, bugun, [...ASOSIY_USTUNLAR]),
+      doskaSahifalari(businessId, filtr, bugun, ustunlar),
       // KATEGORIYA MANBAI BITTA: Kirim modulining kategoriyalari.
       prisma.category.findMany({
         where: { businessId, turi: "kirim", isActive: true },
@@ -151,6 +165,8 @@ export default async function CrmPage({
         />
 
         <CrmClient
+          ustunlar={ustunlar}
+          boshqaruvchi={boshqaruvchi}
           kategoriyalar={kategoriyalar}
           xodimlar={xodimlar}
           filtr={{

@@ -199,7 +199,12 @@ export const DELETE = withTenant<{ params: { id: string } }>(async (request, { p
   }
 
   // Soft delete — belgilanadi (undo/savat uchun). Kunlikdagi ulangan tushum ham chiqadi.
-  await prisma.transaction.update({ where: { id: params.id }, data: { deletedAt: new Date() } });
+  // `deletedBy` — "kim o'chirdi" savoliga yozuvning O'ZIDA javob: savat
+  // ekranida har qator uchun audit jurnaliga borish kerak bo'lmasin.
+  await prisma.transaction.update({
+    where: { id: params.id },
+    data: { deletedAt: new Date(), deletedBy: user.userId },
+  });
   await kunlikSinxron({ ...existing, deletedAt: new Date() }, null);
   dashboardYangilandi(existing.businessId);
   return NextResponse.json({ ok: true });

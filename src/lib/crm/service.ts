@@ -7,6 +7,8 @@ import { kirimgaKochirish } from "@/lib/crm/kirim";
 // Aylanma import (yakunlash.ts ham shu fayldan `pipelineBosqichlari` ni oladi)
 // xavfsiz: ikkala tomon ham faqat CHAQIRUV vaqtida murojaat qiladi.
 import { zakazniYakunlash } from "@/lib/crm/yakunlash";
+// Aylanma import YO'Q: `qaytarish.ts` bu fayldan hech narsa olmaydi.
+import { zakazMoliyasiniQaytarish } from "@/lib/crm/qaytarish";
 import {
   tolovHolati,
   yopiqHolat,
@@ -423,12 +425,31 @@ export async function doskaSahifalari(
  * YUTILDI bu yerda EMAS: u moliyaviy yakun (kirim + qarzdorlik) va
  * `lib/crm/yakunlash.ts` da atomik bajariladi. Shu funksiya YUTILDI
  * so'ralsa ataylab rad etadi — pul yozadigan yo'l bitta bo'lsin.
+ *
+ * ═══ YUTILDI DAN QAYTARISH (direktor) ═══
+ * Moliyaga o'tgan zakaz ilgari umuman qaytarilmasdi. Endi qaytariladi,
+ * lekin FAQAT boshqaruvchiga va faqat moliya bilan BIRGA:
+ * `lib/crm/qaytarish.ts` kirimni yumshoq o'chiradi va qarzni bekor qiladi,
+ * hammasi bitta tranzaksiyada. Oddiy xodimga eski xato saqlanadi — u
+ * yutilgan zakazni orqaga sura olmaydi.
+ *
+ * ═══ YO'QOTISH SABABI ═══
+ * YOQOTILDI ga o'tishda `yoqotishSababi` yoziladi, boshqa holatga
+ * qaytarilganda esa TOZALANADI: yashab qolgan sabab zakaz ustida yolg'on
+ * bo'lib osilib qolardi.
  */
 export async function holatniOzgartirish(params: {
   businessId: string;
   dealId: string;
   holat: Exclude<ZakazHolat, "YUTILDI">;
   userId: string;
+  /** YOQOTILDI ga o'tishda — "nega qo'ldan ketdi". */
+  yoqotishSababi?: string | null;
+  /**
+   * Amalni bajaruvchi OWNER/ADMIN mi. Faqat shu bayroq moliyaga o'tgan
+   * YUTILDI ni qaytarishga yo'l ochadi (route `isManager` dan uzatadi).
+   */
+  boshqaruvchi?: boolean;
 }) {
   const deal = await prisma.deal.findFirst({
     where: { id: params.dealId, businessId: params.businessId, deletedAt: null },
@@ -436,15 +457,29 @@ export async function holatniOzgartirish(params: {
   });
   if (!deal) throw new ForbiddenError("Zakaz topilmadi");
 
-  // YUTILGAN zakaz ORQAGA qaytmaydi: kirim/qarz allaqachon yozilgan bo'lsa
-  // uni "jarayonda" ga surish moliyani CRM bilan zid holatga tushirardi.
+  const bosqichlar = await pipelineBosqichlari(params.businessId);
+
+  // YUTILGAN VA MOLIYAGA O'TGAN ZAKAZ. Oddiy xodim uchun avvalgidek yopiq:
+  // kirim/qarz yozilgan zakazni "jarayonda" ga surish moliyani CRM bilan
+  // zid holatga tushirardi. Direktor esa moliyani ham qaytaradi.
   if (deal.holat === "YUTILDI" && (deal.transactionId || deal.debtId)) {
-    throw new BadRequestError(
-      "Yutilgan va moliyaga o'tgan zakaz holati o'zgartirilmaydi — avval kirim/qarz yozuvini tuzating"
-    );
+    if (!params.boshqaruvchi) {
+      throw new BadRequestError(
+        "Yutilgan va moliyaga o'tgan zakaz holatini faqat direktor qaytara oladi " +
+          "(kirim o'chiriladi va qarz bekor qilinadi)"
+      );
+    }
+    await zakazMoliyasiniQaytarish({
+      businessId: params.businessId,
+      dealId: deal.id,
+      userId: params.userId,
+      yangiHolat: params.holat,
+      stageId: bosqichlar[params.holat],
+      yoqotishSababi: params.yoqotishSababi,
+    });
+    return prisma.deal.findUniqueOrThrow({ where: { id: deal.id } });
   }
 
-  const bosqichlar = await pipelineBosqichlari(params.businessId);
   const updated = await prisma.deal.update({
     where: { id: deal.id },
     data: {
@@ -453,21 +488,68 @@ export async function holatniOzgartirish(params: {
       yopilganAt: yopiqHolat(params.holat) ? new Date() : null,
       // Doska ustunidagi tartib shu vaqtdan (eng yangi o'tish — eng tepada).
       holatAt: new Date(),
+      yoqotishSababi:
+        params.holat === "YOQOTILDI" ? params.yoqotishSababi?.trim() || null : null,
     },
   });
 
+  const sabab =
+    params.holat === "YOQOTILDI" && updated.yoqotishSababi
+      ? ` — sabab: ${updated.yoqotishSababi}`
+      : "";
   await prisma.activity.create({
     data: {
       businessId: params.businessId,
       dealId: deal.id,
       contactId: deal.contactId,
       turi: "tizim",
-      matn: `Holat: ${params.holat}`,
+      matn: `Holat: ${params.holat}${sabab}`,
       userId: params.userId,
     },
   });
 
   return updated;
+}
+
+/**
+ * ZAKAZNI O'CHIRISH — YUMSHOQ (soft-delete), faqat boshqaruvchi.
+ *
+ * Yozuv bazadan yo'qolmaydi: `deletedAt` + `deletedBy` qo'yiladi, shuning
+ * uchun keyinchalik tiklash mumkin va audit izi uzilmaydi (loyihaning
+ * `Transaction` uchun mavjud qoidasi bilan bir xil).
+ *
+ * MOLIYAGA O'TGAN zakaz o'chirilmaydi: kirim kassada, qarz esa
+ * qarzdorlikda turibdi — zakaz jimgina yo'qolsa ular egasiz qolardi.
+ * Direktor avval zakazni "Yutildi"dan qaytaradi (moliya ham qaytadi),
+ * keyin o'chiradi. Shu tarzda ikkita mustaqil amal ketma-ket bajariladi
+ * va har biri auditda alohida ko'rinadi.
+ */
+export async function zakazniOchirish(params: {
+  businessId: string;
+  dealId: string;
+  userId: string;
+}) {
+  const deal = await prisma.deal.findFirst({
+    where: { id: params.dealId, businessId: params.businessId, deletedAt: null },
+    select: { id: true, nomi: true, summa: true, holat: true, transactionId: true, debtId: true },
+  });
+  if (!deal) throw new ForbiddenError("Zakaz topilmadi");
+  if (deal.transactionId || deal.debtId) {
+    throw new BadRequestError(
+      "Moliyaga o'tgan zakaz o'chirilmaydi — avval uni 'Yutildi' holatidan qaytaring " +
+        "(kirim o'chadi, qarz bekor bo'ladi), keyin o'chiring"
+    );
+  }
+
+  // `deletedAt: null` sharti — ikki marta bosilganda ikkinchi so'rov
+  // hech narsani o'zgartirmaydi (va audit ikki marta yozilmaydi).
+  const upd = await prisma.deal.updateMany({
+    where: { id: deal.id, businessId: params.businessId, deletedAt: null },
+    data: { deletedAt: new Date(), deletedBy: params.userId },
+  });
+  if (upd.count !== 1) throw new BadRequestError("Zakaz allaqachon o'chirilgan");
+
+  return deal;
 }
 
 /**
@@ -675,6 +757,75 @@ async function kontaktTop(params: YangiBuyurtma): Promise<string | null> {
     },
   });
   return contact.id;
+}
+
+/**
+ * ZAKAZ MIJOZINI ALMASHTIRISH (direktor tuzatishi).
+ *
+ * NEGA KERAK: zakaz shoshib kiritilganda mijoz ismi/telefoni xato tushadi
+ * yoki umuman qoldirib ketiladi. Ilgari buni tuzatishning yo'li yo'q edi —
+ * `kontaktIsm`/`kontaktTel` PATCH sxemasida bor edi, lekin route ularni
+ * JIMGINA e'tiborsiz qoldirardi.
+ *
+ * QOIDA — `kontaktTop` bilan bir xil: telefon bo'yicha mavjud mijoz qayta
+ * ishlatiladi (dublikat kartochka yaratilmaydi), topilmasa yangisi ochiladi.
+ * Bo'sh ism — mijozni UZISH (zakaz mijozsiz qoladi); mijoz kartochkasining
+ * o'zi O'CHIRILMAYDI, chunki unga boshqa zakazlar ham bog'langan bo'lishi
+ * mumkin.
+ */
+export async function zakazMijoziniOzgartirish(params: {
+  businessId: string;
+  dealId: string;
+  userId: string;
+  kontaktIsm?: string | null;
+  kontaktTel?: string | null;
+}) {
+  const deal = await prisma.deal.findFirst({
+    where: { id: params.dealId, businessId: params.businessId, deletedAt: null },
+    select: { id: true, contactId: true, contact: { select: { ism: true, tel: true } } },
+  });
+  if (!deal) throw new ForbiddenError("Zakaz topilmadi");
+
+  // Berilmagan maydon o'zgarmaydi — mavjud qiymat asos qilib olinadi.
+  const ism = (params.kontaktIsm !== undefined ? params.kontaktIsm : deal.contact?.ism)?.trim() || null;
+  const tel = (params.kontaktTel !== undefined ? params.kontaktTel : deal.contact?.tel)?.trim() || null;
+
+  if (!ism) {
+    if (!deal.contactId) return deal;
+    await prisma.deal.update({ where: { id: deal.id }, data: { contact: { disconnect: true } } });
+    return deal;
+  }
+
+  const mavjud = tel
+    ? await prisma.contact.findFirst({
+        where: { businessId: params.businessId, tel, deletedAt: null },
+        select: { id: true },
+      })
+    : null;
+
+  let contactId: string;
+  if (mavjud) {
+    contactId = mavjud.id;
+    // Topilgan kartochkaning ISMI yangilanadi: telefon bir xil bo'lsa bu
+    // ayni odam, ismi esa tuzatilayotgan bo'lishi mumkin.
+    await prisma.contact.update({ where: { id: mavjud.id }, data: { ism } });
+  } else if (deal.contactId && !tel) {
+    // Telefonsiz tuzatish — mavjud kartochkaning o'zini yangilash yetarli.
+    contactId = deal.contactId;
+    await prisma.contact.update({ where: { id: deal.contactId }, data: { ism, tel } });
+  } else {
+    const yangi = await prisma.contact.create({
+      data: { businessId: params.businessId, ism, tel, createdBy: params.userId },
+      select: { id: true },
+    });
+    contactId = yangi.id;
+  }
+
+  await prisma.deal.update({
+    where: { id: deal.id },
+    data: { contact: { connect: { id: contactId } } },
+  });
+  return deal;
 }
 
 /**

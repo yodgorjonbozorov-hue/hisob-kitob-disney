@@ -19,27 +19,19 @@ import { ijroKategoriyalari } from "./ZakazJamoasi";
 import { ZakazBahoBlok } from "./ZakazBaho";
 import { ZakazSotuvchisiBlok } from "./ZakazSotuvchisi";
 import type { ZakazBahoDTO } from "@/lib/services/zakazBaho";
+import { ZakazAmalPaneli } from "./ZakazAmalPaneli";
+import { ZakazDirektorTahriri } from "./ZakazDirektorTahriri";
 import { ZakazMoliya } from "./ZakazMoliya";
 import { ZakazTarix, type ActivityDTO } from "./ZakazTarix";
 import type {
   BuyurtmaDTO,
   KategoriyaDTO,
   SotuvchiDTO,
+  XodimDTO,
   XodimKategoriyaDTO,
   ZakazSotuvchiDTO,
   ZakazXodimDTO,
 } from "./turlar";
-
-/**
- * TEZ AMALLAR (10-talab) — ustunga qarab. Har ustunda faqat MA'NOLI
- * o'tishlar ko'rinadi, shunda sotuvchi noto'g'ri tugmani bosolmaydi.
- */
-function tezAmallar(ustun: Ustun): { ustun: Ustun; matn: string }[] {
-  if (ustun === "KUTILAYOTGAN") return [{ ustun: "BUGUNGI", matn: "Bugungi zakazga o'tkazish" }];
-  if (ustun === "BUGUNGI") return [{ ustun: "JARAYONDA", matn: "Jarayonga o'tkazish" }];
-  if (ustun === "JARAYONDA") return [{ ustun: "YUTILDI", matn: "Yutildi" }];
-  return [];
-}
 
 /**
  * ZAKAZ TAFSILOTI: tez amallar (sudrab tashlashga mobil muqobil),
@@ -49,7 +41,9 @@ export function BuyurtmaSheet({
   b,
   ustun,
   bugun,
+  boshqaruvchi,
   kategoriyalar,
+  xodimlar,
   xodimKategoriyalari,
   sotuvchilar,
   jamoaHuquqi,
@@ -57,14 +51,19 @@ export function BuyurtmaSheet({
   meId,
   onUstunga,
   onYoqotildi,
+  onOchirish,
   onTahrirlandi,
   onClose,
 }: {
   b: BuyurtmaDTO;
   ustun: Ustun;
   bugun: string;
+  /** OWNER/ADMIN mi — arxivdan qaytarish va o'chirish tugmalari uchun. */
+  boshqaruvchi: boolean;
   /** Kirim modulining kategoriyalari — tahrirlash uchun (CRM alohida ro'yxat yuritmaydi). */
   kategoriyalar: KategoriyaDTO[];
+  /** Shu biznesning faol xodimlari — mas'ulni almashtirish uchun. */
+  xodimlar: XodimDTO[];
   /** Xodim kategoriyalari (Diktor/Dekorator/...) — bajaruvchi tahriri uchun. */
   xodimKategoriyalari: XodimKategoriyaDTO[];
   /** Sotuvchilar ro'yxati — sotuvchini almashtirish uchun. */
@@ -76,6 +75,8 @@ export function BuyurtmaSheet({
   meId: string;
   onUstunga: (u: Ustun) => void;
   onYoqotildi: () => void;
+  /** Zakazni o'chirish (tasdiq oynasi doskada ochiladi) — faqat direktor. */
+  onOchirish: () => void;
   onTahrirlandi: (yangi: {
     categoryId: string;
     kategoriya: string;
@@ -161,30 +162,30 @@ export function BuyurtmaSheet({
           {b.izoh && <p className="text-xs text-muted whitespace-pre-line pt-1">{b.izoh}</p>}
         </div>
 
-        {/* TEZ AMALLAR — mobilda sudrab tashlashning muqobili. */}
-        <div className="flex gap-2 flex-wrap">
-          {tezAmallar(ustun).map((a) => (
-            <button
-              key={a.ustun}
-              onClick={() => onUstunga(a.ustun)}
-              className="flex-1 min-w-[8rem] rounded-lg bg-brand text-white text-sm font-medium py-2"
-            >
-              {a.matn}
-            </button>
-          ))}
-          {ustun !== "YUTILDI" && ustun !== "YOQOTILDI" && (
-            <button
-              onClick={onYoqotildi}
-              className="flex-1 min-w-[8rem] rounded-lg border border-line text-sm font-medium py-2 text-expense"
-            >
-              Yo&apos;qotildi
-            </button>
-          )}
-        </div>
+        <ZakazAmalPaneli
+          b={b}
+          ustun={ustun}
+          boshqaruvchi={boshqaruvchi}
+          onUstunga={onUstunga}
+          onYoqotildi={onYoqotildi}
+          onOchirish={onOchirish}
+        />
 
         {/* Kategoriya/narx/to'lov — faqat moliyaga o'tmagan zakazda (server ham qulflaydi). */}
         {!moliyaYozilgan && (
           <BuyurtmaTahrir b={b} kategoriyalar={kategoriyalar} onSaqlandi={onTahrirlandi} />
+        )}
+
+        {/* Pulga tegmaydigan tuzatishlar — moliyaga o'tgan zakazda ham ochiq. */}
+        {boshqaruvchi && (
+          <ZakazDirektorTahriri
+            b={b}
+            xodimlar={xodimlar}
+            onSaqlandi={() => {
+              void yuklash();
+              router.refresh();
+            }}
+          />
         )}
 
         {/* SOTUVCHI (10-talab) — bajaruvchilardan alohida, birinchi o'rinda. */}

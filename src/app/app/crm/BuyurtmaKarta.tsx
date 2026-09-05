@@ -83,7 +83,11 @@ export function BuyurtmaKarta({
 
       {/* SOTUVCHI: bir qatorlik, ko'p joy egallamaydi (9-talab).
           Sotuvchi biriktirilmagan bo'lsa (kategoriyasiz eski bizneslar)
-          mas'ul xodim ko'rsatiladi — qator bo'sh qolmasin. */}
+          mas'ul xodim ko'rsatiladi — qator bo'sh qolmasin.
+
+          ARXIV USTUNIDA (Yo'qotildi) ikkalasi ham ko'rsatiladi: direktor
+          "kim sotdi, kim mas'ul edi" savoliga kartochkaning o'zidan javob
+          olsin, zakazni ochmasdan. */}
       {b.sotuvchi ? (
         <p className="text-2xs text-muted truncate">
           <span className="text-faint">Sotuvchi:</span>{" "}
@@ -91,6 +95,24 @@ export function BuyurtmaKarta({
         </p>
       ) : (
         b.masulIsm && <p className="text-2xs text-faint truncate">Mas&apos;ul: {b.masulIsm}</p>
+      )}
+      {ustun === "YOQOTILDI" && b.sotuvchi && b.masulIsm && (
+        <p className="text-2xs text-faint truncate">Mas&apos;ul: {b.masulIsm}</p>
+      )}
+
+      {/* YO'QOTILGAN ZAKAZ: sana va sabab. Sana `yopilganAt` dan —
+          zakaz aynan qachon qo'ldan ketgani (zakaz sanasi emas). */}
+      {ustun === "YOQOTILDI" && (
+        <div className="rounded-lg bg-surface-2 px-2 py-1.5 mt-1 space-y-0.5">
+          {b.yopilganAt && (
+            <p className="text-2xs text-faint tnum">
+              Yo&apos;qotilgan: {formatDateUZ(new Date(b.yopilganAt))}
+            </p>
+          )}
+          <p className="text-2xs text-muted line-clamp-2">
+            {b.yoqotishSababi ?? "Sabab yozilmagan"}
+          </p>
+        </div>
       )}
 
       <div className="flex items-center gap-1.5 flex-wrap pt-1">

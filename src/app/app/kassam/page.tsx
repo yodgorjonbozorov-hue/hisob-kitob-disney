@@ -21,10 +21,17 @@ import { KassamClient } from "./KassamClient";
  * Tasdiq kutayotganlar — faqat men yuborgan yoki menga yuborilganlar
  * (server tomonda kesiladi, `listKutilayotganTransferlar`).
  *
+ * ═══ TOPSHIRISH IKKI BOSQICHLI ═══
+ * Topshirish pulni kassadan darhol yechmaydi — u direktor qabul qilgunga
+ * qadar "Qabul kutilmoqda" holatida turadi va pul xodimning kassasida
+ * qoladi. Shuning uchun "Kassangizdagi pul" ledger QOLDIG'I; tasdiq
+ * kutayotgan summa alohida ko'rsatiladi, `mavjud` esa faqat yangi
+ * topshirish chegarasi sifatida ishlatiladi (ikki marta topshirilmasin).
+ *
  * ═══ JORIY SMENA ═══
- * Kirim/chiqim/sof — oxirgi topshirishdan beri. Kassa topshirilgan zahoti
- * ular 0 dan boshlanadi, "Kassangizdagi pul" esa MAVJUD pul (tasdiq
- * kutayotgan topshirish ayrilgan). Tarix pastdagi lentada to'liq qoladi.
+ * Kirim/chiqim/sof — oxirgi topshirishdan beri: topshirish yaratilgan
+ * zahoti smena yopiladi va ular 0 dan boshlanadi. Tarix pastdagi lentada
+ * to'liq qoladi.
  */
 export default async function KassamPage() {
   const { session, tenantId } = await requireTenantPage();
@@ -104,6 +111,7 @@ export default async function KassamPage() {
 
         <KassamClient
           accountId={meniki.id}
+          qoldiq={detal.kassa.qoldiq}
           mavjud={detal.mavjud}
           kutilayotganChiqim={detal.kutilayotganChiqim}
           smenaKirim={detal.smenaKirim}

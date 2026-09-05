@@ -44,7 +44,10 @@ export function XodimKassaKartasi({
     );
   }
 
-  const topshirolmaydi = kassa.kassada <= 0 || kassa.nishonlar.length === 0 || !!kassa.ochiqTopshirish;
+  // Topshirish chegarasi — BAND BO'LMAGAN qism (`mavjud`), ko'rsatiladigan
+  // raqam esa kassadagi haqiqiy pul. Ikkisi ajratilgani uchun bir summani
+  // ikki marta topshirib bo'lmaydi, lekin kassa ham sun'iy nolga tushmaydi.
+  const topshirolmaydi = kassa.mavjud <= 0 || kassa.nishonlar.length === 0 || !!kassa.ochiqTopshirish;
 
   return (
     <section className="bg-surface rounded-2xl border border-line p-4 flex flex-col gap-3">
@@ -75,9 +78,11 @@ export function XodimKassaKartasi({
       </dl>
 
       {kassa.ochiqTopshirish && (
-        <p className="text-2xs text-debt">
-          Topshirildi: <span className="tnum font-medium">{formatSom(kassa.ochiqTopshirish.summa)}</span>{" "}
-          soʻm · {kassa.ochiqTopshirish.kimga} tasdiqlashini kutmoqda.
+        <p className="text-2xs text-debt-fg bg-debt-soft rounded-lg px-2.5 py-1.5">
+          ⏳ Qabul kutilmoqda:{" "}
+          <span className="tnum font-medium">{formatSom(kassa.ochiqTopshirish.summa)}</span> soʻm{" "}
+          {kassa.ochiqTopshirish.kimga}ga topshirildi. Qabul qilinmaguncha pul kassangizda
+          turaveradi.
         </p>
       )}
 
@@ -101,7 +106,7 @@ export function XodimKassaKartasi({
       {modal && (
         <SmenaTopshirishModal
           sarlavha="Kassa topshirish"
-          qoldiq={kassa.kassada}
+          qoldiq={kassa.mavjud}
           nishonlar={kassa.nishonlar}
           onClose={() => setModal(false)}
           onDone={() => {

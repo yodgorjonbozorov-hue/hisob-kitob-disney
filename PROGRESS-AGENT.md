@@ -1,3 +1,42 @@
+# Direktor huquqlari va kassa topshirish oqimi (2026-09-05)
+
+Ikkita alohida muammo bitta ishda yopildi: xodim kassani topshirgan zahoti
+uning kassasi noldan chiqib ketardi, va yo'qotilgan zakaz direktorga umuman
+ko'rinmasdi.
+
+## Uchta invariant (ular buzilsa modul ishonchsiz bo'ladi)
+
+1. TOPSHIRISH ≠ QABUL QILISH. `turi = "smena"` o'tkazma endi HAR DOIM
+   tasdiq kutadi — egasiz (umumiy) asosiy kassaga topshirilganda ham.
+   Ilgari shart faqat "qabul qiluvchi kassa boshqa odamniki" edi, shuning
+   uchun direktor kassasiga topshirish darhol yakunlanardi.
+2. IKKI RAQAM ARALASHTIRILMAYDI. `qoldiq` — kassadagi haqiqiy pul (ekranda
+   ko'rinadi va topshirgandan keyin ham o'zgarmaydi); `mavjud` =
+   qoldiq − kutilayotgan chiqim — faqat YANGI topshirish chegarasi. Bir
+   summani ikki marta topshirish shu ayirma bilan to'siladi.
+3. "YUTILDI"DAN QAYTARISH MOLIYA BILAN BIRGA. Direktor zakazni qaytarsa
+   `lib/crm/qaytarish.ts` bitta tranzaksiyada kirimni yumshoq o'chiradi,
+   aralash to'lov qatorlarining bog'lanishini uzadi va qarzni bekor qiladi.
+   Yarim tuzatilgan holat (kirim o'chdi, qarz qoldi) imkonsiz.
+
+## Ish paytida topilgan va tuzatilgan xatolar
+
+- `Deal` PATCH sxemasida `kontaktIsm`/`kontaktTel` bor edi, lekin route
+  ularni JIMGINA e'tiborsiz qoldirardi — xato kiritilgan mijozni tuzatishning
+  yo'li yo'q edi (`zakazMijoziniOzgartirish` qo'shildi, telefon bo'yicha
+  mavjud kartochka qayta ishlatiladi).
+- `Transaction` yumshoq o'chirilganda "kim o'chirdi" faqat audit jurnalida
+  qolardi; savat ekrani har qator uchun jurnalga borishi kerak edi
+  (`deletedBy` ustuni).
+- Yo'qotilgan zakazda sabab saqlanmasdi, ya'ni arxivning ma'nosi yo'q edi.
+
+## Testlar
+
+`npm run test:direktor-oqimi` (14 ta: ikki bosqichli topshirish, rad etish,
+yo'qotish sababi, moliyaviy qaytarish, qarz bekori, yumshoq o'chirish,
+mijozni almashtirish). `tests/crm-xodim-kassa.test.ts` dagi 7-test yangi
+xulqqa moslandi (topshirilgan pul qabulgacha kassada qoladi).
+
 # Xodimlar KPI / ball / oylik moduli (2026-09-01)
 
 Rahbar xodim kartochkasini bosadi va "bu xodimga hozir qancha oylik chiqdi"

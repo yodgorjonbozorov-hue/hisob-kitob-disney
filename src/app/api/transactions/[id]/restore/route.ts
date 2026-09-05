@@ -21,7 +21,10 @@ export const POST = withTenant<{ params: { id: string } }>(async (request, { par
 
   const restored = await prisma.transaction.update({
     where: { id: params.id },
-    data: { deletedAt: null },
+    // `deletedBy` ham tozalanadi: yozuv endi o'chirilgan emas, "kim
+    // o'chirgani" osilib qolsa savat ekrani yolg'on ko'rsatardi. Tarix
+    // yo'qolmaydi — u audit jurnalida (o'chirish ham, tiklash ham).
+    data: { deletedAt: null, deletedBy: null },
     include: {
       category: true,
       user: { select: { id: true, ism: true } },

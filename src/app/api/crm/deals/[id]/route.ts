@@ -1,18 +1,22 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withTenant } from "@/lib/auth/tenant";
-import { ForbiddenError, BadRequestError } from "@/lib/auth/guard";
+import { ForbiddenError, BadRequestError, requireManager } from "@/lib/auth/guard";
+import { isManager } from "@/lib/auth/roles";
 import { resolveActiveBusinessId } from "@/lib/business";
 import {
   moveDeal,
   biznesXodimi,
   holatniOzgartirish,
   bugungaKochirish,
+  zakazMijoziniOzgartirish,
+  zakazniOchirish,
   zakazTolovlariniAlmashtirish,
 } from "@/lib/crm/service";
 import { zakazniYakunlash } from "@/lib/crm/yakunlash";
 import { buyurtmaPatchSchema } from "@/lib/validation/crm";
 import { dashboardYangilandi } from "@/lib/cache";
+import { logAudit } from "@/lib/services/audit";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import {
   jamoaOzgartiraOladimi,
@@ -212,6 +216,20 @@ export const PATCH = withTenant<{ params: { id: string } }>(
       }
     }
 
+    // MIJOZNI ALMASHTIRISH/TUZATISH. Sxemada `kontaktIsm`/`kontaktTel`
+    // ilgari ham bor edi, lekin route ularni JIMGINA e'tiborsiz qoldirardi —
+    // xato kiritilgan mijozni tuzatib bo'lmasdi. Telefon bo'yicha mavjud
+    // kartochka qayta ishlatiladi (`lib/crm/service.ts`).
+    if (data.kontaktIsm !== undefined || data.kontaktTel !== undefined) {
+      await zakazMijoziniOzgartirish({
+        businessId,
+        dealId: params.id,
+        userId: user.userId,
+        kontaktIsm: data.kontaktIsm,
+        kontaktTel: data.kontaktTel,
+      });
+    }
+
     // "Bugungi zakazga o'tkazish" — sanani bugunga suradi (holat o'zgarmaydi).
     if (data.bugungaKochir) {
       await bugungaKochirish({ businessId, dealId: params.id, userId: user.userId });
@@ -225,11 +243,16 @@ export const PATCH = withTenant<{ params: { id: string } }>(
         // (`lib/crm/yakunlash.ts`). Takroriy bosish yangi kirim yaratmaydi.
         await zakazniYakunlash({ businessId, dealId: params.id, userId: user.userId });
       } else {
+        // YO'QOTISH SABABI va DIREKTOR HUQUQI xizmat qatlamiga uzatiladi:
+        // moliyaga o'tgan "Yutildi" ni faqat boshqaruvchi qaytara oladi
+        // (kirim o'chadi, qarz bekor bo'ladi — `lib/crm/qaytarish.ts`).
         await holatniOzgartirish({
           businessId,
           dealId: params.id,
           holat: data.holat,
           userId: user.userId,
+          yoqotishSababi: data.yoqotishSababi,
+          boshqaruvchi: isManager(user.rol),
         });
       }
     }
@@ -260,6 +283,41 @@ export const PATCH = withTenant<{ params: { id: string } }>(
       },
     });
     return NextResponse.json(deal);
+  },
+  { module: "CRM" }
+);
+
+/**
+ * ZAKAZNI O'CHIRISH — YUMSHOQ, FAQAT DIREKTOR/ADMINISTRATOR.
+ *
+ * HUQUQ SERVERDA: `requireManager` — frontenddagi tugmani yashirish himoya
+ * emas, oddiy xodim bu yo'lni to'g'ridan-to'g'ri chaqira olmaydi.
+ *
+ * Yozuv bazadan yo'qolmaydi (`deletedAt` + `deletedBy`), audit esa avtomatik
+ * yoziladi (lib/db/tenantDb.ts extension'i `updateMany` ni ushlaydi). Bu
+ * yerdagi qo'shimcha `logAudit` — BIZNES hodisasi nomi bilan: jurnalda
+ * "zakaz o'chirildi" qatori xom ustun o'zgarishidan ajralib tursin.
+ */
+export const DELETE = withTenant<{ params: { id: string } }>(
+  async (_request, { params }, { session: user }) => {
+    requireManager(user.rol);
+
+    const businessId = await resolveActiveBusinessId(user);
+    if (!businessId) return NextResponse.json({ error: "Biznes topilmadi" }, { status: 404 });
+
+    const deal = await zakazniOchirish({ businessId, dealId: params.id, userId: user.userId });
+
+    await logAudit({
+      businessId,
+      action: "delete",
+      entity: "deal",
+      entityId: deal.id,
+      before: { nomi: deal.nomi, summa: deal.summa, holat: deal.holat },
+      after: { deletedBy: user.userId },
+    });
+
+    dashboardYangilandi(businessId);
+    return NextResponse.json({ ok: true });
   },
   { module: "CRM" }
 );

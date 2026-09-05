@@ -84,6 +84,7 @@
     "test:magazin": "node -r ts-node/register tests/magazin.test.ts",
     "test:magazin-postgres": "node scripts/pg-sinov.mjs tests/magazin-postgres.test.ts",
     "test:crm": "node -r ts-node/register tests/crm.test.ts",
+    "test:direktor-oqimi": "node -r ts-node/register tests/direktor-oqimi.test.ts",
     "test:crm-pipeline": "node -r ts-node/register tests/crm-pipeline.test.ts",
     "test:crm-tolovlar": "node -r ts-node/register tests/crm-tolovlar.test.ts",
     "test:crm-sotuvchi": "node -r ts-node/register tests/crm-sotuvchi.test.ts",

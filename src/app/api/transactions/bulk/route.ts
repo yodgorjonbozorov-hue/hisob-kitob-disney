@@ -27,7 +27,9 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
       deletedAt: null,
       ...(isManager(user.rol) ? {} : { userId: user.userId }),
     },
-    data: { deletedAt: new Date() },
+    // `deletedBy` — "kim o'chirdi" yozuvning o'zida (bitta o'chirish bilan
+    // bir xil qoida, `api/transactions/[id]`).
+    data: { deletedAt: new Date(), deletedBy: user.userId },
   });
 
   // Kunlik hisobotga ulangan tushumlar ham chiqariladi (ochiq kunlardan).

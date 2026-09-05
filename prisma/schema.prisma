@@ -591,6 +591,11 @@ model Transaction {
   createdAt       DateTime         @default(now())
   // Soft delete — o'chirilgan yozuv shu vaqt bilan belgilanadi (undo/savat uchun).
   deletedAt       DateTime?
+  /// KIM O'CHIRDI (User.id). Audit jurnalida ham bor, lekin yozuvning
+  /// O'ZIDA turishi "savat"ni ochganda qo'shimcha so'rovsiz javob beradi:
+  /// direktor o'chirganmi yoki yozuv egasi. FK ATAYLAB yo'q — foydalanuvchi
+  /// o'chirilsa ham iz qolsin (DealFeedback.userId bilan bir xil qoida).
+  deletedBy       String?
   /// Tasdiqdan o'tib yozilgan bo'lsa — o'sha so'rov (aks holda null).
   approvalRequest ApprovalRequest?
   /// HR: shu tranzaksiya oylik yoki avans to'lovi bo'lsa — o'sha yozuv.
@@ -1187,8 +1192,18 @@ model Deal {
   debtId        String?        @unique
   debt          Debt?          @relation("CrmBuyurtmaQarzi", fields: [debtId], references: [id], onDelete: SetNull)
   izoh          String?
+  /// YO'QOTISH SABABI — zakaz "Yo'qotildi" ga o'tkazilganda yoziladi.
+  /// `izoh` bilan ARALASHTIRILMAYDI: `izoh` — zakazning o'z tavsifi, bu esa
+  /// "nega qo'ldan ketdi" savolining javobi (direktor arxivining ma'nosi
+  /// aynan shunda). Boshqa holatga qaytarilganda TOZALANADI — aks holda
+  /// yashab qolgan sabab zakaz ustida yolg'on bo'lib osilib qolardi.
+  /// Yo'qotilgan SANA alohida ustun EMAS: u `yopilganAt` da (ikkinchi
+  /// haqiqat manbai bo'lmasin).
+  yoqotishSababi String?
   createdAt     DateTime       @default(now())
   deletedAt     DateTime?
+  /// KIM O'CHIRDI (User.id) — Transaction.deletedBy bilan bir xil qoida.
+  deletedBy     String?
   activities    Activity[]
   tasks         Task[]
   /// Zakazda qatnashgan xodimlar (kategoriya kesimida).

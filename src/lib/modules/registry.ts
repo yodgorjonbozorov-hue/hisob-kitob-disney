@@ -117,6 +117,19 @@ export const MODULLAR: ModulTarifi[] = [
         rollar: BOSHQARUVCHILAR,
         guruh: "asosiy",
       },
+      // KASSA TOPSHIRISHLAR — direktorning qabul qilish sahifasi.
+      // "Kassalar" dan ALOHIDA: u yerda pul QAYERDA turgani ko'rsatiladi,
+      // bu yerda esa HARAKAT talab qiladigan ro'yxat (xodim topshirdi —
+      // direktor qabul qiladi). Sahifa "kassa.jami" huquqini mustaqil
+      // tekshiradi; nav'dan yashirish himoya emas.
+      {
+        href: "/app/kassa-topshirish",
+        label: "Kassa topshirishlar",
+        icon: "cash",
+        tartib: 15,
+        rollar: BOSHQARUVCHILAR,
+        guruh: "asosiy",
+      },
       // QARZLAR — MOLIYA ichida, OMBOR emas. Qarz ombordan mustaqil moliyaviy
       // majburiyat: ombori yo'q biznes ham "Kirim → Qarz" yozadi va uni
       // ko'radigan joyi bo'lishi shart.
