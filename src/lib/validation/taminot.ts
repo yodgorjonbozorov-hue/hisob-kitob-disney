@@ -2,7 +2,7 @@ import { z } from "zod";
 import { BIRLIKLAR } from "@/lib/validation/inventory";
 
 /**
- * TA'MINOT ("Tovar keldi") — Ombor modulining asosiy yozuv amali.
+ * TA'MINOT ("Omborga ta'minot") — Ombor modulining asosiy yozuv amali.
  *
  * Eski xarid oqimi uch qadamli edi: qoralama → tasdiqlangan → qabul qilingan.
  * Bu REJA bilan ishlaydigan biznes uchun to'g'ri, lekin gul do'koni yoki
@@ -65,13 +65,37 @@ export const createTaminotSchema = z.object({
 
 export type CreateTaminotInput = z.infer<typeof createTaminotSchema>;
 
+/**
+ * TA'MINOTNI TAHRIRLASH (direktor huquqi).
+ *
+ * Berilgan maydongina o'zgaradi — berilmagani avvalgidek qoladi. `satrlar`
+ * berilsa BUTUNLAY almashtiriladi (qisman yamash emas): ombor to'g'rilashi
+ * eski va yangi ro'yxat FARQIDAN hisoblanadi, shuning uchun server yangi
+ * ro'yxatni to'liq ko'rishi shart.
+ */
+export const updateTaminotSchema = z
+  .object({
+    supplierId: z.string().min(1).optional(),
+    tolovUsuli: z.enum(TAMINOT_TOLOV_USULLARI).optional(),
+    accountId: z.string().min(1).optional().nullable(),
+    sana: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Sana YYYY-MM-DD ko'rinishida bo'lishi kerak")
+      .optional(),
+    izoh: z.string().trim().max(500).optional().nullable(),
+    satrlar: z.array(satrSchema).min(1, "Kamida bitta mahsulot qoldirilishi kerak").max(100).optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, "O'zgartirish uchun hech narsa berilmadi");
+
+export type UpdateTaminotInput = z.infer<typeof updateTaminotSchema>;
+
 /** Ta'minotni bekor qilish — sabab MAJBURIY (teskari yozuvlar auditda qoladi). */
 export const bekorTaminotSchema = z.object({
   sabab: z.string().trim().min(3, "Bekor qilish sababini yozing").max(300),
 });
 
 /**
- * "Tovar keldi" oqimi ichidan yangi mahsulot yaratish — minimal forma.
+ * "Omborga ta'minot" oqimi ichidan yangi mahsulot yaratish — minimal forma.
  * Ombor sahifasidagi "Yangi mahsulot" ham shu sxemani ishlatadi.
  */
 export const omborMahsulotSchema = z.object({

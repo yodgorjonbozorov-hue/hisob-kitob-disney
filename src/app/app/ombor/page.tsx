@@ -21,10 +21,10 @@ import { OMBOR_TABLAR, type OmborTab } from "./tablar";
  * OMBOR — mahsulot, ta'minot va inventarizatsiya BITTA modulda.
  *
  * Ilgari bu uchta joyga bo'lingan edi: Ombor (jadval), Xarid (buyurtma) va
- * Ta'minotchilar (reyestr). Foydalanuvchi "tovar keldi" deyish uchun avval
+ * Ta'minotchilar (reyestr). Foydalanuvchi kelgan tovarni yozish uchun avval
  * qaysi bo'limga borishni bilishi kerak edi, keyin uch qadamli buyurtma
  * oqimini o'tishi kerak edi. Endi hammasi shu sahifada, asosiy amal esa
- * bitta tugma — "+ Tovar keldi".
+ * bitta tugma — "+ Omborga ta'minot".
  *
  * SERVER TOMONDA faqat KO'RINADIGAN sahifa yuklanadi: mahsulotlar
  * `listOmborMahsulotlar` bilan sahifalanadi (1000+ tovarda ham brauzerga

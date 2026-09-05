@@ -14,7 +14,7 @@ import Link from "next/link";
  * TA'MINOTCHILAR — kimdan tovar olamiz va ular bilan hisob-kitob.
  *
  * Ilgari bu sahifa XARID modulining yon panel punkti edi. Endi u OMBOR
- * ostida: "Tovar keldi" oqimi ta'minotchini talab qiladi, ya'ni reyestr
+ * ostida: "Omborga ta'minot" oqimi ta'minotchini talab qiladi, ya'ni reyestr
  * omborning bir qismi. Modul darvozasi ham shu sababdan OMBOR — rejali
  * xarid moduli yoqilmagan biznes ham ta'minotchisini yuritishi kerak.
  * Ma'lumot AYNI BIR jadvalda (`Supplier`), ikkinchi reyestr yaratilmadi.

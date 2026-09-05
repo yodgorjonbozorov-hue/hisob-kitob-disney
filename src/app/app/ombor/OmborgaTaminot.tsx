@@ -5,19 +5,19 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { QadamTaminotchi } from "./QadamTaminotchi";
-import { QadamTolov } from "./QadamTolov";
+import { QadamTolov, kassaTanlashKerak } from "./QadamTolov";
 import { QadamMahsulotlar, jamiSumma, type TaminotSatr } from "./QadamMahsulotlar";
 import { QadamYakun } from "./QadamYakun";
 import { YangiMahsulot } from "./YangiMahsulot";
+import { QADAM_NOMI, Progress, yangiKalit } from "./taminotOqimi";
 import type { TaminotchiQisqa } from "./YangiTaminotchi";
 import type { TaminotTolovUsuli } from "@/lib/validation/taminot";
+import { todayDateOnlyString } from "@/lib/date";
 import type { AccountDTO } from "@/lib/queries/accounts";
 import type { OmborKategoriyaDTO } from "@/lib/queries/ombor";
 
-const QADAM_NOMI = ["Kimdan?", "Qanday to'landi?", "Nima keldi?", "Saqlash"];
-
 /**
- * "+ TOVAR KELDI" — Omborning eng muhim oqimi.
+ * "+ OMBORGA TA'MINOT" — Omborning eng muhim oqimi.
  *
  * To'rtta qadam, har birida BITTA savol. Ilgari bu uch qadamli xarid
  * buyurtmasi edi (qoralama yaratish → tasdiqlash → qabul qilish) va
@@ -31,7 +31,7 @@ const QADAM_NOMI = ["Kimdan?", "Qanday to'landi?", "Nima keldi?", "Saqlash"];
  *      himoyasi yetarli emas: brauzer so'rovni qayta yuborsa yoki
  *      foydalanuvchi ikki qurilmadan bossa, ombor ikki marta oshardi.
  */
-export function TovarKeldi({
+export function OmborgaTaminot({
   taminotchilar: boshlangichTaminotchilar,
   kassalar,
   kategoriyalar,
@@ -51,6 +51,8 @@ export function TovarKeldi({
   const [usul, setUsul] = useState<TaminotTolovUsuli | null>(null);
   const [accountId, setAccountId] = useState<string | null>(null);
   const [satrlar, setSatrlar] = useState<TaminotSatr[]>([]);
+  const [sana, setSana] = useState(todayDateOnlyString());
+  const [izoh, setIzoh] = useState("");
   const [yangiMahsulotNomi, setYangiMahsulotNomi] = useState<string | null>(null);
   const [xato, setXato] = useState<string | null>(null);
   const [saqlanmoqda, setSaqlanmoqda] = useState(false);
@@ -64,20 +66,34 @@ export function TovarKeldi({
     [accountId, kassalar]
   );
 
+  /**
+   * KASSA MAJBURIY: bir nechta mos kassa bo'lsa qaysi biridan pul chiqqani
+   * ANIQ tanlanishi kerak — aks holda kassa qoldig'i kechqurun to'g'ri
+   * kelmaydi. Bu shart ikki joyda tekshiriladi (qadamdan o'tishda va
+   * saqlashda), chunki foydalanuvchi 4-qadamda to'lovni o'zgartirib
+   * qaytishi mumkin.
+   */
+  const kassaKerak = kassaTanlashKerak(usul, kassalar);
+  const kassaTayyor = !kassaKerak || Boolean(accountId);
+
   /** Shu qadamdan keyingisiga o'tish mumkinmi. */
   const davomEtishMumkin =
     qadam === 0
       ? Boolean(supplier)
       : qadam === 1
-        ? Boolean(usul)
+        ? Boolean(usul) && kassaTayyor
         : qadam === 2
           ? satrlar.length > 0 &&
             satrlar.every((s) => Number(s.miqdor) > 0) &&
             jamiSumma(satrlar) > 0
-          : true;
+          : kassaTayyor;
 
   async function saqla() {
     if (!supplier || !usul || saqlanmoqda) return;
+    if (!kassaTayyor) {
+      setXato("Qaysi kassadan to'langanini tanlang");
+      return;
+    }
     setXato(null);
     setSaqlanmoqda(true);
     try {
@@ -89,6 +105,8 @@ export function TovarKeldi({
           supplierId: supplier.id,
           tolovUsuli: usul,
           accountId,
+          sana,
+          izoh: izoh.trim() || null,
           satrlar: satrlar.map((s) => ({
             productId: s.productId,
             miqdor: Number(s.miqdor.replace(/[^0-9]/g, "")),
@@ -117,7 +135,7 @@ export function TovarKeldi({
   }
 
   return (
-    <Modal open onClose={onClose} title={`Tovar keldi · ${QADAM_NOMI[qadam]}`} size="lg">
+    <Modal open onClose={onClose} title={`Omborga ta'minot · ${QADAM_NOMI[qadam]}`} size="lg">
       <div className="space-y-4">
         <Progress qadam={qadam} />
 
@@ -142,7 +160,9 @@ export function TovarKeldi({
             usul={usul}
             onUsul={(u) => {
               setUsul(u);
-              setQadam(2);
+              // Kassa tanlash kerak bo'lsa shu qadamda qolamiz — savolga
+              // javob berilmasdan oldinga o'tib ketmasin.
+              if (!kassaTanlashKerak(u, kassalar)) setQadam(2);
             }}
             accountId={accountId}
             onAccount={setAccountId}
@@ -164,6 +184,10 @@ export function TovarKeldi({
             usul={usul}
             satrlar={satrlar}
             kassaNomi={kassaNomi}
+            sana={sana}
+            onSana={setSana}
+            izoh={izoh}
+            onIzoh={setIzoh}
           />
         )}
 
@@ -187,7 +211,13 @@ export function TovarKeldi({
               Keyingi
             </Button>
           ) : (
-            <Button size="lg" loading={saqlanmoqda} onClick={() => void saqla()} className="flex-[2]">
+            <Button
+              size="lg"
+              disabled={!kassaTayyor}
+              loading={saqlanmoqda}
+              onClick={() => void saqla()}
+              className="flex-[2]"
+            >
               Ta&apos;minotni saqlash
             </Button>
           )}
@@ -216,30 +246,4 @@ export function TovarKeldi({
       )}
     </Modal>
   );
-}
-
-function Progress({ qadam }: { qadam: number }) {
-  return (
-    <div className="flex gap-1.5" aria-label={`${qadam + 1}-qadam, jami 4`}>
-      {QADAM_NOMI.map((nomi, i) => (
-        <span
-          key={nomi}
-          className={`h-1.5 flex-1 rounded-full transition ${
-            i <= qadam ? "bg-brand" : "bg-surface-2"
-          }`}
-        />
-      ))}
-    </div>
-  );
-}
-
-/**
- * Idempotentlik kaliti. `crypto.randomUUID` eski brauzerlarda (va HTTPS'siz
- * kontekstda) yo'q — shu bois zaxira yo'l bor, aks holda oqim butunlay
- * ochilmay qolardi.
- */
-function yangiKalit(): string {
-  const c = globalThis.crypto;
-  if (c && typeof c.randomUUID === "function") return c.randomUUID();
-  return `t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }

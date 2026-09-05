@@ -26,12 +26,12 @@ const HARAKAT_NOMI: Record<string, string> = {
 export function MahsulotDetal({
   productId,
   onClose,
-  onTovarKeldi,
+  onTaminot,
   onTahrirla,
 }: {
   productId: string;
   onClose: () => void;
-  onTovarKeldi: () => void;
+  onTaminot: () => void;
   onTahrirla: (m: MahsulotDetalDTO) => void;
 }) {
   const [m, setM] = useState<MahsulotDetalDTO | null>(null);
@@ -106,8 +106,8 @@ export function MahsulotDetal({
           </div>
 
           <div className="flex gap-2">
-            <Button onClick={onTovarKeldi} className="flex-1">
-              Tovar keldi
+            <Button onClick={onTaminot} className="flex-1">
+              Omborga ta&apos;minot
             </Button>
             <Button variant="secondary" onClick={() => onTahrirla(m)} className="flex-1">
               Tahrirlash

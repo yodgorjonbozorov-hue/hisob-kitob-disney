@@ -12,7 +12,7 @@ import { requirePro } from "@/lib/billing/pro";
  *
  * NEGA `/api/xarid/suppliers` NUSXASI EMAS: reyestr ham, xizmat qatlami ham
  * AYNI BIR (`Supplier` jadvali, `lib/services/xarid.ts`). Faqat modul
- * darvozasi boshqacha — "Tovar keldi" oqimi XARID moduli yoqilmagan
+ * darvozasi boshqacha — "Omborga ta'minot" oqimi XARID moduli yoqilmagan
  * bizneslarda ham ishlashi kerak, aks holda gul do'koni ta'minotchi
  * tanlay olmasdi. Ikkinchi jadval ham, ikkinchi haqiqat ham yaratilmaydi.
  *

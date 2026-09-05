@@ -204,85 +204,48 @@ export interface QabulYozuvlariNatija {
   debtId: string | null;
 }
 
-/**
- * QABUL YOZUVLARI — OMBOR VA PUL HARAKATINING YAGONA MANBASI.
- *
- * Bu funksiya tranzaksiya ICHIDA ishlaydi va ikki chaqiruvchisi bor:
- *   - `qabulQilish` — oldindan tuzilgan buyurtmani qabul qilish (eski oqim);
- *   - `taminotYarat` (lib/services/taminot.ts) — "Tovar keldi" bir qadamli oqim.
- *
- * Ataylab BITTA joyda: aks holda ikki oqim ikki xil hisob qoidasi bilan
- * ishlab, bir xil ta'minot ikki xil natija berardi.
- *
- * Bitta atomik amalda:
- *   1. har satr uchun `StockEntry` (ombor qoldig'i oshadi, tannarx snapshot);
- *   2. `Product.kelganNarx` yangi tannarxga yangilanadi (mavjud qoida —
- *      oxirgi xarid narxi tannarx bo'ladi; sotuvda `Sale.tannarx` shundan
- *      snapshot olinadi va ombor qiymati ham shu narxdan hisoblanadi);
- *   3. pul harakati:
- *      - TASHQI ta'minotchi: to'langan qism chiqim tranzaksiya;
- *      - ICHKI ta'minotchi (supplier.userId, PRO): to'langan qism xaridor
- *        kassasidan ta'minotchi-userning SHAXSIY kassasiga transfer — pul
- *        biznes ichida qolgani uchun bu chiqim EMAS (AccountTransfer falsafasi);
- *      - to'lanmagan qoldiq — "beriladigan" qarz ("Men qarzdorman" bo'limi).
- */
-export async function qabulYozuvlariTx(
-  tx: BusinessTx,
-  params: {
-    businessId: string;
-    orderId: string;
-    userId: string;
-    tenantId: string;
-    /** "YYYY-MM-DD" — qabul (ta'minot) sanasi. */
-    sana: string;
-    supplierId: string;
-    tolovTuri: string;
-    /** Berilmasa eski xatti-harakat: naqd → to'liq, qarz → 0. */
-    tolanganSumma?: number | null;
-    /** To'lov qaysi kassadan chiqadi. */
-    accountId?: string | null;
-    /**
-     * TO'LOV USULI — "Tovar keldi" oqimidagi 💵 Naqd / 💳 Click tanlovi.
-     *
-     * Berilmasa (eski xarid oqimi) tranzaksiyaga `tolovTuri` YOZILMAYDI va
-     * usul avvalgidek kassa turidan chiqariladi (`lib/tolovBolimi.ts`) —
-     * ya'ni mavjud yozuvlarning tasnifi bir bitga ham o'zgarmaydi.
-     */
-    tolovUsuli?: "naqd" | "karta" | null;
-    /** Chiqim tranzaksiya izohi uchun qo'shimcha belgi. */
-    izohBelgisi?: string | null;
-  }
-): Promise<QabulYozuvlariNatija> {
-  const satrlar = await tx.purchaseOrderItem.findMany({
-    where: { orderId: params.orderId, businessId: params.businessId },
-  });
-  if (satrlar.length === 0) throw new BadRequestError("Buyurtmada satr yo'q");
+export interface PulHarakatiParams {
+  businessId: string;
+  orderId: string;
+  userId: string;
+  tenantId: string;
+  /** "YYYY-MM-DD" — pul harakati sanasi. */
+  sana: string;
+  supplierId: string;
+  tolovTuri: string;
+  /** Ta'minot jami summasi (satrlardan hisoblangan). */
+  jamiSumma: number;
+  /** Berilmasa eski xatti-harakat: naqd → to'liq, qarz → 0. */
+  tolanganSumma?: number | null;
+  accountId?: string | null;
+  tolovUsuli?: "naqd" | "karta" | null;
+  izohBelgisi?: string | null;
+}
 
+/**
+ * TA'MINOT PULI — chiqim / transfer / qarz yozuvlarining YAGONA manbasi.
+ *
+ * Ombor harakatidan ATAYLAB ajratilgan: ta'minotni TAHRIRLASHDA
+ * (`taminotTahrir`) ombor to'g'rilanadi, lekin pul yozuvi noldan qayta
+ * yoziladi — o'sha paytda ayni shu funksiya chaqiriladi. Aks holda yaratish
+ * va tahrirlash ikki xil hisob qoidasi bilan ishlab, bir xil ta'minot ikki
+ * xil kassa natijasini berardi.
+ *
+ * Uch tarmoq:
+ *   - ICHKI ta'minotchi (supplier.userId, PRO) → shaxsiy kassaga TRANSFER
+ *     (pul biznes ichida qolgani uchun chiqim EMAS);
+ *   - TASHQI ta'minotchi, to'langan qism → CHIQIM tranzaksiya;
+ *   - to'lanmagan qoldiq → "beriladigan" QARZ ("Men qarzdorman" bo'limi).
+ */
+export async function pulHarakatiTx(
+  tx: BusinessTx,
+  params: PulHarakatiParams
+): Promise<Omit<QabulYozuvlariNatija, "jamiSumma">> {
+  const { jamiSumma } = params;
   const supplier = await tx.supplier.findFirst({
     where: { id: params.supplierId, businessId: params.businessId },
     select: { nomi: true, userId: true },
   });
-
-  let jamiSumma = 0;
-  for (const s of satrlar) {
-    jamiSumma += s.jamiSumma;
-
-    // Ombor kirimi + tannarx snapshot.
-    await tx.stockEntry.create({
-      data: {
-        businessId: params.businessId,
-        productId: s.productId,
-        miqdor: s.miqdor,
-        birlikNarx: s.birlikNarx,
-        userId: params.userId,
-        izoh: `Ta'minot: ${supplier?.nomi ?? "ta'minotchi"}`,
-      },
-    });
-    await tx.product.updateMany({
-      where: { id: s.productId, businessId: params.businessId },
-      data: { miqdor: { increment: s.miqdor }, kelganNarx: s.birlikNarx },
-    });
-  }
 
   // To'langan qism: berilmasa eski xatti-harakat (naqd → to'liq, qarz → 0).
   const tolangan = params.tolanganSumma ?? (params.tolovTuri === "naqd" ? jamiSumma : 0);
@@ -404,7 +367,92 @@ export async function qabulYozuvlariTx(
     debtId = debt.id;
   }
 
-  return { jamiSumma, tolangan, transactionId, transferId, debtId };
+  return { tolangan, transactionId, transferId, debtId };
+}
+
+/**
+ * QABUL YOZUVLARI — OMBOR VA PUL HARAKATINING YAGONA MANBASI.
+ *
+ * Bu funksiya tranzaksiya ICHIDA ishlaydi va ikki chaqiruvchisi bor:
+ *   - `qabulQilish` — oldindan tuzilgan buyurtmani qabul qilish (eski oqim);
+ *   - `taminotYarat` (lib/services/taminot.ts) — "Omborga ta'minot" bir qadamli oqim.
+ *
+ * Ataylab BITTA joyda: aks holda ikki oqim ikki xil hisob qoidasi bilan
+ * ishlab, bir xil ta'minot ikki xil natija berardi.
+ *
+ * Bitta atomik amalda:
+ *   1. har satr uchun `StockEntry` (ombor qoldig'i oshadi, tannarx snapshot);
+ *   2. `Product.kelganNarx` yangi tannarxga yangilanadi (mavjud qoida —
+ *      oxirgi xarid narxi tannarx bo'ladi; sotuvda `Sale.tannarx` shundan
+ *      snapshot olinadi va ombor qiymati ham shu narxdan hisoblanadi);
+ *   3. pul harakati:
+ *      - TASHQI ta'minotchi: to'langan qism chiqim tranzaksiya;
+ *      - ICHKI ta'minotchi (supplier.userId, PRO): to'langan qism xaridor
+ *        kassasidan ta'minotchi-userning SHAXSIY kassasiga transfer — pul
+ *        biznes ichida qolgani uchun bu chiqim EMAS (AccountTransfer falsafasi);
+ *      - to'lanmagan qoldiq — "beriladigan" qarz ("Men qarzdorman" bo'limi).
+ */
+export async function qabulYozuvlariTx(
+  tx: BusinessTx,
+  params: {
+    businessId: string;
+    orderId: string;
+    userId: string;
+    tenantId: string;
+    /** "YYYY-MM-DD" — qabul (ta'minot) sanasi. */
+    sana: string;
+    supplierId: string;
+    tolovTuri: string;
+    /** Berilmasa eski xatti-harakat: naqd → to'liq, qarz → 0. */
+    tolanganSumma?: number | null;
+    /** To'lov qaysi kassadan chiqadi. */
+    accountId?: string | null;
+    /**
+     * TO'LOV USULI — "Omborga ta'minot" oqimidagi 💵 Naqd / 💳 Click tanlovi.
+     *
+     * Berilmasa (eski xarid oqimi) tranzaksiyaga `tolovTuri` YOZILMAYDI va
+     * usul avvalgidek kassa turidan chiqariladi (`lib/tolovBolimi.ts`) —
+     * ya'ni mavjud yozuvlarning tasnifi bir bitga ham o'zgarmaydi.
+     */
+    tolovUsuli?: "naqd" | "karta" | null;
+    /** Chiqim tranzaksiya izohi uchun qo'shimcha belgi. */
+    izohBelgisi?: string | null;
+  }
+): Promise<QabulYozuvlariNatija> {
+  const satrlar = await tx.purchaseOrderItem.findMany({
+    where: { orderId: params.orderId, businessId: params.businessId },
+  });
+  if (satrlar.length === 0) throw new BadRequestError("Buyurtmada satr yo'q");
+
+  const supplier = await tx.supplier.findFirst({
+    where: { id: params.supplierId, businessId: params.businessId },
+    select: { nomi: true, userId: true },
+  });
+
+  let jamiSumma = 0;
+  for (const s of satrlar) {
+    jamiSumma += s.jamiSumma;
+
+    // Ombor kirimi + tannarx snapshot.
+    await tx.stockEntry.create({
+      data: {
+        businessId: params.businessId,
+        productId: s.productId,
+        miqdor: s.miqdor,
+        birlikNarx: s.birlikNarx,
+        userId: params.userId,
+        izoh: `Ta'minot: ${supplier?.nomi ?? "ta'minotchi"}`,
+      },
+    });
+    await tx.product.updateMany({
+      where: { id: s.productId, businessId: params.businessId },
+      data: { miqdor: { increment: s.miqdor }, kelganNarx: s.birlikNarx },
+    });
+  }
+
+  // Pul harakati — AYNI BIR funksiyada (tahrirlash ham shuni chaqiradi).
+  const pul = await pulHarakatiTx(tx, { ...params, jamiSumma });
+  return { jamiSumma, ...pul };
 }
 
 /**

@@ -11,7 +11,7 @@ import { InventarizatsiyaTab } from "./InventarizatsiyaTab";
 import { MahsulotDetal } from "./MahsulotDetal";
 import { MahsulotTahrir } from "./MahsulotTahrir";
 import { YangiMahsulot } from "./YangiMahsulot";
-import { TovarKeldi } from "./TovarKeldi";
+import { OmborgaTaminot } from "./OmborgaTaminot";
 import { TogrilashSheet, type TogrilashTuri } from "./TogrilashSheet";
 import { ImportModal } from "./ImportModal";
 import { KatalogTozalashModal } from "./KatalogTozalashModal";
@@ -32,7 +32,7 @@ import type {
  * OMBOR — bitta sahifa, uchta tab, BITTA asosiy amal.
  *
  * Sahifada nima ko'rinishi tartibi ataylab shunday: avval "nima bor" (KPI),
- * keyin "nima qilaman" (+ Tovar keldi), keyin ma'lumot. Ikkinchi darajali
+ * keyin "nima qilaman" (+ Omborga ta'minot), keyin ma'lumot. Ikkinchi darajali
  * amallar "•••" ichida, telefonda esa pastki o'ngdagi FAB'da — asosiy
  * ekran tugmalar bilan to'ldirilmaydi.
  */
@@ -58,7 +58,7 @@ export function OmborSahifa({
   togrilashlar: StockAdjustmentDTO[] | null;
 }) {
   const router = useRouter();
-  const [tovarKeldi, setTovarKeldi] = useState(false);
+  const [taminotOchiq, setTaminotOchiq] = useState(false);
   const [yangiMahsulot, setYangiMahsulot] = useState(false);
   const [detal, setDetal] = useState<string | null>(null);
   const [tahrir, setTahrir] = useState<OmborMahsulotDTO | null>(null);
@@ -81,7 +81,7 @@ export function OmborSahifa({
   ];
 
   const fabAmallari: QoshimchaAmal[] = [
-    { nomi: "📦 Tovar keldi", onClick: () => setTovarKeldi(true) },
+    { nomi: "📦 Omborga ta'minot", onClick: () => setTaminotOchiq(true) },
     ...qoshimcha.filter((a) => !a.href),
   ];
 
@@ -96,8 +96,8 @@ export function OmborSahifa({
           <p className="text-2xs text-faint mt-0.5 truncate">{biznesNomi}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Button onClick={() => setTovarKeldi(true)} className="hidden sm:inline-flex">
-            + Tovar keldi
+          <Button onClick={() => setTaminotOchiq(true)} className="hidden sm:inline-flex">
+            + Omborga ta&apos;minot
           </Button>
           <div className="hidden lg:block">
             <OmborBoshqaruv amallar={qoshimcha} />
@@ -130,7 +130,7 @@ export function OmborSahifa({
           boshlangich={boshlangichRoyxat}
           kategoriyalar={kategoriyalar}
           onTanla={(m) => setDetal(m.id)}
-          onTovarKeldi={() => setTovarKeldi(true)}
+          onTaminot={() => setTaminotOchiq(true)}
           onYangiMahsulot={() => setYangiMahsulot(true)}
         />
       )}
@@ -138,7 +138,7 @@ export function OmborSahifa({
       {tab === "taminotlar" && taminotlar && (
         <TaminotlarTab
           royxat={taminotlar}
-          onTovarKeldi={() => setTovarKeldi(true)}
+          onTaminot={() => setTaminotOchiq(true)}
           onYangilandi={yangila}
         />
       )}
@@ -153,12 +153,12 @@ export function OmborSahifa({
 
       <OmborFab amallar={fabAmallari} />
 
-      {tovarKeldi && (
-        <TovarKeldi
+      {taminotOchiq && (
+        <OmborgaTaminot
           taminotchilar={taminotchilar.map((t) => ({ id: t.id, nomi: t.nomi }))}
           kassalar={kassalar}
           kategoriyalar={kategoriyalar}
-          onClose={() => setTovarKeldi(false)}
+          onClose={() => setTaminotOchiq(false)}
           onDone={yangila}
         />
       )}
@@ -178,9 +178,9 @@ export function OmborSahifa({
         <MahsulotDetal
           productId={detal}
           onClose={() => setDetal(null)}
-          onTovarKeldi={() => {
+          onTaminot={() => {
             setDetal(null);
-            setTovarKeldi(true);
+            setTaminotOchiq(true);
           }}
           onTahrirla={(m) => {
             setDetal(null);
