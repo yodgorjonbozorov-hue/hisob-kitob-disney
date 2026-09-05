@@ -6220,3 +6220,45 @@ bayt-ma-bayt solishtiradi. SQLite ham, Postgres ham UNIQUE indeksda
 NULL larni TENG deb hisoblamaydi, shuning uchun indeks yaratish yiqilmaydi.
 SQL faqat 6 ta nullable `ADD COLUMN` + 3 ta `CREATE INDEX`:
 DROP/TRUNCATE/DELETE/UPDATE/RENAME/INSERT YO'Q.
+
+## Production deploy (2026-09-05)
+
+`927d1f6` — `Merge: moliya "Pul oldim / Pul berdim" oqimi (#23)`. Prod:
+commit `927d1f6`, migratsiya **64/64** (pending 0), `/api/health` yashil.
+
+**MERGE PAYTIDA `main` SILJIB KETDI.** Sinxron tekshiruvim (`origin/main` =
+`649f986`, merge-base teng, konflikt yo'q) 07:37 da bajarilgan edi; boshqa
+agent 07:19 da yozgan ikki commitni (`5e67460`, `30359c7`) shundan KEYIN
+push qildi va GitHub mening branchimni AYNI o'sha yangi `main` ustiga
+merge qildi.
+
+Yo'qotish bo'lmadi — merge matn darajasida toza o'tdi va uchala kesishgan
+faylda ikkala o'zgarish ham saqlanib qoldi:
+- `api/transactions/bulk/route.ts` — mening `qarzsizYozuvlar` qulfim +
+  ularning `deletedBy` si;
+- `api/transactions/[id]/route.ts` — mening `qarzQulfiniTekshir` ikki
+  chaqiruvim + ularning `deletedBy` si;
+- `lib/modules/registry.ts` — `/app/moliya` va `/app/kassa-topshirish`
+  nav yozuvlari ikkalasi ham.
+
+LEKIN natijaviy DARAXT men sinamagan kombinatsiya edi. Shuning uchun
+merge'dan keyin butun tekshiruv MERGED daraxtda (`927d1f6`) qaytadan
+bajarildi: tsc toza, `next build` o'tdi (213 sahifa), **602 test yashil**
+(78 ta yangi suita — ikkala agentniki, 524 ta regressiya).
+
+**Ikki migratsiya bir xil timestamp bilan tushdi:**
+`20260905090000_moliya_pul_oqimi` va `20260905090000_zakaz_yoqotish_sababi_ochirgan`.
+`scripts/db-migrate.mjs` katalog nomlarini `.sort()` bilan tartiblaydi
+('m' < 'z'), ikkalasi ham qo'shuvchi va bir-biriga bog'liq emas, shuning
+uchun tartib ahamiyatsiz — ikkalasi ham qo'llandi. Kelgusida timestamp
+to'qnashuvidan qochish uchun migratsiya nomini yozishdan oldin `main` dan
+fetch qilib olish kerak.
+
+**Xulosa (o'zim uchun).** "Merge-base teng" tekshiruvi FAQAT o'sha
+sekundda haqiqat. Merge tugmasini bosishdan oldin `main` ni QAYTA fetch
+qilish va merge natijasi bo'yicha testni QAYTA yugurtirish kerak —
+GitHub'da "mergeable" degani "sinovdan o'tgan" degani emas.
+
+**Smoke (faqat o'qish, production'ga hech narsa yozilmadi):**
+`/api/health` 200 · `/api/moliya` 401 · `/api/moliya/shaxslar` 401 ·
+`/app/moliya` 200 (login) · `/app/tranzaksiyalar` 200 (login).
