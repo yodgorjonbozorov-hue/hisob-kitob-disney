@@ -11,6 +11,7 @@ import { resolveAccountId } from "@/lib/services/accounts";
 import { dashboardYangilandi } from "@/lib/cache";
 import { kunlikSinxron } from "@/lib/services/kunlik";
 import { tekshirilganSotuvchi } from "@/lib/services/sotuvchi";
+import { qarzQulfiniTekshir } from "@/lib/services/yozuvQulfi";
 
 export const PATCH = withTenant<{ params: { id: string } }>(async (request, { params }, { session: user }) => {
   const businessId = await resolveActiveBusinessId(user);
@@ -27,6 +28,9 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
     throw new ForbiddenError("O'chirilgan yozuvni tahrirlab bo'lmaydi");
   }
   requireOwnerOrAdmin(user.rol, user.userId, existing.userId);
+  // Qarz to'lovi yozuvi bu yerdan tuzatilmaydi: kassa o'zgarib, qarz
+  // qoldig'i o'sha-o'sha qolardi (lib/services/yozuvQulfi.ts).
+  await qarzQulfiniTekshir(existing.businessId, existing.id);
 
   const body = await request.json();
   const parsed = updateTransactionSchema.safeParse(body);
@@ -177,6 +181,8 @@ export const DELETE = withTenant<{ params: { id: string } }>(async (request, { p
     throw new ForbiddenError("Bu yozuv boshqa biznesga tegishli");
   }
   requireOwnerOrAdmin(user.rol, user.userId, existing.userId);
+  // O'chirish ham qarz qoldig'ini ledgerdan ajratib yuborardi — ayni qulf.
+  await qarzQulfiniTekshir(existing.businessId, existing.id);
 
   const permanent = new URL(request.url).searchParams.get("permanent") === "true";
 
@@ -199,7 +205,12 @@ export const DELETE = withTenant<{ params: { id: string } }>(async (request, { p
   }
 
   // Soft delete — belgilanadi (undo/savat uchun). Kunlikdagi ulangan tushum ham chiqadi.
-  await prisma.transaction.update({ where: { id: params.id }, data: { deletedAt: new Date() } });
+  // `deletedBy` — "kim o'chirdi" savoliga yozuvning O'ZIDA javob: savat
+  // ekranida har qator uchun audit jurnaliga borish kerak bo'lmasin.
+  await prisma.transaction.update({
+    where: { id: params.id },
+    data: { deletedAt: new Date(), deletedBy: user.userId },
+  });
   await kunlikSinxron({ ...existing, deletedAt: new Date() }, null);
   dashboardYangilandi(existing.businessId);
   return NextResponse.json({ ok: true });

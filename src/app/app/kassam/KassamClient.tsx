@@ -21,14 +21,26 @@ import {
  * sahifasidagi bilan AYNI manba. Bu yerda FAQAT o'z kassasi ko'rinadi —
  * boshqa xodimlarning kassasi va biznesning jami puli emas (kassa maxfiyligi).
  *
+ * ═══ TOPSHIRISH IKKI BOSQICHLI ═══
+ * "Smenani topshirish" pulni kassadan DARHOL yechmaydi: topshiriq
+ * "Qabul kutilmoqda" holatida turadi va pul xodimning kassasida qoladi
+ * ("Kassangizdagi pul" o'zgarmaydi). Faqat direktor "Qabul qilish"ni
+ * bosgach pul uning kassasiga o'tadi va bu yerdagi raqam kamayadi.
+ *
+ * Shu sababli ikkita raqam bor: `qoldiq` — kassadagi haqiqiy pul (katta
+ * raqam), `mavjud` — undan tasdiq kutayotgan summa ayrilgani, ya'ni YANGI
+ * topshirish uchun band bo'lmagan qism. Bir summani ikki marta topshirish
+ * aynan shu ayirma bilan to'siladi (`lib/services/kassaTransfer.ts`).
+ *
  * ═══ JORIY SMENA ═══
  * Kirim / chiqim / sof — oxirgi topshirishdan beri. Kassa topshirilgan
- * zahoti (server hisobi bo'yicha) ular 0 bo'ladi va "Kassangizdagi pul" ham
- * 0 ga tushadi — tasdiq kutayotgan pul MAVJUD puldan ayrilgan. Topshirish
- * tarixi pastdagi lentada saqlanadi.
+ * zahoti ular 0 dan boshlanadi (smena YOPILDI), lekin bu pulning ko'chgani
+ * DEGANI EMAS — yuqoridagi izohga qarang. Topshirish tarixi pastdagi
+ * lentada saqlanadi.
  */
 export function KassamClient({
   accountId,
+  qoldiq,
   mavjud,
   kutilayotganChiqim,
   smenaKirim,
@@ -40,7 +52,13 @@ export function KassamClient({
   ochiqTopshirish,
 }: {
   accountId: string;
-  /** Kassadagi MAVJUD pul: ledger qoldig'i − tasdiq kutayotgan topshirish. */
+  /**
+   * KASSADAGI PUL — ledger qoldig'i. Topshirilgan, lekin hali QABUL
+   * QILINMAGAN summa bundan AYRILMAYDI: pul haqiqatda hali xodimning
+   * qo'lida va direktor uni sanab olmagan.
+   */
+  qoldiq: number;
+  /** Yangi topshirish uchun BAND BO'LMAGAN qism: qoldiq − kutilayotgan. */
   mavjud: number;
   /** Topshirilgan, hali qabul qilinmagan summa. */
   kutilayotganChiqim: number;
@@ -63,14 +81,19 @@ export function KassamClient({
     <div className="space-y-6">
       <Card>
         <p className="text-sm text-muted">Kassangizdagi pul</p>
-        <Money value={mavjud} size="display" tone={mavjud > 0 ? "brand" : mavjud < 0 ? "expense" : "neutral"} />
+        <Money value={qoldiq} size="display" tone={qoldiq > 0 ? "brand" : qoldiq < 0 ? "expense" : "neutral"} />
 
         {ochiqTopshirish && (
-          <p className="text-2xs text-debt mt-2">
-            Topshirildi: <span className="tnum font-medium">{formatSom(ochiqTopshirish.summa)}</span> soʻm
-            {" · "}
-            {ochiqTopshirish.kimga} tasdiqlashini kutmoqda ({formatToshkentVaqt(new Date(ochiqTopshirish.vaqt))})
-          </p>
+          <div className="mt-2 rounded-lg bg-debt-soft px-3 py-2">
+            <p className="text-xs font-medium text-debt-fg">⏳ Qabul kutilmoqda</p>
+            <p className="text-2xs text-debt-fg mt-0.5">
+              <span className="tnum font-medium">{formatSom(ochiqTopshirish.summa)}</span> soʻm{" "}
+              {ochiqTopshirish.kimga}ga topshirildi (
+              {formatToshkentVaqt(new Date(ochiqTopshirish.vaqt))}). Pul qabul qilinmaguncha
+              kassangizda turaveradi — hisob faqat direktor &quot;Qabul qilish&quot;ni
+              bosgandan keyin yopiladi.
+            </p>
+          </div>
         )}
         {!ochiqTopshirish && kutilayotganChiqim > 0 && (
           <p className="text-2xs text-debt mt-2">
@@ -105,6 +128,9 @@ export function KassamClient({
             </dd>
           </div>
           <div>
+            {/* Topshirilishi kerak = hali topshirilmagan qism. Tasdiq
+                kutayotgan summa bu yerdan AYRILADI — u allaqachon
+                topshirilgan, faqat qabul qilinmagan. */}
             <dt className="text-2xs text-muted">Topshirilishi kerak</dt>
             <dd><Money value={Math.max(mavjud, 0)} size="md" tone="neutral" /></dd>
           </div>

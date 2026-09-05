@@ -2,20 +2,17 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  ASOSIY_USTUNLAR,
-  kirimUlushi,
-  qarzUlushi,
-  zakazUstuni,
-  type Ustun,
-} from "@/lib/crm/pipeline";
+import { kirimUlushi, qarzUlushi, zakazUstuni, type Ustun } from "@/lib/crm/pipeline";
 import { BuyurtmaModal } from "./BuyurtmaModal";
 import { BuyurtmaSheet } from "./BuyurtmaSheet";
 import { DoskaFiltr } from "./DoskaFiltr";
 import { YakunlashTasdiq } from "./YakunlashTasdiq";
+import { YoqotishSababiModal } from "./YoqotishSababiModal";
+import { ZakazOchirishTasdiq } from "./ZakazOchirishTasdiq";
 import { ZakazUstuni } from "./ZakazUstuni";
 import { useUstunSahifalari } from "./useUstunSahifalari";
 import { useOptimistikKochish } from "./useOptimistikKochish";
+import { useZakazAmallari } from "./useZakazAmallari";
 import type {
   BuyurtmaDTO,
   KategoriyaDTO,
@@ -28,18 +25,25 @@ import type {
 /**
  * CRM ZAKAZ DOSKASI.
  *
- * Kutilayotgan → Bugungi → Jarayonda → Yutildi (+ arxiv: Yo'qotildi).
+ * Kutilayotgan → Bugungi → Jarayonda → Yutildi (+ direktorda: Yo'qotildi).
  * Ustun BAZADAN o'qilmaydi — u `holat` va `sana` dan hisoblanadi
  * (`lib/crm/pipeline.ts`), server bilan bir xil qoida bo'yicha.
  *
- * Sudrab tashlash (drag & drop) ishlashda davom etadi; mobilda esa ayni
- * o'tishlar tafsilot oynasidagi tugmalarda (10-talab).
+ * ═══ YO'QOTILDI USTUNI ═══
+ * Oddiy xodimda avvalgidek 4 ta ustun (mobil svayp ham shunga moslangan).
+ * Direktorda BESHINCHISI qo'shiladi: yo'qotilgan zakaz o'chib ketmasin,
+ * u yerda mijoz, telefon, summa, sotuvchi va YO'QOTISH SABABI ko'rinadi va
+ * zakazni boshqa holatga qaytarish mumkin. Ustunlar ro'yxati SERVERDAN
+ * keladi (`page.tsx`) — sahifa faqat kelgan sahifalarni chizadi.
  *
- * Ikki mantiq alohida hooklarda: ustun sahifalari ("Yana ko'rsatish" —
- * `useUstunSahifalari`) va optimistik ko'chish (`useOptimistikKochish`).
+ * Uch mantiq alohida modullarda: ustun sahifalari (`useUstunSahifalari`),
+ * optimistik ko'chish (`useOptimistikKochish`) va server amallari
+ * (`useZakazAmallari`).
  */
 export function CrmClient({
   sahifalar,
+  ustunlar,
+  boshqaruvchi,
   kategoriyalar,
   xodimlar,
   xodimKategoriyalari,
@@ -53,6 +57,10 @@ export function CrmClient({
 }: {
   /** Har ustunning BIRINCHI sahifasi (server tomonda kesilgan, 10 tadan). */
   sahifalar: UstunSahifaDTO[];
+  /** Chiziladigan ustunlar — direktorda "Yo'qotildi" ham bor. */
+  ustunlar: Ustun[];
+  /** OWNER/ADMIN mi — o'chirish va "Yutildi"dan qaytarish tugmalari uchun. */
+  boshqaruvchi: boolean;
   kategoriyalar: KategoriyaDTO[];
   xodimlar: XodimDTO[];
   /** Xodim kategoriyalari (Diktor/Dekorator/...) — bajaruvchi biriktiruvi. */
@@ -88,64 +96,21 @@ export function CrmClient({
     () => zakazlar.find((x) => x.id === buyurtmaId) ?? null
   );
   const [yakunlanadi, setYakunlanadi] = useState<BuyurtmaDTO | null>(null);
+  const [yoqotiladi, setYoqotiladi] = useState<BuyurtmaDTO | null>(null);
+  const [ochiriladi, setOchiriladi] = useState<BuyurtmaDTO | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
-  const [xato, setXato] = useState<string | null>(null);
   const ustuni = (b: BuyurtmaDTO): Ustun => zakazUstuni(b.holat, b.sana, bugun);
 
-  /**
-   * USTUNGA KO'CHIRISH. "Yutildi" darhol bajarilmaydi — pul yozadigan amal
-   * sudrab tashlash bilan bo'lmasin: tasdiq oynasi kirim/qarzni ko'rsatadi.
-   */
-  async function ustungaKochirish(id: string, ustun: Ustun) {
-    setXato(null);
+  const amallar = useZakazAmallari({ bugun, onOzgardi: mahalliyYoz });
+
+  /** Ustunga ko'chirish. "Yutildi" va "Yo'qotildi" — tasdiq oynasi orqali. */
+  function ustunga(id: string, ustun: Ustun) {
     const b = zakazlar.find((x) => x.id === id) ?? (tanlangan?.id === id ? tanlangan : undefined);
-    if (!b) return;
-    if (ustuni(b) === ustun) return;
-
-    if (ustun === "YUTILDI") {
-      setTanlangan(null);
-      setYakunlanadi(b);
-      return;
-    }
-
-    // "Bugungi" — holat emas, SANA: zakaz sanasi bugunga suriladi.
-    const tana =
-      ustun === "BUGUNGI"
-        ? { bugungaKochir: true }
-        : { holat: ustun === "JARAYONDA" ? "JARAYONDA" : "KUTILMOQDA" };
-
-    const res = await fetch(`/api/crm/deals/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(tana),
-    });
-    if (!res.ok) {
-      setXato((await res.json()).error ?? "Xatolik yuz berdi");
-      return;
-    }
-    // "Bugungi" — HOLAT emas, sana o'zgarishi (pipeline qoidasi).
-    if (ustun === "BUGUNGI") mahalliyYoz(b, b.holat, bugun);
-    else mahalliyYoz(b, ustun === "JARAYONDA" ? "JARAYONDA" : "KUTILMOQDA");
+    if (!b || ustuni(b) === ustun) return;
     setTanlangan(null);
-    router.refresh();
-  }
-
-  /** Yo'qotildi — arxivga (asosiy ustunlardan tashqarida). */
-  async function yoqotildi(id: string) {
-    setXato(null);
-    const res = await fetch(`/api/crm/deals/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ holat: "YOQOTILDI" }),
-    });
-    if (!res.ok) {
-      setXato((await res.json()).error ?? "Xatolik yuz berdi");
-      return;
-    }
-    const b = zakazlar.find((x) => x.id === id);
-    if (b) mahalliyYoz(b, "YOQOTILDI");
-    setTanlangan(null);
-    router.refresh();
+    if (ustun === "YUTILDI") return setYakunlanadi(b);
+    if (ustun === "YOQOTILDI") return setYoqotiladi(b);
+    void amallar.ustungaKochirish(b, ustun);
   }
 
   return (
@@ -157,8 +122,8 @@ export function CrmClient({
         >
           + Yangi zakaz
         </button>
-        {(xato ?? sahifaXatosi) && (
-          <p className="text-expense text-sm">{xato ?? sahifaXatosi}</p>
+        {(amallar.xato ?? sahifaXatosi) && (
+          <p className="text-expense text-sm">{amallar.xato ?? sahifaXatosi}</p>
         )}
       </div>
 
@@ -172,7 +137,7 @@ export function CrmClient({
 
       {/* Kanban — mobilda gorizontal svayp (16-talab), har ustun 10 tadan. */}
       <div className="flex gap-3 overflow-x-auto pb-3 -mx-1 px-1 snap-x snap-mandatory">
-        {ASOSIY_USTUNLAR.map((u) => (
+        {ustunlar.map((u) => (
           <div key={u} className="snap-start">
             <ZakazUstuni
               ustun={u}
@@ -183,7 +148,7 @@ export function CrmClient({
               yanaBormi={Boolean(ustunHolati[u]?.kursor)}
               yuklanmoqda={yuklanayotgan === u}
               onYana={() => yanaKorsatish(u)}
-              onDrop={() => dragId && ustungaKochirish(dragId, u)}
+              onDrop={() => dragId && ustunga(dragId, u)}
               onTanlash={setTanlangan}
               onDragStart={setDragId}
               onDragEnd={() => setDragId(null)}
@@ -209,14 +174,23 @@ export function CrmClient({
           b={tanlangan}
           ustun={ustuni(tanlangan)}
           bugun={bugun}
+          boshqaruvchi={boshqaruvchi}
           kategoriyalar={kategoriyalar}
+          xodimlar={xodimlar}
           xodimKategoriyalari={xodimKategoriyalari}
           sotuvchilar={sotuvchilar}
           jamoaHuquqi={jamoaHuquqi}
           bahoYozaOladi={bahoYozaOladi}
           meId={meId}
-          onUstunga={(u) => ustungaKochirish(tanlangan.id, u)}
-          onYoqotildi={() => yoqotildi(tanlangan.id)}
+          onUstunga={(u) => ustunga(tanlangan.id, u)}
+          onYoqotildi={() => {
+            setYoqotiladi(tanlangan);
+            setTanlangan(null);
+          }}
+          onOchirish={() => {
+            setOchiriladi(tanlangan);
+            setTanlangan(null);
+          }}
           onTahrirlandi={(yangi) => {
             // Ochiq oyna serverdan kelgan snapshot ustida ishlaydi — yangi
             // qiymatlar darhol ko'rinsin. Yutilgan zakazda to'lov belgilansa
@@ -240,6 +214,26 @@ export function CrmClient({
             mahalliyYoz(yakunlanadi, "YUTILDI");
             setYakunlanadi(null);
             router.refresh();
+          }}
+        />
+      )}
+      {yoqotiladi && (
+        <YoqotishSababiModal
+          b={yoqotiladi}
+          band={amallar.band}
+          onClose={() => setYoqotiladi(null)}
+          onTasdiq={async (sabab) => {
+            if (await amallar.yoqotildi(yoqotiladi, sabab)) setYoqotiladi(null);
+          }}
+        />
+      )}
+      {ochiriladi && (
+        <ZakazOchirishTasdiq
+          b={ochiriladi}
+          band={amallar.band}
+          onClose={() => setOchiriladi(null)}
+          onTasdiq={async () => {
+            if (await amallar.ochirish(ochiriladi)) setOchiriladi(null);
           }}
         />
       )}

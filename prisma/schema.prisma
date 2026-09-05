@@ -588,9 +588,50 @@ model Transaction {
   sotuvchiId      String?
   sotuvchi        User?            @relation("SotuvchiYozuvlari", fields: [sotuvchiId], references: [id], onDelete: SetNull)
   filial          String?
+  /// MOLIYA: PUL KIMDAN OLINDI / KIMGA BERILDI.
+  ///
+  /// "mijoz" | "taminotchi" | "xodim" | "shaxs" | "filial" | "boshqa"
+  /// (lib/moliya/shaxs.ts). null — eski yozuvlar va tomonsiz tizim
+  /// yozuvlari (sotuv, oylik, CRM ko'chirmasi).
+  shaxsTuri       String?
+  /// Tomonning IDsi: mijozda `Contact.id`, ta'minotchida `Supplier.id`,
+  /// xodimda `User.id`. FK ATAYLAB YO'Q (Debt.masulId uslubi) — kartochka
+  /// o'chirilsa ham moliya tarixi o'qiladigan bo'lib qoladi.
+  shaxsId         String?
+  /// TANLANGAN TO'LOV USULI — "naqd" | "terminal" | "click" | "otkazma"
+  /// (lib/moliya/usul.ts). Moliya lug'ati (`tolovTuri`) ATAYLAB
+  /// kengaytirilmaydi — butun hisobot tizimi "naqd" | "click" | "qarz" ga
+  /// qurilgan — shuning uchun foydalanuvchi tanlagan aniq usul, xuddi
+  /// `DealTolov.kanal` kabi, ALOHIDA ustunda saqlanadi va faqat ko'rsatish
+  /// uchun ishlatiladi. null — moliya oqimidan tashqarida yozilgan yozuvlar.
+  pulUsuli        String?
+  /// Tomon nomi — SNAPSHOT. Kartochka o'chirilsa yoki nomi o'zgarsa ham
+  /// yozuvda o'sha paytdagi nom turadi (ShiftClose uslubi).
+  shaxsIsm        String?
+  /// PUL HARAKATI (AMAL) KALITI — bitta "Pul oldim/berdim" amalidan
+  /// yozilgan BARCHA tranzaksiyalarni birlashtiradi. Qarzga bog'langan
+  /// to'lov bir necha qarzga taqsimlansa har qarz uchun alohida kirim
+  /// yoziladi (kategoriya kesimi saqlansin), lekin ular BITTA amal —
+  /// tuzatish va bekor qilish o'sha amalning hammasiga birdan tegadi.
+  /// null — moliya oqimidan tashqarida yozilgan yozuvlar.
+  amalId          String?
+  /// TAKROR YUBORISHDAN HIMOYA (idempotentlik kaliti) — `PurchaseOrder`
+  /// bilan bir xil uslub: himoya ATAYLAB bazada, ilova kodi ham brauzer
+  /// ham xato qilsa baza ikkinchisini o'tkazmaydi.
+  ///
+  /// FAQAT BITTA yozuv yozadigan amalda to'ldiriladi (oddiy kirim/chiqim).
+  /// Qarzga bog'langan amal bir necha yozuv yozishi mumkin, shuning uchun
+  /// u yerda himoya `DebtPayment.idempotencyKey` ning UNIQUE cheklovida
+  /// turadi — ikkita unique bir amalga qo'yilmaydi.
+  idempotencyKey  String?
   createdAt       DateTime         @default(now())
   // Soft delete — o'chirilgan yozuv shu vaqt bilan belgilanadi (undo/savat uchun).
   deletedAt       DateTime?
+  /// KIM O'CHIRDI (User.id). Audit jurnalida ham bor, lekin yozuvning
+  /// O'ZIDA turishi "savat"ni ochganda qo'shimcha so'rovsiz javob beradi:
+  /// direktor o'chirganmi yoki yozuv egasi. FK ATAYLAB yo'q — foydalanuvchi
+  /// o'chirilsa ham iz qolsin (DealFeedback.userId bilan bir xil qoida).
+  deletedBy       String?
   /// Tasdiqdan o'tib yozilgan bo'lsa — o'sha so'rov (aks holda null).
   approvalRequest ApprovalRequest?
   /// HR: shu tranzaksiya oylik yoki avans to'lovi bo'lsa — o'sha yozuv.
@@ -622,6 +663,11 @@ model Transaction {
   /// Xodim statistikasi kesimi (biznes + sotuvchi + davr) va `SetNull` tekshiruvi.
   @@index([businessId, sotuvchiId, sana])
   @@index([sotuvchiId])
+  /// Moliya: bitta amalning barcha yozuvlari (tuzatish va bekor qilish).
+  @@index([businessId, amalId])
+  /// Moliya: shaxs kesimi ("Aziz bilan barcha pul harakati").
+  @@index([businessId, shaxsTuri, shaxsId])
+  @@unique([businessId, idempotencyKey])
 }
 
 /// Audit izi — har bir muhim o'zgarish (kim, nima, oldin→keyin) yoziladi.
@@ -1187,8 +1233,18 @@ model Deal {
   debtId        String?        @unique
   debt          Debt?          @relation("CrmBuyurtmaQarzi", fields: [debtId], references: [id], onDelete: SetNull)
   izoh          String?
+  /// YO'QOTISH SABABI — zakaz "Yo'qotildi" ga o'tkazilganda yoziladi.
+  /// `izoh` bilan ARALASHTIRILMAYDI: `izoh` — zakazning o'z tavsifi, bu esa
+  /// "nega qo'ldan ketdi" savolining javobi (direktor arxivining ma'nosi
+  /// aynan shunda). Boshqa holatga qaytarilganda TOZALANADI — aks holda
+  /// yashab qolgan sabab zakaz ustida yolg'on bo'lib osilib qolardi.
+  /// Yo'qotilgan SANA alohida ustun EMAS: u `yopilganAt` da (ikkinchi
+  /// haqiqat manbai bo'lmasin).
+  yoqotishSababi String?
   createdAt     DateTime       @default(now())
   deletedAt     DateTime?
+  /// KIM O'CHIRDI (User.id) — Transaction.deletedBy bilan bir xil qoida.
+  deletedBy     String?
   activities    Activity[]
   tasks         Task[]
   /// Zakazda qatnashgan xodimlar (kategoriya kesimida).

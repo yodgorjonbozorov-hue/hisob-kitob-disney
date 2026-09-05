@@ -80,12 +80,22 @@ export default async function KassaPage({
               <span className="hidden sm:inline"> · pul qayerda va bugun nima bo&apos;ldi</span>
             </p>
           </div>
-          <Link
-            href="/app/kassa/hisobot"
-            className="shrink-0 inline-flex items-center rounded-lg bg-surface-2 px-3 min-h-[44px] text-sm font-medium text-muted hover:text-fg"
-          >
-            Hisobot
-          </Link>
+          <div className="shrink-0 flex items-center gap-2">
+            {/* Topshirishlar ALOHIDA sahifada: bu yerda pul qayerda turgani,
+                u yerda esa harakat talab qiladigan qabul ro'yxati. */}
+            <Link
+              href="/app/kassa-topshirish"
+              className="inline-flex items-center rounded-lg bg-surface-2 px-3 min-h-[44px] text-sm font-medium text-muted hover:text-fg"
+            >
+              Topshirishlar
+            </Link>
+            <Link
+              href="/app/kassa/hisobot"
+              className="inline-flex items-center rounded-lg bg-surface-2 px-3 min-h-[44px] text-sm font-medium text-muted hover:text-fg"
+            >
+              Hisobot
+            </Link>
+          </div>
         </div>
 
         <KassaClient

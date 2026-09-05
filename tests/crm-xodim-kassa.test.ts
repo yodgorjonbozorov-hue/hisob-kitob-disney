@@ -247,7 +247,7 @@ test("chiqim paneli: xodim boshqa xodimning chiqimini ko'rmaydi", async () => {
 
 // ---------- KASSA TOPSHIRISH ----------
 
-test("kassa topshirish: kassa 0 ga tushadi, tarix saqlanadi", async () => {
+test("kassa topshirish: pul QABULGACHA kassada qoladi, keyin 0 ga tushadi", async () => {
   const oldin = await A(() => panel.xodimKassaHolati(t.business.id, fayruza.id, "Fayruza"));
   assert.equal(oldin.kassada, 750_000);
 
@@ -261,7 +261,11 @@ test("kassa topshirish: kassa 0 ga tushadi, tarix saqlanadi", async () => {
   assert.equal(transfer.holat, "kutilmoqda", "direktor tasdiqlashini kutadi");
 
   const keyin = await A(() => panel.xodimKassaHolati(t.business.id, fayruza.id, "Fayruza"));
-  assert.equal(keyin.kassada, 0, "topshirilgan pul kassadan chiqdi");
+  // TOPSHIRISH ≠ QABUL QILISH: pul hali xodimning qo'lida va uni direktor
+  // sanab olmagan, shuning uchun "Kassada" raqami O'ZGARMAYDI. Nolga
+  // tushadigan raqam — `mavjud`: yangi topshirish uchun band bo'lmagan qism.
+  assert.equal(keyin.kassada, 750_000, "qabul qilinmaguncha pul kassada turaveradi");
+  assert.equal(keyin.mavjud, 0, "lekin qayta topshirish uchun bo'sh pul yo'q");
   assert.equal(keyin.kirim, 0, "yangi smena 0 dan boshlanadi");
   assert.equal(keyin.chiqim, 0);
   assert.equal(keyin.ochiqTopshirish.summa, 750_000);
@@ -276,7 +280,8 @@ test("kassa topshirish: kassa 0 ga tushadi, tarix saqlanadi", async () => {
     )
   );
   const yakuniy = await A(() => panel.xodimKassaHolati(t.business.id, fayruza.id, "Fayruza"));
-  assert.equal(yakuniy.kassada, 0);
+  assert.equal(yakuniy.kassada, 0, "qabuldan KEYIN kassa yopiladi");
+  assert.equal(yakuniy.mavjud, 0);
   assert.equal(yakuniy.ochiqTopshirish, null);
 
   const tarix = await A(() =>

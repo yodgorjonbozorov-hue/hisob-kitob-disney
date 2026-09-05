@@ -1,3 +1,42 @@
+# Direktor huquqlari va kassa topshirish oqimi (2026-09-05)
+
+Ikkita alohida muammo bitta ishda yopildi: xodim kassani topshirgan zahoti
+uning kassasi noldan chiqib ketardi, va yo'qotilgan zakaz direktorga umuman
+ko'rinmasdi.
+
+## Uchta invariant (ular buzilsa modul ishonchsiz bo'ladi)
+
+1. TOPSHIRISH ≠ QABUL QILISH. `turi = "smena"` o'tkazma endi HAR DOIM
+   tasdiq kutadi — egasiz (umumiy) asosiy kassaga topshirilganda ham.
+   Ilgari shart faqat "qabul qiluvchi kassa boshqa odamniki" edi, shuning
+   uchun direktor kassasiga topshirish darhol yakunlanardi.
+2. IKKI RAQAM ARALASHTIRILMAYDI. `qoldiq` — kassadagi haqiqiy pul (ekranda
+   ko'rinadi va topshirgandan keyin ham o'zgarmaydi); `mavjud` =
+   qoldiq − kutilayotgan chiqim — faqat YANGI topshirish chegarasi. Bir
+   summani ikki marta topshirish shu ayirma bilan to'siladi.
+3. "YUTILDI"DAN QAYTARISH MOLIYA BILAN BIRGA. Direktor zakazni qaytarsa
+   `lib/crm/qaytarish.ts` bitta tranzaksiyada kirimni yumshoq o'chiradi,
+   aralash to'lov qatorlarining bog'lanishini uzadi va qarzni bekor qiladi.
+   Yarim tuzatilgan holat (kirim o'chdi, qarz qoldi) imkonsiz.
+
+## Ish paytida topilgan va tuzatilgan xatolar
+
+- `Deal` PATCH sxemasida `kontaktIsm`/`kontaktTel` bor edi, lekin route
+  ularni JIMGINA e'tiborsiz qoldirardi — xato kiritilgan mijozni tuzatishning
+  yo'li yo'q edi (`zakazMijoziniOzgartirish` qo'shildi, telefon bo'yicha
+  mavjud kartochka qayta ishlatiladi).
+- `Transaction` yumshoq o'chirilganda "kim o'chirdi" faqat audit jurnalida
+  qolardi; savat ekrani har qator uchun jurnalga borishi kerak edi
+  (`deletedBy` ustuni).
+- Yo'qotilgan zakazda sabab saqlanmasdi, ya'ni arxivning ma'nosi yo'q edi.
+
+## Testlar
+
+`npm run test:direktor-oqimi` (14 ta: ikki bosqichli topshirish, rad etish,
+yo'qotish sababi, moliyaviy qaytarish, qarz bekori, yumshoq o'chirish,
+mijozni almashtirish). `tests/crm-xodim-kassa.test.ts` dagi 7-test yangi
+xulqqa moslandi (topshirilgan pul qabulgacha kassada qoladi).
+
 # Xodimlar KPI / ball / oylik moduli (2026-09-01)
 
 Rahbar xodim kartochkasini bosadi va "bu xodimga hozir qancha oylik chiqdi"
@@ -6066,6 +6105,121 @@ eski test qoidani hali ham talab qilardi — suite RED holda deploy bo'lgan.
 Merge paytida men u faylni ishga tushirmagandim. Xulosa: merge'dan keyin
 o'zgargan MODUL bo'yicha barcha suitalar yugurtiriladi, faqat o'zim
 tegingan fayllar emas.
+
+---
+
+# MOLIYA — "PUL OLDIM / PUL BERDIM" OQIMI (2026-09-05)
+
+Direktor pul harakatini ikki bosishda kiritadi: `/app/moliya` da faqat
+ikkita katta tugma — **+ PUL OLDIM** (kirim) va **− PUL BERDIM** (chiqim).
+
+## Avval qilingan audit (nima allaqachon bor edi)
+
+| Savol | Javob |
+| --- | --- |
+| Kirim/Chiqim qayerda | `Transaction` modeli, `lib/services/transactionService.ts`, `/app/tranzaksiyalar` |
+| Kassa qoldig'i qanday | SAQLANMAYDI — ledgerdan hisoblanadi: `getAccountBalances()` = kirim − chiqim + kirgan transfer − chiqqan transfer |
+| Mijoz qarzi | `Debt` (turi `olinadigan`) + `DebtPayment`, `lib/services/qarz.ts` |
+| Ta'minotchi qarzi | AYNI `Debt` (turi `beriladigan`), `Supplier` — katalog, `lib/services/xarid.ts` ochadi |
+| To'lov turlari | `Transaction.tolovTuri` = naqd/click/qarz, `Account.turi` = naqd/plastik/bank, guruhlar `lib/tolovBolimi.ts` |
+
+Shu sababli YANGI moliya tizimi qurilmadi — yangi qatlam faqat mavjud
+xizmatlarni bitta formaga va bitta atomik amalga bog'laydi.
+
+## Uchta invariant
+
+1. **KASSA QOLDIG'I TO'G'RILANMAYDI, U HISOBLANADI.** Yozuv summasi
+   o'zgarsa yoki yozuv o'chirilsa qoldiq O'ZI to'g'ri chiqadi. Shuning
+   uchun tuzatishda "correction" yozuvi YOZILMAYDI — u qo'shilsa pul ikki
+   marta harakatlangan bo'lardi.
+2. **QARZ MAVJUD XIZMAT ORQALI.** "Mijoz qarzini to'ladi" / "Ta'minotchi
+   qarzini to'lash" sabablari `qarzdorTolovTx` ga tushadi: eng eski ochiq
+   qarzdan boshlab taqsimlanadi, har qarz uchun ALOHIDA kirim yoziladi
+   (kategoriya kesimi saqlansin), qisman to'lov o'z-o'zidan ishlaydi.
+   Ikkinchi qarz mantiqi yozilmadi.
+3. **BIR AMAL — BIR `amalId`.** Bitta pul harakati bir necha yozuv
+   qoldirishi mumkin (qarz taqsimoti), shuning uchun tuzatish va bekor
+   qilish AMAL bo'yicha ishlaydi, yozuv bo'yicha emas.
+
+## Sxema (faqat qo'shuvchi migratsiya)
+
+`20260905090000_moliya_pul_oqimi` — `Transaction` ga 6 ta NULL bo'lishi
+mumkin bo'lgan ustun: `shaxsTuri`, `shaxsId`, `shaxsIsm` (tomon, FK'siz —
+kartochka o'chirilsa tarix o'qiladigan qolsin), `pulUsuli`, `amalId`,
+`idempotencyKey`. Birorta mavjud yozuv o'zgarmaydi.
+
+## Qabul qilingan qarorlar
+
+- **Moliya lug'ati kengaytirilmadi.** `tolovTuri` avvalgidek
+  naqd/click/qarz. Foydalanuvchi tanlagan aniq usul (Naqd / Terminal /
+  Click / Pul o'tkazish) `pulUsuli` da saqlanadi — `DealTolov.kanal` bilan
+  AYNI uslub. Farq kassaga ham tushadi: terminal → plastik, o'tkazma → bank.
+- **Sabab = kategoriya.** Yangi "sabab" jadvali ochilmadi: sabablar
+  `ensureCategoryTx` bilan oddiy kategoriya sifatida yaratiladi, direktor
+  qo'shgan kategoriyalar esa formada darhol tanlanadi.
+- **Tuzatish = bekor + qayta yozish, bitta tranzaksiyada.** Summa o'zgarsa
+  qarz taqsimoti ham o'zgaradi; mavjud yozuvlarni "joyida" tahrirlash uchun
+  FIFO qoidasidan ajralib ketadigan ikkinchi mantiq kerak bo'lardi.
+- **Bekor qilish — soft delete + qarzni tiklash.** Yozuv o'chirilmaydi
+  (`deletedAt`), `DebtPayment` o'chiriladi va `Debt.tolangan` qaytariladi.
+- **Takror bosish himoyasi bazada:** oddiy yo'lda
+  `Transaction @@unique([businessId, idempotencyKey])`, qarz yo'lida esa
+  mavjud `DebtPayment @@unique([debtId, idempotencyKey])`. Bekor qilishda
+  topilgan har bir to'lov AYNAN shu amalning yozuviga bog'langani
+  tekshiriladi — klientdan kelgan kalitga ishonilmaydi.
+
+## Testlar
+
+`npm run test:moliya-pul` (11 ta): oddiy chiqim qarz yaratmasligi, takror
+bosish, mijoz va ta'minotchi qarzi to'lovi, ortiqcha to'lovning rad
+etilishi, usulga mos kassa, tuzatish (kassa + qarz), bekor qilish, ro'yxat
+maydonlari, tomon qidiruvi, tenant izolyatsiyasi.
+
+Regressiya: `isolation`, `izolyatsiya-royxati`, `qarz`, `qarzdorlik`,
+`qarz-taqsimot`, `kirim-chiqim`, `kassa`, `kassa-qoldiq`, `migratsiya`,
+`atomik`, `audit`, `soft-delete`, `agregat`, `tolov-taqsimoti`, `xarid`,
+`taminot`, `crm-tolovlar`, `backup` — hammasi yashil. `npm run build` o'tdi.
+
+## Merge oldidan audit (2026-09-05)
+
+**1. `idempotencyKey` multi-tenant.** Cheklov `@@unique([businessId,
+idempotencyKey])`. `Business.tenantId` — MAJBURIY skalyar, ya'ni bitta
+biznes aynan bitta tenantga tegishli; demak bu cheklov
+`(tenantId, idempotencyKey)` dan QAT'IY tor va bir tenantning kaliti
+boshqasinikini to'sa olmaydi. Test indeks ustunlarini `pragma_index_info`
+bilan o'qib isbotlaydi va ikki tenantda AYNI kalit bilan yozuv yozadi.
+
+**2. TOPILGAN VA TUZATILGAN XATO — qarzga bog'langan yozuv qulfi.**
+`/api/moliya/[amalId]` PATCH/DELETE `requireManager` bilan yopiq edi, lekin
+YONDOSH yo'l ochiq qolgan: `/api/transactions/[id]` PATCH/DELETE
+`requireOwnerOrAdmin` ishlatadi, ya'ni KASSIR o'zi kiritgan yozuvni
+tahrirlay olardi — shu jumladan qarz to'lovi yozuvini. U holda kassa
+o'zgarib, `Debt.tolangan` o'sha-o'sha qolardi (2 mln to'lov 10 mln ga
+tuzatilsa kassa 10 mln, qarzdan esa 2 mln ayrilgan bo'lib qolardi). Ayni
+teshik `/api/transactions/bulk` ommaviy o'chirishida ham bor edi.
+
+Bu MENING o'zgarishim keltirgan xato emas — qarz to'lovlari ilgari ham
+`Transaction` yozardi — lekin Moliya oqimi uni asosiy yo'lga aylantirgani
+uchun endi yopildi: `lib/services/yozuvQulfi.ts`. Bitta yozuvda
+`ForbiddenError`, ommaviy amalda esa qulflangani O'TKAZIB YUBORILADI
+(50 tadan bittasi qarz to'lovi bo'lgani uchun qolgani bloklanmasin) va
+nechtasi o'tkazib yuborilgani javobda qaytadi.
+
+**3-5. Chuqur oqim testlari** — `npm run test:moliya-audit` (12 ta):
+CUSTOMER 5→2→3→bekor→5 mln, SUPPLIER 7→3→4→bekor→7 mln, FIFO uch qarzga
+taqsimlash va tuzatishda eski allocation TO'LIQ bekor bo'lib qayta
+taqsimlanishi, ledger tozaligi (2 mln → 1,5 mln tuzatishdan keyin faol
+yozuvlar soni faqat bittaga oshadi — correction tranzaksiyasi YO'Q),
+har to'lov usulining o'z kassa turiga tushishi.
+
+**6. Migratsiya xavfsizligi** — `npm run test:moliya-migratsiya` (4 ta).
+Eng katta xavf: `idempotencyKey` ustidagi UNIQUE indeks migratsiyadan keyin
+BARCHA eski yozuvlarda NULL bo'ladi. Test migratsiyagacha bo'lgan bazani
+quradi, 5 ta tranzaksiya soladi, migratsiyani qo'llaydi va har ustunni
+bayt-ma-bayt solishtiradi. SQLite ham, Postgres ham UNIQUE indeksda
+NULL larni TENG deb hisoblamaydi, shuning uchun indeks yaratish yiqilmaydi.
+SQL faqat 6 ta nullable `ADD COLUMN` + 3 ta `CREATE INDEX`:
+DROP/TRUNCATE/DELETE/UPDATE/RENAME/INSERT YO'Q.
 
 ---
 

@@ -88,6 +88,11 @@ export const buyurtmaPatchSchema = z.object({
   holat: z.enum(ZAKAZ_HOLATLARI).optional(),
   /** "Bugungi zakazga o'tkazish": sanani bugunga suradi. */
   bugungaKochir: z.boolean().optional(),
+  /**
+   * YO'QOTISH SABABI — "Yo'qotildi" ga o'tkazishda. Boshqa holatga
+   * o'tkazishda e'tiborsiz qoladi (server sababni o'zi tozalaydi).
+   */
+  yoqotishSababi: z.string().trim().max(500, "Sabab 500 belgidan oshmasin").optional().nullable(),
   nomi: z.string().trim().min(1).max(200).optional(),
   summa: z.number().int().min(0).optional(),
   categoryId: z.string().trim().optional().nullable(),

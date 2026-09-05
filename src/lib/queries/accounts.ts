@@ -383,6 +383,35 @@ export async function listKutilayotganTransferlar(
   return rows.map(transferDto);
 }
 
+/**
+ * KASSA TOPSHIRISHLARI — direktorning "Kassa qabul qilish" sahifasi uchun.
+ *
+ * Faqat `turi = "smena"` qatorlari: oddiy pul o'tkazmalari bu ro'yxatga
+ * tushmaydi (ular Kassalar sahifasidagi harakatlar lentasida). Topshirish
+ * bu yerda IKKI bo'lakda ko'rsatiladi — qabul kutayotganlar (harakat talab
+ * qiladi) va tarix (qabul qilingan/rad etilgan).
+ *
+ * `holatlar` berilmasa hammasi qaytadi. Tenant izolyatsiyasi — scoped
+ * `prisma` va `businessId` sharti (sahifa aktiv biznes bilan chaqiradi).
+ */
+export async function listTopshirishlar(
+  businessId: string,
+  holatlar: string[] | null,
+  limit = 50
+): Promise<TransferDTO[]> {
+  const rows = await prisma.accountTransfer.findMany({
+    where: {
+      businessId,
+      turi: "smena",
+      ...(holatlar ? { holat: { in: holatlar } } : {}),
+    },
+    include: TRANSFER_INCLUDE,
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+  return rows.map(transferDto);
+}
+
 /** Berilgan kundan boshlab yakunlangan o'tkazmalar (direktor paneli: "bugungi transferlar"). */
 export async function listTransferlarKundan(
   businessId: string,

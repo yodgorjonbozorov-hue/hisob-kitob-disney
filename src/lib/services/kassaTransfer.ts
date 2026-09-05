@@ -100,10 +100,13 @@ export async function ozKassaTopshirishimi(
 /**
  * O'TKAZMA YARATISH.
  *
- * Tasdiq TALAB QILINADI qachonki qabul qiluvchi kassa BOSHQA odamniki bo'lsa:
- * pul o'sha odamning qo'liga o'tadi va u sanab olishi kerak. Umumiy kassaga
- * (bank, terminal) yoki o'z kassasiga o'tkazma darhol yakunlanadi — u yerda
- * tasdiqlaydigan ikkinchi tomon yo'q.
+ * KASSA TOPSHIRISH (`turi = "smena"`) HAR DOIM tasdiq kutadi — topshirish va
+ * qabul qilish ikkita alohida operatsiya (pastdagi `tasdiqKerak` izohi).
+ *
+ * ODDIY O'TKAZMADA tasdiq faqat qabul qiluvchi kassa BOSHQA odamniki
+ * bo'lganda: pul o'sha odamning qo'liga o'tadi va u sanab olishi kerak.
+ * Umumiy kassaga (bank, terminal) yoki o'z kassasiga oddiy o'tkazma darhol
+ * yakunlanadi — u yerda tasdiqlaydigan ikkinchi tomon yo'q.
  */
 export async function kassaTransferYarat(
   businessId: string,
@@ -155,7 +158,23 @@ export async function kassaTransferYarat(
       );
     }
 
-    const tasdiqKerak = !!to.userId && to.userId !== aktor.userId;
+    /*
+     * TASDIQ QACHON KERAK.
+     *
+     * KASSA TOPSHIRISH (`turi = "smena"`) — HAR DOIM. Topshirish ikkita
+     * ALOHIDA operatsiya: xodim topshiradi, direktor QABUL QILADI. Ilgari
+     * shart faqat "qabul qiluvchi kassa boshqa odamniki" edi, shuning uchun
+     * umumiy (egasiz) direktor/asosiy kassaga topshirish DARHOL yakunlanardi
+     * — xodimning kassasi hech kim sanamasdan turib nolga tushardi. Endi
+     * bunday topshiriq ham "Qabul kutilmoqda" holatida turadi va uni faqat
+     * boshqaruvchi yopadi (`kassaTransferQaror`: egasiz kassada
+     * `qabulQiluvchi` bo'lmaydi, faqat `isManager` o'tadi).
+     *
+     * ODDIY O'TKAZMA — avvalgidek: tasdiq faqat pul BOSHQA odamning qo'liga
+     * o'tganda. O'z kassalari orasidagi yoki umumiy kassaga (bank, terminal)
+     * ko'chirishda tasdiqlaydigan ikkinchi tomon yo'q.
+     */
+    const tasdiqKerak = turi === "smena" || (!!to.userId && to.userId !== aktor.userId);
 
     // IKKI MARTA YUBORISHDAN HIMOYA: aynan shu yo'nalish va summa bilan
     // tasdiq kutayotgan o'tkazma bo'lsa — ikkinchisi yaratilmaydi.

@@ -37,8 +37,14 @@ export interface XodimKassaDTO {
   kirim: number;
   /** Joriy smena chiqimi. */
   chiqim: number;
-  /** Kassada MAVJUD pul = ledger qoldig'i − tasdiq kutayotgan topshirish. */
+  /**
+   * KASSADAGI PUL — ledger qoldig'i. Topshirilgan, lekin hali qabul
+   * qilinmagan summa AYRILMAYDI: topshirish va qabul qilish ikki alohida
+   * operatsiya, pul esa qabul qilingunga qadar xodimning qo'lida.
+   */
   kassada: number;
+  /** Yangi topshirish uchun band bo'lmagan qism: kassada − kutilayotgan. */
+  mavjud: number;
   /** Topshirilgan, hali qabul qilinmagan summa (bo'lsa). */
   ochiqTopshirish: { summa: number; kimga: string } | null;
   nishonlar: TopshirishNishoniDTO[];
@@ -102,7 +108,8 @@ export async function xodimKassaHolati(
     ism,
     kirim: meniki.smenaKirim,
     chiqim: meniki.smenaChiqim,
-    kassada: meniki.mavjud,
+    kassada: meniki.qoldiq,
+    mavjud: meniki.mavjud,
     ochiqTopshirish: ochiq
       ? { summa: ochiq.summa, kimga: ochiq.toUserIsm ?? ochiq.toAccount.nomi }
       : null,

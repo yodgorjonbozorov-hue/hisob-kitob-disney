@@ -30,6 +30,32 @@ export interface CreateTransactionData {
    * (lib/services/sotuvchi.ts). Kirimda berilmasa — yozuvchi o'zi.
    */
   sotuvchiId?: string | null;
+  /**
+   * MOLIYA: pul kimdan olindi / kimga berildi (lib/moliya/shaxs.ts).
+   * Berilmasa yozuv avvalgidek tomonsiz qoladi — sotuv, oylik va CRM
+   * ko'chirmasi shu yo'ldan o'tadi va ular uchun tomon tushunchasi yo'q.
+   */
+  shaxsTuri?: string | null;
+  shaxsId?: string | null;
+  shaxsIsm?: string | null;
+  /** Foydalanuvchi tanlagan aniq to'lov usuli (lib/moliya/usul.ts). */
+  pulUsuli?: string | null;
+  /** Bitta "Pul oldim/berdim" amalining barcha yozuvlarini birlashtiruvchi kalit. */
+  amalId?: string | null;
+  /** Takror yuborishdan himoya — baza darajasidagi UNIQUE cheklov kaliti. */
+  idempotencyKey?: string | null;
+}
+
+/** Yangi (moliya oqimi) maydonlari — ikkala yozish yo'lida bir xil. */
+function moliyaMaydonlari(data: CreateTransactionData) {
+  return {
+    shaxsTuri: data.shaxsTuri ?? undefined,
+    shaxsId: data.shaxsId ?? undefined,
+    shaxsIsm: data.shaxsIsm ?? undefined,
+    pulUsuli: data.pulUsuli ?? undefined,
+    amalId: data.amalId ?? undefined,
+    idempotencyKey: data.idempotencyKey ?? undefined,
+  };
 }
 
 /**
@@ -108,6 +134,7 @@ export async function createTransaction(userId: string, businessId: string, data
       // Kirim savdosi HAR DOIM kimgadir yoziladi — berilmasa yozuvchining o'ziga
       // (bot va tez qo'shish shu yo'ldan yuradi). Chiqimda sotuvchi bo'lmaydi.
       sotuvchiId: data.turi === "kirim" ? data.sotuvchiId ?? userId : null,
+      ...moliyaMaydonlari(data),
     },
     include: {
       category: true,
@@ -206,6 +233,7 @@ export async function createTransactionTx(
       // TIZIM yozuvlari (qarz to'lovi, oylik, xarid) sotuvchisiz qoladi —
       // savdo emas. CRM ko'chirishi esa buyurtma mas'ulini OCHIQ uzatadi.
       sotuvchiId: data.turi === "kirim" ? data.sotuvchiId ?? null : null,
+      ...moliyaMaydonlari(data),
     },
   });
 }
