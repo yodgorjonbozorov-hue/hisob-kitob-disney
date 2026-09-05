@@ -8,7 +8,7 @@ import { dashboardYangilandi } from "@/lib/cache";
 /**
  * KUTILAYOTGAN BUYURTMANI QABUL QILISH.
  *
- * "Tovar keldi" oqimi ta'minotni bir qadamda yozadi, lekin XARID moduli
+ * "Omborga ta'minot" oqimi ta'minotni bir qadamda yozadi, lekin XARID moduli
  * bilan ilgari yaratilgan QORALAMA/TASDIQLANGAN buyurtmalar bazada qolgan.
  * Ular Ombor ichidagi "Ta'minotlar" tabida "Kutilmoqda" bo'lib ko'rinadi va
  * shu yerdan qabul qilinadi — aks holda mijozning ochiq buyurtmalari

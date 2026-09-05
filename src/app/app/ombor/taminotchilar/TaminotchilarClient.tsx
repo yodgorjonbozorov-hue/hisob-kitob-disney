@@ -71,7 +71,10 @@ export function TaminotchilarClient({
           ustunlar={ustunlar}
           qatorlar={suppliers}
           kalit={(s) => s.id}
-          amallar={(s) => [{ label: "Tahrirlash", onClick: () => setModal(s), tur: "asosiy" }]}
+          amallar={(s) => [
+            { label: "Profil", href: `/app/ombor/taminotchilar/${s.id}`, tur: "asosiy" },
+            { label: "Tahrirlash", onClick: () => setModal(s), tur: "oddiy" },
+          ]}
           bosh={
             <EmptyState
               icon="🏭"

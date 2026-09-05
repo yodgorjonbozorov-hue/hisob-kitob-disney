@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { INPUT_CLASS } from "@/components/ui/fieldStyles";
 import { useToast } from "@/components/ui/Toast";
 import { formatSom, formatSomLabel, formatDateUz } from "@/lib/format";
+import { TaminotTahrir } from "./TaminotTahrir";
 import type { TaminotDTO } from "@/lib/queries/ombor";
 
 /**
@@ -29,6 +30,7 @@ export function TaminotDetal({
   onYangilandi: () => void;
 }) {
   const { toast } = useToast();
+  const [tahrir, setTahrir] = useState(false);
   const [bekorRejim, setBekorRejim] = useState(false);
   const [sabab, setSabab] = useState("");
   const [xato, setXato] = useState<string | null>(null);
@@ -180,11 +182,29 @@ export function TaminotDetal({
             </div>
           </div>
         ) : (
-          <Button variant="ghost" onClick={() => setBekorRejim(true)} className="w-full">
-            Ta&apos;minotni bekor qilish
-          </Button>
+          <div className="flex gap-2">
+            {t.holat === "qabul_qilingan" && (
+              <Button variant="secondary" onClick={() => setTahrir(true)} className="flex-1">
+                To&apos;g&apos;rilash
+              </Button>
+            )}
+            <Button variant="ghost" onClick={() => setBekorRejim(true)} className="flex-1">
+              Bekor qilish
+            </Button>
+          </div>
         )}
       </div>
+
+      {tahrir && (
+        <TaminotTahrir
+          taminot={t}
+          onClose={() => setTahrir(false)}
+          onDone={() => {
+            setTahrir(false);
+            onYangilandi();
+          }}
+        />
+      )}
     </Modal>
   );
 }

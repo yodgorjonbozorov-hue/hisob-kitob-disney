@@ -8,9 +8,9 @@ import { createTaminotSchema } from "@/lib/validation/taminot";
 import { dashboardYangilandi } from "@/lib/cache";
 
 /**
- * TA'MINOT ("Tovar keldi") — Ombor modulining yozuv amali.
+ * TA'MINOT ("Omborga ta'minot") — Ombor modulining yozuv amali.
  *
- * NEGA `OMBOR` MODULIDA, `XARID` da emas: "tovar keldi" — omborning eng
+ * NEGA `OMBOR` MODULIDA, `XARID` da emas: "omborga ta'minot" — omborning eng
  * asosiy hodisasi, uni alohida modul ortiga yashirish gul do'koni yoki
  * kichik magazin uchun ma'nosiz. Eski uch qadamli XARID oqimi (reja →
  * tasdiq → qabul) o'z modulida qoldi; ikkalasi ham bir xil hisob

@@ -18,11 +18,11 @@ import { TaminotDetal } from "./TaminotDetal";
  */
 export function TaminotlarTab({
   royxat,
-  onTovarKeldi,
+  onTaminot,
   onYangilandi,
 }: {
   royxat: TaminotRoyxatDTO;
-  onTovarKeldi: () => void;
+  onTaminot: () => void;
   onYangilandi: () => void;
 }) {
   const [ochiq, setOchiq] = useState<TaminotDTO | null>(null);
@@ -33,7 +33,7 @@ export function TaminotlarTab({
         icon="🚚"
         title="Hali ta'minot yo'q"
         description="Tovar kelganda uni shu yerdan kiriting — ombor qoldig'i avtomatik oshadi."
-        action={<Button onClick={onTovarKeldi}>+ Tovar keldi</Button>}
+        action={<Button onClick={onTaminot}>+ Omborga ta&apos;minot</Button>}
       />
     );
   }

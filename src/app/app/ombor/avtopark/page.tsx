@@ -13,7 +13,7 @@ import { omborMatn, isAvto } from "@/lib/biznesTuri";
 /**
  * AVTOPARK — avto (olib-sotar) bizneslar uchun ESKI Ombor ko'rinishi.
  *
- * Yangi Ombor sahifasi (rasmli kartochka gridi, "+ Tovar keldi" oqimi,
+ * Yangi Ombor sahifasi (rasmli kartochka gridi, "+ Omborga ta'minot" oqimi,
  * ta'minotchi tanlash) tovar OQIMI bilan ishlaydigan biznes uchun
  * qurilgan: bir xil mahsulot yuz marta keladi va ketadi. Avtoparkda esa
  * har yozuv YAGONA mashina — u yerda kartochka gridi ham, miqdor kiritish

@@ -3,13 +3,17 @@ import { prisma } from "@/lib/prisma";
 import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { runBusinessTx } from "@/lib/db/businessTx";
 import { currentTenantId } from "@/lib/db/tenantContext";
-import { dateOnlyStringToUTCDate, todayDateOnlyString } from "@/lib/date";
+import { dateOnlyStringToUTCDate, todayDateOnlyString, utcDateToDateOnlyString } from "@/lib/date";
 import { logAudit } from "@/lib/services/audit";
-import { qabulYozuvlariTx, satrlarniTayyorla } from "@/lib/services/xarid";
-import type { CreateTaminotInput } from "@/lib/validation/taminot";
+import { pulHarakatiTx, qabulYozuvlariTx, satrlarniTayyorla } from "@/lib/services/xarid";
+import type {
+  CreateTaminotInput,
+  TaminotTolovUsuli,
+  UpdateTaminotInput,
+} from "@/lib/validation/taminot";
 
 /**
- * TA'MINOT — "Tovar keldi" oqimining xizmat qatlami.
+ * TA'MINOT — "Omborga ta'minot" oqimining xizmat qatlami.
  *
  * BIR QADAM: yozuv yaratiladi va O'SHA ZAHOTI qabul qilingan hisoblanadi.
  * Eski uch qadamli xarid oqimi (qoralama → tasdiqlangan → qabul) o'z joyida
@@ -161,6 +165,256 @@ export async function taminotYarat(params: {
     },
   });
   return natija;
+}
+
+/**
+ * TA'MINOTNI TAHRIRLASH (DIREKTOR) — to'g'rilash, qayta yozish EMAS.
+ *
+ * Direktor xato kiritilgan ta'minotni to'g'rilay olishi kerak: miqdor,
+ * narx, ta'minotchi, sana, izoh va hatto Naqd ↔ Qarz holati. Lekin
+ * `PurchaseOrder` yozuvini shunchaki `update` qilish MOLIYANI BUZADI —
+ * ombor allaqachon oshgan, kassadan pul chiqqan yoki qarz yozilgan.
+ *
+ * Shuning uchun tahrirlash bitta atomik amalda uchta ishni birga bajaradi:
+ *
+ *   1. OMBOR — eski va yangi satrlar FARQI bo'yicha to'g'rilanadi
+ *      (50 → 40 bo'lsa qoldiq −10). Har farq uchun `StockAdjustment`
+ *      yoziladi: tarix QAYTA YOZILMAYDI, to'g'rilash QO'SHILADI.
+ *   2. PUL — eski yozuv butunlay orqaga qaytariladi (chiqim yumshoq
+ *      o'chiriladi, qarz o'chiriladi), so'ng yangi holat bo'yicha
+ *      `pulHarakatiTx` bilan NOLDAN yoziladi. Shu bois Naqd → Qarz va
+ *      Qarz → Naqd o'tishlari alohida tarmoqni talab qilmaydi: ikkalasi
+ *      ham "eskisini qaytar, yangisini yoz" qoidasining natijasi.
+ *   3. AUDIT — eski va yangi qiymat bilan.
+ *
+ * RAD ETILADIGAN HOLATLAR (biri bo'lsa butun amal bekor):
+ *   - ta'minot qabul qilingan holatda emas (qoralama hech narsaga tegmagan,
+ *     bekor qilingani esa allaqachon qaytarilgan);
+ *   - to'lov ta'minotchining shaxsiy kassasiga transfer bilan ketgan;
+ *   - qarz bo'yicha to'lov qilingan (avval to'lov bekor qilinishi kerak);
+ *   - qisman to'langan ta'minot (PRO oqimi) — bu yerda ma'nosi noaniq;
+ *   - miqdorni kamaytirish ombor qoldig'ini MANFIYGA tushirsa (tovarning
+ *     bir qismi allaqachon sotilgan).
+ */
+export async function taminotTahrir(params: {
+  businessId: string;
+  orderId: string;
+  userId: string;
+  data: UpdateTaminotInput;
+}) {
+  const { businessId, orderId, userId, data } = params;
+  const tenantId = currentTenantId();
+
+  const { natija, oldin } = await runBusinessTx(businessId, async (tx) => {
+    const order = await tx.purchaseOrder.findFirst({ where: { id: orderId, businessId } });
+    if (!order) throw new ForbiddenError("Ta'minot topilmadi");
+    if (order.holat === "bekor") {
+      throw new BadRequestError("Bekor qilingan ta'minotni tahrirlab bo'lmaydi");
+    }
+    if (order.holat !== "qabul_qilingan") {
+      throw new BadRequestError(
+        "Bu buyurtma hali qabul qilinmagan — avval qabul qiling, keyin tahrirlang"
+      );
+    }
+    if (order.transferId) {
+      throw new BadRequestError(
+        "Bu ta'minot to'lovi ta'minotchining shaxsiy kassasiga o'tkazilgan — " +
+          "avval Kassa transferi bo'limida o'tkazmani qaytaring"
+      );
+    }
+    if (order.tolanganSumma > 0 && order.tolanganSumma < order.jamiSumma) {
+      throw new BadRequestError(
+        "Qisman to'langan ta'minotni tahrirlab bo'lmaydi — avval uni bekor qilib qaytadan kiriting"
+      );
+    }
+
+    // Yangi holat: berilmagan maydon avvalgidek qoladi.
+    const yangiSupplierId = data.supplierId ?? order.supplierId;
+    const supplier = await tx.supplier.findFirst({
+      where: { id: yangiSupplierId, businessId, deletedAt: null },
+      select: { id: true, nomi: true },
+    });
+    if (!supplier) throw new ForbiddenError("Ta'minotchi topilmadi");
+
+    const eskiSana = order.qabulSana ?? order.sana;
+    const yangiSana = data.sana ?? utcDateToDateOnlyString(eskiSana);
+    const yangiUsul: TaminotTolovUsuli =
+      data.tolovUsuli ?? (order.tolovTuri === "qarz" ? "qarz" : "naqd");
+    const qarzga = yangiUsul === "qarz";
+
+    // --- 1) TEKSHIRUVLAR AVVAL, o'zgarish keyin ---------------------------
+    //
+    // Tranzaksiya baribir orqaga qaytadi, lekin foydalanuvchi KO'RADIGAN
+    // xato birinchi uchragan to'siqniki bo'ladi. Ombor to'sig'i eng foydali
+    // xabarni beradi, shuning uchun u birinchi tekshiriladi.
+    const eskiSatrlar = await tx.purchaseOrderItem.findMany({ where: { orderId, businessId } });
+
+    const yangiSatrlar = data.satrlar
+      ? (await satrlarniTayyorla(tx, businessId, data.satrlar)).tayyor
+      : eskiSatrlar.map((s) => ({
+          productId: s.productId,
+          miqdor: s.miqdor,
+          birlikNarx: s.birlikNarx,
+          jamiSumma: s.jamiSumma,
+        }));
+
+    // Bir mahsulot ikki satrda bo'lishi mumkin — farq MAHSULOT bo'yicha
+    // jamlanadi, aks holda to'g'rilash ikki marta yozilardi.
+    const eskiMiqdor = miqdorlarniJamla(eskiSatrlar);
+    const yangiMiqdor = miqdorlarniJamla(yangiSatrlar);
+
+    const togrilashlar: { productId: string; nomi: string; farq: number; eski: number }[] = [];
+    for (const productId of new Set([...eskiMiqdor.keys(), ...yangiMiqdor.keys()])) {
+      const farq = (yangiMiqdor.get(productId) ?? 0) - (eskiMiqdor.get(productId) ?? 0);
+      if (farq === 0) continue;
+      const product = await tx.product.findFirst({
+        where: { id: productId, businessId },
+        select: { id: true, nomi: true, miqdor: true },
+      });
+      // Mahsulot o'chirilgan — qaytariladigan qoldiq yo'q (bekor qilishdagi qoida).
+      if (!product) continue;
+      if (product.miqdor + farq < 0) {
+        throw new BadRequestError(
+          `"${product.nomi}" dan omborda ${product.miqdor} ta qoldi — ` +
+            `${-farq} tasini ayirib bo'lmaydi (bir qismi sotilgan). ` +
+            `Avval sotuvni bekor qiling yoki qoldiqni inventarizatsiya bilan to'g'rilang.`
+        );
+      }
+      togrilashlar.push({ productId, nomi: product.nomi, farq, eski: product.miqdor });
+    }
+
+    // Qarz: to'lov qilingan bo'lsa tahrirlashga yo'l yo'q — aks holda to'lov
+    // "havoda" qolib, kassaga tushgan pul hech qayerga bog'lanmasdi.
+    if (order.debtId) {
+      const debt = await tx.debt.findFirst({
+        where: { id: order.debtId, businessId },
+        select: { id: true, tolangan: true },
+      });
+      if (debt && debt.tolangan > 0) {
+        throw new BadRequestError(
+          "Bu ta'minot qarzi bo'yicha to'lov qilingan — avval to'lovlarni bekor qiling"
+        );
+      }
+    }
+
+    // --- 2) ESKI PUL YOZUVINI QAYTARISH -----------------------------------
+    if (order.transactionId) {
+      await tx.transaction.updateMany({
+        where: { id: order.transactionId, businessId, deletedAt: null },
+        data: { deletedAt: new Date() },
+      });
+    }
+    if (order.debtId) {
+      await tx.debt.deleteMany({ where: { id: order.debtId, businessId } });
+    }
+
+    // --- 3) SATRLARNI ALMASHTIRISH ----------------------------------------
+    if (data.satrlar) {
+      await tx.purchaseOrderItem.deleteMany({ where: { orderId, businessId } });
+      for (const s of yangiSatrlar) {
+        await tx.purchaseOrderItem.create({ data: { businessId, orderId, ...s } });
+      }
+    }
+
+    // --- 4) OMBOR TO'G'RILASHI --------------------------------------------
+    for (const t of togrilashlar) {
+      await tx.product.updateMany({
+        where: { id: t.productId, businessId },
+        data: { miqdor: { increment: t.farq } },
+      });
+      await tx.stockAdjustment.create({
+        data: {
+          businessId,
+          productId: t.productId,
+          turi: "taminot_tahrir",
+          eskiMiqdor: t.eski,
+          yangiMiqdor: t.eski + t.farq,
+          farq: t.farq,
+          sabab: `Ta'minot tahrirlandi (${supplier.nomi})`,
+          userId,
+        },
+      });
+    }
+    // Tannarx snapshot — yaratishdagi qoida bilan bir xil (oxirgi kelgan narx).
+    for (const s of yangiSatrlar) {
+      await tx.product.updateMany({
+        where: { id: s.productId, businessId },
+        data: { kelganNarx: s.birlikNarx },
+      });
+    }
+
+    // --- 5) YANGI PUL YOZUVI ----------------------------------------------
+    const jamiSumma = yangiSatrlar.reduce((a, s) => a + s.jamiSumma, 0);
+    const pul = await pulHarakatiTx(tx, {
+      businessId,
+      orderId,
+      userId,
+      tenantId,
+      sana: yangiSana,
+      supplierId: supplier.id,
+      tolovTuri: qarzga ? "qarz" : "naqd",
+      jamiSumma,
+      accountId: data.accountId ?? null,
+      tolovUsuli: yangiUsul === "karta" ? "karta" : yangiUsul === "naqd" ? "naqd" : null,
+      izohBelgisi: "tahrirlandi",
+    });
+
+    const yangilangan = await tx.purchaseOrder.update({
+      where: { id: orderId },
+      data: {
+        supplierId: supplier.id,
+        sana: dateOnlyStringToUTCDate(yangiSana),
+        qabulSana: dateOnlyStringToUTCDate(yangiSana),
+        tolovTuri: qarzga ? "qarz" : "naqd",
+        jamiSumma,
+        tolanganSumma: pul.tolangan,
+        transactionId: pul.transactionId,
+        transferId: pul.transferId,
+        debtId: pul.debtId,
+        ...(data.izoh !== undefined ? { izoh: data.izoh?.trim() || null } : {}),
+      },
+    });
+
+    return {
+      natija: yangilangan,
+      // Audit uchun ESKI qiymat — tranzaksiya ichida olinadi, chunki
+      // tashqaridagi ikkinchi so'rov allaqachon yangilangan yozuvni ko'radi.
+      oldin: {
+        supplierId: order.supplierId,
+        tolovTuri: order.tolovTuri,
+        jamiSumma: order.jamiSumma,
+        tolanganSumma: order.tolanganSumma,
+        sana: utcDateToDateOnlyString(eskiSana),
+        satrlar: eskiSatrlar.length,
+        jamiMiqdor: [...eskiMiqdor.values()].reduce((a, m) => a + m, 0),
+      },
+    };
+  });
+
+  await logAudit({
+    businessId,
+    action: "update",
+    entity: "purchaseOrder",
+    entityId: orderId,
+    before: { taminot: true, ...oldin },
+    after: {
+      taminot: true,
+      supplierId: natija.supplierId,
+      tolovTuri: natija.tolovTuri,
+      jamiSumma: natija.jamiSumma,
+      tolanganSumma: natija.tolanganSumma,
+      sana: utcDateToDateOnlyString(natija.qabulSana ?? natija.sana),
+      satrlar: data.satrlar ? data.satrlar.length : oldin.satrlar,
+    },
+  });
+  return natija;
+}
+
+/** Mahsulot bo'yicha jamlangan miqdorlar (bir mahsulot ikki satrda bo'lishi mumkin). */
+function miqdorlarniJamla(satrlar: { productId: string; miqdor: number }[]): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const s of satrlar) m.set(s.productId, (m.get(s.productId) ?? 0) + s.miqdor);
+  return m;
 }
 
 /**

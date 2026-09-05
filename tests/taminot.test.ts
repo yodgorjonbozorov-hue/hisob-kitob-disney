@@ -1,5 +1,5 @@
 /**
- * TA'MINOT ("Tovar keldi") — Ombor modulining bir qadamli kirim oqimi.
+ * TA'MINOT ("Omborga ta'minot") — Ombor modulining bir qadamli kirim oqimi.
  *
  * Bu yerda tekshiriladigan narsa UI emas, HISOB: bir xil tovar naqdga
  * olinganda kassadan pul chiqishi, qarzga olinganda esa PUL UMUMAN
