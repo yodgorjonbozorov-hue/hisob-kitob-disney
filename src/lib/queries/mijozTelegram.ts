@@ -85,6 +85,35 @@ export async function buyurtmaTelegramHolati(
   };
 }
 
+/**
+ * BUYURTMA BO'YICHA MIJOZGA YUBORILGAN OXIRGI MATN.
+ *
+ * Botdagi "buyurtma tafsiloti" shu matnni QAYTA ko'rsatadi — mijoz aynan
+ * o'zi olgan hujjatni ko'radi, qarz raqamlari bugungi ledgerga qarab
+ * o'zgarib ketmaydi. Bekor xabari CHIQARILADI: tafsilot bekor qilinmagan
+ * xaridlar ro'yxatidan ochiladi.
+ *
+ * null — bunday xabar hech qachon ketmagan (masalan mijoz keyinroq
+ * ulangan); shunda chaqiruvchi joriy holatdan chizadi.
+ */
+export async function buyurtmaOxirgiMatni(
+  businessId: string,
+  manba: { chekId?: string | null; saleId?: string | null }
+): Promise<string | null> {
+  if (!manba.chekId && !manba.saleId) return null;
+  const oxirgi = await prisma.telegramNotification.findFirst({
+    where: {
+      businessId,
+      ...(manba.chekId ? { chekId: manba.chekId } : { saleId: manba.saleId }),
+      holat: "YUBORILDI",
+      turi: { in: ["SALE_CREATED", "SALE_UPDATED"] },
+    },
+    orderBy: { versiya: "desc" },
+    select: { matn: true },
+  });
+  return oxirgi?.matn ?? null;
+}
+
 /** Mijoz kartochkasidagi Telegram bloki. */
 export interface MijozTelegramDTO {
   /**

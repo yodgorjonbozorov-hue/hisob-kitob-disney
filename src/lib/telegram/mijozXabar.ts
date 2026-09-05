@@ -1,6 +1,6 @@
 import { formatSom, uzOyNomi } from "@/lib/format";
 import { TOLOV_BOLIMI_BELGI, TOLOV_BOLIMI_NOMI } from "@/lib/tolovBolimi";
-import type { BuyurtmaMalumot, BuyurtmaSatr, BuyurtmaTolovi } from "./buyurtma";
+import type { BuyurtmaMalumot, BuyurtmaSatr, BuyurtmaTolovi, QarzSnapshot } from "./buyurtma";
 
 /**
  * MIJOZGA KETADIGAN TELEGRAM MATNLARI — formatterlar.
@@ -12,6 +12,10 @@ import type { BuyurtmaMalumot, BuyurtmaSatr, BuyurtmaTolovi } from "./buyurtma";
  * TO'LOV KANALLARI QOTIRILMAGAN (spec 7): qatorlar bazadagi HAQIQIY
  * to'lovlardan chiqadi va nomlari `lib/tolovBolimi.ts` dan olinadi. Yangi
  * kassa turi qo'shilsa xabar o'zi kengayadi, bu fayl tegilmaydi.
+ *
+ * QARZ QIYMATLARI ARGUMENT SIFATIDA KELADI (`QarzSnapshot`), buyurtmadan
+ * QAYTA HISOBLANMAYDI. Sababi: qayta urinishda mijoz AYNAN o'sha paytdagi
+ * raqamlarni ko'rishi kerak — snapshot esa `TelegramNotification` da yotadi.
  */
 
 /** "5-sentabr 2026" — mijoz uchun odatiy o'zbekcha sana. */
@@ -72,18 +76,18 @@ function pulBloki(b: BuyurtmaMalumot): string[] {
 }
 
 /**
- * QARZ BLOKI — oldingi / yangi / jami.
+ * QARZ BLOKI — oldingi / yangi / jami. HAMMASI SNAPSHOT'dan.
  *
  * Faqat mijozda oldindan qarz bo'lganda ko'rinadi: qarzsiz mijozga
  * "Oldingi qarz: 0" deb yozish xabarni ma'nosiz uzaytiradi.
  */
-function qarzBloki(b: BuyurtmaMalumot): string[] {
-  if (b.oldingiQarz <= 0 || b.qarz <= 0) return [];
+function qarzBloki(q: QarzSnapshot): string[] {
+  if (q.debtBefore <= 0 || q.debtAdded <= 0) return [];
   return [
     "",
-    `Oldingi qarz: ${formatSom(b.oldingiQarz)} so'm`,
-    `Yangi qarz: +${formatSom(b.qarz)} so'm`,
-    `📕 Jami qarz: ${formatSom(b.joriyQarz)} so'm`,
+    `Oldingi qarz: ${formatSom(q.debtBefore)} so'm`,
+    `Yangi qarz: +${formatSom(q.debtAdded)} so'm`,
+    `📕 Jami qarz: ${formatSom(q.debtAfter)} so'm`,
   ];
 }
 
@@ -92,7 +96,7 @@ function imzo(b: BuyurtmaMalumot): string[] {
 }
 
 /** 📦 Yangi xarid (SALE_CREATED). */
-export function xaridXabari(b: BuyurtmaMalumot): string {
+export function xaridXabari(b: BuyurtmaMalumot, qarz: QarzSnapshot): string {
   return [
     "📦 Xaridingiz",
     `📅 ${sanaMatni(b.sana)}`,
@@ -101,7 +105,7 @@ export function xaridXabari(b: BuyurtmaMalumot): string {
     ...b.satrlar.map((s, i) => satrMatni(s, i + 1)),
     "",
     ...pulBloki(b),
-    ...qarzBloki(b),
+    ...qarzBloki(qarz),
     ...imzo(b),
   ].join("\n");
 }
@@ -112,7 +116,7 @@ export function xaridXabari(b: BuyurtmaMalumot): string {
  * Mijoz eski xabarni qidirib solishtirmasligi uchun YANGILANGAN to'liq
  * tarkib qayta yuboriladi — faqat "o'zgardi" deb qo'yilmaydi.
  */
-export function ozgarishXabari(b: BuyurtmaMalumot): string {
+export function ozgarishXabari(b: BuyurtmaMalumot, qarz: QarzSnapshot): string {
   return [
     "⚠️ Xaridingizga o'zgartirish kiritildi",
     `📅 ${sanaMatni(b.sana)}`,
@@ -121,7 +125,7 @@ export function ozgarishXabari(b: BuyurtmaMalumot): string {
     ...b.satrlar.map((s, i) => satrMatni(s, i + 1)),
     "",
     ...pulBloki(b),
-    ...qarzBloki(b),
+    ...qarzBloki(qarz),
     ...imzo(b),
   ].join("\n");
 }
@@ -133,7 +137,7 @@ export function ozgarishXabari(b: BuyurtmaMalumot): string {
  * tranzaksiyasi qarz yozuvini o'chiradi), shuning uchun "Jami qarz" — bekor
  * qilinganDAN KEYINGI haqiqiy qoldiq (spec 10).
  */
-export function bekorXabari(b: BuyurtmaMalumot): string {
+export function bekorXabari(b: BuyurtmaMalumot, qarz: QarzSnapshot): string {
   const qatorlar = [
     "❌ Xarid bekor qilindi",
     `📅 ${sanaMatni(b.sana)}`,
@@ -142,7 +146,7 @@ export function bekorXabari(b: BuyurtmaMalumot): string {
     `Bekor qilingan summa: ${formatSom(b.jami)} so'm`,
   ];
   if (b.bekorSababi) qatorlar.push(`Sabab: ${b.bekorSababi}`);
-  qatorlar.push("", `📕 Joriy qarzingiz: ${formatSom(b.joriyQarz)} so'm`);
+  qatorlar.push("", `📕 Joriy qarzingiz: ${formatSom(qarz.debtAfter)} so'm`);
   return qatorlar.join("\n");
 }
 

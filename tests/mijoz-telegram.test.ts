@@ -50,6 +50,17 @@ function B<R>(fn: () => Promise<R>): Promise<R> {
   return runWithTenant(T2.tenant.id, fn, { userId: T2.user.id, ism: "Direktor 2" });
 }
 
+/** Mijozning ledgerdagi HOZIRGI ochiq qarzi (snapshot emas). */
+function joriyQarz(): Promise<number> {
+  return A(async () => {
+    const agg = await rawPrisma.debt.aggregate({
+      where: { businessId: T.business.id, contactId: mijoz, isYopilgan: false, turi: "olinadigan" },
+      _sum: { jamiSumma: true, tolangan: true },
+    });
+    return (agg._sum.jamiSumma ?? 0) - (agg._sum.tolangan ?? 0);
+  });
+}
+
 /** Oxirgi yuborilgan matn. */
 function oxirgi(): string {
   assert.ok(yuborilgan.length > 0, "hech qanday xabar yuborilmagan");
@@ -297,13 +308,7 @@ test("5-7. Ko'p mahsulotli savdo: har satr o'z birligi bilan, jami to'g'ri", asy
 // ---------------------------------------------------------------------------
 
 test("8. Oldingi qarzi bor mijoz: oldingi + yangi = jami qarz", async () => {
-  const oldingiQarz = await A(async () => {
-    const agg = await rawPrisma.debt.aggregate({
-      where: { businessId: T.business.id, contactId: mijoz, isYopilgan: false, turi: "olinadigan" },
-      _sum: { jamiSumma: true, tolangan: true },
-    });
-    return (agg._sum.jamiSumma ?? 0) - (agg._sum.tolangan ?? 0);
-  });
+  const oldingiQarz = await joriyQarz();
   assert.ok(oldingiQarz > 0, "test uchun mijozda oldindan qarz bo'lishi kerak");
 
   yuborilgan = [];
@@ -374,6 +379,11 @@ test("10. Telegram xatosi savdoni buzmaydi, jurnalda XATO qoladi", async () => {
   assert.equal(yozuv.holat, "XATO");
   assert.equal(yozuv.urinish, 3, "maksimum 3 marta urinilishi kerak");
   assert.match(yozuv.xato, /503/);
+  assert.equal(
+    yozuv.idempotencyKey,
+    `CHEK:${chek.id}:SALE_CREATED:1`,
+    "yiqilgan yozuv ham kalit bilan yozilishi kerak"
+  );
 
   // Qayta yuborish O'SHA yozuvni tuzatadi — yangi satr ochmaydi.
   yuborilgan = [];
@@ -381,12 +391,78 @@ test("10. Telegram xatosi savdoni buzmaydi, jurnalda XATO qoladi", async () => {
     xabarnomaSvc.xabarnomaniQaytaYubor({ businessId: T.business.id, chekId: chek.id })
   );
   assert.equal(natija.holat, "YUBORILDI");
+  assert.equal(natija.versiya, 1, "yiqilgan xabar versiyani band qilmasligi kerak");
   const soni = await A(() =>
     rawPrisma.telegramNotification.count({
       where: { businessId: T.business.id, chekId: chek.id },
     })
   );
   assert.equal(soni, 1, "qayta urinish yangi jurnal satri ochmasligi kerak");
+});
+
+// ---------------------------------------------------------------------------
+// 10b. QARZ SNAPSHOT'i — qayta urinish ledgerdan qayta hisoblamaydi
+// ---------------------------------------------------------------------------
+
+test("10b. Kech yuborilgan xabar SNAPSHOT raqamlarini saqlaydi", async () => {
+  // Mijozda oldindan qarz bor holatda qarzga savdo qilamiz, lekin Telegram
+  // yiqilib turadi — xabar yozuvda "XATO" bo'lib qoladi.
+  const oldin = await joriyQarz();
+  assert.ok(oldin > 0, "test uchun mijozda oldindan qarz bo'lishi kerak");
+
+  xatoRejimi = true;
+  let chek: any;
+  try {
+    chek = await buyurtma({ satrlar: [{ productId: fanta, miqdor: 2 }], tolovTuri: "qarz" });
+  } finally {
+    xatoRejimi = false;
+  }
+
+  const yozuv = await A(() =>
+    rawPrisma.telegramNotification.findFirst({
+      where: { businessId: T.business.id, chekId: chek.id },
+    })
+  );
+  assert.equal(yozuv.debtBefore, oldin, "debtBefore — savdogacha bo'lgan qarz");
+  assert.equal(yozuv.debtAdded, 23_000, "debtAdded — shu savdodan qo'shilgan qarz");
+  assert.equal(yozuv.debtAfter, oldin + 23_000, "debtAfter = before + added");
+
+  // ORADAN BOSHQA SAVDO O'TDI — ledgerdagi jami qarz o'zgardi.
+  await buyurtma({ satrlar: [{ productId: suv, miqdor: 10 }], tolovTuri: "qarz" });
+  const keyin = await joriyQarz();
+  assert.equal(keyin, oldin + 23_000 + 30_000, "ledger o'zgargan bo'lishi kerak");
+
+  // Endi yiqilgan xabar qayta yuboriladi: raqamlar O'SHA paytdagidek qolishi
+  // kerak, ledgerdan qayta hisoblanmasin.
+  yuborilgan = [];
+  const natija = await A(() =>
+    xabarnomaSvc.xabarnomaniQaytaYubor({ businessId: T.business.id, chekId: chek.id })
+  );
+  assert.equal(natija.holat, "YUBORILDI");
+
+  const m = oxirgi();
+  assert.match(m, new RegExp(`Oldingi qarz: ${fs(oldin)} so'm`));
+  assert.match(m, /Yangi qarz: \+23 000 so'm/);
+  assert.match(
+    m,
+    new RegExp(`📕 Jami qarz: ${fs(oldin + 23_000)} so'm`),
+    "snapshot ishlatilishi kerak — keyingi savdo qo'shilmasin"
+  );
+  assert.ok(!new RegExp(fs(keyin)).test(m), "yangi ledger qoldig'i xabarga tushmasligi kerak");
+
+  const soni = await A(() =>
+    rawPrisma.telegramNotification.count({
+      where: { businessId: T.business.id, chekId: chek.id },
+    })
+  );
+  assert.equal(soni, 1, "qayta urinish yangi satr ochmasligi kerak");
+});
+
+test("10c. Botdagi 'Mening qarzim' esa REAL-TIME ledgerdan o'qiydi", async () => {
+  const buyurtmaSvc = await import("@/lib/telegram/buyurtma");
+  const realTime = await A(() => buyurtmaSvc.mijozJoriyQarzi(T.business.id, mijoz));
+  const ledger = await joriyQarz();
+  assert.equal(realTime, ledger, "qarz sahifasi snapshot emas, ledger o'qishi bo'lishi kerak");
 });
 
 // ---------------------------------------------------------------------------
@@ -429,6 +505,19 @@ test("11. O'zgargan buyurtma: SALE_UPDATED 2-versiya bilan ketadi", async () => 
   );
   assert.equal(holat.turi, "SALE_UPDATED");
   assert.equal(holat.versiya, 2);
+
+  const yozuvlar = await A(() =>
+    rawPrisma.telegramNotification.findMany({
+      where: { businessId: T.business.id, chekId: ozgarChek.id },
+      orderBy: { versiya: "asc" },
+    })
+  );
+  assert.deepEqual(
+    yozuvlar.map((y: any) => y.idempotencyKey),
+    [`CHEK:${ozgarChek.id}:SALE_CREATED:1`, `CHEK:${ozgarChek.id}:SALE_UPDATED:2`]
+  );
+  // O'zgartirish YANGI snapshot yozadi (raqamlar haqiqatan o'zgargan).
+  assert.equal(yozuvlar[1].debtAdded, 40_000, "to'lovdan keyingi qarz snapshotga tushishi kerak");
 });
 
 // ---------------------------------------------------------------------------
@@ -488,6 +577,124 @@ test("13. Dublikat hodisa: ikkinchi marta yuborilmaydi", async () => {
     })
   );
   assert.equal(soni, 1, "bazada bitta SALE_CREATED yozuvi qolishi kerak");
+
+  const yozuv = await A(() =>
+    rawPrisma.telegramNotification.findFirst({
+      where: { businessId: T.business.id, chekId: chek.id },
+    })
+  );
+  assert.equal(yozuv.idempotencyKey, `CHEK:${chek.id}:SALE_CREATED:1`);
+});
+
+test("13b. PARALLEL bir xil hodisa: bitta xabar, bitta satr", async () => {
+  yuborilgan = [];
+  const chek = await buyurtma({ satrlar: [{ productId: suv, miqdor: 2 }], tolovTuri: "naqd" });
+  assert.equal(yuborilgan.length, 1);
+
+  // Beshta so'rov BIR VAQTDA o'sha hodisa bilan keldi.
+  yuborilgan = [];
+  const natijalar = await A(() =>
+    Promise.all(
+      Array.from({ length: 5 }, () =>
+        xabarnomaSvc.buyurtmaXabarnomasi({
+          businessId: T.business.id,
+          chekId: chek.id,
+          turi: "SALE_CREATED",
+        })
+      )
+    )
+  );
+  assert.ok(
+    natijalar.every((n: any) => n.holat === "DUBLIKAT"),
+    "parallel takroriy hodisalar dublikat deb qaytishi kerak"
+  );
+  assert.equal(yuborilgan.length, 0, "mijozga bitta ham qo'shimcha xabar ketmasligi kerak");
+
+  const soni = await A(() =>
+    rawPrisma.telegramNotification.count({
+      where: { businessId: T.business.id, chekId: chek.id },
+    })
+  );
+  assert.equal(soni, 1, "parallel so'rovlar bitta satrga tushishi kerak");
+});
+
+test("13d. PARALLEL QAYTA YUBORISH: yiqilgan xabar ikki nusxada ketmaydi", async () => {
+  // Xabar yiqilib qoladi — satr "XATO" holatida, ya'ni qayta urinishga ochiq.
+  xatoRejimi = true;
+  let chek: any;
+  try {
+    chek = await buyurtma({ satrlar: [{ productId: cola, miqdor: 4 }], tolovTuri: "naqd" });
+  } finally {
+    xatoRejimi = false;
+  }
+
+  // Direktor tugmani IKKI MARTA bosdi (parallel). Kalit ikkinchi SATR
+  // ochilishini to'sadi, "band" belgisi esa ikkinchi YUBORISHNI to'sadi.
+  yuborilgan = [];
+  const natijalar = await A(() =>
+    Promise.all(
+      Array.from({ length: 4 }, () =>
+        xabarnomaSvc.xabarnomaniQaytaYubor({ businessId: T.business.id, chekId: chek.id })
+      )
+    )
+  );
+
+  assert.equal(yuborilgan.length, 1, "mijozga faqat BITTA nusxa ketishi kerak");
+  assert.equal(
+    natijalar.filter((n: any) => n.holat === "YUBORILDI").length,
+    1,
+    "faqat bitta oqim yuborgan bo'lishi kerak"
+  );
+  assert.ok(
+    natijalar.filter((n: any) => n.holat === "DUBLIKAT").length >= 3,
+    "qolganlari dublikat deb qaytishi kerak"
+  );
+
+  const yozuvlar = await A(() =>
+    rawPrisma.telegramNotification.findMany({
+      where: { businessId: T.business.id, chekId: chek.id },
+    })
+  );
+  assert.equal(yozuvlar.length, 1, "bitta satr qolishi kerak");
+  assert.equal(yozuvlar[0].holat, "YUBORILDI");
+  assert.equal(yozuvlar[0].bandAt, null, "yuborilgach band belgisi bo'shatilishi kerak");
+});
+
+test("13c. Yakka sotuvda ham kalit ishlaydi (chekId = NULL bo'lgan yo'l)", async () => {
+  yuborilgan = [];
+  const sotuv = await A(() =>
+    omborSvc.createSale({
+      businessId: T.business.id,
+      productId: suv,
+      miqdor: 3,
+      tolovTuri: "naqd",
+      contactId: mijoz,
+      mijozNomi: "Akmal Optom",
+      mijozSaqla: true,
+      sana: "2026-09-05",
+      userId: T.user.id,
+    })
+  );
+  assert.equal(yuborilgan.length, 1);
+
+  const yozuv = await A(() =>
+    rawPrisma.telegramNotification.findFirst({
+      where: { businessId: T.business.id, saleId: sotuv.id },
+    })
+  );
+  assert.equal(yozuv.idempotencyKey, `SALE:${sotuv.id}:SALE_CREATED:1`);
+
+  // Takroriy hodisa — chekId NULL bo'lsa ham to'siladi.
+  yuborilgan = [];
+  const takror = await A(() =>
+    xabarnomaSvc.buyurtmaXabarnomasi({
+      businessId: T.business.id,
+      saleId: sotuv.id,
+      turi: "SALE_CREATED",
+    })
+  );
+  assert.equal(takror.holat, "DUBLIKAT");
+  assert.equal(yuborilgan.length, 0);
 });
 
 // ---------------------------------------------------------------------------

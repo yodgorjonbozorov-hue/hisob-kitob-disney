@@ -2410,55 +2410,93 @@ model PosChek {
 /// Shu bois har urinish (muvaffaqiyatli ham, xato ham) yozib boriladi va
 /// UI'da "✅ yuborildi / ⚠️ yuborilmadi" bo'lib ko'rinadi.
 ///
-/// DUBLIKATDAN HIMOYA — BAZA DARAJASIDA, ilova mantig'ida emas:
-/// `@@unique([chekId, turi, versiya])` va `@@unique([saleId, turi, versiya])`.
-/// Bitta buyurtma bo'yicha bitta turdagi xabar bir versiyada FAQAT BIR MARTA
-/// yoziladi; takroriy hodisa (webhook qayta kelishi, tugmani ikki marta
-/// bosish) cheklovga uriladi va ikkinchi xabar YUBORILMAYDI.
+/// DUBLIKATDAN HIMOYA — BITTA NON-NULL KALIT (`idempotencyKey @unique`):
+///   "CHEK:{chekId}:SALE_CREATED:1", "SALE:{saleId}:SALE_CANCELLED:1",
+///   "CHEK:{chekId}:SALE_UPDATED:2" ...
+///
+/// Ilgari bu ikkita KOMPOZIT unique bilan qilingan edi
+/// (`[chekId, turi, versiya]` va `[saleId, turi, versiya]`), lekin ularning
+/// birinchi ustuni NULL bo'lishi mumkin edi: SQLite ham, PostgreSQL ham
+/// NULL'larni bir-biriga TENG DEB HISOBLAMAYDI, ya'ni yakka sotuv yozuvida
+/// (chekId = NULL) birinchi cheklov UMUMAN ishlamasdi va himoya jimgina
+/// ikkinchisiga qolib ketardi. Bitta non-null kalit bu noaniqlikni
+/// butunlay yo'q qiladi: parallel so'rov ham, qayta urinish ham AYNI
+/// qatorga tushadi.
 ///
 /// VERSIYALASH (`versiya`): buyurtma o'zgarganda yangi versiya bilan
-/// SALE_UPDATED yoziladi. "Oxirgi yuborilgan versiya" va "oxirgi yuborilgan
-/// vaqt" shu jadvaldan O'QILADI — `PosChek`/`Sale` ga denormalizatsiya
-/// qilingan ustun ATAYLAB qo'shilmagan (u jurnaldan ajralib qolardi).
+/// SALE_UPDATED yoziladi. Keyingi versiya faqat MUVAFFAQIYATLI yuborilgan
+/// yozuvlar bo'yicha hisoblanadi — shu sabab YIQILGAN xabar qayta
+/// urinilganda o'sha versiyada, ya'ni o'sha kalit va o'sha qatorda qoladi.
+/// "Oxirgi yuborilgan versiya" va "oxirgi yuborilgan vaqt" shu jadvaldan
+/// O'QILADI — `PosChek`/`Sale` ga denormalizatsiya qilingan ustun ATAYLAB
+/// qo'shilmagan (u jurnaldan ajralib qolardi).
+///
+/// QARZ SNAPSHOT'i (`debtBefore`/`debtAdded`/`debtAfter`): xabar yozilgan
+/// PAYTDAGI qarz holati. Qayta urinishda qarz LEDGERDAN QAYTA
+/// HISOBLANMAYDI — aks holda kech yuborilgan xabar o'sha savdo haqida
+/// BOSHQA raqamlarni ko'rsatardi (oradan boshqa savdo yoki to'lov o'tgan
+/// bo'lishi mumkin). Ya'ni: savdo xabari — TARIXIY hujjat, botdagi
+/// "Mening qarzim" esa REAL-TIME ledger o'qishi.
 ///
 /// TENANT: `tenantId` ustuni yo'q — biznes orqali filtrlanadi
 /// (`BUSINESS_SCOPED`, lib/db/tenantDb.ts), loyihaning barcha savdo
 /// jadvallari bilan bir xil qoida.
 model TelegramNotification {
-  id         String    @id @default(cuid())
-  businessId String
-  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  id             String    @id @default(cuid())
+  businessId     String
+  business       Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
   /// Kimga yuborildi (mijoz kartochkasi).
-  contactId  String
-  contact    Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  contactId      String
+  contact        Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
   /// Buyurtma — CHEK (ko'p mahsulotli) yoki yakka SOTUV. Ikkalasidan
   /// ANIQ BITTASI to'ldiriladi; qarz eslatmasi kabi buyurtmasiz xabarda
   /// ikkalasi ham null bo'lishi mumkin.
-  chekId     String?
-  chek       PosChek?  @relation(fields: [chekId], references: [id], onDelete: Cascade)
-  saleId     String?
-  sale       Sale?     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  chekId         String?
+  chek           PosChek?  @relation(fields: [chekId], references: [id], onDelete: Cascade)
+  saleId         String?
+  sale           Sale?     @relation(fields: [saleId], references: [id], onDelete: Cascade)
   /// Yuborilgan chat (mijoz o'sha paytdagi chatId snapshot'i).
-  chatId     String
+  chatId         String
   /// "SALE_CREATED" | "SALE_UPDATED" | "SALE_CANCELLED" |
-  /// "PAYMENT_RECEIVED" | "DEBT_REMINDER" (lib/telegram/mijozXabarTuri.ts).
-  turi       String
+  /// "PAYMENT_RECEIVED" | "DEBT_REMINDER" (lib/telegram/xabarTuri.ts).
+  turi           String
   /// "YUBORILDI" | "XATO".
-  holat      String
+  holat          String
   /// Buyurtma versiyasi: 1 — birinchi xabar, keyin har o'zgarishda +1.
-  versiya    Int       @default(1)
+  versiya        Int       @default(1)
+  /// TAKRORDAN HIMOYA KALITI — "CHEK:{id}:{turi}:{versiya}" yoki
+  /// "SALE:{id}:{turi}:{versiya}". Yagona haqiqiy dublikat to'sig'i.
+  idempotencyKey String    @unique
+  /// QARZ SNAPSHOT'i — xabar yozilgan paytdagi holat (so'm):
+  ///   debtBefore — shu savdogacha bo'lgan qarz;
+  ///   debtAdded  — shu savdodan qo'shilgan qarz;
+  ///   debtAfter  — shu savdodan keyingi jami qarz (before + added).
+  /// Qayta urinishda AYNAN shu qiymatlar ishlatiladi (model izohiga qarang).
+  debtBefore     Int       @default(0)
+  debtAdded      Int       @default(0)
+  debtAfter      Int       @default(0)
   /// Yuborilgan matn (mijoz aynan nimani ko'rgani bahsda hal qiluvchi dalil).
-  matn       String
+  matn           String
   /// Telegram qaytargan xato (holat = "XATO" bo'lganda).
-  xato       String?
+  xato           String?
   /// Nechta urinish qilindi (maksimum 3 — lib/telegram/yuborish.ts).
-  urinish    Int       @default(1)
+  urinish        Int       @default(1)
   /// Muvaffaqiyatli yuborilgan vaqt (holat = "YUBORILDI").
-  sentAt     DateTime?
-  createdAt  DateTime  @default(now())
+  sentAt         DateTime?
+  /// URINISH BOSHLANGAN PAYT ("band" belgisi) — parallel yuborishga qarshi.
+  ///
+  /// `idempotencyKey` ikkinchi SATR ochilishini to'sadi, lekin o'zi ikkinchi
+  /// YUBORISHNI to'smaydi: ikki so'rov bir vaqtda kelsa, birinchisi satrni
+  /// yaratib jo'natayotgan payt ikkinchisi o'sha satrni "yiqilgan, qayta
+  /// urinaman" deb o'qib qolardi. Shu bois satr shartli `updateMany` bilan
+  /// BAND QILINADI — faqat band qila olgan oqim yuboradi.
+  ///
+  /// Yuborish tugashi bilan NULL ga qaytadi. Jarayon o'rtada uzilib qolsa
+  /// belgi eskiradi va `lib/services/mijozXabarnoma.ts` dagi chegaradan
+  /// keyin qayta urinish yana ochiladi (abadiy qulf bo'lmasin).
+  bandAt         DateTime?
+  createdAt      DateTime  @default(now())
 
-  @@unique([chekId, turi, versiya])
-  @@unique([saleId, turi, versiya])
   @@index([businessId, createdAt])
   @@index([businessId, contactId])
   @@index([chekId])

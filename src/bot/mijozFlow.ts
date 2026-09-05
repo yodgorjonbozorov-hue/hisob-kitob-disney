@@ -3,7 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { formatSom } from "@/lib/format";
 import { chatMijozlari, tokenBilanUla, MIJOZ_TOKEN_PREFIKS, type MijozChati } from "@/lib/services/mijozTelegram";
-import { chekBuyurtmasi, mijozJoriyQarzi, sotuvBuyurtmasi } from "@/lib/telegram/buyurtma";
+import {
+  chekBuyurtmasi,
+  mijozJoriyQarzi,
+  qarzSnapshoti,
+  sotuvBuyurtmasi,
+} from "@/lib/telegram/buyurtma";
+import { buyurtmaOxirgiMatni } from "@/lib/queries/mijozTelegram";
 import { royxatQatori, sanaMatni, xaridXabari } from "@/lib/telegram/mijozXabar";
 import { rateLimit } from "@/lib/rateLimit";
 
@@ -287,22 +293,43 @@ async function qarzniYubor(ctx: Context, mijoz: MijozChati): Promise<void> {
   await ctx.reply(qatorlar.join("\n"));
 }
 
-/** Bitta buyurtma tafsiloti — xarid xabari bilan AYNAN bir xil formatda. */
+/**
+ * BITTA BUYURTMA TAFSILOTI.
+ *
+ * Mijozga o'sha paytda YUBORILGAN matn qaytariladi — xarid hujjati tarixiy
+ * va u qayta ochilganda o'zgarmasligi kerak (qarz qatorlari bugungi
+ * ledgerga qarab siljib ketmasin).
+ *
+ * Xabar hech qachon ketmagan bo'lsa (mijoz keyinroq ulangan) — joriy
+ * holatdan chiziladi va bu ochiq zaxira yo'l: hujjat yo'q, demak
+ * "tarixiy nusxa" ham yo'q.
+ */
 async function tafsilotniYubor(
   ctx: Context,
   mijoz: MijozChati,
   manba: Manba,
   buyurtmaId: string
 ): Promise<void> {
-  const buyurtma = await runWithTenant(mijoz.tenantId, () =>
-    manba === "c"
-      ? chekBuyurtmasi(mijoz.businessId, buyurtmaId)
-      : sotuvBuyurtmasi(mijoz.businessId, buyurtmaId)
-  );
+  const matn = await runWithTenant(mijoz.tenantId, async () => {
+    // EGALIK TEKSHIRUVI har doim buyurtmaning O'ZIDAN: saqlangan matn
+    // bo'lsa ham, avval bu buyurtma shu mijozniki ekani tasdiqlanadi.
+    const buyurtma =
+      manba === "c"
+        ? await chekBuyurtmasi(mijoz.businessId, buyurtmaId)
+        : await sotuvBuyurtmasi(mijoz.businessId, buyurtmaId);
+    if (!buyurtma || buyurtma.mijoz.id !== mijoz.id) return null;
+
+    const yuborilgan = await buyurtmaOxirgiMatni(
+      mijoz.businessId,
+      manba === "c" ? { chekId: buyurtmaId } : { saleId: buyurtmaId }
+    );
+    return yuborilgan ?? xaridXabari(buyurtma, qarzSnapshoti(buyurtma));
+  });
+
   // Buyurtma boshqa mijozniki bo'lsa (soxta callback) — ochilmaydi.
-  if (!buyurtma || buyurtma.mijoz.id !== mijoz.id) {
+  if (!matn) {
     await ctx.reply("Buyurtma topilmadi.");
     return;
   }
-  await ctx.reply(xaridXabari(buyurtma));
+  await ctx.reply(matn);
 }

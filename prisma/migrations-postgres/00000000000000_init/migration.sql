@@ -1164,10 +1164,15 @@ CREATE TABLE "TelegramNotification" (
     "turi" TEXT NOT NULL,
     "holat" TEXT NOT NULL,
     "versiya" INTEGER NOT NULL DEFAULT 1,
+    "idempotencyKey" TEXT NOT NULL,
+    "debtBefore" INTEGER NOT NULL DEFAULT 0,
+    "debtAdded" INTEGER NOT NULL DEFAULT 0,
+    "debtAfter" INTEGER NOT NULL DEFAULT 0,
     "matn" TEXT NOT NULL,
     "xato" TEXT,
     "urinish" INTEGER NOT NULL DEFAULT 1,
     "sentAt" TIMESTAMP(3),
+    "bandAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "TelegramNotification_pkey" PRIMARY KEY ("id")
@@ -2001,6 +2006,9 @@ CREATE INDEX "PosChek_contactId_idx" ON "PosChek"("contactId");
 CREATE UNIQUE INDEX "PosChek_businessId_raqam_key" ON "PosChek"("businessId", "raqam");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "TelegramNotification_idempotencyKey_key" ON "TelegramNotification"("idempotencyKey");
+
+-- CreateIndex
 CREATE INDEX "TelegramNotification_businessId_createdAt_idx" ON "TelegramNotification"("businessId", "createdAt");
 
 -- CreateIndex
@@ -2014,12 +2022,6 @@ CREATE INDEX "TelegramNotification_saleId_idx" ON "TelegramNotification"("saleId
 
 -- CreateIndex
 CREATE INDEX "TelegramNotification_contactId_idx" ON "TelegramNotification"("contactId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "TelegramNotification_chekId_turi_versiya_key" ON "TelegramNotification"("chekId", "turi", "versiya");
-
--- CreateIndex
-CREATE UNIQUE INDEX "TelegramNotification_saleId_turi_versiya_key" ON "TelegramNotification"("saleId", "turi", "versiya");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "FeatureFlag_kalit_key" ON "FeatureFlag"("kalit");

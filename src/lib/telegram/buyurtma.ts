@@ -75,14 +75,42 @@ export interface BuyurtmaMalumot {
   mijoz: BuyurtmaMijozi;
   /** Mijozning HOZIRGI umumiy ochiq qarzi (barcha savdolari bo'yicha). */
   joriyQarz: number;
-  /**
-   * Shu savdogacha bo'lgan qarz = joriyQarz − shu buyurtma qarzi.
-   *
-   * Ataylab AYIRISH bilan: agar "oldingi qarz" alohida ustunga yozilsa u
-   * ledger bilan ajralib qolardi (keyingi to'lov uni yangilamaydi). Ayirma
-   * esa har o'qishda ledger bilan bir xil bo'ladi.
-   */
-  oldingiQarz: number;
+}
+
+/**
+ * QARZ SNAPSHOT'i — xabar YOZILGAN PAYTDAGI holat.
+ *
+ * NEGA SNAPSHOT, HISOB EMAS. "Oldingi qarz" ni har o'qishda
+ * `joriyQarz − buyurtma qarzi` deb chiqarish mumkin edi, lekin u FAQAT
+ * xabar yozilgan lahzada to'g'ri bo'ladi. Xabar kech ketsa (Telegram
+ * yiqilib, keyin qayta urinilsa) oradan boshqa savdo yoki to'lov o'tgan
+ * bo'lishi mumkin — va mijoz O'SHA savdo haqida butunlay boshqa raqamlarni
+ * ko'rardi. Shu bois qiymatlar `TelegramNotification` ga yoziladi va qayta
+ * urinishda AYNAN o'sha yozuvdan olinadi.
+ *
+ * Chegara aniq:
+ *   savdo xabari         → TARIXIY snapshot (shu tur);
+ *   botdagi "Mening qarzim" → REAL-TIME ledger (`mijozJoriyQarzi`).
+ */
+export interface QarzSnapshot {
+  /** Shu savdogacha bo'lgan qarz. */
+  debtBefore: number;
+  /** Shu savdodan qo'shilgan qarz. */
+  debtAdded: number;
+  /** Shu savdodan keyingi jami qarz (= debtBefore + debtAdded). */
+  debtAfter: number;
+}
+
+/**
+ * Buyurtmadan snapshot yasaydi — FAQAT xabar birinchi marta yozilayotganda
+ * chaqiriladi (qayta urinishda saqlangan snapshot ishlatiladi).
+ */
+export function qarzSnapshoti(b: BuyurtmaMalumot): QarzSnapshot {
+  return {
+    debtBefore: b.joriyQarz - b.qarz,
+    debtAdded: b.qarz,
+    debtAfter: b.joriyQarz,
+  };
 }
 
 /** Bo'sh birlik ("") ni ham "dona" ga qaytaradi — xabarda birlik doim bo'ladi. */
@@ -238,7 +266,6 @@ export async function chekBuyurtmasi(
     bekorSababi: chek.cancelReason,
     mijoz: chek.contact,
     joriyQarz,
-    oldingiQarz: joriyQarz - qarzInfo.qarz,
   };
 }
 
@@ -293,7 +320,6 @@ export async function sotuvBuyurtmasi(
     bekorSababi: sale.cancelReason,
     mijoz: sale.contact,
     joriyQarz,
-    oldingiQarz: joriyQarz - qarzInfo.qarz,
   };
 }
 

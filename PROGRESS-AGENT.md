@@ -5,19 +5,23 @@ avtomatik ketadi: mahsulotlar (o'z birligi bilan), savdo paytidagi narx,
 to'lov taqsimoti va qarz. Xabar bildirishnoma emas — har raqami bazadagi
 tasdiqlangan chek/sotuv, kirim tranzaksiyasi va qarz ledgeridan chiqadi.
 
-## Uchta invariant (ular buzilsa modul ishonchsiz bo'ladi)
+## To'rtta invariant (ular buzilsa modul ishonchsiz bo'ladi)
 
 1. RAQAM TAKRORLANMAYDI — Telegram uchun ALOHIDA hisob-kitob yo'q.
    `lib/telegram/buyurtma.ts` satrlarni `Sale` snapshot narxlaridan, pulni
-   `Transaction` + `DebtPayment` dan, qarzni `Debt` dan o'qiydi. "Oldingi
-   qarz" ham alohida ustunga yozilmaydi — u `joriyQarz − shu buyurtma qarzi`
-   ayirmasi, ya'ni ledger bilan hech qachon ajralib qolmaydi.
-2. DUBLIKAT BAZAGA SIG'MAYDI — `TelegramNotification` da
-   `@@unique([chekId, turi, versiya])` va `@@unique([saleId, turi, versiya])`.
-   Jurnal yozuvi YUBORISHDAN OLDIN yaratiladi, shuning uchun takroriy hodisa
-   yoki ikki marta bosilgan tugma ikkinchi xabarni yubora olmaydi. Yiqilgan
-   xabar esa O'SHA satr ustidan qayta urinadi (yangi satr ochmaydi).
-3. TELEGRAM SAVDONI BUZMAYDI — xabar tranzaksiyadan TASHQARIDA va
+   `Transaction` + `DebtPayment` dan, qarzni `Debt` dan o'qiydi.
+2. SAVDO XABARI — TARIXIY HUJJAT. Qarz holati (`debtBefore` / `debtAdded` /
+   `debtAfter`) va matnning O'ZI xabar yozilgan paytda `TelegramNotification`
+   ga muzlatiladi; qayta urinishda ledgerdan QAYTA HISOBLANMAYDI. Xabar kech
+   ketsa oradan boshqa savdo yoki to'lov o'tgan bo'lishi mumkin va mijoz
+   o'sha savdo haqida boshqa raqamlarni ko'rardi. Botdagi "Mening qarzim"
+   esa aksincha — REAL-TIME `Debt` ledger o'qishi.
+3. DUBLIKAT IKKI QAVAT TO'SILADI — `idempotencyKey String @unique`
+   ("CHEK:{id}:SALE_CREATED:1") ikkinchi SATR ochilishini, `bandAt` shartli
+   `updateMany` bilan esa ikkinchi YUBORISHNI to'sadi (parallel so'rov,
+   ikki marta bosilgan tugma). Yiqilgan xabar O'SHA satr ustidan qayta
+   urinadi — versiya faqat MUVAFFAQIYATLI yuborilganlar bo'yicha o'sadi.
+4. TELEGRAM SAVDONI BUZMAYDI — xabar tranzaksiyadan TASHQARIDA va
    `buyurtmaXabarnomasiniUrin()` o'rovchisi bilan yuboriladi (u hech qachon
    tashlamaydi). Telegram yiqilsa chek saqlanadi, jurnalda "XATO" qoladi va
    UI'da direktor uchun "Qayta yuborish" tugmasi chiqadi.
@@ -36,6 +40,11 @@ tasdiqlangan chek/sotuv, kirim tranzaksiyasi va qarz ledgeridan chiqadi.
 - **`telegramConnected` ustuni QO'SHILMADI** — u `telegramChatId != null`
   dan hisoblanadi (DTO'da `ulangan`). Ikkita ustun ajralib qolsa bot kimga
   yozishini bilmay qolardi.
+- **Kompozit unique NULL'ga tayangan edi.** Birinchi variantda himoya
+  `unique(chekId, turi, versiya)` + `unique(saleId, turi, versiya)` edi,
+  lekin SQLite ham, PostgreSQL ham NULL'larni teng deb hisoblamaydi —
+  yakka sotuvda (chekId = NULL) birinchi cheklov umuman ishlamasdi. Bitta
+  NON-NULL `idempotencyKey` bu noaniqlikni yo'q qildi.
 - **To'lov usullari qotirilmagan** — `lib/tolovBolimi.ts` dagi mavjud
   "amaldagi usul" qoidasi ishlatiladi (aniq `tolovTuri`, bo'lmasa kassa
   turi). Yangi kassa turi qo'shilsa xabar o'zi kengayadi.
@@ -55,11 +64,14 @@ va barcha hisobotlarni qayta ko'rishni talab qiladi — ataylab qilinmadi.
 
 ## Testlar
 
-`npm run test:mijoz-telegram` (18 ta): naqd/qarz/qisman/aralash to'lov,
+`npm run test:mijoz-telegram` (22 ta): naqd/qarz/qisman/aralash to'lov,
 ko'p mahsulot, kg va dona birligi, oldindan qarzi bor mijoz, ulanmagan
-mijoz, Telegram API xatosi, o'zgartirish va versiyalash, bekor qilish,
-dublikat hodisa, tenant izolyatsiyasi, katalog narxi keyin o'zgargan holat,
-bir martalik ulanish tokeni.
+mijoz, Telegram API xatosi, kech yuborilgan xabarda qarz SNAPSHOT'i
+saqlanishi (va "Mening qarzim" ning aksincha real-time bo'lishi),
+o'zgartirish va versiyalash, bekor qilish, dublikat hodisa, PARALLEL
+takroriy va parallel qayta yuborish, yakka sotuv (chekId = NULL) yo'li,
+tenant izolyatsiyasi, katalog narxi keyin o'zgargan holat, bir martalik
+ulanish tokeni.
 
 # Xodimlar KPI / ball / oylik moduli (2026-09-01)
 
