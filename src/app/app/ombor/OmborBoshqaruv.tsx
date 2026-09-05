@@ -16,7 +16,7 @@ export interface QoshimchaAmal {
  * Ilgari Ombor sahifasi tepasida yettita tugma bir qatorda turardi (Excel,
  * import, hisobdan chiqarish, inventarizatsiya, narxlar, ko'proq, yangi) va
  * telefonda ular ikki-uch qatorga sinib ketardi. Endi sahifada FAQAT bitta
- * asosiy amal bor — "+ Tovar keldi", qolgani shu menyuda.
+ * asosiy amal bor — "+ Omborga ta'minot", qolgani shu menyuda.
  */
 export function OmborBoshqaruv({ amallar }: { amallar: QoshimchaAmal[] }) {
   const [ochiq, setOchiq] = useState(false);

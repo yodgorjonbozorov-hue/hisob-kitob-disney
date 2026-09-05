@@ -222,13 +222,13 @@ export const MODULLAR: ModulTarifi[] = [
     nomi: "Xarid (rejali buyurtma)",
     tavsif:
       "Oldindan rejalashtiriladigan xarid buyurtmasi: qoralama \u2192 tasdiqlash \u2192 qabul qilish. " +
-      "Kundalik \"tovar keldi\" oqimi va ta'minotchilar reyestri endi OMBOR modulida \u2014 " +
+      "Kundalik \"omborga ta'minot\" oqimi va ta'minotchilar reyestri endi OMBOR modulida \u2014 " +
       "bu modul faqat reja bilan ishlaydigan bizneslarga kerak.",
     core: false,
     // Xarid — pul va ombor qarori, shuning uchun faqat boshqaruvchilar.
     rollar: BOSHQARUVCHILAR,
     // NAV ATAYLAB BO'SH. Ilgari yon panelda "Xarid" va "Ta'minotchilar"
-    // alohida turardi va foydalanuvchi "tovar keldi" deyish uchun qaysi
+    // alohida turardi va foydalanuvchi kelgan tovarni yozish uchun qaysi
     // bo'limga borishni o'ylashi kerak edi. Endi ikkalasi ham Ombor ichida:
     //   /app/ombor?tab=taminotlar   — kelgan tovarlar tarixi;
     //   /app/ombor/taminotchilar    — reyestr.

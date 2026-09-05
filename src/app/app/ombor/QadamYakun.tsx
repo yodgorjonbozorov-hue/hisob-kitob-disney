@@ -1,5 +1,6 @@
 "use client";
 
+import { INPUT_CLASS, LABEL_CLASS } from "@/components/ui/fieldStyles";
 import { formatSom, formatSomLabel } from "@/lib/format";
 import { TAMINOT_TOLOV_BELGI, TAMINOT_TOLOV_NOMI, type TaminotTolovUsuli } from "@/lib/validation/taminot";
 import { jamiSumma, satrSummasi, type TaminotSatr } from "./QadamMahsulotlar";
@@ -10,17 +11,30 @@ import { jamiSumma, satrSummasi, type TaminotSatr } from "./QadamMahsulotlar";
  * Saqlashdan OLDIN nima yozilishi bir ekranda ko'rinadi. Ayniqsa qarzga
  * olishda: pul kassadan chiqmaydi, lekin "Men qarzdorman" summasi oshadi —
  * buni foydalanuvchi saqlagandan KEYIN emas, oldin bilishi kerak.
+ *
+ * SANA VA IZOH ATAYLAB SHU YERDA, birinchi qadamda emas: 10 holatdan 9 tasida
+ * tovar BUGUN keladi va izoh kerak emas — ularni oldinga qo'yish har
+ * ta'minotga ikkita ortiqcha savol qo'shardi. Kechagi kirimni yozayotgan
+ * foydalanuvchi esa ularni oxirgi ekranda, saqlashdan oldin topadi.
  */
 export function QadamYakun({
   supplierNomi,
   usul,
   satrlar,
   kassaNomi,
+  sana,
+  onSana,
+  izoh,
+  onIzoh,
 }: {
   supplierNomi: string;
   usul: TaminotTolovUsuli;
   satrlar: TaminotSatr[];
   kassaNomi: string | null;
+  sana: string;
+  onSana: (v: string) => void;
+  izoh: string;
+  onIzoh: (v: string) => void;
 }) {
   const jami = jamiSumma(satrlar);
   const jamiMiqdor = satrlar.reduce(
@@ -62,6 +76,34 @@ export function QadamYakun({
       <div className="flex items-center justify-between px-1">
         <span className="text-base font-medium text-fg">Jami</span>
         <span className="text-xl font-bold text-fg tnum">{formatSomLabel(jami)}</span>
+      </div>
+
+      <div className="grid sm:grid-cols-2 gap-3">
+        <div>
+          <label className={LABEL_CLASS} htmlFor="qy-sana">
+            Sana
+          </label>
+          <input
+            id="qy-sana"
+            type="date"
+            value={sana}
+            onChange={(e) => onSana(e.target.value)}
+            className={INPUT_CLASS}
+          />
+        </div>
+        <div>
+          <label className={LABEL_CLASS} htmlFor="qy-izoh">
+            Izoh (ixtiyoriy)
+          </label>
+          <input
+            id="qy-izoh"
+            value={izoh}
+            onChange={(e) => onIzoh(e.target.value)}
+            placeholder="Masalan: yuk mashinasi bilan keldi"
+            maxLength={500}
+            className={INPUT_CLASS}
+          />
+        </div>
       </div>
 
       {usul === "qarz" ? (

@@ -32,13 +32,13 @@ export function MahsulotlarTab({
   boshlangich,
   kategoriyalar,
   onTanla,
-  onTovarKeldi,
+  onTaminot,
   onYangiMahsulot,
 }: {
   boshlangich: OmborRoyxatDTO;
   kategoriyalar: OmborKategoriyaDTO[];
   onTanla: (m: OmborMahsulotDTO) => void;
-  onTovarKeldi: () => void;
+  onTaminot: () => void;
   onYangiMahsulot: () => void;
 }) {
   const [q, setQ] = useState("");
@@ -146,7 +146,7 @@ export function MahsulotlarTab({
             description="Birinchi mahsulot yoki kelgan tovarni kiriting. Tovar kelganda qoldiq avtomatik oshadi."
             action={
               <div className="flex flex-col sm:flex-row gap-2">
-                <Button onClick={onTovarKeldi}>+ Tovar keldi</Button>
+                <Button onClick={onTaminot}>+ Omborga ta&apos;minot</Button>
                 <Button variant="secondary" onClick={onYangiMahsulot}>
                   + Yangi mahsulot
                 </Button>

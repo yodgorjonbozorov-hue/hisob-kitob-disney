@@ -6220,3 +6220,97 @@ bayt-ma-bayt solishtiradi. SQLite ham, Postgres ham UNIQUE indeksda
 NULL larni TENG deb hisoblamaydi, shuning uchun indeks yaratish yiqilmaydi.
 SQL faqat 6 ta nullable `ADD COLUMN` + 3 ta `CREATE INDEX`:
 DROP/TRUNCATE/DELETE/UPDATE/RENAME/INSERT YO'Q.
+
+---
+
+## "Omborga ta'minot" moduli — nomlash, tahrirlash va ta'minotchi profili (2026-09-05)
+
+### Nima o'zgardi
+
+Bo'lim foydalanuvchi uchun endi **"Omborga ta'minot"** deb ataladi ("Tovar
+keldi" o'rniga). Komponent `TovarKeldi.tsx` → `OmborgaTaminot.tsx`.
+
+Uch yangi imkoniyat:
+
+1. **Direktor ta'minotni TO'G'RILAY oladi** (`taminotTahrir`, `PATCH
+   /api/ombor/taminot/[id]`) — miqdor, narx, ta'minotchi, sana, izoh va
+   Naqd ↔ Qarz holati.
+2. **Ta'minotchi profili** (`/app/ombor/taminotchilar/[id]`) — jami
+   ta'minot, jami to'langan, jami qarz, qolgan qarz, oxirgi ta'minot va
+   ta'minotlar tarixi; qarzni AYNI SHU YERDAN to'lash tugmasi bilan.
+3. **Formada sana va izoh** maydonlari (yakun qadamida), **kassa esa
+   majburiy** — bir nechta mos kassa bo'lsa tanlanmaguncha saqlab bo'lmaydi.
+
+### Ombor modeli — o'zgarmadi (ATAYLAB)
+
+Spec'da "Omborni tanlash" bor edi. Loyiha egasi bilan kelishilgan qaror:
+**Warehouse modeli qo'shilmaydi.** Sabab 2026-08-19 dagi yozuv bilan bir xil
+— qoldiqning yagona manbasi `Product.miqdor`, ombor konteksti = `businessId`.
+Ombor darajasidagi haqiqiy qoldiq sotuv, POS, inventarizatsiya va
+hisobotlarni ham ombor tanlaydigan qilishni talab qilardi; aks holda ikkita
+qarama-qarshi qoldiq manbasi paydo bo'lardi. Shu bois **migratsiya ham,
+sxema o'zgarishi ham YO'Q** — mavjud produksiya ma'lumoti tegilmadi.
+
+### Pul yozuvi bitta joyda — `pulHarakatiTx`
+
+`qabulYozuvlariTx` ikkiga bo'lindi: ombor harakati o'z joyida qoldi, pul
+harakati (chiqim / kassa transferi / "beriladigan" qarz) esa
+**`pulHarakatiTx`** ga ajratildi (`lib/services/xarid.ts`).
+
+Nega: tahrirlashda ombor FARQ bo'yicha to'g'rilanadi, pul esa NOLDAN qayta
+yoziladi. Agar tahrirlash o'z pul mantig'ini yozganda, yaratish va
+tahrirlash vaqt o'tib ikki xil natija bera boshlardi. Endi uchala
+chaqiruvchi (`taminotYarat`, `qabulQilish`, `taminotTahrir`) ayni bir
+funksiyani chaqiradi.
+
+### Tahrirlash qanday ishlaydi
+
+Bitta `runBusinessTx` ichida:
+
+1. eski/yangi satrlar MAHSULOT bo'yicha jamlanadi va farq hisoblanadi
+   (bir mahsulot ikki satrda bo'lsa to'g'rilash ikki marta yozilmasin);
+2. eski pul yozuvi qaytariladi (chiqim yumshoq o'chiriladi, qarz o'chadi);
+3. satrlar almashtiriladi, ombor farq bo'yicha to'g'rilanadi va har farq
+   uchun `StockAdjustment` (`turi: "taminot_tahrir"`) yoziladi — tarix
+   QAYTA YOZILMAYDI, to'g'rilash QO'SHILADI;
+4. `pulHarakatiTx` yangi holatni yozadi;
+5. audit `before`/`after` bilan.
+
+Naqd → Qarz va Qarz → Naqd uchun ALOHIDA tarmoq yo'q: ikkalasi ham
+"eskisini qaytar, yangisini yoz" qoidasining natijasi.
+
+**Rad etiladigan holatlar:** qabul qilinmagan yoki bekor qilingan ta'minot;
+to'lov ta'minotchining shaxsiy kassasiga transfer bilan ketgan; qarz
+bo'yicha to'lov qilingan; qisman to'langan (PRO) ta'minot; miqdorni
+kamaytirish qoldiqni manfiyga tushiradigan holat (tovar sotilgan).
+
+### Qarz to'lash — yangi backend YOZILMADI
+
+Ta'minotchi profilidagi "Qarz to'lash" mavjud `/api/debts/qarzdor/tolov`
+oqimini chaqiradi. Ta'minot qarzi `Debt.mijozNomi = supplier.nomi` bilan
+yoziladi, ya'ni `qarzdorKalit(null, nomi)` = `ism:<kichik harf>` — "Men
+qarzdorman" bo'limidagi ayni qarzdor. Taqsimot qoidasi (eng eskisidan
+boshlab) bitta joyda qoladi.
+
+`Debt` ga `supplierId` QO'SHILMADI: qarz allaqachon
+`PurchaseOrder.debtId` orqali bog'langan, ikkinchi bog'lanish ikki manba
+yaratardi.
+
+### To'lov turi — Naqd va Qarz asosiy, Click ikkinchi darajada
+
+Spec faqat ikkita variant so'radi. Click/Karta butunlay olib tashlanmadi:
+u naqdsiz kassadan chiqadigan pul va uni olib tashlash naqdsiz to'lovni
+naqd kassaga yozib, kassa qoldig'ini buzardi. Yechim — Naqd va Qarz katta
+tugmada, Click esa ostidagi kichik qatorda.
+
+"Avtomatik (birinchi kassa)" varianti OLIB TASHLANDI: pul qaysi kassadan
+chiqqanini foydalanuvchi bilmasdi. Endi bir nechta mos kassa bo'lsa tanlash
+majburiy; kassa bitta bo'lsa savol berilmaydi, nomi ekranda ko'rsatiladi.
+
+### Testlar
+
+`tests/taminot-tahrir.test.ts` (14 test, `npm run test:taminot-tahrir`):
+uch mahsulotli ta'minot, miqdor/narx/ta'minotchi tahriri, Naqd → Qarz,
+Qarz → Naqd, Naqd → Karta, to'rtta to'siq (sotilgan tovar, to'langan qarz,
+bekor qilingan ta'minot, audit yozuvi), ta'minotchi profili jamlari,
+qarzning qisman to'lovi va takror saqlash.

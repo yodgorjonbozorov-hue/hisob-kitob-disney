@@ -43,7 +43,7 @@ export const GET = withTenant(
 );
 
 /**
- * YANGI MAHSULOT — minimal forma ("Tovar keldi" oqimi ichidan ham chaqiriladi).
+ * YANGI MAHSULOT — minimal forma ("Omborga ta'minot" oqimi ichidan ham chaqiriladi).
  *
  * TAKROR YARATMASLIK: bir xil nomdagi mahsulot allaqachon bo'lsa yangisi
  * yaratilmaydi. Aks holda "Atirgul 50sm" har ta'minotda qaytadan qo'shilib,
