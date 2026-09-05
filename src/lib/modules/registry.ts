@@ -100,6 +100,11 @@ export const MODULLAR: ModulTarifi[] = [
       // "Yozuvlar" -> "Kirim / Chiqim": sahifa aynan kirim va chiqim
       // tranzaksiyalarini yuritadi. Faqat YORLIQ o'zgardi — route, API va
       // huquqlar (`tranzaksiya.*`) o'sha-o'sha.
+      // MOLIYA — "Pul oldim / Pul berdim" TEZ KIRITISH oqimi. Kirim/Chiqim
+      // sahifasi o'z o'rnida qoladi: u ANALITIK ko'rinish (kategoriya kesimi,
+      // filtrlar, eksport). Ikkalasi ayni ma'lumotni o'qiydi, shuning uchun
+      // ular hech qachon ikki xil raqam ko'rsatmaydi.
+      { href: "/app/moliya", label: "Moliya", icon: "wallet", tartib: 11, rollar: HAMMA, guruh: "asosiy" },
       { href: "/app/tranzaksiyalar", label: "Kirim / Chiqim", icon: "receipt", tartib: 12, rollar: HAMMA, guruh: "asosiy" },
       // Barcha davriy hisobotlar (kunlik/haftalik/oylik/yillik) bitta
       // sahifada tab bo'lib turadi, shuning uchun yorliq "Hisobotlar".

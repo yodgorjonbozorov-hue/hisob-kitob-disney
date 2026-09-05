@@ -279,7 +279,7 @@ interface BittaTolov {
 }
 
 /** Bitta qarzga yozilgan to'lovning natijasi (taqsimotdagi bir bo'lak). */
-interface TolovBolagi {
+export interface TolovBolagi {
   debtId: string;
   paymentId: string;
   transactionId: string | null;
@@ -540,7 +540,7 @@ async function taminotchiUserTx(
  * mos birinchi faol kassa. `resolveAccountId` ning tranzaksiya ichidagi
  * varianti (xom `tx`, shuning uchun `businessId` qo'lda).
  */
-async function kassaniAniqlaTx(
+export async function kassaniAniqlaTx(
   tx: BusinessTx,
   businessId: string,
   accountId: string | null | undefined,
@@ -638,7 +638,7 @@ export interface QarzdorTolovNatija {
 }
 
 /** Qarzdorning ochiq qarzlarini eng eskisidan boshlab o'qiydi. */
-async function qarzdorOchiqQarzlariTx(
+export async function qarzdorOchiqQarzlariTx(
   tx: BusinessTx,
   businessId: string,
   turi: string,
@@ -736,7 +736,15 @@ export async function qarzdorTolov(params: QarzdorTolovParams): Promise<QarzdorT
   return natija;
 }
 
-async function qarzdorTolovTx(
+/**
+ * `qarzdorTolov` ning TRANZAKSIYA ICHIDAGI varianti.
+ *
+ * Moliya oqimi ("Pul oldim / Pul berdim") shu funksiyani o'z tranzaksiyasi
+ * ichidan chaqiradi: pul harakati, qarz qoldig'i va kassa BITTA atomik
+ * amalda bo'lishi shart (16-talab), shuning uchun ichkarida ikkinchi
+ * `runBusinessTx` ochib bo'lmaydi.
+ */
+export async function qarzdorTolovTx(
   tx: BusinessTx,
   params: QarzdorTolovParams,
   sana: string
