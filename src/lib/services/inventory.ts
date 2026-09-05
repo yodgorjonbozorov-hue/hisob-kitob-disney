@@ -7,6 +7,7 @@ import { ensureUserKassaTx } from "@/lib/services/userKassa";
 import { todayDateOnlyString, dateOnlyStringToUTCDate } from "@/lib/date";
 import { isAvto, isOptom } from "@/lib/biznesTuri";
 import { logAudit } from "@/lib/services/audit";
+import { buyurtmaXabarnomasiniUrin } from "@/lib/services/mijozXabarnoma";
 import { qarzLimitTekshirTx } from "@/lib/services/mijoz";
 import { mijozniAniqlaTx } from "@/lib/services/mijozAniqla";
 import { qarzHolatHisobla } from "@/lib/validation/qarz";
@@ -242,6 +243,10 @@ export async function createSale(params: {
         tannarx,
         jamiSumma,
         tolovTuri: params.tolovTuri,
+        // SNAPSHOT: katalogdagi nom yoki birlik keyin o'zgarsa ham mijozga
+        // yuborilgan savdo o'zgarmaydi (lib/telegram/buyurtma.ts).
+        mahsulotNomi: product.nomi,
+        birlik: product.birlik,
         contactId: mijoz.contactId ?? undefined,
         mijozNomi: mijoz.ism ?? undefined,
         mijozTel: mijoz.tel ?? undefined,
@@ -302,6 +307,16 @@ export async function createSale(params: {
       mijozNomi: sotuv?.mijozNomi,
     },
   });
+
+  // MIJOZGA TELEGRAM XABARI — tranzaksiyadan TASHQARIDA, tashlamaydigan
+  // o'rovchi bilan (spec 14: Telegram yiqilsa ham savdo saqlanadi).
+  if (sotuv?.id) {
+    await buyurtmaXabarnomasiniUrin({
+      businessId: params.businessId,
+      saleId: sotuv.id,
+      turi: "SALE_CREATED",
+    });
+  }
   return sotuv;
 }
 
@@ -376,6 +391,14 @@ export async function cancelSale(params: {
     entityId: params.saleId,
     before: natija,
     after: { sabab },
+  });
+
+  // Mijoz "❌ Xarid bekor qilindi" xabarini oladi; xabardagi qarz —
+  // reversal'dan KEYINGI haqiqiy qoldiq (spec 10).
+  await buyurtmaXabarnomasiniUrin({
+    businessId: params.businessId,
+    saleId: params.saleId,
+    turi: "SALE_CANCELLED",
   });
   return { ok: true, ...natija };
 }

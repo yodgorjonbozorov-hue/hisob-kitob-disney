@@ -235,7 +235,8 @@ export const MODULLAR: ModulTarifi[] = [
     code: "MIJOZLAR",
     nomi: "Mijozlar",
     tavsif:
-      "Mijoz kartochkasi: barcha sotuvlar, qarzlar va CRM bitimlari bitta sahifada. Qarz limiti — chegaradan oshgan qarzga sotuv rad etiladi.",
+      "Mijoz kartochkasi: barcha sotuvlar, qarzlar va CRM bitimlari bitta sahifada. Qarz limiti — chegaradan oshgan qarzga sotuv rad etiladi. " +
+      "Mijozni Telegram botga ulasangiz har xaridi (mahsulot, narx, to'lov, qarz) unga avtomatik yuboriladi.",
     core: false,
     rollar: HAMMA,
     nav: [

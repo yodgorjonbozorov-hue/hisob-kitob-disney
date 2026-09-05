@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { chekTelegramHolatlari, type TelegramHolatDTO } from "@/lib/queries/mijozTelegram";
 
 /**
  * MAGAZIN (POS) o'qish so'rovlari.
@@ -61,6 +62,8 @@ export async function listMahsulotKategoriyalar(businessId: string): Promise<Pos
 export interface PosChekSatriDTO {
   nomi: string;
   miqdor: number;
+  /** Savdo paytidagi o'lchov birligi snapshot'i ("dona" | "kg" | "quti"...). */
+  birlik: string;
   birlikNarx: number;
   jamiSumma: number;
 }
@@ -77,6 +80,14 @@ export interface PosChekDTO {
   cancelReason: string | null;
   kassir: string;
   satrlar: PosChekSatriDTO[];
+  /**
+   * Chek mijozi Telegram botga ULANGANMI. `telegram` holati bilan
+   * ARALASHTIRILMAYDI: ulanmagan mijozga xabar umuman yuborilmaydi va
+   * "yuborilmadi" deb ogohlantirish ham noto'g'ri bo'lardi.
+   */
+  mijozUlangan: boolean;
+  /** Oxirgi Telegram xabarnomasi holati (spec 15). */
+  telegram: TelegramHolatDTO;
 }
 
 /**
@@ -92,7 +103,16 @@ export async function listPosCheklar(businessId: string, limit = 50): Promise<Po
     take: limit,
     include: {
       satrlar: {
-        select: { miqdor: true, birlikNarx: true, jamiSumma: true, product: { select: { nomi: true } } },
+        select: {
+          miqdor: true,
+          birlikNarx: true,
+          jamiSumma: true,
+          // SNAPSHOT ustun turadi: katalog keyin o'zgarsa ham chek
+          // mijozga yuborilgan holida ko'rinadi.
+          birlik: true,
+          mahsulotNomi: true,
+          product: { select: { nomi: true, birlik: true } },
+        },
       },
     },
   });
@@ -103,6 +123,23 @@ export async function listPosCheklar(businessId: string, limit = 50): Promise<Po
     ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, ism: true } })
     : [];
   const ismMap = new Map(users.map((u) => [u.id, u.ism]));
+
+  // Telegram holati va mijoz ulanganligi — ikkita jamlangan so'rovda
+  // (chek boshiga alohida so'rov yuborilsa N+1 bo'lardi).
+  const contactIds = [...new Set(cheklar.map((c) => c.contactId).filter(Boolean))] as string[];
+  const [tgHolatlar, ulanganlar] = await Promise.all([
+    chekTelegramHolatlari(
+      businessId,
+      cheklar.map((c) => c.id)
+    ),
+    contactIds.length
+      ? prisma.contact.findMany({
+          where: { businessId, id: { in: contactIds }, telegramChatId: { not: null } },
+          select: { id: true },
+        })
+      : Promise.resolve([]),
+  ]);
+  const ulanganSet = new Set(ulanganlar.map((c) => c.id));
 
   return cheklar.map((c) => ({
     id: c.id,
@@ -115,9 +152,18 @@ export async function listPosCheklar(businessId: string, limit = 50): Promise<Po
     bekorQilingan: !!c.deletedAt,
     cancelReason: c.cancelReason,
     kassir: ismMap.get(c.userId) ?? "—",
+    mijozUlangan: c.contactId !== null && ulanganSet.has(c.contactId),
+    telegram: tgHolatlar.get(c.id) ?? {
+      holat: "ULANMAGAN",
+      turi: null,
+      versiya: null,
+      sentAt: null,
+      xato: null,
+    },
     satrlar: c.satrlar.map((s) => ({
-      nomi: s.product.nomi,
+      nomi: s.mahsulotNomi ?? s.product.nomi,
       miqdor: s.miqdor,
+      birlik: s.birlik ?? s.product.birlik,
       birlikNarx: s.birlikNarx,
       jamiSumma: s.jamiSumma,
     })),

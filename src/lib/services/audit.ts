@@ -60,7 +60,9 @@ export type AuditEntity =
   | "employeePenalty"
   | "employeeBonus"
   // CRM: zakaz sotuvchisini almashtirish (kim → kimga, kim o'zgartirdi)
-  | "deal";
+  | "deal"
+  // Mijozga Telegram xabarnomasi (qo'lda qayta yuborish)
+  | "telegramNotification";
 
 interface AuditInput {
   businessId?: string | null;

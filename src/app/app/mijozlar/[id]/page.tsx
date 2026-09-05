@@ -6,7 +6,9 @@ import { runWithTenant } from "@/lib/db/tenantContext";
 import { isManager } from "@/lib/auth/roles";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { getMijozKartochka } from "@/lib/queries/mijoz";
+import { mijozTelegramHolati } from "@/lib/queries/mijozTelegram";
 import { KartochkaClient } from "./KartochkaClient";
+import { TelegramUlash } from "./TelegramUlash";
 
 /** Bitta mijozning butun tarixi — sotuv, qarz va bitimlar bitta sahifada. */
 export default async function MijozKartochkaPage({ params }: { params: { id: string } }) {
@@ -18,8 +20,11 @@ export default async function MijozKartochkaPage({ params }: { params: { id: str
     const businessId = await resolveActiveBusinessId(session);
     if (!businessId) notFound();
 
-    const kartochka = await getMijozKartochka(businessId, params.id);
-    if (!kartochka) notFound();
+    const [kartochka, telegram] = await Promise.all([
+      getMijozKartochka(businessId, params.id),
+      mijozTelegramHolati(businessId, params.id),
+    ]);
+    if (!kartochka || !telegram) notFound();
 
     return (
       <div className="space-y-6">
@@ -37,6 +42,11 @@ export default async function MijozKartochkaPage({ params }: { params: { id: str
             <p className="text-2xs text-faint mt-0.5">{kartochka.mijoz.manzil}</p>
           )}
         </div>
+        <TelegramUlash
+          contactId={params.id}
+          boshlangich={telegram}
+          boshqaruvchi={isManager(session.rol)}
+        />
         <KartochkaClient kartochka={kartochka} boshqaruvchi={isManager(session.rol)} />
       </div>
     );

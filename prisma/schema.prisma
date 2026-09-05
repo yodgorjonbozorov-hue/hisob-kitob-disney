@@ -239,6 +239,8 @@ model Business {
   kpiOyliklar        KpiPayroll[]
   kpiOylikQatorlari  KpiPayrollItem[]
   kpiTuzatishlar     KpiPayrollAdjustment[]
+  // Mijoz Telegram xabarnomalari (optom savdo)
+  telegramXabarlar   TelegramNotification[]
 
   @@index([tenantId])
 }
@@ -838,36 +840,46 @@ model StockEntry {
 /// mumkin bo'lishi kerak, aks holda u kechagi hisobotga tushmaydi.
 /// `deletedAt` — xato kiritilgan sotuvni bekor qilish (kassa dasturi uchun shart).
 model Sale {
-  id            String    @id @default(cuid())
-  businessId    String
-  business      Business  @relation(fields: [businessId], references: [id], onDelete: Restrict)
-  productId     String
-  product       Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
-  miqdor        Int
-  birlikNarx    Int // sotuv narxi snapshot
-  tannarx       Int // kelgan narx snapshot (marja hisobi uchun)
-  jamiSumma     Int
-  tolovTuri     String // "naqd" | "qarz"
+  id               String                 @id @default(cuid())
+  businessId       String
+  business         Business               @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  productId        String
+  product          Product                @relation(fields: [productId], references: [id], onDelete: Restrict)
+  miqdor           Int
+  birlikNarx       Int // sotuv narxi snapshot
+  tannarx          Int // kelgan narx snapshot (marja hisobi uchun)
+  jamiSumma        Int
+  /// O'LCHOV BIRLIGI SNAPSHOT'i ("dona" | "kg" | "quti" | ...).
+  /// Katalogdagi `Product.birlik` keyin o'zgarsa ham mijozga yuborilgan
+  /// chekdagi birlik O'ZGARMAYDI. null — eski yozuvlar (o'qishda
+  /// `product.birlik` ga qaytiladi).
+  birlik           String?
+  /// MAHSULOT NOMI SNAPSHOT'i. Mahsulot keyin qayta nomlansa ham eski
+  /// savdodagi nom o'zgarmaydi. null — eski yozuvlar (`product.nomi`).
+  mahsulotNomi     String?
+  tolovTuri        String // "naqd" | "qarz"
   /// Mijoz kartochkasiga bog'lanish (ixtiyoriy — eski yozuvlarda null).
-  contactId     String?
-  contact       Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  mijozNomi     String?
-  mijozTel      String?
-  userId        String
-  transactionId String? // naqd bo'lsa bog'langan kirim tranzaksiya
+  contactId        String?
+  contact          Contact?               @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  mijozNomi        String?
+  mijozTel         String?
+  userId           String
+  transactionId    String? // naqd bo'lsa bog'langan kirim tranzaksiya
   /// Sotuv sanasi (UTC yarim tuni). Migratsiyada createdAt dan to'ldiriladi.
-  sana          DateTime
-  createdAt     DateTime  @default(now())
+  sana             DateTime
+  createdAt        DateTime               @default(now())
   /// Bekor qilingan sotuv — yumshoq o'chirish (tarix saqlanadi).
-  deletedAt     DateTime?
-  cancelledBy   String?
-  cancelReason  String?
-  debt          Debt?
+  deletedAt        DateTime?
+  cancelledBy      String?
+  cancelReason     String?
+  debt             Debt?
   /// POS CHEKI (MAGAZIN moduli). To'ldirilgan bo'lsa — bu sotuv savatdagi
   /// bitta satr; pul harakati va bekor qilish CHEK darajasida yuritiladi.
   /// null — oddiy bir mahsulotli sotuv (OMBOR moduli, avvalgi xatti-harakat).
-  chekId        String?
-  chek          PosChek?  @relation(fields: [chekId], references: [id], onDelete: Restrict)
+  chekId           String?
+  chek             PosChek?               @relation(fields: [chekId], references: [id], onDelete: Restrict)
+  /// Mijozga yuborilgan Telegram xabarlari (chekka kirmagan yakka sotuv uchun).
+  telegramXabarlar TelegramNotification[]
 
   @@index([businessId, sana])
   @@index([chekId])
@@ -1061,11 +1073,13 @@ model PurchaseOrderItem {
 
 /// Mijoz/kontakt — CRM'ning asosiy sub'ekti.
 model Contact {
-  id         String     @id @default(cuid())
+  id         String    @id @default(cuid())
   businessId String
-  business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
   ism        String
   tel        String?
+  /// QO'LDA yozilgan Telegram username (eski maydon) — ULANISH BILAN
+  /// ARALASHTIRILMAYDI: bu shunchaki eslatma matni, bot unga yoza olmaydi.
   telegram   String?
   /// Optom mijoz kartochkasi maydonlari: manzil va mas'ul shaxs.
   /// null — eski yozuvlar va chakana mijozlar (ixtiyoriy).
@@ -1076,15 +1090,45 @@ model Contact {
   /// Ochiq qarz shu chegaradan oshsa yangi qarzga sotuv rad etiladi.
   /// null — chegara yo'q (avvalgi xatti-harakat).
   qarzLimit  Int?
-  createdAt  DateTime   @default(now())
+  createdAt  DateTime  @default(now())
   deletedAt  DateTime?
-  deals      Deal[]
-  activities Activity[]
-  sales      Sale[]
-  debts      Debt[]
-  contracts  Contract[]
-  posCheklar PosChek[]
 
+  // ---- MIJOZ TELEGRAM ULANISHI (xabarnoma moduli) ----
+  /// Mijozning Telegram chat identifikatori. NULL — ulanmagan.
+  ///
+  /// "telegramConnected" degan ALOHIDA USTUN ATAYLAB YO'Q: u shu maydondan
+  /// hisoblanadi (`telegramChatId != null`). Ikkita ustun bo'lsa ular
+  /// ajralib qolardi ("connected = true, chatId = null") va bot kimga
+  /// yozishini bilmay qolardi. UI/DTO darajasidagi nom —
+  /// `telegramUlangan` (lib/queries/mijozTelegram.ts).
+  ///
+  /// Biznes ichida TAKRORLANMAYDI: bitta Telegram hisobi bitta biznesda
+  /// faqat bitta mijoz bo'la oladi. Bizneslar ORASIDA esa takrorlanishi
+  /// MUMKIN va bu to'g'ri — bir odam ikki ulgurji do'kondan mol oladi.
+  telegramChatId         String?
+  /// Telegram @username (bor bo'lsa) — sotuvchi kim ulanganini ko'rishi uchun.
+  telegramUsername       String?
+  /// Ulanish vaqti (audit).
+  telegramUlanganAt      DateTime?
+  /// BIR MARTALIK ULANISH TOKENI (t.me/bot?start=mijoz_TOKEN).
+  ///
+  /// GLOBAL @unique: token tenantni ham, mijozni ham O'ZI aniqlaydi, shuning
+  /// uchun ikki tenantda bir xil token bo'lishi mumkin emas — aks holda
+  /// bot noto'g'ri mijozga ulanib, cross-tenant ma'lumot ochilardi.
+  /// Ishlatilgandan keyin NULL ga tushadi (bir martalik).
+  telegramToken          String?   @unique
+  /// Token amal qilish muddati. O'tgan token qabul qilinmaydi.
+  telegramTokenExpiresAt DateTime?
+
+  deals            Deal[]
+  activities       Activity[]
+  sales            Sale[]
+  debts            Debt[]
+  contracts        Contract[]
+  posCheklar       PosChek[]
+  telegramXabarlar TelegramNotification[]
+
+  @@unique([businessId, telegramChatId])
   @@index([businessId])
   @@index([businessId, tel])
 }
@@ -2320,38 +2364,105 @@ model ProductCategory {
 /// Bekor qilish ham chek darajasida: kassada yarim chekni qaytarish emas,
 /// butun chekni qaytarish qoidasi ishlaydi.
 model PosChek {
-  id            String    @id @default(cuid())
-  businessId    String
-  business      Business  @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  id               String                 @id @default(cuid())
+  businessId       String
+  business         Business               @relation(fields: [businessId], references: [id], onDelete: Restrict)
   /// Biznes ichidagi ketma-ket chek raqami (kassir "125-chek" deb ataydi).
-  raqam         Int
-  jamiSumma     Int
+  raqam            Int
+  jamiSumma        Int
   /// "naqd" | "karta" | "click" | "qarz". Naqd/karta/click — pul darhol
   /// kassaga tushadi (qaysi kassa — `accountId`), qarz — Debt yaratiladi.
-  tolovTuri     String
+  tolovTuri        String
   /// Pul tushgan kassa (Account) — naqd/karta/click uchun.
-  accountId     String?
+  accountId        String?
   /// Chekning yagona kirim tranzaksiyasi (naqd/karta/click).
-  transactionId String?
+  transactionId    String?
   /// Qarzga sotilganda — yaratilgan qarzdorlik.
-  debtId        String?   @unique
-  contactId     String?
-  contact       Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  mijozNomi     String?
-  mijozTel      String?
-  userId        String
+  debtId           String?                @unique
+  contactId        String?
+  contact          Contact?               @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  mijozNomi        String?
+  mijozTel         String?
+  userId           String
   /// Chek sanasi (UTC yarim tuni) — `Sale.sana` bilan bir xil qoida.
-  sana          DateTime
-  createdAt     DateTime  @default(now())
+  sana             DateTime
+  createdAt        DateTime               @default(now())
   /// Qaytarilgan/bekor qilingan chek — yumshoq o'chirish (tarix saqlanadi).
-  deletedAt     DateTime?
-  cancelledBy   String?
-  cancelReason  String?
-  satrlar       Sale[]
+  deletedAt        DateTime?
+  cancelledBy      String?
+  cancelReason     String?
+  satrlar          Sale[]
+  /// Mijozga yuborilgan Telegram xabarlari (audit jurnali).
+  telegramXabarlar TelegramNotification[]
 
   @@unique([businessId, raqam])
   @@index([businessId, deletedAt, sana])
   @@index([businessId, createdAt])
+  @@index([contactId])
+}
+
+// ==== MIJOZ TELEGRAM XABARNOMASI (optom savdo) ====
+
+/// TELEGRAM XABARNOMA JURNALI — mijozga nima, qachon va qanday yuborilgani.
+///
+/// NEGA JURNAL KERAK. Optom mijozga "tovarni oldingiz" xabari yuborilmasa
+/// yoki IKKI MARTA yuborilsa — bu mijoz bilan pul ustidagi bahs demakdir.
+/// Shu bois har urinish (muvaffaqiyatli ham, xato ham) yozib boriladi va
+/// UI'da "✅ yuborildi / ⚠️ yuborilmadi" bo'lib ko'rinadi.
+///
+/// DUBLIKATDAN HIMOYA — BAZA DARAJASIDA, ilova mantig'ida emas:
+/// `@@unique([chekId, turi, versiya])` va `@@unique([saleId, turi, versiya])`.
+/// Bitta buyurtma bo'yicha bitta turdagi xabar bir versiyada FAQAT BIR MARTA
+/// yoziladi; takroriy hodisa (webhook qayta kelishi, tugmani ikki marta
+/// bosish) cheklovga uriladi va ikkinchi xabar YUBORILMAYDI.
+///
+/// VERSIYALASH (`versiya`): buyurtma o'zgarganda yangi versiya bilan
+/// SALE_UPDATED yoziladi. "Oxirgi yuborilgan versiya" va "oxirgi yuborilgan
+/// vaqt" shu jadvaldan O'QILADI — `PosChek`/`Sale` ga denormalizatsiya
+/// qilingan ustun ATAYLAB qo'shilmagan (u jurnaldan ajralib qolardi).
+///
+/// TENANT: `tenantId` ustuni yo'q — biznes orqali filtrlanadi
+/// (`BUSINESS_SCOPED`, lib/db/tenantDb.ts), loyihaning barcha savdo
+/// jadvallari bilan bir xil qoida.
+model TelegramNotification {
+  id         String    @id @default(cuid())
+  businessId String
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  /// Kimga yuborildi (mijoz kartochkasi).
+  contactId  String
+  contact    Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  /// Buyurtma — CHEK (ko'p mahsulotli) yoki yakka SOTUV. Ikkalasidan
+  /// ANIQ BITTASI to'ldiriladi; qarz eslatmasi kabi buyurtmasiz xabarda
+  /// ikkalasi ham null bo'lishi mumkin.
+  chekId     String?
+  chek       PosChek?  @relation(fields: [chekId], references: [id], onDelete: Cascade)
+  saleId     String?
+  sale       Sale?     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  /// Yuborilgan chat (mijoz o'sha paytdagi chatId snapshot'i).
+  chatId     String
+  /// "SALE_CREATED" | "SALE_UPDATED" | "SALE_CANCELLED" |
+  /// "PAYMENT_RECEIVED" | "DEBT_REMINDER" (lib/telegram/mijozXabarTuri.ts).
+  turi       String
+  /// "YUBORILDI" | "XATO".
+  holat      String
+  /// Buyurtma versiyasi: 1 — birinchi xabar, keyin har o'zgarishda +1.
+  versiya    Int       @default(1)
+  /// Yuborilgan matn (mijoz aynan nimani ko'rgani bahsda hal qiluvchi dalil).
+  matn       String
+  /// Telegram qaytargan xato (holat = "XATO" bo'lganda).
+  xato       String?
+  /// Nechta urinish qilindi (maksimum 3 — lib/telegram/yuborish.ts).
+  urinish    Int       @default(1)
+  /// Muvaffaqiyatli yuborilgan vaqt (holat = "YUBORILDI").
+  sentAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@unique([chekId, turi, versiya])
+  @@unique([saleId, turi, versiya])
+  @@index([businessId, createdAt])
+  @@index([businessId, contactId])
+  @@index([chekId])
+  @@index([saleId])
   @@index([contactId])
 }
 

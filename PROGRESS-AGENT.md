@@ -1,3 +1,66 @@
+# Mijoz Telegram xabarnomasi moduli (2026-09-05)
+
+Optom mijoz tovarni olganda uning Telegramiga to'liq savdo ma'lumoti
+avtomatik ketadi: mahsulotlar (o'z birligi bilan), savdo paytidagi narx,
+to'lov taqsimoti va qarz. Xabar bildirishnoma emas — har raqami bazadagi
+tasdiqlangan chek/sotuv, kirim tranzaksiyasi va qarz ledgeridan chiqadi.
+
+## Uchta invariant (ular buzilsa modul ishonchsiz bo'ladi)
+
+1. RAQAM TAKRORLANMAYDI — Telegram uchun ALOHIDA hisob-kitob yo'q.
+   `lib/telegram/buyurtma.ts` satrlarni `Sale` snapshot narxlaridan, pulni
+   `Transaction` + `DebtPayment` dan, qarzni `Debt` dan o'qiydi. "Oldingi
+   qarz" ham alohida ustunga yozilmaydi — u `joriyQarz − shu buyurtma qarzi`
+   ayirmasi, ya'ni ledger bilan hech qachon ajralib qolmaydi.
+2. DUBLIKAT BAZAGA SIG'MAYDI — `TelegramNotification` da
+   `@@unique([chekId, turi, versiya])` va `@@unique([saleId, turi, versiya])`.
+   Jurnal yozuvi YUBORISHDAN OLDIN yaratiladi, shuning uchun takroriy hodisa
+   yoki ikki marta bosilgan tugma ikkinchi xabarni yubora olmaydi. Yiqilgan
+   xabar esa O'SHA satr ustidan qayta urinadi (yangi satr ochmaydi).
+3. TELEGRAM SAVDONI BUZMAYDI — xabar tranzaksiyadan TASHQARIDA va
+   `buyurtmaXabarnomasiniUrin()` o'rovchisi bilan yuboriladi (u hech qachon
+   tashlamaydi). Telegram yiqilsa chek saqlanadi, jurnalda "XATO" qoladi va
+   UI'da direktor uchun "Qayta yuborish" tugmasi chiqadi.
+
+## Qabul qilingan arxitektura qarorlari
+
+- **Yangi Order/OrderItem jadvali YARATILMADI.** Balansa'da buyurtma
+  allaqachon ikki shaklda bor: `PosChek` + satrlari (`Sale[]`) va chekka
+  kirmagan yakka `Sale`. Parallel jadval qo'shilsa hisobotlar ikki manbadan
+  o'qiy boshlardi. Narx snapshot'i ham allaqachon bor edi (`birlikNarx`,
+  `tannarx`); ustiga faqat `birlik` va `mahsulotNomi` snapshot'i qo'shildi.
+- **DRAFT → CONFIRMED → DELIVERED zanjiri QO'SHILMADI.** Balansa'da chek
+  yozuvining O'ZI "tovar mijozga berildi" hodisasi: aynan o'sha atomik
+  tranzaksiyada ombor kamayadi va pul/qarz yoziladi. Sun'iy holat mashinasi
+  ikkinchi haqiqat manbai bo'lardi.
+- **`telegramConnected` ustuni QO'SHILMADI** — u `telegramChatId != null`
+  dan hisoblanadi (DTO'da `ulangan`). Ikkita ustun ajralib qolsa bot kimga
+  yozishini bilmay qolardi.
+- **To'lov usullari qotirilmagan** — `lib/tolovBolimi.ts` dagi mavjud
+  "amaldagi usul" qoidasi ishlatiladi (aniq `tolovTuri`, bo'lmasa kassa
+  turi). Yangi kassa turi qo'shilsa xabar o'zi kengayadi.
+- **SALE_UPDATED avtomatik hodisasi YO'Q**, chunki Balansa'da chek/sotuvni
+  TAHRIRLASH oqimi yo'q (faqat bekor qilish bor). Mexanizmning o'zi to'liq
+  ishlaydi: qayta yuborish tugmasi allaqachon ketgan buyurtma uchun
+  SALE_UPDATED ni KEYINGI versiya bilan yuboradi. Tahrirlash oqimi
+  qo'shilganda unga bitta chaqiruv qo'shish yetarli.
+
+## Ma'lum cheklov
+
+`Sale.miqdor` — butun son, shuning uchun "125,5 kg" kabi kasrli miqdor
+savdo yozuvida ifodalanmaydi (xabarda "125 kg × 8 500" ko'rinadi). Kasrli
+kg savdosi tizimda alohida yo'lda yuritiladi (`Transaction.miqdorGr`,
+`lib/kg.ts`). Buni o'zgartirish `Sale` ustunini minor birlikka ko'chirishni
+va barcha hisobotlarni qayta ko'rishni talab qiladi — ataylab qilinmadi.
+
+## Testlar
+
+`npm run test:mijoz-telegram` (18 ta): naqd/qarz/qisman/aralash to'lov,
+ko'p mahsulot, kg va dona birligi, oldindan qarzi bor mijoz, ulanmagan
+mijoz, Telegram API xatosi, o'zgartirish va versiyalash, bekor qilish,
+dublikat hodisa, tenant izolyatsiyasi, katalog narxi keyin o'zgargan holat,
+bir martalik ulanish tokeni.
+
 # Xodimlar KPI / ball / oylik moduli (2026-09-01)
 
 Rahbar xodim kartochkasini bosadi va "bu xodimga hozir qancha oylik chiqdi"

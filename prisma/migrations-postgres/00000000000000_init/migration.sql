@@ -385,6 +385,8 @@ CREATE TABLE "Sale" (
     "birlikNarx" INTEGER NOT NULL,
     "tannarx" INTEGER NOT NULL,
     "jamiSumma" INTEGER NOT NULL,
+    "birlik" TEXT,
+    "mahsulotNomi" TEXT,
     "tolovTuri" TEXT NOT NULL,
     "contactId" TEXT,
     "mijozNomi" TEXT,
@@ -501,6 +503,11 @@ CREATE TABLE "Contact" (
     "qarzLimit" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "deletedAt" TIMESTAMP(3),
+    "telegramChatId" TEXT,
+    "telegramUsername" TEXT,
+    "telegramUlanganAt" TIMESTAMP(3),
+    "telegramToken" TEXT,
+    "telegramTokenExpiresAt" TIMESTAMP(3),
 
     CONSTRAINT "Contact_pkey" PRIMARY KEY ("id")
 );
@@ -1147,6 +1154,26 @@ CREATE TABLE "PosChek" (
 );
 
 -- CreateTable
+CREATE TABLE "TelegramNotification" (
+    "id" TEXT NOT NULL,
+    "businessId" TEXT NOT NULL,
+    "contactId" TEXT NOT NULL,
+    "chekId" TEXT,
+    "saleId" TEXT,
+    "chatId" TEXT NOT NULL,
+    "turi" TEXT NOT NULL,
+    "holat" TEXT NOT NULL,
+    "versiya" INTEGER NOT NULL DEFAULT 1,
+    "matn" TEXT NOT NULL,
+    "xato" TEXT,
+    "urinish" INTEGER NOT NULL DEFAULT 1,
+    "sentAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "TelegramNotification_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "FeatureFlag" (
     "id" TEXT NOT NULL,
     "kalit" TEXT NOT NULL,
@@ -1647,10 +1674,16 @@ CREATE INDEX "PurchaseOrderItem_orderId_idx" ON "PurchaseOrderItem"("orderId");
 CREATE INDEX "PurchaseOrderItem_businessId_idx" ON "PurchaseOrderItem"("businessId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Contact_telegramToken_key" ON "Contact"("telegramToken");
+
+-- CreateIndex
 CREATE INDEX "Contact_businessId_idx" ON "Contact"("businessId");
 
 -- CreateIndex
 CREATE INDEX "Contact_businessId_tel_idx" ON "Contact"("businessId", "tel");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Contact_businessId_telegramChatId_key" ON "Contact"("businessId", "telegramChatId");
 
 -- CreateIndex
 CREATE INDEX "Stage_businessId_tartib_idx" ON "Stage"("businessId", "tartib");
@@ -1966,6 +1999,27 @@ CREATE INDEX "PosChek_contactId_idx" ON "PosChek"("contactId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "PosChek_businessId_raqam_key" ON "PosChek"("businessId", "raqam");
+
+-- CreateIndex
+CREATE INDEX "TelegramNotification_businessId_createdAt_idx" ON "TelegramNotification"("businessId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "TelegramNotification_businessId_contactId_idx" ON "TelegramNotification"("businessId", "contactId");
+
+-- CreateIndex
+CREATE INDEX "TelegramNotification_chekId_idx" ON "TelegramNotification"("chekId");
+
+-- CreateIndex
+CREATE INDEX "TelegramNotification_saleId_idx" ON "TelegramNotification"("saleId");
+
+-- CreateIndex
+CREATE INDEX "TelegramNotification_contactId_idx" ON "TelegramNotification"("contactId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "TelegramNotification_chekId_turi_versiya_key" ON "TelegramNotification"("chekId", "turi", "versiya");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "TelegramNotification_saleId_turi_versiya_key" ON "TelegramNotification"("saleId", "turi", "versiya");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "FeatureFlag_kalit_key" ON "FeatureFlag"("kalit");
@@ -2455,6 +2509,18 @@ ALTER TABLE "PosChek" ADD CONSTRAINT "PosChek_businessId_fkey" FOREIGN KEY ("bus
 
 -- AddForeignKey
 ALTER TABLE "PosChek" ADD CONSTRAINT "PosChek_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TelegramNotification" ADD CONSTRAINT "TelegramNotification_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TelegramNotification" ADD CONSTRAINT "TelegramNotification_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TelegramNotification" ADD CONSTRAINT "TelegramNotification_chekId_fkey" FOREIGN KEY ("chekId") REFERENCES "PosChek"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "TelegramNotification" ADD CONSTRAINT "TelegramNotification_saleId_fkey" FOREIGN KEY ("saleId") REFERENCES "Sale"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "SupportTicket" ADD CONSTRAINT "SupportTicket_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

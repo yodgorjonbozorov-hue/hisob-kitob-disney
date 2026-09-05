@@ -124,6 +124,9 @@ const BUSINESS_SCOPED = new Set([
   "DealTolov",
   // Zakaz sifat nazorati (mijoz fikri) — biznesga bog'langan.
   "DealFeedback",
+  // Mijoz Telegram xabarnomasi jurnali (optom savdo) — `businessId` ustuni
+  // bor, ya'ni tenant filtri avtomatik qo'llanadi.
+  "TelegramNotification",
   // Xodimlar KPI / ball / oylik moduli
   "KpiSetting",
   "KpiSalesBracket",

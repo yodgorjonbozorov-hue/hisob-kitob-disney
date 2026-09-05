@@ -46,6 +46,7 @@ import { isModuleOnForTenant } from "@/lib/modules/guard";
 import { modulByCode } from "@/lib/modules/registry";
 import { BRAND } from "@/lib/brand";
 import { clearAllFlows } from "./conversationStore";
+import { mijozCallbackUrin, mijozMatniniUrin, mijozMenyusiniKorsat, mijozStartUrin } from "./mijozFlow";
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) {
@@ -139,6 +140,14 @@ function tenantHandler(
 
 bot.command("start", async (ctx) => {
   const chatId = String(ctx.chat.id);
+
+  // MIJOZ ULANISH HAVOLASI (`?start=mijoz_TOKEN`) — eng birinchi tekshiriladi.
+  // Xodim tekshiruvidan OLDIN turadi: havolani bosgan odam aynan mijoz
+  // kartochkasiga ulanmoqchi va u xodim ham bo'lishi mumkin emas
+  // (token bir martalik va kartochkaga qat'iy bog'langan).
+  const payload = ctx.match?.toString().trim() ?? "";
+  if (payload && (await mijozStartUrin(ctx, payload))) return;
+
   const user = await findUserByChatId(chatId);
   if (user) {
     await ctx.reply(
@@ -146,6 +155,10 @@ bot.command("start", async (ctx) => {
     );
     return;
   }
+
+  // Xodim emas — allaqachon ulangan MIJOZ bo'lishi mumkin: unga menyu chiqadi.
+  if (await mijozMenyusiniKorsat(ctx)) return;
+
   await ctx.reply(
     `${BRAND.nomi} — biznesingiz balansda.\n\n` +
       `Bu ${BRAND.nomi} boti: kirim-chiqim, lead va hisobotlar Telegram orqali.\n\n` +
@@ -246,6 +259,14 @@ bot.command("bekor", async (ctx) => {
   await ctx.reply("Amal bekor qilindi.");
 });
 
+// MIJOZ TUGMALARI — xodim callback'laridan OLDIN ro'yxatdan o'tadi.
+// `tenantHandler` mijozni xodim deb topa olmaydi va "Avval /kod orqali
+// ulaning" deb rad etardi, shuning uchun mijoz oqimi shu yerda uziladi.
+bot.callbackQuery(/^mx:/, async (ctx, next) => {
+  if (await mijozCallbackUrin(ctx)) return;
+  await next();
+});
+
 bot.callbackQuery(/^lbiz:/, tenantHandler((ctx, user) => handleLeadBusinessCallback(ctx, user)));
 
 // Avto: mashina qabul qilish va xarajat yozish (faqat direktor/administrator).
@@ -335,6 +356,16 @@ bot.on(
   "message:photo",
   tenantHandler((ctx, user) => handleChekPhoto(ctx, user), { yozish: true })
 );
+
+// MIJOZ MENYUSI ("📦 Oxirgi xaridlar" / "📕 Mening qarzim") — xodim matn
+// oqimidan OLDIN. Xodim chatida bu tugmalar yo'q, shuning uchun mavjud
+// oqimlarga (kirim/chiqim, lead, avto) TA'SIR QILMAYDI: mos kelmagan
+// har qanday matn `next()` bilan avvalgidek pastga o'tadi.
+bot.on("message:text", async (ctx, next) => {
+  const xodim = await findUserByChatId(String(ctx.chat.id));
+  if (!xodim && (await mijozMatniniUrin(ctx))) return;
+  await next();
+});
 
 bot.on(
   "message:text",

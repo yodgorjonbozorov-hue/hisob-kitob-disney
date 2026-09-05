@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Money } from "@/components/ui/Money";
+import { TelegramHolat } from "@/components/telegram/TelegramHolat";
 import { formatDateUZ, formatSomLabel } from "@/lib/format";
 import type { PosChekDTO } from "@/lib/queries/pos";
 
@@ -30,7 +31,11 @@ export function CheklarClient({
   qaytaraOladi,
 }: {
   cheklar: PosChekDTO[];
-  /** Chekni qaytarish faqat direktor/adminda (kassir o'z xatosini yashira olmasin). */
+  /**
+   * Chekni qaytarish faqat direktor/adminda (kassir o'z xatosini yashira
+   * olmasin). AYNI huquq mijozga Telegram xabarini qayta yuborishga ham
+   * amal qiladi — u ham mijoz ko'radigan hujjat.
+   */
   qaytaraOladi: boolean;
 }) {
   const router = useRouter();
@@ -111,12 +116,26 @@ export function CheklarClient({
               </div>
             </div>
 
+            {/* Mijozli cheklarda Telegram holati — chek ochilmasa ham
+                ko'rinadi: sotuvchi "mijozga ketdimi?" degan savolga
+                ro'yxatning o'zidan javob olishi kerak. */}
+            {c.mijozNomi && (
+              <div className="mt-2 pt-2 border-t border-line">
+                <TelegramHolat
+                  holat={c.telegram}
+                  mijozUlangan={c.mijozUlangan}
+                  chekId={c.id}
+                  qaytaYubora={qaytaraOladi}
+                />
+              </div>
+            )}
+
             {ochiq === c.id && (
               <ul className="mt-3 pt-3 border-t border-line space-y-1">
                 {c.satrlar.map((s, i) => (
                   <li key={i} className="flex justify-between text-sm">
                     <span className="text-fg truncate">
-                      {s.nomi} × {s.miqdor}
+                      {s.nomi} × {s.miqdor} {s.birlik}
                     </span>
                     <span className="text-muted shrink-0 ml-3">{formatSomLabel(s.jamiSumma)}</span>
                   </li>

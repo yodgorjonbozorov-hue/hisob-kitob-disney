@@ -5,6 +5,7 @@ import { ensureCategoryTx } from "@/lib/services/inventory";
 import { qarzLimitTekshirTx } from "@/lib/services/mijoz";
 import { mijozniAniqlaTx } from "@/lib/services/mijozAniqla";
 import { logAudit } from "@/lib/services/audit";
+import { buyurtmaXabarnomasiniUrin } from "@/lib/services/mijozXabarnoma";
 import { todayDateOnlyString, dateOnlyStringToUTCDate } from "@/lib/date";
 import { biznesQatorQulfiSql } from "@/lib/db/dialect";
 
@@ -246,7 +247,7 @@ export async function posSotuv(params: PosSotuvParams): Promise<PosChekNatija> {
           businessId: params.businessId,
           isActive: true,
         },
-        select: { id: true, nomi: true, sotuvNarx: true, kelganNarx: true },
+        select: { id: true, nomi: true, sotuvNarx: true, kelganNarx: true, birlik: true },
       });
       const pMap = new Map(products.map((p) => [p.id, p]));
 
@@ -353,6 +354,10 @@ export async function posSotuv(params: PosSotuvParams): Promise<PosChekNatija> {
             // tarixan ikki qiymatli ("naqd" | "qarz") va uni kengaytirish
             // eski sotuv hisobotlarini o'zgartirib yuborardi.
             tolovTuri: params.tolovTuri === "qarz" ? "qarz" : "naqd",
+            // SNAPSHOT: katalogdagi nom yoki birlik keyin o'zgarsa ham
+            // mijozga yuborilgan chek o'zgarmaydi (lib/telegram/buyurtma.ts).
+            mahsulotNomi: h.product.nomi,
+            birlik: h.product.birlik,
             contactId: mijoz.contactId ?? undefined,
             mijozNomi: mijoz.ism ?? undefined,
             mijozTel: mijoz.tel ?? undefined,
@@ -427,6 +432,16 @@ export async function posSotuv(params: PosSotuvParams): Promise<PosChekNatija> {
       tolovTuri: natija.tolovTuri,
       satrSoni: natija.satrlar.length,
     },
+  });
+
+  // MIJOZGA TELEGRAM XABARI — tranzaksiyadan TASHQARIDA va tashlamaydigan
+  // o'rovchi bilan: Telegram ishlamasa ham chek saqlanib qolgan bo'ladi
+  // (spec 14). Chek yozuvining O'ZI "tovar mijozga berildi" hodisasi —
+  // aynan shu tranzaksiyada ombor kamaydi va pul/qarz yozildi.
+  await buyurtmaXabarnomasiniUrin({
+    businessId: params.businessId,
+    chekId: natija.id,
+    turi: "SALE_CREATED",
   });
   return natija;
 }
@@ -512,6 +527,15 @@ export async function posChekBekor(params: {
     entityId: params.chekId,
     before: natija,
     after: { sabab },
+  });
+
+  // Mijoz "❌ Xarid bekor qilindi" xabarini oladi. Qarz shu paytga kelib
+  // allaqachon qaytarilgan — xabardagi "joriy qarz" reversal'dan KEYINGI
+  // haqiqiy qoldiq bo'ladi (spec 10).
+  await buyurtmaXabarnomasiniUrin({
+    businessId: params.businessId,
+    chekId: params.chekId,
+    turi: "SALE_CANCELLED",
   });
   return { ok: true, ...natija };
 }

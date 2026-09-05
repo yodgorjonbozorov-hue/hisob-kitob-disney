@@ -67,6 +67,10 @@ export const ZAXIRA_JADVALLARI = [
   "sale",
   "debt",
   "debtPayment",
+  // MIJOZ TELEGRAM XABARNOMASI: DIQQAT: `contact`, `posChek` VA `sale` dan
+  // KEYIN turishi SHART — uchalasiga ham FK bilan murojaat qiladi. Tartib
+  // buzilsa zaxira tiklanmaydi ("Foreign key constraint violated").
+  "telegramNotification",
   "stage",
   "deal",
   "activity",
