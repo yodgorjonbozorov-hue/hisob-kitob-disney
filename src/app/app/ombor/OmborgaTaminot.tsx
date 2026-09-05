@@ -81,11 +81,11 @@ export function OmborgaTaminot({
     qadam === 0
       ? Boolean(supplier)
       : qadam === 1
-        ? Boolean(usul) && kassaTayyor
+        ? satrlar.length > 0 &&
+          satrlar.every((s) => Number(s.miqdor) > 0) &&
+          jamiSumma(satrlar) > 0
         : qadam === 2
-          ? satrlar.length > 0 &&
-            satrlar.every((s) => Number(s.miqdor) > 0) &&
-            jamiSumma(satrlar) > 0
+          ? Boolean(usul) && kassaTayyor
           : kassaTayyor;
 
   async function saqla() {
@@ -156,25 +156,25 @@ export function OmborgaTaminot({
         )}
 
         {qadam === 1 && (
+          <QadamMahsulotlar
+            satrlar={satrlar}
+            onChange={setSatrlar}
+            onYangiMahsulot={(nomi) => setYangiMahsulotNomi(nomi)}
+          />
+        )}
+
+        {qadam === 2 && (
           <QadamTolov
             usul={usul}
             onUsul={(u) => {
               setUsul(u);
               // Kassa tanlash kerak bo'lsa shu qadamda qolamiz — savolga
               // javob berilmasdan oldinga o'tib ketmasin.
-              if (!kassaTanlashKerak(u, kassalar)) setQadam(2);
+              if (!kassaTanlashKerak(u, kassalar)) setQadam(3);
             }}
             accountId={accountId}
             onAccount={setAccountId}
             kassalar={kassalar}
-          />
-        )}
-
-        {qadam === 2 && (
-          <QadamMahsulotlar
-            satrlar={satrlar}
-            onChange={setSatrlar}
-            onYangiMahsulot={(nomi) => setYangiMahsulotNomi(nomi)}
           />
         )}
 

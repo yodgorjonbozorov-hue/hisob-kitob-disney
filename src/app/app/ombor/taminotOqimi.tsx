@@ -1,7 +1,14 @@
 "use client";
 
-/** "Omborga ta'minot" oqimining to'rt qadami — nomi va progress ko'rsatkichi. */
-export const QADAM_NOMI = ["Kimdan?", "Qanday to'landi?", "Nima keldi?", "Saqlash"];
+/**
+ * "Omborga ta'minot" oqimining to'rt qadami — nomi va progress ko'rsatkichi.
+ *
+ * TARTIB MUHIM: to'lov MAHSULOTDAN KEYIN so'raladi. Sabab — "qanday
+ * to'landi?" savoliga javob ko'pincha SUMMAGA bog'liq (6 mln bo'lsa qarzga,
+ * 200 ming bo'lsa naqd). Ilgari to'lov ikkinchi qadamda edi va foydalanuvchi
+ * summani hali bilmay turib tanlashi kerak edi, keyin esa orqaga qaytardi.
+ */
+export const QADAM_NOMI = ["Kimdan?", "Nima keldi?", "Qanday to'landi?", "Saqlash"];
 
 export function Progress({ qadam }: { qadam: number }) {
   return (
