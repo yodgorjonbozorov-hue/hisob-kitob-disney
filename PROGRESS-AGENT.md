@@ -6140,3 +6140,44 @@ Regressiya: `isolation`, `izolyatsiya-royxati`, `qarz`, `qarzdorlik`,
 `qarz-taqsimot`, `kirim-chiqim`, `kassa`, `kassa-qoldiq`, `migratsiya`,
 `atomik`, `audit`, `soft-delete`, `agregat`, `tolov-taqsimoti`, `xarid`,
 `taminot`, `crm-tolovlar`, `backup` — hammasi yashil. `npm run build` o'tdi.
+
+## Merge oldidan audit (2026-09-05)
+
+**1. `idempotencyKey` multi-tenant.** Cheklov `@@unique([businessId,
+idempotencyKey])`. `Business.tenantId` — MAJBURIY skalyar, ya'ni bitta
+biznes aynan bitta tenantga tegishli; demak bu cheklov
+`(tenantId, idempotencyKey)` dan QAT'IY tor va bir tenantning kaliti
+boshqasinikini to'sa olmaydi. Test indeks ustunlarini `pragma_index_info`
+bilan o'qib isbotlaydi va ikki tenantda AYNI kalit bilan yozuv yozadi.
+
+**2. TOPILGAN VA TUZATILGAN XATO — qarzga bog'langan yozuv qulfi.**
+`/api/moliya/[amalId]` PATCH/DELETE `requireManager` bilan yopiq edi, lekin
+YONDOSH yo'l ochiq qolgan: `/api/transactions/[id]` PATCH/DELETE
+`requireOwnerOrAdmin` ishlatadi, ya'ni KASSIR o'zi kiritgan yozuvni
+tahrirlay olardi — shu jumladan qarz to'lovi yozuvini. U holda kassa
+o'zgarib, `Debt.tolangan` o'sha-o'sha qolardi (2 mln to'lov 10 mln ga
+tuzatilsa kassa 10 mln, qarzdan esa 2 mln ayrilgan bo'lib qolardi). Ayni
+teshik `/api/transactions/bulk` ommaviy o'chirishida ham bor edi.
+
+Bu MENING o'zgarishim keltirgan xato emas — qarz to'lovlari ilgari ham
+`Transaction` yozardi — lekin Moliya oqimi uni asosiy yo'lga aylantirgani
+uchun endi yopildi: `lib/services/yozuvQulfi.ts`. Bitta yozuvda
+`ForbiddenError`, ommaviy amalda esa qulflangani O'TKAZIB YUBORILADI
+(50 tadan bittasi qarz to'lovi bo'lgani uchun qolgani bloklanmasin) va
+nechtasi o'tkazib yuborilgani javobda qaytadi.
+
+**3-5. Chuqur oqim testlari** — `npm run test:moliya-audit` (12 ta):
+CUSTOMER 5→2→3→bekor→5 mln, SUPPLIER 7→3→4→bekor→7 mln, FIFO uch qarzga
+taqsimlash va tuzatishda eski allocation TO'LIQ bekor bo'lib qayta
+taqsimlanishi, ledger tozaligi (2 mln → 1,5 mln tuzatishdan keyin faol
+yozuvlar soni faqat bittaga oshadi — correction tranzaksiyasi YO'Q),
+har to'lov usulining o'z kassa turiga tushishi.
+
+**6. Migratsiya xavfsizligi** — `npm run test:moliya-migratsiya` (4 ta).
+Eng katta xavf: `idempotencyKey` ustidagi UNIQUE indeks migratsiyadan keyin
+BARCHA eski yozuvlarda NULL bo'ladi. Test migratsiyagacha bo'lgan bazani
+quradi, 5 ta tranzaksiya soladi, migratsiyani qo'llaydi va har ustunni
+bayt-ma-bayt solishtiradi. SQLite ham, Postgres ham UNIQUE indeksda
+NULL larni TENG deb hisoblamaydi, shuning uchun indeks yaratish yiqilmaydi.
+SQL faqat 6 ta nullable `ADD COLUMN` + 3 ta `CREATE INDEX`:
+DROP/TRUNCATE/DELETE/UPDATE/RENAME/INSERT YO'Q.
