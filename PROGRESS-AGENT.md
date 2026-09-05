@@ -6066,3 +6066,77 @@ eski test qoidani hali ham talab qilardi — suite RED holda deploy bo'lgan.
 Merge paytida men u faylni ishga tushirmagandim. Xulosa: merge'dan keyin
 o'zgargan MODUL bo'yicha barcha suitalar yugurtiriladi, faqat o'zim
 tegingan fayllar emas.
+
+---
+
+# MOLIYA — "PUL OLDIM / PUL BERDIM" OQIMI (2026-09-05)
+
+Direktor pul harakatini ikki bosishda kiritadi: `/app/moliya` da faqat
+ikkita katta tugma — **+ PUL OLDIM** (kirim) va **− PUL BERDIM** (chiqim).
+
+## Avval qilingan audit (nima allaqachon bor edi)
+
+| Savol | Javob |
+| --- | --- |
+| Kirim/Chiqim qayerda | `Transaction` modeli, `lib/services/transactionService.ts`, `/app/tranzaksiyalar` |
+| Kassa qoldig'i qanday | SAQLANMAYDI — ledgerdan hisoblanadi: `getAccountBalances()` = kirim − chiqim + kirgan transfer − chiqqan transfer |
+| Mijoz qarzi | `Debt` (turi `olinadigan`) + `DebtPayment`, `lib/services/qarz.ts` |
+| Ta'minotchi qarzi | AYNI `Debt` (turi `beriladigan`), `Supplier` — katalog, `lib/services/xarid.ts` ochadi |
+| To'lov turlari | `Transaction.tolovTuri` = naqd/click/qarz, `Account.turi` = naqd/plastik/bank, guruhlar `lib/tolovBolimi.ts` |
+
+Shu sababli YANGI moliya tizimi qurilmadi — yangi qatlam faqat mavjud
+xizmatlarni bitta formaga va bitta atomik amalga bog'laydi.
+
+## Uchta invariant
+
+1. **KASSA QOLDIG'I TO'G'RILANMAYDI, U HISOBLANADI.** Yozuv summasi
+   o'zgarsa yoki yozuv o'chirilsa qoldiq O'ZI to'g'ri chiqadi. Shuning
+   uchun tuzatishda "correction" yozuvi YOZILMAYDI — u qo'shilsa pul ikki
+   marta harakatlangan bo'lardi.
+2. **QARZ MAVJUD XIZMAT ORQALI.** "Mijoz qarzini to'ladi" / "Ta'minotchi
+   qarzini to'lash" sabablari `qarzdorTolovTx` ga tushadi: eng eski ochiq
+   qarzdan boshlab taqsimlanadi, har qarz uchun ALOHIDA kirim yoziladi
+   (kategoriya kesimi saqlansin), qisman to'lov o'z-o'zidan ishlaydi.
+   Ikkinchi qarz mantiqi yozilmadi.
+3. **BIR AMAL — BIR `amalId`.** Bitta pul harakati bir necha yozuv
+   qoldirishi mumkin (qarz taqsimoti), shuning uchun tuzatish va bekor
+   qilish AMAL bo'yicha ishlaydi, yozuv bo'yicha emas.
+
+## Sxema (faqat qo'shuvchi migratsiya)
+
+`20260905090000_moliya_pul_oqimi` — `Transaction` ga 6 ta NULL bo'lishi
+mumkin bo'lgan ustun: `shaxsTuri`, `shaxsId`, `shaxsIsm` (tomon, FK'siz —
+kartochka o'chirilsa tarix o'qiladigan qolsin), `pulUsuli`, `amalId`,
+`idempotencyKey`. Birorta mavjud yozuv o'zgarmaydi.
+
+## Qabul qilingan qarorlar
+
+- **Moliya lug'ati kengaytirilmadi.** `tolovTuri` avvalgidek
+  naqd/click/qarz. Foydalanuvchi tanlagan aniq usul (Naqd / Terminal /
+  Click / Pul o'tkazish) `pulUsuli` da saqlanadi — `DealTolov.kanal` bilan
+  AYNI uslub. Farq kassaga ham tushadi: terminal → plastik, o'tkazma → bank.
+- **Sabab = kategoriya.** Yangi "sabab" jadvali ochilmadi: sabablar
+  `ensureCategoryTx` bilan oddiy kategoriya sifatida yaratiladi, direktor
+  qo'shgan kategoriyalar esa formada darhol tanlanadi.
+- **Tuzatish = bekor + qayta yozish, bitta tranzaksiyada.** Summa o'zgarsa
+  qarz taqsimoti ham o'zgaradi; mavjud yozuvlarni "joyida" tahrirlash uchun
+  FIFO qoidasidan ajralib ketadigan ikkinchi mantiq kerak bo'lardi.
+- **Bekor qilish — soft delete + qarzni tiklash.** Yozuv o'chirilmaydi
+  (`deletedAt`), `DebtPayment` o'chiriladi va `Debt.tolangan` qaytariladi.
+- **Takror bosish himoyasi bazada:** oddiy yo'lda
+  `Transaction @@unique([businessId, idempotencyKey])`, qarz yo'lida esa
+  mavjud `DebtPayment @@unique([debtId, idempotencyKey])`. Bekor qilishda
+  topilgan har bir to'lov AYNAN shu amalning yozuviga bog'langani
+  tekshiriladi — klientdan kelgan kalitga ishonilmaydi.
+
+## Testlar
+
+`npm run test:moliya-pul` (11 ta): oddiy chiqim qarz yaratmasligi, takror
+bosish, mijoz va ta'minotchi qarzi to'lovi, ortiqcha to'lovning rad
+etilishi, usulga mos kassa, tuzatish (kassa + qarz), bekor qilish, ro'yxat
+maydonlari, tomon qidiruvi, tenant izolyatsiyasi.
+
+Regressiya: `isolation`, `izolyatsiya-royxati`, `qarz`, `qarzdorlik`,
+`qarz-taqsimot`, `kirim-chiqim`, `kassa`, `kassa-qoldiq`, `migratsiya`,
+`atomik`, `audit`, `soft-delete`, `agregat`, `tolov-taqsimoti`, `xarid`,
+`taminot`, `crm-tolovlar`, `backup` — hammasi yashil. `npm run build` o'tdi.

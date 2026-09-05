@@ -50,6 +50,7 @@
     "test:kassa-maxfiylik": "node -r ts-node/register tests/kassa-maxfiylik.test.ts",
     "test:tozalash": "node -r ts-node/register tests/tozalash.test.ts",
     "test:qarz": "node -r ts-node/register tests/qarz.test.ts",
+    "test:moliya-pul": "node -r ts-node/register tests/moliya-pul.test.ts",
     "test:qarzdorlik": "node -r ts-node/register tests/qarzdorlik.test.ts",
     "test:qarz-taqsimot": "node -r ts-node/register tests/qarz-taqsimot.test.ts",
     "test:qarz-mijoz": "node -r ts-node/register tests/qarz-mijoz.test.ts",
