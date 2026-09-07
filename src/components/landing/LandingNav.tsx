@@ -68,6 +68,9 @@ export function LandingNav() {
           </div>
 
           <div className="flex items-center gap-5 max-[900px]:hidden">
+            <Link href="/demo" className="text-[15px] text-[#F8FBFA]/[0.72] hover:text-[#F8FBFA]">
+              Demo
+            </Link>
             <Link href="/login" className="text-[15px] text-[#F8FBFA]/[0.72] hover:text-[#F8FBFA]">
               Kirish
             </Link>
@@ -126,6 +129,9 @@ function MobilMenyu({ yop }: { yop: () => void }) {
             {h.matn}
           </a>
         ))}
+        <Link href="/demo" onClick={yop} className="py-3.5 text-[17px] text-[#F8FBFA]/[0.72]">
+          Demo ko&apos;rish
+        </Link>
         <Link href="/login" onClick={yop} className="py-3.5 text-[17px] text-[#F8FBFA]/[0.72]">
           Kirish
         </Link>

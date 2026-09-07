@@ -80,7 +80,9 @@ export interface EslatmaNatija {
  * yuboradi. Cron'dan kuniga bir marta chaqiriladi.
  */
 export async function sendExpiryWarnings(bot: Bot, now: Date = new Date()): Promise<EslatmaNatija> {
-  const tenants = await rawPrisma.tenant.findMany();
+  // Demo tenantga obuna eslatmasi yuborilmaydi (u to'lov qilmaydi va
+  // unga bog'langan Telegram hisobi ham yo'q).
+  const tenants = await rawPrisma.tenant.findMany({ where: { demo: false } });
   const natija: EslatmaNatija = { yuborilgan: 0, telegramsiz: [] };
   const base = process.env.NEXT_PUBLIC_APP_URL ?? BRAND.url;
 

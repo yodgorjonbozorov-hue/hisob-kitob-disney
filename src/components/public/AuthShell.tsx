@@ -17,8 +17,8 @@ export function AuthShell({
   children,
   ost,
 }: {
-  /** Ochiq turgan sahifa — panel o'ziga havola bermaydi. */
-  joriy: "login" | "signup";
+  /** Ochiq turgan sahifa — panel o'ziga havola bermaydi. Demo sahifasida yo'q. */
+  joriy?: "login" | "signup";
   /** Karta ustidagi sarlavha. */
   sarlavha: string;
   /** Sarlavha ostidagi izoh (ixtiyoriy). */

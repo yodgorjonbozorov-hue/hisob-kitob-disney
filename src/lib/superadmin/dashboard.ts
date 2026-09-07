@@ -16,6 +16,16 @@ import { amalLabel } from "./audit";
 
 const KUN_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * DEMO KOMPANIYA METRIKAGA KIRMAYDI.
+ *
+ * Demo tenant — marketing vitrinasi, mijoz emas: u MRR, churn, sinov va
+ * "faol kompaniyalar" raqamlarini jimgina buzib turardi. Ro'yxatlarda esa
+ * ATAYLAB ko'rinadi (superadmin uni topa olishi kerak) — bu yerda faqat
+ * hisob-kitob kesimlari filtrlanadi.
+ */
+const DEMOSIZ = { demo: false } as const;
+
 export type DavrKalit = "bugun" | "7kun" | "30kun" | "90kun";
 
 export const DAVRLAR: { kalit: DavrKalit; label: string; kun: number }[] = [
@@ -145,9 +155,9 @@ export async function dashboardMalumot(
     soglik,
     qamrov,
   ] = await Promise.all([
-    rawPrisma.tenant.groupBy({ by: ["status"], _count: { _all: true } }),
+    rawPrisma.tenant.groupBy({ by: ["status"], where: DEMOSIZ, _count: { _all: true } }),
     rawPrisma.tenant.findMany({
-      where: { createdAt: { gte: davr.boshlanish, lte: davr.tugash } },
+      where: { ...DEMOSIZ, createdAt: { gte: davr.boshlanish, lte: davr.tugash } },
       select: { createdAt: true },
     }),
     rawPrisma.user.count({ where: { tenantId: { not: null } } }),
@@ -164,26 +174,28 @@ export async function dashboardMalumot(
     }),
     rawPrisma.tenant.groupBy({
       by: ["plan"],
-      where: { status: "ACTIVE", bepul: false },
+      where: { ...DEMOSIZ, status: "ACTIVE", bepul: false },
       _count: { _all: true },
     }),
     // Churn: davr ichida obuna muddati tugagan va hozir to'lamayotgan mijozlar.
     rawPrisma.tenant.count({
       where: {
+        ...DEMOSIZ,
         bepul: false,
         status: { in: ["PAST_DUE", "BLOCKED"] },
         currentPeriodEnd: { gte: davr.boshlanish, lte: davr.tugash },
       },
     }),
-    rawPrisma.tenant.count({ where: { bepul: false, status: { in: ["ACTIVE", "PAST_DUE"] } } }),
+    rawPrisma.tenant.count({ where: { ...DEMOSIZ, bepul: false, status: { in: ["ACTIVE", "PAST_DUE"] } } }),
     rawPrisma.payment.aggregate({ where: { status: "PENDING" }, _count: true, _sum: { amount: true } }),
     rawPrisma.tenant.count({
       where: {
+        ...DEMOSIZ,
         status: "TRIAL",
         trialEndsAt: { gte: now, lte: new Date(now.getTime() + 3 * KUN_MS) },
       },
     }),
-    rawPrisma.tenant.count({ where: { status: "PAST_DUE", bepul: false } }),
+    rawPrisma.tenant.count({ where: { ...DEMOSIZ, status: "PAST_DUE", bepul: false } }),
     rawPrisma.auditLog.count({
       where: { action: "login_failed", createdAt: { gte: new Date(now.getTime() - KUN_MS) } },
     }),

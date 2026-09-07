@@ -32,7 +32,12 @@ export async function tenantlarBoylab(
   fn: (tenantId: string) => Promise<number>,
   nom: string
 ): Promise<{ jami: number; xato: number }> {
-  const tenants = await rawPrisma.tenant.findMany({ select: { id: true, name: true } });
+  // Demo tenant cron ishlaridan chetda: unda takroriy yozuv ham, eslatma
+  // yuboriladigan foydalanuvchi ham yo'q — faqat namunaviy ma'lumot turadi.
+  const tenants = await rawPrisma.tenant.findMany({
+    where: { demo: false },
+    select: { id: true, name: true },
+  });
   let jami = 0;
   let xato = 0;
   for (const tenant of tenants) {

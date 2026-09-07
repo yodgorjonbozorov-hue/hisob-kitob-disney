@@ -28,6 +28,9 @@ export const signupSchema = z.object({
   // (narx/tarif hisobi baribir serverda). Shu bois qat'iy enum emas.
   yonalish: z.string().trim().max(30).optional(),
   addons: z.array(z.string().trim().max(20)).max(10).optional(),
+  // ISHONCHSIZ o'lchov belgisi: faqat "demo qancha mijoz olib keldi" sanog'i
+  // uchun. Hech qanday huquq/narx/tarifga ta'sir qilmaydi.
+  manba: z.string().trim().max(20).optional(),
 });
 
 export type SignupInput = z.infer<typeof signupSchema>;

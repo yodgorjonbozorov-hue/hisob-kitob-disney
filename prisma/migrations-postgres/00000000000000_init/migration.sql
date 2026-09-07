@@ -8,6 +8,7 @@ CREATE TABLE "Tenant" (
     "currentPeriodEnd" TIMESTAMP(3),
     "plan" TEXT NOT NULL DEFAULT 'STANDARD',
     "bepul" BOOLEAN NOT NULL DEFAULT false,
+    "demo" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -235,8 +236,15 @@ CREATE TABLE "Transaction" (
     "userId" TEXT NOT NULL,
     "sotuvchiId" TEXT,
     "filial" TEXT,
+    "shaxsTuri" TEXT,
+    "shaxsId" TEXT,
+    "pulUsuli" TEXT,
+    "shaxsIsm" TEXT,
+    "amalId" TEXT,
+    "idempotencyKey" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "deletedAt" TIMESTAMP(3),
+    "deletedBy" TEXT,
 
     CONSTRAINT "Transaction_pkey" PRIMARY KEY ("id")
 );
@@ -538,8 +546,10 @@ CREATE TABLE "Deal" (
     "tolovTuri" TEXT,
     "debtId" TEXT,
     "izoh" TEXT,
+    "yoqotishSababi" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "deletedAt" TIMESTAMP(3),
+    "deletedBy" TEXT,
 
     CONSTRAINT "Deal_pkey" PRIMARY KEY ("id")
 );
@@ -1513,6 +1523,15 @@ CREATE INDEX "Transaction_businessId_sotuvchiId_sana_idx" ON "Transaction"("busi
 
 -- CreateIndex
 CREATE INDEX "Transaction_sotuvchiId_idx" ON "Transaction"("sotuvchiId");
+
+-- CreateIndex
+CREATE INDEX "Transaction_businessId_amalId_idx" ON "Transaction"("businessId", "amalId");
+
+-- CreateIndex
+CREATE INDEX "Transaction_businessId_shaxsTuri_shaxsId_idx" ON "Transaction"("businessId", "shaxsTuri", "shaxsId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Transaction_businessId_idempotencyKey_key" ON "Transaction"("businessId", "idempotencyKey");
 
 -- CreateIndex
 CREATE INDEX "AuditLog_tenantId_createdAt_idx" ON "AuditLog"("tenantId", "createdAt");

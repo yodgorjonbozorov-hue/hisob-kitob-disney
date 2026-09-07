@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { rawPrisma as prisma } from "@/lib/db/rawPrisma";
 import { getSession } from "@/lib/auth/session";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
+import { demoFoydalanuvchimi, demoRadJavobi } from "@/lib/auth/demo";
 import { z } from "zod";
 
 const schema = z.object({
@@ -16,6 +17,12 @@ export async function PATCH(request: NextRequest) {
   if (!session.userId) {
     return NextResponse.json({ error: "Avtorizatsiyadan o'ting" }, { status: 401 });
   }
+
+  // DEMO QULFI. Bu route `withTenant` dan tashqarida (self-service), ya'ni
+  // markaziy qulf uni qamramaydi — qulf shu yerda QO'LDA takrorlanadi.
+  // Aks holda mehmon demo hisobining parolini almashtirib, uni o'ziga
+  // qaraydigan haqiqiy hisobga aylantirib olardi.
+  if (await demoFoydalanuvchimi(session.userId)) return demoRadJavobi();
 
   const body = await request.json();
   const parsed = schema.safeParse(body);

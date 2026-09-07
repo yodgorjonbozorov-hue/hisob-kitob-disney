@@ -40,4 +40,6 @@ export const POST = withTenant(async (request, _ctx, { session: user }) => {
     path: "/",
   });
   return res;
-}, { readonlyOk: true });
+// `demoYozish: true` — bu route MA'LUMOT YOZMAYDI, faqat cookie qo'yadi (aktiv
+// biznes tanlovi), shuning uchun demo mehmon ham bizneslar orasida yura oladi.
+}, { readonlyOk: true, demoYozish: true });

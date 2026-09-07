@@ -20,13 +20,20 @@ export function YakuniyCta() {
         <p data-reveal className="m-0 mt-5 text-[18px] leading-[1.6] text-[#E2F0EE]/70">
           14 kun bepul. Karta talab qilinmaydi.
         </p>
-        <Link
-          data-reveal
-          href="/signup"
-          className="mt-9 inline-block rounded-[14px] bg-[#5EEAD4] px-10 py-[19px] text-[18px] font-semibold text-[#061413] hover:bg-[#99F6E4]"
-        >
-          14 kun bepul boshlash
-        </Link>
+        <div data-reveal className="mt-9 flex flex-wrap justify-center gap-3">
+          <Link
+            href="/signup"
+            className="inline-block rounded-[14px] bg-[#5EEAD4] px-10 py-[19px] text-[18px] font-semibold text-[#061413] hover:bg-[#99F6E4]"
+          >
+            14 kun bepul boshlash
+          </Link>
+          <Link
+            href="/demo"
+            className="inline-block rounded-[14px] border border-[#F8FBFA]/[0.24] px-10 py-[19px] text-[18px] font-semibold text-[#F8FBFA] hover:border-[#F8FBFA]/[0.44]"
+          >
+            Demo ko&apos;rish
+          </Link>
+        </div>
       </div>
     </section>
   );

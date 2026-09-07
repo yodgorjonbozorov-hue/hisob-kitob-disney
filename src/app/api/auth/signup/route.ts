@@ -8,6 +8,7 @@ import { isBusinessType } from "@/lib/pricing/profil";
 import { isAddonKey } from "@/lib/pricing/config";
 import { rateLimit } from "@/lib/rateLimit";
 import { getClientIp } from "@/lib/services/audit";
+import { kunlikKalit, sanoqOshir } from "@/lib/db/hisoblagich";
 
 /**
  * Yangi kompaniya ro'yxatdan o'tishi: Tenant (TRIAL, 14 kun) + OWNER + default
@@ -83,6 +84,12 @@ export async function POST(request: NextRequest) {
   session.businessId = null;
   session.mustChangePassword = false;
   await session.save();
+
+  // O'LCHOV: demo ichidagi CTA orqali kelgan ro'yxatdan o'tish (konversiya).
+  // Yozilmasa ham ro'yxatdan o'tish davom etadi (fail-open).
+  if (parsed.data.manba === "demo") {
+    await sanoqOshir(kunlikKalit("demo:signup"));
+  }
 
   return NextResponse.json({ ok: true, tenantSlug: tenant.slug }, { status: 201 });
 }

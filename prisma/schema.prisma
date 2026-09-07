@@ -26,6 +26,17 @@ model Tenant {
   /// talab qilinmaydi: obuna tugasa ham kirish yopilmaydi, eslatma yuborilmaydi.
   /// Bloklash bundan ustun turadi.
   bepul            Boolean         @default(false)
+  /// DEMO KOMPANIYA — ro'yxatdan o'tmagan mehmonga ko'rsatiladigan namunaviy
+  /// tenant (`/api/demo/kirish` shu tenantga parolsiz sessiya ochadi).
+  ///
+  /// Ma'nosi BITTA va qat'iy: bu tenantda YOZISH umuman mumkin emas —
+  /// markaziy qulf `withTenant` da, obuna istisnolaridan ham OLDIN ishlaydi
+  /// (lib/auth/demo.ts). Shuningdek demo obuna metrikasi, eslatma va cron
+  /// aylanishlaridan chiqarib tashlanadi.
+  ///
+  /// DEFAULT `false` — mavjud va kelajakdagi HAR bir haqiqiy mijoz uchun
+  /// hech narsa o'zgarmaydi. Bayroq faqat `scripts/demo-seed.ts` qo'yadi.
+  demo             Boolean         @default(false)
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
   businesses       Business[]

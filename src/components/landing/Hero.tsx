@@ -47,18 +47,25 @@ export function Hero() {
             >
               14 kun bepul boshlash
             </Link>
-            <a
-              href="#kunlik"
+            {/* Ikkinchi yo'l — ro'yxatdan o'tmasdan ichkarini ko'rish.
+                "Qanday ishlaydi" pastdagi matn havolasiga tushdi: bu yerda
+                eng kuchli ikkinchi amal demo bo'lishi kerak. */}
+            <Link
+              href="/demo"
               className="inline-flex items-center gap-2 rounded-[12px] border border-[#F8FBFA]/[0.24] px-6 py-[15px] text-[16px] font-semibold text-[#F8FBFA] hover:border-[#F8FBFA]/[0.44]"
             >
-              Qanday ishlaydi <span aria-hidden="true">↓</span>
-            </a>
+              Demo ko&apos;rish
+            </Link>
           </div>
 
           <div
             data-reveal
             className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-[14px] text-[#E2F0EE]/[0.52]"
           >
+            <a href="#kunlik" className="hover:text-[#E2F0EE]">
+              Qanday ishlaydi ↓
+            </a>
+            <span aria-hidden="true">·</span>
             <span>Telegram bot bilan ishlaydi</span>
             <span aria-hidden="true">·</span>
             <span>O&apos;zbek tilida</span>

@@ -144,6 +144,29 @@ npm run client:create -- --nom "AvtoBalans" --login AvtoBalans --parol "avtobala
 `--tarif`: STANDARD | AVTO | PRO · `--turi`: umumiy | avto · `--kunlar`: obuna kunlari (0 → 14 kunlik TRIAL).
 Production'da xuddi shu buyruq Turso env (`DATABASE_URL`, `DATABASE_AUTH_TOKEN`) bilan ishlatiladi.
 
+## Demo rejimi (`/demo`)
+
+Ro'yxatdan o'tmagan mehmon "Demo ko'rish" tugmasi orqali **hisob yaratmasdan** ilova ichiga
+kiradi: `POST /api/demo/kirish` demo kompaniyaning direktori nomidan sessiya ochadi.
+
+```bash
+npm run demo:seed   # demo datasetni yaratadi/yangilaydi (idempotent)
+```
+
+Muhim jihatlar:
+
+- Demo — **oddiy tenant**, `Tenant.demo = true` bayrog'i bilan. Real mijozlardan aynan o'sha
+  mexanizm ajratadi (`lib/db/tenantDb.ts`), ya'ni alohida izolyatsiya kodi yo'q.
+- Demo'da **yozish umuman mumkin emas**: qulf `withTenant` da, obuna (`billing`) istisnosidan
+  ham oldin (`lib/auth/demo.ts`). Guard tashqarisidagi route'lar (parol, Telegram bog'lash)
+  qo'lda qulflangan — `tests/demo.test.ts` buni qo'riqlaydi.
+- Sanalar nisbiy (bugundan orqaga 40 kun) — demo eskirmaydi; oyda bir marta `demo:seed`
+  qayta ishga tushirilsa yetadi. Raqamlar o'zaro mos: ombor = kirim − sotuv, sof foyda =
+  kirim − chiqim, qarz qoldig'i = savdo − to'lovlar.
+- Demo tenant obuna metrikasi, eslatmalar va cron aylanishlaridan chiqarib tashlangan.
+- Production'da ham xuddi shu buyruq Turso env bilan ishlatiladi; skript demo bo'lmagan
+  kompaniya ustiga yozishdan bosh tortadi.
+
 ## Ishga tushirish
 
 ```bash

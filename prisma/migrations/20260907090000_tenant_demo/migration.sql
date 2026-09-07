@@ -1,0 +1,17 @@
+-- DEMO KOMPANIYA BAYROG'I (`Tenant.demo`).
+--
+-- Ro'yxatdan o'tmagan mehmon "Demo ko'rish" tugmasini bosganda unga shu
+-- bayroq qo'yilgan YAGONA tenant ochiladi. Bayroqning ma'nosi bitta:
+-- o'sha tenantda yozish amali umuman bajarilmaydi (markaziy qulf —
+-- src/lib/auth/demo.ts), shuningdek u obuna metrikasi, Telegram eslatmalari
+-- va cron aylanishlaridan chiqarib tashlanadi.
+--
+-- NEGA USTUN, NEGA `slug` EMAS: slug kompaniya nomidan hosil bo'ladi, ya'ni
+-- kimdir "Demo" nomli kompaniya ochsa `slug = "demo"` ni egallab olishi va
+-- HAQIQIY mijoz demo rejimiga tushib qolishi mumkin edi. Ustun esa faqat
+-- seed skripti tomonidan qo'yiladi.
+--
+-- FAQAT QO'SHUVCHI (additive) migratsiya: DROP/RENAME yo'q, jadval qayta
+-- qurilmaydi. Default `false` — mavjud barcha tenantlar uchun hech narsa
+-- o'zgarmaydi (fail-closed: demo bo'lmagan hamma narsa avvalgidek yozadi).
+ALTER TABLE "Tenant" ADD COLUMN "demo" BOOLEAN NOT NULL DEFAULT false;

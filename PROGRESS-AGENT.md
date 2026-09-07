@@ -1,3 +1,75 @@
+# Demo rejimi — ro'yxatdan o'tmasdan ilova ichini ko'rish (2026-09-07)
+
+Landing'dagi ikkinchi yo'l: `[14 kun bepul boshlash]` yonida `[Demo ko'rish]`.
+Mehmon hisob yaratmasdan, o'z ma'lumotini kiritmasdan tayyor namunaviy
+biznes ichiga kiradi. 14 kunlik trial oqimiga BIRORTA satr tegilmadi.
+
+## Uchta invariant
+
+1. DEMO — ODDIY TENANT. Yangi izolyatsiya qatlami yozilmadi: demo
+   `Tenant.demo = true` bayrog'i qo'yilgan oddiy tenant va real mijozlardan
+   aynan o'sha mexanizm ajratadi (`lib/db/tenantDb.ts`), qaysi ki bugun
+   to'lovchi mijozlarni bir-biridan ajratib turibdi. Yangi kod — yangi teshik;
+   shuning uchun yangi kod yo'q.
+2. QULF BITTA JOYDA VA ISTISNOLARDAN OLDIN. `withTenant` demo tekshiruvini
+   `opts.billing` va `opts.readonlyOk` istisnolaridan OLDIN qo'llaydi. Aks
+   holda `billing: true` bilan belgilangan `/api/billing/checkout` qulfdan
+   o'tib ketardi va mehmon REAL `Payment` qatori yaratardi. Ruxsat faqat
+   ANIQ `demoYozish: true` bilan beriladi (bitta route — aktiv biznes
+   cookie'si), ya'ni yangi route hech narsa qilmasa ham demo'da bloklanadi.
+3. RAQAMLAR O'ZARO MOS. Ombor qoldig'i = kirim − sotuv; sof foyda =
+   kirim − chiqim; qarz qoldig'i = savdo − to'lovlar; kassalar yig'indisi =
+   sof foyda. Reja SOF funksiyalarda (`lib/demo/reja.ts`), yozish esa alohida
+   (`lib/demo/dataset.ts`) — test ikkalasini solishtiradi.
+
+## Ish paytida topilgan va tuzatilgan xatolar
+
+- Birinchi variantda omborga kirim uchun chiqim tranzaksiyasi yozilgan edi va
+  demo dashboard'i **−106 mln sof foyda** ko'rsatardi. Haqiqiy oqimda esa
+  `createStockEntry` chiqim YARATMAYDI: pul chiqimi ta'minotchiga to'lov
+  paytida yoziladi. Endi kunlik "Tovar xaridi" chiqimi PULI TUSHGAN
+  savdoning tannarx ulushiga teng — sof foyda +31 mln (aylanmaning ~8,8% i).
+- Xarajatlar naqd kassadan, tushumning uchdan biri terminaldan kelgani uchun
+  naqd kassa **manfiy** qoldiqqa tushib qolgandi. Haftalik "terminaldan
+  kassaga yechish" o'tkazmasi qo'shildi (`AccountTransfer` — kirim ham,
+  chiqim ham emas, ya'ni sof foyda o'zgarmaydi).
+- `/api/superadmin/impersonate/exit` hech qanday o'ram ishlatmasligi
+  aniqlandi (huquq `impersonatedBy` orqali tekshiriladi). Endi u guard'siz
+  route'lar ro'yxatiga ochiq yozildi va test ro'yxat o'sishini kuzatadi.
+- `prisma/migrations-postgres/00000000000000_init/migration.sql` OLDINDAN
+  eskirgan edi (moliya migratsiyasidan keyin yangilanmagan) — `pg:migratsiya`
+  qayta generatsiya qildi, `tests/postgres.test.ts` yashil.
+
+## Nima qo'shildi
+
+- Migratsiya `20260907090000_tenant_demo`: `Tenant.demo` (faqat qo'shuvchi,
+  default `false`). Slug bo'yicha aniqlash ATAYLAB rad etildi — kimdir "Demo"
+  nomli kompaniya ochsa `slug = "demo"` ni egallab olishi mumkin edi.
+- `lib/auth/demo.ts` — qulf, demo tenantni topish, `demoFoydalanuvchimi`.
+- `POST /api/demo/kirish` — parolsiz sessiya (impersonatsiya naqshi).
+  Tizimga kirgan foydalanuvchining sessiyasi USTIGA YOZILMAYDI: 409 qaytadi.
+- `/demo` sahifasi, ilova ichida doimiy banner + `/signup?manba=demo` CTA,
+  dashboard'da 5 qadamli yo'llanma.
+- `npm run demo:seed` — idempotent dataset (40 kun, 226 sotuv, 10 mahsulot,
+  8 mijoz, 5 xodim, 2 kassa, 43 qarz, 6 zakaz). Demo bo'lmagan tenant ustiga
+  ekishdan bosh tortadi.
+- O'lchov: yangi analytics stack QURILMADI — `AppSetting` da ikkita kunlik
+  hisoblagich (`demo:kirish:*`, `demo:signup:*`).
+
+## Tekshiruv
+
+`npm run test:demo` — 27 test yashil. `next build` o'tdi (214 sahifa).
+Ishga tushirilgan ilovada uchidan-uchiga tekshirildi: demo sessiya ochildi,
+8 sahifa 200, olti xil yozish urinishi 403, `/billing` demo'da `/app` ga
+qaytaradi, haqiqiy mijoz esa o'sha serverda ro'yxatdan o'tdi, yozuv yaratdi
+va `/billing` ni ko'rdi.
+
+MAIN'DA OLDINDAN QIZIL (bu ish bilan bog'liq emas): `test:cron` da
+`vercel.json` ro'yxati (davomat cron qo'shilgan, test yangilanmagan) va
+`test:modules` da `/app/moliya` nav yozuvi.
+
+---
+
 # Direktor huquqlari va kassa topshirish oqimi (2026-09-05)
 
 Ikkita alohida muammo bitta ishda yopildi: xodim kassani topshirgan zahoti

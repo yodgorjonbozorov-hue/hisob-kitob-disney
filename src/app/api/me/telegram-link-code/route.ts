@@ -4,6 +4,7 @@ import { rawPrisma as prisma } from "@/lib/db/rawPrisma";
 import { getCurrentUser } from "@/lib/auth/session";
 import { handleApiError, UnauthorizedError } from "@/lib/auth/guard";
 import { rateLimit } from "@/lib/rateLimit";
+import { demoFoydalanuvchimi, demoRadJavobi } from "@/lib/auth/demo";
 import { randomInt } from "node:crypto";
 
 const CODE_TTL_MS = 10 * 60 * 1000; // 10 daqiqa
@@ -25,6 +26,11 @@ export async function POST() {
   try {
     const user = await getCurrentUser();
     if (!user) throw new UnauthorizedError();
+
+    // DEMO QULFI (`withTenant` dan tashqaridagi route — qulf qo'lda).
+    // Aks holda mehmon o'z Telegramini demo hisobiga ulab, bot orqali
+    // YOZISH yo'lini ochib olardi.
+    if (await demoFoydalanuvchimi(user.userId)) return demoRadJavobi();
 
     // Kod so'rashni cheklaymiz — cheksiz yangi kod olish urinishlar oynasini
     // qayta-qayta tiklab, taxmin qilish imkoniyatini oshirardi.

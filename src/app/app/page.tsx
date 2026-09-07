@@ -47,6 +47,7 @@ import { YASHIRIN_COOKIE, yashirinniOqi } from "@/lib/pulYashirish";
 import { SelosBugunKartasi } from "./SelosBugunKartasi";
 import { biznesProfil, onboardingQadamlar } from "@/lib/pricing/profil";
 import { OnboardingKarta, type OnboardingQadamKorinish } from "./OnboardingKarta";
+import { DemoYollanma } from "./DemoYollanma";
 
 /**
  * KPI tarmog'i — kartalar soniga qarab (huquqlar hammada bir xil emas).
@@ -275,6 +276,8 @@ export default async function DashboardPage({
           <YangiTugma amallar={yangiAmallar} />
         </div>
       </div>
+
+      {ctx.access.demo && <DemoYollanma />}
 
       {onboardingKorinish.length > 0 && business && (
         <OnboardingKarta

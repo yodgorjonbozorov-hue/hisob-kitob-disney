@@ -24,6 +24,12 @@ export default function LoginPage() {
           <Link href="/signup" className="text-brand font-medium hover:underline">
             14 kun bepul sinab ko&apos;ring
           </Link>
+          <span className="block mt-1">
+            Yoki avval{" "}
+            <Link href="/demo" className="text-brand font-medium hover:underline">
+              demo ko&apos;ring
+            </Link>
+          </span>
         </>
       }
     >

@@ -20,6 +20,8 @@ import { BIZNES_PROFILLAR, BUSINESS_TYPES, type BusinessType } from "@/lib/prici
  * hisobi serverda qayta tekshiriladi.
  */
 export interface SignupBoshlangich {
+  /** Foydalanuvchi qayerdan keldi ("demo" — demo ichidagi CTA orqali). O'LCHOV uchun. */
+  manba: string | null;
   yonalish: BusinessType | null;
   filiallar: number;
   addons: AddonKey[];
@@ -69,6 +71,7 @@ export default function SignupForm({ boshlangich }: { boshlangich: SignupBoshlan
           parol,
           ...(yonalish ? { yonalish } : {}),
           ...(boshlangich.addons.length > 0 ? { addons: boshlangich.addons } : {}),
+          ...(boshlangich.manba ? { manba: boshlangich.manba } : {}),
         }),
       });
       const data = await res.json();

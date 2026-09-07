@@ -23,7 +23,11 @@ function boshlangichTanlov(searchParams: Record<string, string | string[] | unde
     .map((s) => s.trim())
     .filter(isAddonKey)
     .filter((v, i, arr) => arr.indexOf(v) === i) as AddonKey[];
+  // Manba faqat O'LCHOV uchun: hech qanday huquq yoki narxga ta'sir qilmaydi,
+  // shu bois oq ro'yxat bilan cheklanadi ("demo" dan boshqasi e'tiborsiz).
+  const manbaRaw = birinchi(searchParams.manba);
   return {
+    manba: manbaRaw === "demo" ? "demo" : null,
     yonalish: isBusinessType(yonalishRaw) ? yonalishRaw : null,
     filiallar: normalizeFiliallar(birinchi(searchParams.filiallar)),
     addons,
@@ -51,6 +55,12 @@ export default function SignupPage({
           <Link href="/login" className="text-brand font-medium hover:underline">
             Kirish
           </Link>
+          <span className="block mt-1">
+            Avval ko&apos;rib chiqmoqchimisiz?{" "}
+            <Link href="/demo" className="text-brand font-medium hover:underline">
+              Demo rejimi
+            </Link>
+          </span>
         </>
       }
     >

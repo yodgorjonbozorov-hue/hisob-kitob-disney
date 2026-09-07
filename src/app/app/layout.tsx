@@ -14,6 +14,7 @@ import { ToastProvider } from "@/components/ui/Toast";
 import { CommandPalette } from "@/components/CommandPalette";
 import { BillingBanner } from "@/components/BillingBanner";
 import { ImpersonationBanner } from "@/components/ImpersonationBanner";
+import { DemoBanner } from "@/components/DemoBanner";
 
 export default async function ProtectedLayout({
   children,
@@ -87,6 +88,7 @@ export default async function ProtectedLayout({
             usiz bitta keng jadval butun maketni cho'zib yuboradi. */}
         <main className="flex-1 min-w-0 max-w-full p-4 md:p-8 pb-24 lg:pb-8">
           {session.impersonatedBy && <ImpersonationBanner ism={session.ism} />}
+          {access.demo && <DemoBanner />}
           <BillingBanner access={access} />
           {children}
         </main>

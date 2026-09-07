@@ -6,6 +6,7 @@ import { handleApiError, UnauthorizedError, ForbiddenError } from "./guard";
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { computeAccess, type Access } from "@/lib/billing/access";
+import { demoQulfi, demoRadJavobi } from "./demo";
 
 /** So'rovdan mijoz IP manzilini oladi (Vercel `x-forwarded-for` beradi). */
 function clientIp(request: NextRequest): string | null {
@@ -26,6 +27,8 @@ export interface TenantInfo {
   plan: string;
   /** Doimiy bepul mijoz — obuna guard'i qo'llanmaydi. */
   bepul: boolean;
+  /** Demo kompaniya — yozish umuman mumkin emas (lib/auth/demo.ts). */
+  demo: boolean;
 }
 
 /** Joriy so'rovning tenant konteksti: sessiya + tenant + hisoblangan kirish rejimi. */
@@ -52,6 +55,7 @@ const tenantByIdCached = requestCache(async (tenantId: string): Promise<TenantIn
       currentPeriodEnd: true,
       plan: true,
       bepul: true,
+      demo: true,
     },
   })
 );
@@ -141,6 +145,11 @@ export async function requireBillingPage(): Promise<TenantContext> {
   if (!ctx) {
     redirect("/login");
   }
+  // Demo mehmonga obuna sahifasi ko'rsatilmaydi: u yerdagi tugmalar REAL
+  // to'lov oqimini boshlaydi. Demo'ning to'lov yo'li — ro'yxatdan o'tish.
+  if (ctx.tenant.demo) {
+    redirect("/app");
+  }
   return ctx;
 }
 
@@ -155,6 +164,12 @@ export interface WithTenantOptions {
   readonlyOk?: boolean;
   /** Modul kodi (masalan "OMBOR") — yoqilmagan/rol ruxsatsiz bo'lsa 403. */
   module?: string;
+  /**
+   * DEMO TENANTDA yozish (non-GET) so'roviga ruxsat. FAQAT ma'lumotga
+   * tegmaydigan holat amallari uchun — masalan aktiv biznes cookie'si.
+   * Berilmasa demo'da har qanday yozish 403 bilan rad etiladi (fail-closed).
+   */
+  demoYozish?: boolean;
 }
 
 type RouteHandler<Ctx> = (
@@ -172,6 +187,13 @@ export function withTenant<Ctx = unknown>(handler: RouteHandler<Ctx>, opts: With
   return async (request: NextRequest, routeCtx: Ctx): Promise<NextResponse | Response> => {
     try {
       const ctx = await requireTenantApi();
+
+      // DEMO QULFI — obuna istisnolaridan OLDIN. Aks holda `billing: true`
+      // bilan belgilangan route (to'lov boshlash) qulfdan o'tib ketardi va
+      // demo mehmon REAL `Payment` yozuvi yaratardi.
+      if (demoQulfi(ctx.tenant.demo, request.method, opts.demoYozish)) {
+        return demoRadJavobi();
+      }
 
       if (!opts.billing) {
         if (ctx.access.mode === "BILLING_ONLY") {
