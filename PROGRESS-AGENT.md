@@ -6536,3 +6536,40 @@ ham.
 **`test:cron`** — `vercel.json` da 5 ta cron, test 4 tasini kutadi
 (`/api/cron/davomat` HR modulida qo'shilgan, `ee224d8`). MENING ISHIMGA
 ALOQADOR EMAS va tegilmadi — foydalanuvchiga xabar berildi.
+
+## `test:cron` qotirilgan ro'yxatdan qoidalarga o'tkazildi (2026-09-08)
+
+`/api/cron/davomat` QONUNIY: route, ishi (`davomatIshi`) va `vercel.json`
+yozuvi bitta commitda kelgan (`ee224d8`, HR moduli). Faqat test yangilanmay
+qolgan edi.
+
+Sonni 4 dan 5 ga o'zgartirish muammoni QAYTARARDI: keyingi qonuniy cron
+yana shu testni yiqitardi. Shuning uchun test RO'YXATNI emas, QOIDALARNI
+tekshiradigan qilib qayta yozildi:
+
+| Tekshiruv | Nimani ushlaydi |
+| --- | --- |
+| Majburiy cronlar mavjud | backup/billing/reports/tasks tushib qolsa |
+| Yozuv shakli va jadval | `/api/cron/<nom>` bo'lmasa, jadval buzuq bo'lsa |
+| Yo'l takrorlanmaydi | bitta cron ikki marta yozilsa |
+| Jadval takrorlanmaydi | ikki cron bir vaqtda ishga tushsa |
+| Route ro'yxatga olingan | route yozilib, `vercel.json` ga qo'shilmasa |
+
+Jadval tekshiruvi qo'lda yozilgan (loyihada cron parser yo'q va bittasini
+shu uchun qo'shish ortiqcha): 5 maydon, har maydon o'z chegarasida,
+qadam noldan katta, oy/hafta kuni nom bilan ham yozilishi mumkin. Uning
+O'ZI ham sinaladi (`cron jadvali tekshiruvining o'zi ishlaydi`) — aks
+holda hech narsani ushlamaydigan tekshiruv yolg'on tinchlik berardi.
+
+`ROYXATSIZ_CRONLAR` — ataylab `vercel.json` dan tashqaridagi route'lar
+ro'yxati. Hozircha bitta: `monthly-report` (eski yagona cron, faqat qo'lda
+chaqiriladi). Yangi route shu ro'yxatga tushsa — bu ONGLI qaror bo'ladi.
+
+MUTATSIYA BILAN TEKSHIRILDI (vercel.json vaqtincha buzilib, keyin
+tiklandi): majburiy cron olib tashlansa, jadval buzuq bo'lsa, maydon
+yetishmasa, yo'l yoki jadval takrorlansa, route ro'yxatga olinmasa — test
+YIQILADI. QONUNIY yangi cron (route + guard + vercel.json yozuvi)
+qo'shilganda esa 15/15 yashil qoladi.
+
+PRODUKSIYA KONFIGURATSIYASI TEGILMADI: `vercel.json` o'zgarmagan, faqat
+`tests/cron.test.ts`.
