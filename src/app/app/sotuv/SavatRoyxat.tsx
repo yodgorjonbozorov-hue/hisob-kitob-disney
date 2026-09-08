@@ -47,12 +47,17 @@ export function SavatRoyxat({
   const jami = qatorlar.reduce((s, q) => s + q.miqdor * q.narx, 0);
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" data-test="savat">
       <ul className="divide-y divide-line rounded-xl border border-line">
         {qatorlar.map((q) => {
           const farq = q.standartNarx > 0 && q.narx > 0 ? q.narx - q.standartNarx : 0;
           return (
-            <li key={q.productId} className="px-3 py-3 space-y-2">
+            <li
+              key={q.productId}
+              data-test="savat-qator"
+              data-nomi={q.nomi}
+              className="px-3 py-3 space-y-2"
+            >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-fg truncate">{q.nomi}</p>
@@ -82,8 +87,11 @@ export function SavatRoyxat({
                     value={q.miqdor || ""}
                     disabled={disabled || avto}
                     onChange={(e) => {
+                      // 0 ATAYLAB ruxsat: maydonni tozalab qayta yozish
+                      // mumkin bo'lsin. Bo'sh qator yuborishni yakuniy
+                      // tekshiruv to'sadi ("Miqdorni kiriting").
                       const xom = parseInt(e.target.value.replace(/\D/g, ""), 10) || 0;
-                      onOzgart(q.productId, { miqdor: Math.max(1, Math.min(q.qoldiq, xom)) });
+                      onOzgart(q.productId, { miqdor: Math.min(q.qoldiq, xom) });
                     }}
                     className="w-full rounded-lg border border-line bg-surface px-2 py-2 text-sm tnum min-h-[40px]"
                   />

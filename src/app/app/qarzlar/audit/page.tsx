@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireTenantPage } from "@/lib/auth/tenant";
 import { runWithTenant } from "@/lib/db/tenantContext";
-import { isManager } from "@/lib/auth/roles";
+import { isDirektor } from "@/lib/auth/roles";
 import { hasPermission } from "@/lib/permissions/tekshir";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { listQarzAudit } from "@/lib/queries/qarzAudit";
@@ -18,8 +18,9 @@ import { QarzAuditFiltr } from "./QarzAuditFiltr";
  * O'CHIRILGAN QARZ HAM SHU YERDA QOLADI: jurnal qarzga FK bilan
  * bog'lanmagan, mijoz nomi va summa esa yozuv suratida saqlanadi.
  *
- * HUQUQ SERVERDA: `isManager` + `qarz.tahrir`. Havolani yashirish himoya
- * emas — URL qo'lda terilsa ham sahifa ochilmaydi.
+ * HUQUQ SERVERDA: `isDirektor` (faqat OWNER) + `qarz.tahrir`.
+ * Administrator ham ko'ra olmaydi — tahrir huquqi bilan AYNI chegara.
+ * Havolani yashirish himoya emas: URL qo'lda terilsa ham sahifa ochilmaydi.
  */
 export default async function QarzAuditPage({
   searchParams,
@@ -29,7 +30,8 @@ export default async function QarzAuditPage({
   const { session, tenantId } = await requireTenantPage();
 
   return runWithTenant(tenantId, async () => {
-    if (!isManager(session.rol)) redirect("/app/qarzlar");
+    // Audit tarixi ham qarz tahriri bilan AYNI qoidada: faqat direktor.
+    if (!isDirektor(session.rol)) redirect("/app/qarzlar");
     if (!(await hasPermission(session.userId, "qarz.tahrir"))) redirect("/app/qarzlar");
 
     const businessId = await resolveActiveBusinessId(session);

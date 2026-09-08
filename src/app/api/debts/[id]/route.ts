@@ -1,4 +1,5 @@
-import { forbidSeller, requireManager } from "@/lib/auth/guard";
+import { forbidSeller, ForbiddenError } from "@/lib/auth/guard";
+import { isDirektor } from "@/lib/auth/roles";
 import { withTenant } from "@/lib/auth/tenant";
 import { NextResponse } from "next/server";
 import { resolveActiveBusinessId } from "@/lib/business";
@@ -25,18 +26,27 @@ export const GET = withTenant<{ params: { id: string } }>(
 /**
  * QARZNI TAHRIRLASH — FAQAT DIREKTOR (6-talab).
  *
+ * DIREKTOR = KOMPANIYA EGASI (`OWNER`). ADMINISTRATOR (`ADMIN`) bu amalni
+ * BAJARA OLMAYDI: qarz summasini o'zgartirish mijoz bilan hisob-kitobni
+ * qayta yozish demakdir va javobgarlik kompaniya egasida qoladi.
+ *
  * Ikki qavat himoya, ikkalasi ham SERVERDA:
- *   1. `requireManager` — rol darajasi (OWNER/ADMIN). Kassir yoki sotuvchi
- *      API'ni to'g'ridan-to'g'ri chaqirsa ham 403 oladi;
- *   2. `qarz.tahrir` granular huquqi — maxsus rollarda (PRO) direktor uni
- *      ochib/yopib qo'ya oladi. Kassir/sotuvchining standart to'plamida yo'q.
+ *   1. `isDirektor` — rol darajasi (faqat OWNER). Administrator, kassir yoki
+ *      sotuvchi API'ni to'g'ridan-to'g'ri chaqirsa ham 403 oladi;
+ *   2. `qarz.tahrir` granular huquqi — u ADMIN ning standart to'plamida ham
+ *      YO'Q (`FAQAT_DIREKTOR`, lib/permissions/katalog.ts).
  *
  * Interfeysdagi tugmani yashirish HIMOYA EMAS — shuning uchun tekshiruv
  * aynan shu yerda turadi.
  */
+function direktorTekshir(rol: string): void {
+  if (!isDirektor(rol)) {
+    throw new ForbiddenError("Qarzni tahrirlash va o'chirish faqat direktorga ruxsat etilgan");
+  }
+}
 export const PATCH = withTenant<{ params: { id: string } }>(
   async (request, { params }, { session: user }) => {
-    requireManager(user.rol);
+    direktorTekshir(user.rol);
     await requirePermission(user.userId, "qarz.tahrir");
 
     const businessId = await resolveActiveBusinessId(user);
@@ -65,7 +75,7 @@ export const PATCH = withTenant<{ params: { id: string } }>(
 /** QARZNI O'CHIRISH — FAQAT DIREKTOR. Yumshoq o'chirish, audit bilan. */
 export const DELETE = withTenant<{ params: { id: string } }>(
   async (request, { params }, { session: user }) => {
-    requireManager(user.rol);
+    direktorTekshir(user.rol);
     await requirePermission(user.userId, "qarz.tahrir");
 
     const businessId = await resolveActiveBusinessId(user);

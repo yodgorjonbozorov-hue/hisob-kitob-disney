@@ -3,7 +3,7 @@ import { requireTenantPage } from "@/lib/auth/tenant";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { isModuleOnForTenant } from "@/lib/modules/guard";
 import { getActiveBusiness } from "@/lib/business";
-import { isManager } from "@/lib/auth/roles";
+import { isManager, isDirektor } from "@/lib/auth/roles";
 import { hasPermission } from "@/lib/permissions/tekshir";
 import { listQarzlar, getQarzDashboard, listQarzdorlar } from "@/lib/queries/qarz";
 import { listAccounts } from "@/lib/queries/accounts";
@@ -83,9 +83,10 @@ export default async function QarzlarPage({
           products={productOptions}
           biznesTuri={business.turi}
           bekorQilaOladi={isManager(session.rol)}
-          // Tuzatish/o'chirish — rol VA granular huquq (server ham
-          // ikkalasini tekshiradi: src/app/api/debts/[id]/route.ts).
-          qarzniBoshqaradi={isManager(session.rol) && qarzTahrirHuquqi}
+          // Tuzatish/o'chirish — FAQAT DIREKTOR (OWNER), administrator ham
+          // emas. Server ham ikkala qavatni tekshiradi
+          // (src/app/api/debts/[id]/route.ts).
+          qarzniBoshqaradi={isDirektor(session.rol) && qarzTahrirHuquqi}
           boshlangichYonalish={yonalish}
         />
       </div>

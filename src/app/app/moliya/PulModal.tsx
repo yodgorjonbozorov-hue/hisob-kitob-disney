@@ -7,6 +7,7 @@ import { ShaxsTanlash } from "./ShaxsTanlash";
 import { QarzKorinish } from "./QarzKorinish";
 import { PulMaydonlari } from "./PulMaydonlari";
 import { usePulFormasi } from "./usePulFormasi";
+import { sabablar } from "@/lib/moliya/sabablar";
 import type { KassaOption, KategoriyaOption, PulFormasi } from "./turlar";
 
 /**
@@ -85,15 +86,27 @@ export function PulModal({
     }
   }
 
-  const sababVariantlari = [
-    ...f.sabablar.map((s) => ({ value: `sabab:${s.kod}`, label: s.nomi })),
-    ...f.qoshimchaKategoriyalar.map((k) => ({ value: `kat:${k.id}`, label: k.nomi })),
-  ];
   const sababQiymati = f.forma.sababKod
     ? `sabab:${f.forma.sababKod}`
     : f.forma.categoryId
       ? `kat:${f.forma.categoryId}`
       : "";
+
+  const sababVariantlari = [
+    ...f.sabablar.map((s) => ({ value: `sabab:${s.kod}`, label: s.nomi })),
+    ...f.qoshimchaKategoriyalar.map((k) => ({ value: `kat:${k.id}`, label: k.nomi })),
+  ];
+  // TUZATISH REJIMI: eski amalning sababi endi ro'yxatda bo'lmasligi mumkin
+  // (masalan ta'minotchida qisqartirilgan ro'yxat). U holda joriy qiymat
+  // qo'shib qo'yiladi — aks holda Select bo'sh ko'rinib, direktor nimani
+  // tuzatayotganini bilmay qolardi.
+  if (sababQiymati && !sababVariantlari.some((v) => v.value === sababQiymati)) {
+    const nomi = f.forma.sababKod
+      ? (sabablar(f.forma.yonalish).find((s) => s.kod === f.forma.sababKod)?.nomi ??
+        "Avvalgi sabab")
+      : (kategoriyalar.find((k) => k.id === f.forma.categoryId)?.nomi ?? "Avvalgi kategoriya");
+    sababVariantlari.unshift({ value: sababQiymati, label: `${nomi} (avvalgi)` });
+  }
 
   return (
     <Modal

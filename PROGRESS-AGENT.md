@@ -6473,3 +6473,66 @@ summa tuzatish chegarasi, o'chirish + audit tarixi.
 
 Regressiya: 800+ test (ikki bo'lakda) — hammasi yashil. `npm run build` va
 `tsc --noEmit` toza.
+
+## Qayta tekshiruv va tuzatishlar (2026-09-08, ikkinchi o'tish)
+
+**1. TA'MINOTCHIDA BITTA VARIANT.** `QATIY_SHAXSLAR` endi ro'yxat emas,
+XARITA: tomon → ruxsat etilgan sabab kodlari. Ta'minotchida faqat
+`taminotchi-tolov` ("Ta'minotchiga pul berish") qoladi; "Ta'minotchi
+qarzini to'lash" ham yashirildi.
+
+Sabab katalogdan O'CHIRILMADI (`sababTop` uni hali ham topadi): eski
+yozuvlar tuzatilganda ular o'z sababini yo'qotmasligi kerak. `PulModal`
+endi ro'yxatda yo'q joriy sababni "(avvalgi)" belgisi bilan qo'shib
+qo'yadi — aks holda tuzatish oynasida Select bo'sh ko'rinardi.
+
+OQIBAT (bilib turib): ta'minotchi qarzini Moliya formasidan yopib
+bo'lmaydi — bu amal QARZLAR bo'limida qoladi, u yerda qaysi qarzga qancha
+tushayotgani ko'rinib turadi.
+
+**2. DIREKTOR = FAQAT `OWNER`.** Yangi `isDirektor` (lib/auth/roles.ts) —
+`isManager` dan ataylab ajratilgan, chunki boshqa amallar administratorda
+qoladi. Uch joyda qo'llandi: API (`/api/debts/[id]` PATCH/DELETE), audit
+sahifasi va `qarzlar` sahifasidagi tugmalar. Nav yozuvi ham `["OWNER"]`.
+
+Huquq katalogida `FAQAT_DIREKTOR` to'plami paydo bo'ldi: u
+`ROL_DEFAULT_HUQUQLAR.ADMIN` dan chiqarib tashlanadi, ya'ni administrator
+`qarz.tahrir` ni STANDART holatda olmaydi. Rol tekshiruvi va huquq
+tekshiruvi ikkalasi ham serverda, birga ishlaydi.
+
+**3. SAVAT — INTERFEYS DARAJASIDA TEKSHIRILDI.** Ikkita haqiqiy nuqson
+topildi va tuzatildi:
+
+- **Holat mutatsiyasi.** `qoshish()` mavjud qatorni JOYIDA o'zgartirardi
+  (`bor.miqdor += ...`). React StrictMode yangilagichni ikki marta
+  chaqiradi va miqdor ikki barobar oshib ketardi. Endi har qator yangi
+  obyekt bo'lib quriladi (`Map` orqali).
+- **"Ko'rib chiqish" qadami yo'q edi.** Oyna faqat sonni ko'rsatardi.
+  Endi tanlanganlar pastda alohida blokda ro'yxat bo'lib turadi va shu
+  yerdan olib tashlanadi.
+
+Mobil uchun: qator `flex-wrap` (375px da stepper pastga tushadi), tugmalar
+44px, "Savatga qo'shish" pastda yopishqoq. Savat qatorida miqdorni
+tozalab qayta yozish mumkin (ilgari 1 ga qaytib ketardi).
+
+Yangi brauzer to'plami — `npm run test:sotuv-savat` (10 ta), 390×844
+telefon ekranida: bitta oynada uch mahsulot + miqdor + ko'rib chiqish +
+bitta bosishda savat; takror tanlov birlashishi; qoldiq chegarasi;
+tugagan mahsulot; savatning bitta so'rovda sotilishi (baza tekshiruvi
+bilan); ta'minotchi sababi; administratorning audit sahifasiga va API'ga
+kira olmasligi (403).
+
+## Ikki RED suita topildi (ikkalasi ham main'da edi)
+
+**`test:modules`** — nav ro'yxatlari qotirilgan. `/app/moliya` (mening
+oldingi o'tishim) va `/app/kassa-topshirish` (boshqa agent) qo'shilgach
+suita qizargan, lekin ikkalamiz ham uni yugurtirmagan edik. TUZATILDI.
+
+**XULOSA (o'zim uchun):** nav registry'ga tegilgan har safar
+`test:modules` majburiy. Kengroq qoida — "o'zgargan MODUL bo'yicha barcha
+suitalar" degani faqat modul kodi emas, o'sha modulning REGISTRY yozuvi
+ham.
+
+**`test:cron`** — `vercel.json` da 5 ta cron, test 4 tasini kutadi
+(`/api/cron/davomat` HR modulida qo'shilgan, `ee224d8`). MENING ISHIMGA
+ALOQADOR EMAS va tegilmadi — foydalanuvchiga xabar berildi.

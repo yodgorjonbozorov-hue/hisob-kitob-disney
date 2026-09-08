@@ -27,6 +27,19 @@ export function isManager(rol: string | undefined | null): boolean {
 }
 
 /**
+ * DIREKTOR — kompaniya EGASI (`OWNER`), administrator EMAS.
+ *
+ * `isManager` dan farqi ataylab: ba'zi amallar administratorga ham
+ * berilmaydi. Hozircha bittasi — mijoz va ta'minotchi QARZLARINI
+ * tahrirlash va o'chirish: qarz summasini o'zgartirish mijoz bilan
+ * hisob-kitobni qayta yozish demakdir va uning javobgarligi kompaniya
+ * egasida qoladi.
+ */
+export function isDirektor(rol: string | undefined | null): boolean {
+  return rol === "OWNER";
+}
+
+/**
  * Eski (migratsiyagacha bo'lgan) sessiya cookie'lari va bazadagi qiymatlarni
  * yangi rol nomlariga o'tkazadi. Yangi qiymatlar o'zgarishsiz qaytadi.
  */

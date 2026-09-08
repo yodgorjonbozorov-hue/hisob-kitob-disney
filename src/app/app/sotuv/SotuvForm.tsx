@@ -74,15 +74,22 @@ export function SotuvForm({
   function qoshish(tanlov: { productId: string; miqdor: number }[]) {
     setError(null);
     setSavat((oldingi) => {
-      const yangi = [...oldingi];
+      // HOLAT O'ZGARTIRILMAYDI, QAYTA QURILADI: mavjud qatorni joyida
+      // (`bor.miqdor += ...`) o'zgartirish React holatini buzadi — StrictMode
+      // yangilagichni ikki marta chaqiradi va miqdor ikki barobar oshib
+      // ketardi. Shuning uchun har qator YANGI obyekt bo'lib chiqadi.
+      const xarita = new Map(oldingi.map((q) => [q.productId, { ...q }]));
       for (const t of tanlov) {
         const p = products.find((x) => x.id === t.productId);
         if (!p) continue;
-        const bor = yangi.find((q) => q.productId === t.productId);
+        const bor = xarita.get(t.productId);
         if (bor) {
-          bor.miqdor = Math.min(p.qoldiq, bor.miqdor + t.miqdor);
+          xarita.set(t.productId, {
+            ...bor,
+            miqdor: Math.min(p.qoldiq, bor.miqdor + t.miqdor),
+          });
         } else {
-          yangi.push({
+          xarita.set(p.id, {
             productId: p.id,
             nomi: p.nomi,
             birlik: p.birlik,
@@ -93,7 +100,7 @@ export function SotuvForm({
           });
         }
       }
-      return yangi;
+      return [...xarita.values()];
     });
   }
 
@@ -184,7 +191,12 @@ export function SotuvForm({
         <div>
           <div className="flex items-center justify-between gap-2 mb-1.5">
             <span className={`${LABEL_CLASS} mb-0`}>{M.birlikBosh}</span>
-            <Button size="sm" onClick={() => setTanlovOchiq(true)} disabled={loading}>
+            <Button
+              size="sm"
+              onClick={() => setTanlovOchiq(true)}
+              disabled={loading}
+              data-test="mahsulot-qoshish"
+            >
               + Mahsulot qo&apos;shish
             </Button>
           </div>

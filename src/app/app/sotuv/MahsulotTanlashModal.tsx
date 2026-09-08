@@ -13,15 +13,16 @@ import type { ProductKassirDTO } from "@/lib/queries/inventory";
  *
  * Ilgari har mahsulot uchun oynani qaytadan ochish kerak edi: mijoz
  * tanlangach 6 ta tovar sotish 6 marta oyna ochib-yopishni talab qilardi.
- * Endi oyna ochiq turadi, tanlanganlar pastda sanaladi va hammasi birdan
- * savatga qo'shiladi.
+ * Endi oyna OCHIQ TURADI: foydalanuvchi belgilaydi, miqdorini kiritadi,
+ * pastdagi ro'yxatda tanlaganini KO'RIB CHIQADI va bitta tugma bilan
+ * hammasini savatga qo'shadi.
  *
  * TARTIB — `lib/mahsulotTartib.ts`: qoldig'i ko'pi tepada, tugagani eng
  * pastda. Qidiruv ro'yxatni faqat FILTRLAYDI, tartibni o'zgartirmaydi.
  *
- * QOLDIQ CHEGARASI shu yerda ham qo'yiladi (`max`), lekin u faqat
- * qulaylik: haqiqiy tekshiruv serverda, atomik `miqdor: { gte }` sharti
- * bilan (lib/services/inventory.ts).
+ * QOLDIQ CHEGARASI shu yerda ham qo'yiladi (`+` tugmasi o'chadi), lekin u
+ * faqat qulaylik: haqiqiy tekshiruv serverda, atomik `miqdor: { gte }`
+ * sharti bilan (lib/services/inventory.ts).
  */
 export function MahsulotTanlashModal({
   ochiq,
@@ -42,16 +43,14 @@ export function MahsulotTanlashModal({
   const [qidiruv, setQidiruv] = useState("");
   const [tanlov, setTanlov] = useState<Record<string, number>>({});
 
+  const tartiblangan = useMemo(() => mahsulotlarniTartibla(products), [products]);
   const royxat = useMemo(() => {
     const q = qidiruv.trim().toLowerCase();
-    const tartiblangan = mahsulotlarniTartibla(
-      products.map((p) => ({ ...p, qoldiq: p.qoldiq }))
-    );
     if (!q) return tartiblangan;
     return tartiblangan.filter(
       (p) => p.nomi.toLowerCase().includes(q) || (p.sku ?? "").toLowerCase().includes(q)
     );
-  }, [products, qidiruv]);
+  }, [tartiblangan, qidiruv]);
 
   /** Shu mahsulotdan yana nechtasini qo'shish mumkin (savatdagisi ayrilgan). */
   function qolganChegara(p: ProductKassirDTO): number {
@@ -59,8 +58,8 @@ export function MahsulotTanlashModal({
   }
 
   function ozgart(p: ProductKassirDTO, xom: number) {
-    const chegara = qolganChegara(p);
-    const miqdor = Math.max(0, Math.min(avto ? Math.min(1, chegara) : chegara, xom));
+    const chegara = avto ? Math.min(1, qolganChegara(p)) : qolganChegara(p);
+    const miqdor = Math.max(0, Math.min(chegara, xom));
     setTanlov((t) => {
       const yangi = { ...t };
       if (miqdor <= 0) delete yangi[p.id];
@@ -71,6 +70,10 @@ export function MahsulotTanlashModal({
 
   const tanlanganlar = Object.entries(tanlov);
   const jamiDona = tanlanganlar.reduce((s, [, m]) => s + m, 0);
+  const jamiSumma = tanlanganlar.reduce((s, [id, m]) => {
+    const p = products.find((x) => x.id === id);
+    return s + (p?.sotuvNarx ?? 0) * m;
+  }, 0);
 
   function qoshish() {
     onQoshish(tanlanganlar.map(([productId, miqdor]) => ({ productId, miqdor })));
@@ -81,7 +84,7 @@ export function MahsulotTanlashModal({
 
   return (
     <Modal open={ochiq} onClose={onClose} title="Mahsulot tanlash" size="lg">
-      <div className="space-y-3">
+      <div className="space-y-3" data-test="mahsulot-tanlash">
         <input
           type="text"
           value={qidiruv}
@@ -89,9 +92,13 @@ export function MahsulotTanlashModal({
           placeholder="Nomi yoki SKU bo'yicha qidiring..."
           className={INPUT_CLASS}
           autoComplete="off"
+          aria-label="Mahsulot qidirish"
         />
 
-        <ul className="max-h-[52vh] overflow-y-auto divide-y divide-line rounded-xl border border-line">
+        <ul
+          className="max-h-[42vh] sm:max-h-[46vh] overflow-y-auto overscroll-contain divide-y divide-line rounded-xl border border-line"
+          data-test="mahsulot-royxati"
+        >
           {royxat.length === 0 && (
             <li className="px-3 py-6 text-center text-sm text-faint">Mahsulot topilmadi</li>
           )}
@@ -103,10 +110,17 @@ export function MahsulotTanlashModal({
             return (
               <li
                 key={p.id}
-                className={`flex items-center gap-3 px-3 py-2.5 ${band ? "opacity-55" : ""}`}
+                data-test="mahsulot-qator"
+                data-nomi={p.nomi}
+                /* Mobil'da nom va stepper bir qatorga sig'masa stepper pastga
+                   tushadi (`flex-wrap`) — 375px ekranda ham bosiladigan
+                   qoladi. */
+                className={`flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5 ${
+                  band ? "opacity-55" : ""
+                }`}
               >
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-fg truncate">{p.nomi}</p>
+                <div className="min-w-[55%] flex-1">
+                  <p className="text-sm text-fg">{p.nomi}</p>
                   <p className="text-2xs text-muted">
                     {p.sotuvNarx > 0 ? formatSomLabel(p.sotuvNarx) : "narx kelishiladi"}
                     {tugadi ? (
@@ -124,16 +138,16 @@ export function MahsulotTanlashModal({
                 {/* Tugagan mahsulotni tanlab bo'lmaydi — stepper umuman
                     ko'rsatilmaydi, "Qolmadi" belgisi esa qoladi. */}
                 {band ? (
-                  <span className="shrink-0 text-2xs text-faint">
+                  <span className="ml-auto shrink-0 text-2xs text-faint">
                     {tugadi ? "—" : "savatda"}
                   </span>
                 ) : (
-                  <div className="shrink-0 flex items-center gap-1">
+                  <div className="ml-auto shrink-0 flex items-center gap-1">
                     <button
                       type="button"
                       aria-label={`${p.nomi} miqdorini kamaytirish`}
                       onClick={() => ozgart(p, miqdor - 1)}
-                      className="w-9 h-9 rounded-lg border border-line text-fg disabled:opacity-40"
+                      className="w-11 h-11 sm:w-9 sm:h-9 rounded-lg border border-line text-fg disabled:opacity-40"
                       disabled={miqdor <= 0}
                     >
                       −
@@ -144,14 +158,16 @@ export function MahsulotTanlashModal({
                       aria-label={`${p.nomi} miqdori`}
                       value={miqdor || ""}
                       placeholder="0"
-                      onChange={(e) => ozgart(p, parseInt(e.target.value.replace(/\D/g, ""), 10) || 0)}
-                      className="w-12 h-9 rounded-lg border border-line bg-surface text-center text-sm tnum"
+                      onChange={(e) =>
+                        ozgart(p, parseInt(e.target.value.replace(/\D/g, ""), 10) || 0)
+                      }
+                      className="w-12 h-11 sm:h-9 rounded-lg border border-line bg-surface text-center text-sm tnum"
                     />
                     <button
                       type="button"
                       aria-label={`${p.nomi} miqdorini oshirish`}
                       onClick={() => ozgart(p, miqdor + 1)}
-                      className="w-9 h-9 rounded-lg border border-line text-fg disabled:opacity-40"
+                      className="w-11 h-11 sm:w-9 sm:h-9 rounded-lg border border-line text-fg disabled:opacity-40"
                       disabled={miqdor >= chegara}
                     >
                       +
@@ -163,14 +179,45 @@ export function MahsulotTanlashModal({
           })}
         </ul>
 
-        <div className="flex items-center justify-between gap-3 pt-1">
+        {/* TANLANGANLARNI KO'RIB CHIQISH — qo'shishdan OLDIN. Ro'yxat uzun
+            bo'lsa foydalanuvchi yuqoriga qaytmasdan nimani tanlaganini
+            ko'radi va shu yerdan olib tashlay oladi. */}
+        {tanlanganlar.length > 0 && (
+          <div className="rounded-xl border border-brand/30 bg-brand-wash px-3 py-2.5" data-test="tanlanganlar">
+            <p className="text-2xs font-medium text-muted mb-1.5">
+              Tanlangan: {tanlanganlar.length} ta mahsulot · {jamiDona} birlik
+              {jamiSumma > 0 && ` · ${formatSomLabel(jamiSumma)}`}
+            </p>
+            <ul className="flex flex-wrap gap-1.5">
+              {tanlanganlar.map(([id, m]) => {
+                const p = products.find((x) => x.id === id);
+                if (!p) return null;
+                return (
+                  <li key={id}>
+                    <button
+                      type="button"
+                      onClick={() => ozgart(p, 0)}
+                      aria-label={`${p.nomi} tanlovini bekor qilish`}
+                      className="inline-flex items-center gap-1 rounded-lg bg-surface border border-line px-2 py-1 text-2xs text-fg"
+                    >
+                      <span className="max-w-[9rem] truncate">{p.nomi}</span>
+                      <span className="tnum text-muted">× {m}</span>
+                      <span className="text-faint">×</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {/* Tugma pastda yopishqoq: uzun ro'yxatda ham barmoq ostida qoladi. */}
+        <div className="sticky bottom-0 -mx-4 px-4 sm:mx-0 sm:px-0 bg-surface pt-2 pb-1 flex items-center justify-between gap-3">
           <p className="text-sm text-muted">
-            {tanlanganlar.length > 0
-              ? `${tanlanganlar.length} ta mahsulot · ${jamiDona} birlik`
-              : "Hech narsa tanlanmadi"}
+            {tanlanganlar.length > 0 ? `${jamiDona} birlik` : "Hech narsa tanlanmadi"}
           </p>
-          <Button onClick={qoshish} disabled={tanlanganlar.length === 0}>
-            Savatga qo&apos;shish
+          <Button onClick={qoshish} disabled={tanlanganlar.length === 0} data-test="savatga-qoshish">
+            Savatga qo&apos;shish{tanlanganlar.length > 0 ? ` (${tanlanganlar.length})` : ""}
           </Button>
         </div>
       </div>

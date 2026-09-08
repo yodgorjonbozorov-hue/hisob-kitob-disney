@@ -33,6 +33,7 @@ let qarzTuzatish: any;
 let qarzAuditQ: any;
 let qarzQ: any;
 let katalog: any;
+let rollar: any;
 let tekshir: any;
 
 let T: any;
@@ -66,6 +67,7 @@ before(async () => {
   qarzAuditQ = await import("@/lib/queries/qarzAudit");
   qarzQ = await import("@/lib/queries/qarz");
   katalog = await import("@/lib/permissions/katalog");
+  rollar = await import("@/lib/auth/roles");
   tekshir = await import("@/lib/permissions/tekshir");
 
   T = await createTenantWithOwner({
@@ -85,21 +87,34 @@ after(async () => {
 // 1 — TA'MINOTCHI SABABLARI
 // ===========================================================================
 
-test("1: ta'minotchida faqat ta'minotchi sabablari qoladi", () => {
+test("1: ta'minotchida FAQAT BITTA sabab ko'rinadi", () => {
   const royxat = sabablar.shaxsSabablari("chiqim", "taminotchi");
-  const kodlar = royxat.map((s: any) => s.kod).sort();
-  assert.deepEqual(kodlar, ["taminotchi-qarz", "taminotchi-tolov"]);
+  assert.equal(royxat.length, 1, "ro'yxatda aynan bitta variant");
+  assert.equal(royxat[0].kod, "taminotchi-tolov");
+  assert.equal(royxat[0].nomi, "Ta'minotchiga pul berish");
+  assert.equal(royxat[0].qarz, false, "oddiy to'lov qarzga bog'lanmaydi");
 
-  // Umumiy variantlar YASHIRILGAN.
-  for (const yoq of ["xarajat", "qarz-berdik", "boshqa-chiqim"]) {
+  const kodlar = royxat.map((s: any) => s.kod);
+  // Qarz to'lovi HAM, umumiy variantlar HAM yashirilgan.
+  for (const yoq of ["taminotchi-qarz", "xarajat", "qarz-berdik", "boshqa-chiqim"]) {
     assert.equal(kodlar.includes(yoq), false, `${yoq} ta'minotchida ko'rinmasligi kerak`);
   }
   assert.equal(sabablar.qatiyShaxsmi("taminotchi"), true);
 
-  // Asosiy sababning nomi aniqlashtirilgan.
-  const asosiy = royxat.find((s: any) => s.kod === "taminotchi-tolov");
-  assert.equal(asosiy.nomi, "Ta'minotchiga pul berish");
-  assert.equal(asosiy.qarz, false, "oddiy to'lov qarzga bog'lanmaydi");
+  // Kirim tarafida ham ta'minotchi uchun umumiy sabablar chiqmaydi.
+  assert.equal(
+    sabablar.shaxsSabablari("kirim", "taminotchi").length,
+    0,
+    "ta'minotchidan pul olish oqimi bu formada yo'q"
+  );
+});
+
+test("1c: yashirilgan sabab KATALOGDA qoladi — eski yozuvlar sababsiz qolmaydi", () => {
+  // Ro'yxatdan chiqarildi, lekin `sababTop` uni hali ham topadi: tuzatish
+  // oynasi eski amalning sababini ko'rsatishi kerak.
+  const qarzSababi = sabablar.sababTop("chiqim", "taminotchi-qarz");
+  assert.ok(qarzSababi, "sabab katalogda qoladi");
+  assert.equal(qarzSababi.qarz, true);
 });
 
 test("1b: boshqa tomonlarda umumiy sabablar saqlanadi", () => {
@@ -291,31 +306,55 @@ test("5d: bitta mahsulotli eski yo'l o'zgarmagan", async () => {
 // 6 — QARZ TAHRIRI VA O'CHIRISH HUQUQI
 // ===========================================================================
 
-test("6: qarz.tahrir huquqi kassir va sotuvchida YO'Q", () => {
+test("6: qarz.tahrir huquqi FAQAT direktorda (OWNER)", () => {
   assert.ok(katalog.HUQUQ_KODLARI.has("qarz.tahrir"), "huquq katalogda bor");
+  assert.ok(katalog.FAQAT_DIREKTOR.includes("qarz.tahrir"));
+  assert.ok(katalog.ROL_DEFAULT_HUQUQLAR.OWNER.includes("qarz.tahrir"));
+  // ADMINISTRATOR ham OLMAYDI — asosiy o'zgarish shu.
+  assert.equal(
+    katalog.ROL_DEFAULT_HUQUQLAR.ADMIN.includes("qarz.tahrir"),
+    false,
+    "administrator qarzni tahrirlay olmaydi"
+  );
   assert.equal(katalog.ROL_DEFAULT_HUQUQLAR.CASHIER.includes("qarz.tahrir"), false);
   assert.equal(katalog.ROL_DEFAULT_HUQUQLAR.SELLER.includes("qarz.tahrir"), false);
-  assert.ok(katalog.ROL_DEFAULT_HUQUQLAR.OWNER.includes("qarz.tahrir"));
-  assert.ok(katalog.ROL_DEFAULT_HUQUQLAR.ADMIN.includes("qarz.tahrir"));
+
+  // Qolgan huquqlarda administrator to'plami o'zgarmagan.
+  assert.ok(katalog.ROL_DEFAULT_HUQUQLAR.ADMIN.includes("qarz.tolash"));
+  assert.ok(katalog.ROL_DEFAULT_HUQUQLAR.ADMIN.includes("hisobot.korish"));
 });
 
-test("6b: kassir uchun huquq tekshiruvi rad etadi", async () => {
-  const kassir = await A(async () =>
-    prisma.user.create({
-      data: {
-        ism: "Kassir",
-        login: "+998900000602",
-        parolHash: "x",
-        rol: "CASHIER",
-        tenantId: T.tenant.id,
-      },
-    })
-  );
-  assert.equal(await A(async () => tekshir.hasPermission(kassir.id, "qarz.tahrir")), false);
-  await assert.rejects(
-    () => A(async () => tekshir.requirePermission(kassir.id, "qarz.tahrir")),
-    /huquq/i
-  );
+test("6a: isDirektor faqat OWNER ni o'tkazadi", () => {
+  assert.equal(rollar.isDirektor("OWNER"), true);
+  assert.equal(rollar.isDirektor("ADMIN"), false, "administrator direktor emas");
+  assert.equal(rollar.isDirektor("CASHIER"), false);
+  assert.equal(rollar.isDirektor("SELLER"), false);
+  assert.equal(rollar.isDirektor(null), false);
+  // `isManager` avvalgidek ikkalasini o'tkazadi — boshqa amallar tegilmadi.
+  assert.equal(rollar.isManager("ADMIN"), true);
+});
+
+test("6b: administrator va kassir uchun huquq tekshiruvi rad etadi", async () => {
+  const yarat = (ism: string, login: string, rol: string) =>
+    A(async () =>
+      prisma.user.create({
+        data: { ism, login, parolHash: "x", rol, tenantId: T.tenant.id },
+      })
+    );
+  const kassir = await yarat("Kassir", "+998900000602", "CASHIER");
+  const admin = await yarat("Administrator", "+998900000603", "ADMIN");
+
+  for (const u of [kassir, admin]) {
+    assert.equal(
+      await A(async () => tekshir.hasPermission(u.id, "qarz.tahrir")),
+      false,
+      `${u.rol} da qarz.tahrir bo'lmasligi kerak`
+    );
+    await assert.rejects(
+      () => A(async () => tekshir.requirePermission(u.id, "qarz.tahrir")),
+      /huquq/i
+    );
+  }
   // Direktorda esa bor.
   assert.equal(await A(async () => tekshir.hasPermission(T.user.id, "qarz.tahrir")), true);
 });

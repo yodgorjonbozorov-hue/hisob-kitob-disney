@@ -54,6 +54,7 @@
     "test:moliya-audit": "node -r ts-node/register tests/moliya-audit.test.ts",
     "test:moliya-migratsiya": "node -r ts-node/register tests/moliya-migratsiya.test.ts",
     "test:vazifalar": "node -r ts-node/register tests/vazifalar-2026-09.test.ts",
+    "test:sotuv-savat": "node -r ts-node/register tests/sotuv-savat-brauzer.test.ts",
     "test:qarzdorlik": "node -r ts-node/register tests/qarzdorlik.test.ts",
     "test:qarz-taqsimot": "node -r ts-node/register tests/qarz-taqsimot.test.ts",
     "test:qarz-mijoz": "node -r ts-node/register tests/qarz-mijoz.test.ts",
