@@ -10,6 +10,7 @@ const USTUN_RANG: Record<Ustun, string> = {
   BUGUNGI: "border-brand/50",
   JARAYONDA: "border-debt-fg/40",
   YUTILDI: "border-income/50",
+  QARZ: "border-debt/60",
   YOQOTILDI: "border-expense/40",
 };
 

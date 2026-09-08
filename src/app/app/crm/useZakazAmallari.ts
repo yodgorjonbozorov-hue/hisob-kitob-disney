@@ -52,7 +52,10 @@ export function useZakazAmallari({
    * suriladi (`lib/crm/pipeline.ts` qoidasi).
    */
   async function ustungaKochirish(b: BuyurtmaDTO, ustun: Ustun): Promise<boolean> {
-    if (zakazUstuni(b.holat, b.sana, bugun) === ustun) return false;
+    if (zakazUstuni(b.holat, b.sana, bugun, b.qarzOchiq) === ustun) return false;
+    // "Qarz" — hisoblanadigan ustun, holat emas: unga ko'chirish yo'q
+    // (CrmClient ham to'sadi; bu yerda ikkinchi qavat himoya).
+    if (ustun === "QARZ") return false;
     const tana =
       ustun === "BUGUNGI"
         ? { bugungaKochir: true }

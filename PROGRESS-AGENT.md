@@ -6358,3 +6358,118 @@ GitHub'da "mergeable" degani "sinovdan o'tgan" degani emas.
 **Smoke (faqat o'qish, production'ga hech narsa yozilmadi):**
 `/api/health` 200 · `/api/moliya` 401 · `/api/moliya/shaxslar` 401 ·
 `/app/moliya` 200 (login) · `/app/tranzaksiyalar` 200 (login).
+
+---
+
+# YETTI VAZIFA: moliya sabablari, CRM qarz ustuni, kassa, sotuv savati, qarz huquqi va auditi (2026-09-08)
+
+## 1. Ta'minotchi sabablari qisqartirildi
+
+`lib/moliya/sabablar.ts` ga QAT'IY TOMON tushunchasi qo'shildi: ta'minotchi
+tanlanganda ro'yxatda faqat "Ta'minotchiga pul berish" va "Ta'minotchi
+qarzini to'lash" qoladi; umumiy variantlar (Xarajat, Qarz berdik, Boshqa
+chiqim) va direktor qo'shgan erkin kategoriyalar YASHIRILADI. Boshqa
+tomonlarda (mijoz, xodim, filial) umumiylar ATAYLAB qoldi — u yerda ular
+haqiqatan uchraydi.
+
+Sababning nomi "Ta'minotchiga to'lov" → "Ta'minotchiga pul berish".
+Migratsiya (`20260908090100`) mavjud kategoriyani QAYTA NOMLAYDI, yangisini
+yaratmaydi: `Category.id` saqlanadi, ya'ni barcha tranzaksiyalar o'sha
+qatorga bog'langanicha qoladi va hisobot ikkiga bo'linib ketmaydi. Unique
+cheklovga urilmasligi uchun yangi nom shu biznesda allaqachon bo'lsa qator
+tegilmaydi.
+
+## 2. CRM doskasida "Qarz" ustuni
+
+"Yutildi"dan KEYIN turadi. Zakaz BIR VAQTDA BITTA ustunda: ochiq qarzi bor
+yutilgan zakaz "Yutildi"dan chiqib "Qarz"ga o'tadi, qarz yopilgach o'zi
+qaytadi. Aks holda ustun sarlavhalaridagi "N ta • summa" ikki marta
+sanalardi.
+
+QARZDORLIK MANBAI — `Deal.summa − tolangan` EMAS, HAQIQIY `Debt` YOZUVI
+(`isYopilgan` + `status`). Sabab: zakaz yutilgandan KEYIN qilingan to'lovlar
+qarz yozuviga tushadi, zakaz maydonlariga emas — shu bois faqat qarz
+qoldig'i to'g'ri javob beradi. Yangi `Deal.holat` qiymati QO'SHILMADI:
+ustun hisoblanadi, eski yozuvlar tegilmadi. "Qarz" ustuniga qo'lda
+ko'chirib bo'lmaydi (ikki qavat to'siq: `CrmClient` va `useZakazAmallari`).
+
+## 3. TUZATILGAN XATO — xodim o'z kassasini ocha olmasdi
+
+`/app/kassa/[id]` sahifa boshida `kassa.korish` huquqini talab qilardi.
+SOTUVCHIDA (SELLER) bu huquq YO'Q (`lib/permissions/katalog.ts`), shuning
+uchun u kassadagi summani ko'rardi-yu, ustiga bosganda "Kirim/Chiqim"ga
+uloqtirilardi.
+
+Qoida endi `XodimKassaKartasi` va "Mening kassam" bilan BIR XIL: xodimning
+O'Z kassasi undan yopilmaydi (u kun oxirida shu pulni topshiradi),
+`kassa.korish` esa BOSHQA kassalar uchun talab bo'lib qoladi — maxfiylik
+chegarasi joyida. Orqaga havola ham huquqqa moslashtirildi.
+
+## 4. Sotuv ro'yxati qoldiq bo'yicha
+
+`lib/mahsulotTartib.ts` (sof funksiya) — qoldig'i ko'pi tepada, tugagani
+eng pastda. Ayni qoida SQL'da (`orderBy: miqdor desc`) ham, brauzerdagi
+qidiruvda ham qo'llanadi, shunda qidirgandan keyin ro'yxat sakramaydi.
+Tugagan mahsulotda "Qolmadi" belgisi qoladi va uni tanlab bo'lmaydi.
+
+`ProductKassirDTO` ga `qoldiq` qo'shildi: savatda har qatorga miqdor
+kiritilgani uchun brauzer "nechtagacha mumkin"ni bilishi shart. Server
+tekshiruvi (atomik `miqdor: { gte }`) o'z o'rnida qoldi.
+
+## 5. Sotuvda savat (ko'p mahsulot)
+
+`createSale` ichi `bittaSotuvTx` ga ajratildi, ustiga `createSaleKop`
+qo'shildi: savat BITTA `runBusinessTx` da yoziladi — yo hammasi, yo hech
+nimasi. Bitta mahsulotli eski yo'l (bot, POS, testlar) o'zgarmagan imzo
+bilan shu yangi yo'ldan o'tadi, ya'ni ikkinchi buxgalteriya yo'q.
+
+MIJOZ SAVAT BO'YICHA BIR MARTA aniqlanadi (`sotuvKontekstiTx`) — har qator
+uchun qayta aniqlansa bitta mijozdan bir necha kartochka paydo bo'lish
+xavfi bor edi. Har qator o'z `Sale` va (qarzga sotuvda) o'z `Debt` yozuvini
+qoldiradi: model "bir sotuv = bir qarz" deb qurilgan (`Debt.saleId` UNIQUE),
+qatorlar esa baribir bitta qarzdor ostida jamlanadi va to'lov ular bo'ylab
+FIFO taqsimlanadi.
+
+Takror tanlangan mahsulot yangi qator ochmaydi — miqdor qo'shiladi
+(`savatniBirlashtir`, brauzer va server AYNI qoidadan).
+
+## 6-7. Qarzni tuzatish/o'chirish va audit
+
+IKKI QAVAT HIMOYA, ikkalasi ham SERVERDA: `requireManager` (OWNER/ADMIN) +
+yangi `qarz.tahrir` granular huquqi (kassir va sotuvchining standart
+to'plamida ATAYLAB yo'q). Interfeysdagi tugmani yashirish himoya emas.
+
+O'CHIRISH YUMSHOQ (`Debt.deletedAt` + `deletedBy`, migratsiya
+`20260908090000`). Ayni paytda `status = CANCELLED` ham qo'yiladi — shu
+bois pul jamlarini hisoblaydigan MAVJUD 72 ta so'rov (ular bekor
+qilinganni allaqachon chiqarib tashlaydi) o'zgarishsiz to'g'ri ishlaydi va
+bironta hisobot jimgina yolg'on bo'lib qolmaydi. `deletedAt` filtri faqat
+KO'RINISH so'rovlariga qo'shildi (`lib/queries/qarz.ts` da 5 joy).
+
+TO'LOVGA TEGILMAYDI: summani to'langan qismdan past qilib bo'lmaydi va
+to'lovi bor qarz o'chirilmaydi — avval to'lov Moliya bo'limidan bekor
+qilinadi. Aks holda kassadagi kirim "havoda" qolardi.
+
+AUDIT — mavjud `AuditLog` jadvali (yangi jurnal ochilmadi). `auditYoz` ga
+`sabab` qo'shildi: ustun sxemada bor edi, lekin hech qayerdan
+to'ldirilmasdi. O'chirilgan qarzning yozuvi yo'qolmaydi — `AuditLog` da
+qarzga FK YO'Q, mijoz nomi va summa esa `before` suratida saqlanadi.
+Direktorga alohida sahifa: `/app/qarzlar/audit`.
+
+## Yo'l-yo'lakay tuzatilgan xato
+
+`tests/deploy-mashq.test.ts` "aynan bitta migratsiya qo'llanadi" deb
+qotirilgan edi — har yangi migratsiya qo'shilganda mashq sababsiz
+qizarardi. Endi kutayotganlar soni chegaradan HISOBLANADI; mashqning
+maqsadi (kutayotganlar qo'llanadi, qo'llanganlar qayta ishlamaydi)
+o'zgarmadi.
+
+## Testlar
+
+`npm run test:vazifalar` (17 ta) — sabab ro'yxati, "Qarz" ustuni qoidasi,
+mahsulot tartibi (sof funksiya + baza), savat birlashtirish, ko'p
+mahsulotli sotuvning ATOMIKLIGI, huquq katalogi va `requirePermission`,
+summa tuzatish chegarasi, o'chirish + audit tarixi.
+
+Regressiya: 800+ test (ikki bo'lakda) — hammasi yashil. `npm run build` va
+`tsc --noEmit` toza.

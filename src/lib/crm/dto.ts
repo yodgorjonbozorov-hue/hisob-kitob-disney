@@ -1,4 +1,5 @@
 import { utcDateToDateOnlyString } from "@/lib/date";
+import { zakazQarzdormi } from "@/lib/crm/pipeline";
 import type { UstunSahifa } from "@/lib/crm/service";
 import type { BuyurtmaDTO, UstunSahifaDTO } from "@/app/app/crm/turlar";
 
@@ -62,6 +63,10 @@ export function zakazDTO(
     debtId: d.debtId,
     kirimSumma: kirimSummasi(d),
     qarzQoldiq: d.debt ? Math.max(0, d.debt.jamiSumma - d.debt.tolangan) : 0,
+    // OCHIQ QARZ — "Qarz" ustunining sharti. Serverda hisoblanadi, shunda
+    // brauzer qarz yozuvining ichki maydonlariga bog'lanmaydi va doska
+    // ustuni ikkala tarafda AYNI qoidadan chiqadi (lib/crm/pipeline.ts).
+    qarzOchiq: zakazQarzdormi(d.debt),
     tolovlar: d.tolovlar.map((t) => ({ id: t.id, kanal: t.kanal, summa: t.summa })),
     sotuvchi: sotuvchi
       ? { employeeId: sotuvchi.employeeId, ism: sotuvchi.ism, isActive: sotuvchi.isActive }

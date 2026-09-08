@@ -43,6 +43,10 @@ export const HUQUQLAR: Huquq[] = [
   { code: "sotuv.yaratish", label: "Sotuv yaratish", guruh: "Sotuv va qarz" },
   { code: "qarz.korish", label: "Qarzlarni ko'rish", guruh: "Sotuv va qarz" },
   { code: "qarz.tolash", label: "Qarz to'lash/yopish", guruh: "Sotuv va qarz" },
+  // QARZNI TUZATISH VA O'CHIRISH — direktor amali. Kassir/sotuvchining
+  // standart to'plamida ATAYLAB yo'q: qarz summasini o'zgartirish mijoz
+  // bilan hisob-kitobni qayta yozish demakdir.
+  { code: "qarz.tahrir", label: "Qarzni tahrirlash va o'chirish", guruh: "Sotuv va qarz" },
   // Xarid
   { code: "xarid.korish", label: "Xarid buyurtmalarini ko'rish", guruh: "Xarid" },
   { code: "xarid.qabul", label: "Xarid qabul qilish va to'lash", guruh: "Xarid" },

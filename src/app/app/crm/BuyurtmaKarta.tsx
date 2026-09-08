@@ -6,11 +6,17 @@ import { kechikkanKun, tolovHolati, TOLOV_HOLAT_NOMI, type TolovHolat, type Ustu
 import type { BuyurtmaDTO } from "./turlar";
 
 /** Ustun bo'yicha workflow belgisi — kartada zakaz qayerda turgani ko'rinsin. */
-const USTUN_BELGISI: Record<Ustun, { matn: string; tone: "kirim" | "warning" | "info" | "neutral" }> = {
+const USTUN_BELGISI: Record<
+  Ustun,
+  { matn: string; tone: "kirim" | "warning" | "info" | "neutral" | "chiqim" }
+> = {
   KUTILAYOTGAN: { matn: "⚪ Kutilayotgan", tone: "neutral" },
   BUGUNGI: { matn: "🔵 Bugungi zakaz", tone: "info" },
   JARAYONDA: { matn: "🟡 Jarayonda", tone: "warning" },
   YUTILDI: { matn: "🟢 Yutildi", tone: "kirim" },
+  // Zakaz yutilgan, lekin puli to'liq kelmagan — qarz yopilgach karta
+  // "Yutildi"ga o'zi qaytadi (lib/crm/pipeline.ts).
+  QARZ: { matn: "🔴 Qarz", tone: "chiqim" },
   YOQOTILDI: { matn: "⚫ Yo'qotildi", tone: "neutral" },
 };
 

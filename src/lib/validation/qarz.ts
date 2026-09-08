@@ -255,7 +255,37 @@ export const qarzBekorSchema = z.object({
   sabab: z.string().trim().min(3, "Bekor qilish sababini yozing").max(300),
 });
 
+/**
+ * QARZNI TAHRIRLASH (direktor). Barcha maydonlar IXTIYORIY — faqat
+ * o'zgartirilgani yuboriladi. `sabab` majburiy: audit jurnalida "nega
+ * o'zgardi" degan savol javobsiz qolmasligi kerak.
+ */
+export const qarzTahrirSchema = z.object({
+  jamiSumma: z.number().int().positive("Summa musbat bo'lishi kerak").optional().nullable(),
+  mijozNomi: z.string().trim().min(1).max(100).optional().nullable(),
+  mijozTel: telMaydoni,
+  sana: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Sana noto'g'ri formatda")
+    .optional()
+    .nullable(),
+  muddat: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Muddat noto'g'ri formatda")
+    .optional()
+    .nullable(),
+  izoh: z.string().trim().max(500).optional().nullable(),
+  sabab: z.string().trim().min(3, "Tuzatish sababini yozing").max(300),
+});
+
+/** Qarzni o'chirish (direktor) — sabab MAJBURIY. */
+export const qarzOchirSchema = z.object({
+  sabab: z.string().trim().min(3, "O'chirish sababini yozing").max(300),
+});
+
 export type CreateQarzInput = z.infer<typeof createQarzSchema>;
 export type QarzTolovInput = z.infer<typeof qarzTolovSchema>;
 export type QarzdorTolovInput = z.infer<typeof qarzdorTolovSchema>;
 export type QarzBekorInput = z.infer<typeof qarzBekorSchema>;
+export type QarzTahrirInput = z.infer<typeof qarzTahrirSchema>;
+export type QarzOchirInput = z.infer<typeof qarzOchirSchema>;

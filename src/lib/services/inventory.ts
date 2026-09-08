@@ -132,10 +132,17 @@ export async function createStockEntry(params: StockEntryParams) {
  * Sotuv — mahsulot qoldig'ini atomik kamaytiradi (overselling'dan himoya).
  * Naqd → kirim tranzaksiya; qarz → Debt (daromad yozilmaydi, to'lovda yoziladi).
  */
-export async function createSale(params: {
-  businessId: string;
+/** Savatdagi bitta qator — bir mahsulot va uning miqdori. */
+export interface SotuvQatori {
   productId: string;
   miqdor: number;
+  /** Kelishilgan birlik narxi. Berilmasa mahsulotning sotuv narxi olinadi. */
+  narx?: number | null;
+}
+
+/** Sotuvning MIJOZ va TO'LOV qismi — savatdagi hamma qatorga bir xil tegishli. */
+export interface SotuvUmumiy {
+  businessId: string;
   tolovTuri: "naqd" | "qarz";
   /** Mijoz kartochkasi (ixtiyoriy). Berilsa qarz limiti tekshiriladi. */
   contactId?: string | null;
@@ -143,166 +150,255 @@ export async function createSale(params: {
   mijozTel?: string | null;
   /** Mijoz kartochkasi yaratilsinmi (MIJOZLAR moduli yoqiq bo'lgandagina). */
   mijozSaqla?: boolean;
-  /**
-   * Haqiqiy kelishilgan narx (birlik uchun). Avto rejimida narx deyarli har doim
-   * savdolashib belgilanadi — berilsa shu narx ishlatiladi va mahsulot kartochkasi
-   * ham yangilanadi. Berilmasa rejadagi sotuv narxi olinadi.
-   */
-  narx?: number | null;
   /** Naqd sotuvda pul tushadigan kassa (naqd/Click/terminal). Berilmasa — standart kassa. */
   accountId?: string | null;
   /** Sotuv sanasi "YYYY-MM-DD". Berilmasa bugun (kechagi sotuvni ham kiritish mumkin). */
   sana?: string | null;
   userId: string;
-}) {
-  const sana = params.sana ?? todayDateOnlyString();
-  const sotuv = await runBusinessTx(params.businessId, async (tx) => {
-    const product = await tx.product.findFirst({
-      where: { id: params.productId, businessId: params.businessId, isActive: true },
+}
+
+/** Aniqlangan mijoz — savatdagi barcha qatorlar uchun BIR MARTA hisoblanadi. */
+type SotuvMijozi = { contactId: string | null; ism: string | null; tel: string | null };
+
+/**
+ * BITTA QATORNI YOZISH — chaqiruvchining tranzaksiyasi ICHIDA.
+ *
+ * Bitta mahsulotli sotuv ham (`createSale`), savatli sotuv ham
+ * (`createSaleKop`) AYNI shu funksiyaga tayanadi — ikki yo'lda ikki xil
+ * buxgalteriya bo'lib qolmasin. Mijoz va biznes turi CHAQIRUVCHIDA bir
+ * marta aniqlanadi va shu yerga tayyor holda uzatiladi.
+ */
+async function bittaSotuvTx(
+  tx: BusinessTx,
+  umumiy: SotuvUmumiy,
+  qator: SotuvQatori,
+  mijoz: SotuvMijozi,
+  biznesTuri: string | undefined,
+  sana: string
+) {
+  const product = await tx.product.findFirst({
+    where: { id: qator.productId, businessId: umumiy.businessId, isActive: true },
+  });
+  if (!product) throw new ForbiddenError("Mahsulot topilmadi");
+
+  const kelishilganNarx = qator.narx && qator.narx > 0 ? Math.round(qator.narx) : null;
+  if (!kelishilganNarx && product.sotuvNarx <= 0) {
+    throw new BadRequestError(`Sotuv narxi kiritilmagan: ${product.nomi}`);
+  }
+
+  // Qarz limiti — qoldiq kamaytirilishidan OLDIN tekshiriladi, shu bilan
+  // limitdan oshgan sotuv omborga umuman tegmaydi (tranzaksiya orqaga
+  // qaytadi, lekin tartib baribir aniq bo'lgani ma'qul).
+  if (umumiy.tolovTuri === "qarz" && mijoz.contactId) {
+    const narx = kelishilganNarx && kelishilganNarx > 0 ? kelishilganNarx : product.sotuvNarx;
+    await qarzLimitTekshirTx(tx, umumiy.businessId, mijoz.contactId, narx * qator.miqdor);
+  }
+
+  // Atomik shartli kamaytirish — yetarli qoldiq bo'lsagina bajariladi.
+  const upd = await tx.product.updateMany({
+    where: { id: product.id, businessId: umumiy.businessId, miqdor: { gte: qator.miqdor } },
+    data: { miqdor: { decrement: qator.miqdor } },
+  });
+  if (upd.count === 0) {
+    throw new BadRequestError(`Omborda yetarli emas: ${product.nomi}`);
+  }
+
+  const birlikNarx = kelishilganNarx ?? product.sotuvNarx;
+  const tannarx = product.kelganNarx;
+  const jamiSumma = birlikNarx * qator.miqdor;
+
+  // AVTO rejimida kelishilgan narx kartochkaga yoziladi: bitta yozuv = bitta
+  // mashina, narx esa har doim savdolashib belgilanadi.
+  //
+  // Oddiy omborda esa BU HALOKATLI edi (H-1): 500 dona tovardan bittasini
+  // chegirma bilan sotsangiz butun katalog narxi o'zgarib ketardi va keyingi
+  // barcha sotuvlar chegirma narxida ketardi. Shuning uchun endi faqat avto.
+  if (isAvto(biznesTuri) && kelishilganNarx && kelishilganNarx !== product.sotuvNarx) {
+    await tx.product.update({
+      where: { id: product.id },
+      data: { sotuvNarx: kelishilganNarx },
     });
-    if (!product) throw new ForbiddenError("Mahsulot topilmadi");
+  }
 
-    const kelishilganNarx = params.narx && params.narx > 0 ? Math.round(params.narx) : null;
-    if (!kelishilganNarx && product.sotuvNarx <= 0) {
-      throw new BadRequestError("Sotuv narxi kiritilmagan");
-    }
-    if (params.tolovTuri === "qarz" && !params.contactId && !params.mijozNomi?.trim()) {
-      throw new BadRequestError("Qarzga sotishda mijoz nomi kiritilishi shart");
-    }
+  const sale = await tx.sale.create({
+    data: {
+      businessId: umumiy.businessId,
+      productId: product.id,
+      miqdor: qator.miqdor,
+      birlikNarx,
+      tannarx,
+      jamiSumma,
+      tolovTuri: umumiy.tolovTuri,
+      contactId: mijoz.contactId ?? undefined,
+      mijozNomi: mijoz.ism ?? undefined,
+      mijozTel: mijoz.tel ?? undefined,
+      sana: dateOnlyStringToUTCDate(sana),
+      userId: umumiy.userId,
+    },
+  });
 
-    // Biznes turi bu yerda o'qiladi: "avto" — narx kartochkaga yoziladi (quyida),
-    // "optom" — mijozsiz sotuv o'tmaydi (server qoidasi, frontendga ishonilmaydi).
-    const biznes = await tx.business.findFirst({
-      where: { id: params.businessId },
-      select: { turi: true },
+  if (umumiy.tolovTuri === "naqd") {
+    // Naqd sotuv — darhol kirim tranzaksiya (kassa usuli).
+    const categoryId = await ensureCategoryTx(tx, umumiy.businessId, SOTUV_KATEGORIYA);
+    const txn = await createTransactionTx(tx, umumiy.userId, umumiy.businessId, {
+      turi: "kirim",
+      categoryId,
+      accountId: umumiy.accountId ?? undefined,
+      summa: jamiSumma,
+      sana,
+      izoh: `${product.nomi} × ${qator.miqdor}`,
     });
-    const mijozBerilgan = Boolean(params.contactId || params.mijozNomi?.trim());
-    if (isOptom(biznes?.turi) && !mijozBerilgan) {
-      throw new BadRequestError(
-        "Optom sotuvda mijoz tanlanishi shart — kim xarid qilganini yozing"
-      );
-    }
-
-    // MIJOZ — mijoz berilgan har qanday sotuvda kartochka BITTA joyda
-    // aniqlanadi (lib/services/mijozAniqla.ts): egalik tekshiriladi, dublikat
-    // yaratilmaydi. Qarzda majburiy (yuqorida tekshirildi), naqdda ixtiyoriy —
-    // berilmasa sotuv mijozsiz yoziladi.
-    const mijoz = mijozBerilgan
-      ? await mijozniAniqlaTx(tx, {
-          businessId: params.businessId,
-          userId: params.userId,
-          contactId: params.contactId,
-          mijozNomi: params.mijozNomi,
-          mijozTel: params.mijozTel,
-          mijozSaqla: params.mijozSaqla,
-        })
-      : { contactId: null, ism: null, tel: null };
-
-    // Qarz limiti — qoldiq kamaytirilishidan OLDIN tekshiriladi, shu bilan
-    // limitdan oshgan sotuv omborga umuman tegmaydi (tranzaksiya orqaga
-    // qaytadi, lekin tartib baribir aniq bo'lgani ma'qul).
-    if (params.tolovTuri === "qarz" && mijoz.contactId) {
-      const narx =
-        kelishilganNarx && kelishilganNarx > 0 ? kelishilganNarx : product.sotuvNarx;
-      await qarzLimitTekshirTx(tx, params.businessId, mijoz.contactId, narx * params.miqdor);
-    }
-
-    // Atomik shartli kamaytirish — yetarli qoldiq bo'lsagina bajariladi.
-    const upd = await tx.product.updateMany({
-      where: { id: product.id, businessId: params.businessId, miqdor: { gte: params.miqdor } },
-      data: { miqdor: { decrement: params.miqdor } },
-    });
-    if (upd.count === 0) {
-      throw new BadRequestError("Omborda yetarli emas");
-    }
-
-    const birlikNarx = kelishilganNarx ?? product.sotuvNarx;
-    const tannarx = product.kelganNarx;
-    const jamiSumma = birlikNarx * params.miqdor;
-
-    // AVTO rejimida kelishilgan narx kartochkaga yoziladi: bitta yozuv = bitta
-    // mashina, narx esa har doim savdolashib belgilanadi.
+    await tx.sale.update({ where: { id: sale.id }, data: { transactionId: txn.id } });
+  } else {
+    // Qarz — daromad yozilmaydi, qarzdorlik yaratiladi (bizga qarzdor).
+    // Kirim faqat to'lov qabul qilinganda, TO'LOV SANASI bilan yoziladi
+    // (lib/services/qarz.ts).
     //
-    // Oddiy omborda esa BU HALOKATLI edi (H-1): 500 dona tovardan bittasini
-    // chegirma bilan sotsangiz butun katalog narxi o'zgarib ketardi va keyingi
-    // barcha sotuvlar chegirma narxida ketardi. Shuning uchun endi faqat avto.
-    if (isAvto(biznes?.turi) && kelishilganNarx && kelishilganNarx !== product.sotuvNarx) {
-      await tx.product.update({
-        where: { id: product.id },
-        data: { sotuvNarx: kelishilganNarx },
-      });
-    }
-
-    const sale = await tx.sale.create({
+    // HAR QATOR — O'Z QARZI: `Debt.saleId` UNIQUE va `productId` bilan
+    // bog'langan, ya'ni model "bir sotuv = bir qarz" deb qurilgan. Savatdagi
+    // qatorlar bir mijozga tegishli bo'lgani uchun ular baribir bitta
+    // qarzdor ostida jamlanadi va to'lov ular bo'ylab FIFO taqsimlanadi
+    // (lib/services/qarz.ts).
+    await tx.debt.create({
       data: {
-        businessId: params.businessId,
+        businessId: umumiy.businessId,
+        turi: "olinadigan",
+        saleId: sale.id,
         productId: product.id,
-        miqdor: params.miqdor,
-        birlikNarx,
-        tannarx,
-        jamiSumma,
-        tolovTuri: params.tolovTuri,
         contactId: mijoz.contactId ?? undefined,
-        mijozNomi: mijoz.ism ?? undefined,
+        mijozNomi: mijoz.ism!,
         mijozTel: mijoz.tel ?? undefined,
+        jamiSumma,
+        status: "OPEN",
         sana: dateOnlyStringToUTCDate(sana),
-        userId: params.userId,
+        userId: umumiy.userId,
       },
     });
+  }
 
-    if (params.tolovTuri === "naqd") {
-      // Naqd sotuv — darhol kirim tranzaksiya (kassa usuli).
-      const categoryId = await ensureCategoryTx(tx, params.businessId, SOTUV_KATEGORIYA);
-      const txn = await createTransactionTx(tx, params.userId, params.businessId, {
-        turi: "kirim",
-        categoryId,
-        accountId: params.accountId ?? undefined,
-        summa: jamiSumma,
-        sana,
-        izoh: `${product.nomi} × ${params.miqdor}`,
-      });
-      await tx.sale.update({ where: { id: sale.id }, data: { transactionId: txn.id } });
+  return tx.sale.findUniqueOrThrow({
+    where: { id: sale.id },
+    include: { product: { select: { nomi: true } } },
+  });
+}
+
+/**
+ * SAVATDAGI QATORLARNI BIRLASHTIRISH.
+ *
+ * Foydalanuvchi bitta mahsulotni ikki marta tanlasa (yoki qidiruvdan
+ * qayta qo'shsa) ikkita alohida sotuv yozilmaydi — miqdor QO'SHILADI.
+ * Narx birinchi kiritilgani bo'yicha qoladi: keyingi qator narxsiz
+ * kelsa avvalgisi buzilmasligi kerak.
+ *
+ * Sof funksiya — server ham, brauzer ham ayni qoidadan yuradi.
+ */
+export function savatniBirlashtir(qatorlar: SotuvQatori[]): SotuvQatori[] {
+  const xarita = new Map<string, SotuvQatori>();
+  for (const q of qatorlar) {
+    const bor = xarita.get(q.productId);
+    if (bor) {
+      bor.miqdor += q.miqdor;
+      if (bor.narx == null && q.narx != null) bor.narx = q.narx;
     } else {
-      // Qarz — daromad yozilmaydi, qarzdorlik yaratiladi (bizga qarzdor).
-      // Kirim faqat to'lov qabul qilinganda, TO'LOV SANASI bilan yoziladi
-      // (lib/services/qarz.ts).
-      await tx.debt.create({
-        data: {
-          businessId: params.businessId,
-          turi: "olinadigan",
-          saleId: sale.id,
-          productId: product.id,
-          contactId: mijoz.contactId ?? undefined,
-          mijozNomi: mijoz.ism!,
-          mijozTel: mijoz.tel ?? undefined,
-          jamiSumma,
-          status: "OPEN",
-          sana: dateOnlyStringToUTCDate(sana),
-          userId: params.userId,
-        },
-      });
+      xarita.set(q.productId, { ...q });
     }
+  }
+  return [...xarita.values()];
+}
 
-    return tx.sale.findUnique({
-      where: { id: sale.id },
-      include: { product: { select: { nomi: true } } },
-    });
+/** Sotuv uchun mijoz va biznes turini bir marta aniqlaydi (savat bo'ylab bir xil). */
+async function sotuvKontekstiTx(tx: BusinessTx, umumiy: SotuvUmumiy) {
+  if (umumiy.tolovTuri === "qarz" && !umumiy.contactId && !umumiy.mijozNomi?.trim()) {
+    throw new BadRequestError("Qarzga sotishda mijoz nomi kiritilishi shart");
+  }
+
+  // Biznes turi bu yerda o'qiladi: "avto" — narx kartochkaga yoziladi,
+  // "optom" — mijozsiz sotuv o'tmaydi (server qoidasi, frontendga ishonilmaydi).
+  const biznes = await tx.business.findFirst({
+    where: { id: umumiy.businessId },
+    select: { turi: true },
+  });
+  const mijozBerilgan = Boolean(umumiy.contactId || umumiy.mijozNomi?.trim());
+  if (isOptom(biznes?.turi) && !mijozBerilgan) {
+    throw new BadRequestError("Optom sotuvda mijoz tanlanishi shart — kim xarid qilganini yozing");
+  }
+
+  // MIJOZ — mijoz berilgan har qanday sotuvda kartochka BITTA joyda
+  // aniqlanadi (lib/services/mijozAniqla.ts): egalik tekshiriladi, dublikat
+  // yaratilmaydi. Savatda bu BIR MARTA bajariladi — har qator uchun qayta
+  // aniqlansa bitta mijozdan bir necha kartochka paydo bo'lish xavfi bor.
+  const mijoz: SotuvMijozi = mijozBerilgan
+    ? await mijozniAniqlaTx(tx, {
+        businessId: umumiy.businessId,
+        userId: umumiy.userId,
+        contactId: umumiy.contactId,
+        mijozNomi: umumiy.mijozNomi,
+        mijozTel: umumiy.mijozTel,
+        mijozSaqla: umumiy.mijozSaqla,
+      })
+    : { contactId: null, ism: null, tel: null };
+
+  return { mijoz, biznesTuri: biznes?.turi };
+}
+
+/**
+ * KO'P MAHSULOTLI SOTUV — savat BITTA atomik amalda yoziladi.
+ *
+ * Nega atomik: kassir 6 ta mahsulotni tanlab "Sotuvni yakunlash"ni bosganda
+ * to'rttasi yozilib, beshinchisida ombor yetmay qolsa — ombor ham, kassa ham
+ * yarim holatda qolardi va uni qo'lda tuzatish kerak bo'lardi. Endi yo
+ * hammasi yoziladi, yo hech nimasi.
+ *
+ * Bitta mahsulotli sotuv ham shu yo'ldan o'tadi (`createSale` — bitta
+ * qatorli savat), shuning uchun ikkinchi buxgalteriya yo'q.
+ */
+export async function createSaleKop(umumiy: SotuvUmumiy, qatorlar: SotuvQatori[]) {
+  const savat = savatniBirlashtir(qatorlar);
+  if (savat.length === 0) throw new BadRequestError("Savat bo'sh — mahsulot tanlang");
+  for (const q of savat) {
+    if (!Number.isInteger(q.miqdor) || q.miqdor <= 0) {
+      throw new BadRequestError("Miqdor butun va noldan katta bo'lishi kerak");
+    }
+  }
+
+  const sana = umumiy.sana ?? todayDateOnlyString();
+  const sotuvlar = await runBusinessTx(umumiy.businessId, async (tx) => {
+    const { mijoz, biznesTuri } = await sotuvKontekstiTx(tx, umumiy);
+    const natija = [];
+    for (const q of savat) {
+      natija.push(await bittaSotuvTx(tx, umumiy, q, mijoz, biznesTuri, sana));
+    }
+    return natija;
   });
 
   await logAudit({
-    businessId: params.businessId,
+    businessId: umumiy.businessId,
     action: "create",
     entity: "sale",
-    entityId: sotuv?.id ?? "?",
+    entityId: sotuvlar[0]?.id ?? "?",
     after: {
-      productId: params.productId,
-      miqdor: params.miqdor,
-      jamiSumma: sotuv?.jamiSumma,
-      tolovTuri: params.tolovTuri,
-      mijozNomi: sotuv?.mijozNomi,
+      qatorlar: sotuvlar.map((s) => ({
+        id: s.id,
+        productId: s.productId,
+        miqdor: s.miqdor,
+        jamiSumma: s.jamiSumma,
+      })),
+      jami: sotuvlar.reduce((a, s) => a + s.jamiSumma, 0),
+      tolovTuri: umumiy.tolovTuri,
+      mijozNomi: sotuvlar[0]?.mijozNomi ?? null,
     },
   });
-  return sotuv;
+  return sotuvlar;
+}
+
+/**
+ * BITTA MAHSULOTLI SOTUV — eski chaqiruvchilar (bot, POS, testlar) uchun
+ * o'zgarmagan imzo. Ichkarida savatli yo'ldan o'tadi.
+ */
+export async function createSale(params: SotuvUmumiy & SotuvQatori) {
+  const { productId, miqdor, narx, ...umumiy } = params;
+  const sotuvlar = await createSaleKop(umumiy, [{ productId, miqdor, narx }]);
+  return sotuvlar[0];
 }
 
 /**

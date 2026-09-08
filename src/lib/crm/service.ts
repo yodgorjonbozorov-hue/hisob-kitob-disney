@@ -13,6 +13,7 @@ import { zakazMoliyasiniQaytarish } from "@/lib/crm/qaytarish";
 import {
   tolovHolati,
   yopiqHolat,
+  zakazQarzdormi,
   zakazUstuni,
   type TolovHolat,
   type Ustun,
@@ -208,7 +209,8 @@ export async function getBoard(businessId: string, filtr: DoskaFiltr = {}) {
         // Kirim/qarz summasi YOZUVNING O'ZIDAN o'qiladi: o'chirilgan yoki
         // tahrirlangan tranzaksiya doskada eski raqam bo'lib qolmasin.
         transaction: { select: { id: true, summa: true, deletedAt: true } },
-        debt: { select: { id: true, jamiSumma: true, tolangan: true, status: true } },
+        // `isYopilgan` — "Qarz" ustuni sharti SQL bilan AYNI maydondan chiqsin.
+        debt: { select: { id: true, jamiSumma: true, tolangan: true, status: true, isYopilgan: true } },
       },
       // USTUN ICHIDAGI TARTIB bu yerda EMAS: uni `zakazlarniTartibla`
       // (`lib/crm/pipeline.ts`) hisoblaydi — "Yutildi"ga endigina o'tgan
@@ -232,7 +234,8 @@ const ZAKAZ_INCLUDE = {
   // Kirim/qarz summasi YOZUVNING O'ZIDAN o'qiladi: o'chirilgan yoki
   // tahrirlangan tranzaksiya doskada eski raqam bo'lib qolmasin.
   transaction: { select: { id: true, summa: true, deletedAt: true } },
-  debt: { select: { id: true, jamiSumma: true, tolangan: true, status: true } },
+  // `isYopilgan` — "Qarz" ustuni sharti SQL bilan AYNI maydondan chiqsin.
+        debt: { select: { id: true, jamiSumma: true, tolangan: true, status: true, isYopilgan: true } },
   // ARALASH TO'LOV qatorlari: har kanal alohida kirim yozadi, shuning uchun
   // kartadagi "Kirim" raqami qatorlardan yig'iladi.
   tolovlar: {
@@ -271,9 +274,21 @@ function filtrWhere(businessId: string, filtr: DoskaFiltr): Prisma.DealWhereInpu
  * Ikkalasi AYNI qoidani ifodalaydi, shuning uchun ular yonma-yon turadi:
  * "Bugungi" — alohida holat emas, `KUTILMOQDA` + `sana = bugun`.
  */
+/**
+ * OCHIQ QARZ SHARTI — `zakazQarzdormi` ning SQL ko'rinishi.
+ * Qarz yozuvi bor, yopilmagan va bekor qilinmagan.
+ */
+const OCHIQ_QARZ: Prisma.DealWhereInput = {
+  debt: { is: { isYopilgan: false, status: { not: "CANCELLED" } } },
+};
+
 function ustunWhere(ustun: Ustun, bugun: string): Prisma.DealWhereInput {
   const bugunUTC = dateOnlyStringToUTCDate(bugun);
-  if (ustun === "YUTILDI") return { holat: "YUTILDI" };
+  // "Yutildi" va "Qarz" — bitta holat, ikki ustun: ochiq qarz ajratib turadi.
+  // Shart ikkalasida BIR-BIRINI TO'LDIRADI, ya'ni zakaz ikkalasida ham
+  // ko'rinib qolmaydi va jamlar ikki marta sanalmaydi.
+  if (ustun === "QARZ") return { holat: "YUTILDI", ...OCHIQ_QARZ };
+  if (ustun === "YUTILDI") return { holat: "YUTILDI", NOT: OCHIQ_QARZ };
   if (ustun === "YOQOTILDI") return { holat: "YOQOTILDI" };
   if (ustun === "JARAYONDA") return { holat: "JARAYONDA" };
   if (ustun === "BUGUNGI") return { holat: "KUTILMOQDA", sana: bugunUTC };
@@ -292,6 +307,7 @@ function ustunWhere(ustun: Ustun, bugun: string): Prisma.DealWhereInput {
  * "Yana ko'rsatish" bir zakazni ikki marta yoki umuman ko'rsatmasligi mumkin.
  */
 function ustunOrderBy(ustun: Ustun): Prisma.DealOrderByWithRelationInput[] {
+  // "Qarz" ham TARIX ustuni (zakaz yutilgan) — eng oxirgi o'tgani tepada.
   if (ustun === "KUTILAYOTGAN" || ustun === "BUGUNGI") {
     return [{ sana: "asc" }, { holatAt: "desc" }, { id: "desc" }];
   }
@@ -659,10 +675,20 @@ export async function bugungaKochirish(params: {
 
 /** Zakazning joriy doska ustuni (server tomonda kerak bo'lganda). */
 export function dealUstuni(
-  deal: { holat: string; sana: Date | null },
+  deal: {
+    holat: string;
+    sana: Date | null;
+    /** Bog'langan qarz — berilmasa zakaz qarzsiz deb qaraladi. */
+    debt?: { isYopilgan: boolean; status: string } | null;
+  },
   bugun = todayTashkentDateOnlyString()
 ): Ustun {
-  return zakazUstuni(deal.holat, deal.sana ? utcDateToDateOnlyString(deal.sana) : null, bugun);
+  return zakazUstuni(
+    deal.holat,
+    deal.sana ? utcDateToDateOnlyString(deal.sana) : null,
+    bugun,
+    zakazQarzdormi(deal.debt)
+  );
 }
 
 export interface YangiBuyurtma {

@@ -8,6 +8,8 @@ import { telKorinish, QARZ_TOLOV_NOMI, type QarzTolovUsuli } from "@/lib/validat
 import type { QarzTafsilotDTO } from "@/lib/queries/qarz";
 import { QarzHolatBadge } from "./QarzHolatBadge";
 import { QarzTolovForm, type KassaOption } from "./QarzTolovForm";
+import { QarzTahrirForm } from "./QarzTahrirForm";
+import { QarzOchirForm } from "./QarzOchirForm";
 
 /**
  * QARZ TAFSILOTI — mijoz, summalar, to'lov tarixi va to'lov qabul qilish.
@@ -20,12 +22,15 @@ export function QarzTafsilot({
   debtId,
   kassalar,
   bekorQilaOladi,
+  qarzniBoshqaradi,
   onClose,
   onChanged,
 }: {
   debtId: string;
   kassalar: KassaOption[];
   bekorQilaOladi: boolean;
+  /** Direktor: qarzni tuzatish va o'chirish (6-talab). */
+  qarzniBoshqaradi: boolean;
   onClose: () => void;
   onChanged: () => void;
 }) {
@@ -33,6 +38,8 @@ export function QarzTafsilot({
   const [xato, setXato] = useState<string | null>(null);
   const [tolovOchiq, setTolovOchiq] = useState(false);
   const [bekorOchiq, setBekorOchiq] = useState(false);
+  const [tahrirOchiq, setTahrirOchiq] = useState(false);
+  const [ochirOchiq, setOchirOchiq] = useState(false);
 
   async function yukla() {
     setXato(null);
@@ -119,8 +126,22 @@ export function QarzTafsilot({
             )}
           </div>
 
-          {!qarz.isYopilgan && !tolovOchiq && (
+          {!qarz.isYopilgan && !tolovOchiq && !tahrirOchiq && !ochirOchiq && (
             <div className="flex flex-wrap gap-2 justify-end">
+              {/* TUZATISH VA O'CHIRISH — faqat direktorda (6-talab).
+                  Tugmani yashirish HIMOYA EMAS: server ham `requireManager`
+                  va `qarz.tahrir` huquqini tekshiradi
+                  (src/app/api/debts/[id]/route.ts). */}
+              {qarzniBoshqaradi && (
+                <Button variant="secondary" onClick={() => setTahrirOchiq(true)}>
+                  Tuzatish
+                </Button>
+              )}
+              {qarzniBoshqaradi && qarz.tolangan === 0 && (
+                <Button variant="secondary" onClick={() => setOchirOchiq(true)}>
+                  O&apos;chirish
+                </Button>
+              )}
               {bekorQilaOladi && qarz.tolangan === 0 && (
                 <Button variant="secondary" onClick={() => setBekorOchiq(true)}>
                   Bekor qilish
@@ -130,6 +151,35 @@ export function QarzTafsilot({
                 {beriladigan ? "To'lash" : "To'lov qilish"}
               </Button>
             </div>
+          )}
+
+          {tahrirOchiq && (
+            <QarzTahrirForm
+              debtId={qarz.id}
+              jamiSumma={qarz.jamiSumma}
+              tolangan={qarz.tolangan}
+              mijozNomi={qarz.mijozNomi}
+              muddat={qarz.muddat ? qarz.muddat.slice(0, 10) : ""}
+              izoh={qarz.izoh ?? ""}
+              onCancel={() => setTahrirOchiq(false)}
+              onDone={async () => {
+                setTahrirOchiq(false);
+                await yukla();
+                onChanged();
+              }}
+            />
+          )}
+
+          {ochirOchiq && (
+            <QarzOchirForm
+              debtId={qarz.id}
+              onCancel={() => setOchirOchiq(false)}
+              onDone={() => {
+                setOchirOchiq(false);
+                onChanged();
+                onClose();
+              }}
+            />
           )}
 
           {tolovOchiq && (

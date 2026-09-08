@@ -139,6 +139,10 @@ export const MODULLAR: ModulTarifi[] = [
       // majburiyat: ombori yo'q biznes ham "Kirim → Qarz" yozadi va uni
       // ko'radigan joyi bo'lishi shart.
       { href: "/app/qarzlar", label: "Qarzlar", icon: "debt", tartib: 13, rollar: ["OWNER", "ADMIN", "CASHIER"], guruh: "asosiy" },
+      // QARZ AUDITI — direktor bajargan tuzatish va o'chirishlar tarixi.
+      // Faqat boshqaruvchida; sahifaning o'zi ham `qarz.tahrir` huquqini
+      // mustaqil tekshiradi (nav yashirish himoya emas).
+      { href: "/app/qarzlar/audit", label: "Qarz auditi", icon: "audit", tartib: 57, rollar: BOSHQARUVCHILAR, guruh: "sozlamalar" },
       // "Mening kassam" — direktor ham yozuv kiritadi va uning qo'lida ham
       // naqd qolishi mumkin, shuning uchun boshqaruvchilarga ham ochiq.
       // SELLER menyusi ATAYLAB tegilmaydi ("Sotuvchi faqat Yozuvlar ko'radi"

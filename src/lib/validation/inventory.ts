@@ -84,6 +84,34 @@ export const createSaleSchema = z.object({
   sana: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Sana noto'g'ri formatda").optional().nullable(),
 });
 
+/**
+ * KO'P MAHSULOTLI SOTUV (savat).
+ *
+ * `createSaleSchema` dan farqi faqat qatorlar ro'yxati: mijoz, to'lov turi,
+ * kassa va sana butun savatga BIR MARTA tegishli. Bitta qatorli savat
+ * bir mahsulotli sotuv bilan aynan bir xil ishlaydi.
+ */
+export const createSaleKopSchema = z.object({
+  qatorlar: z
+    .array(
+      z.object({
+        productId: z.string().min(1),
+        miqdor: z.number().int().positive("Miqdor musbat bo'lishi kerak"),
+        narx: z.number().int().positive().optional().nullable(),
+      })
+    )
+    .min(1, "Kamida bitta mahsulot tanlang")
+    // Sog'lom chegara: bitta savatda 50 tadan ko'p qator bo'lsa u sotuv
+    // emas, import — u boshqa oqimdan (mahsulot importi) o'tadi.
+    .max(50, "Bitta sotuvda 50 tadan ko'p mahsulot bo'lmaydi"),
+  tolovTuri: z.enum(["naqd", "qarz"]),
+  contactId: z.string().min(1).optional().nullable(),
+  mijozNomi: z.string().max(100).optional().nullable(),
+  mijozTel: z.string().max(50).optional().nullable(),
+  accountId: z.string().min(1).optional().nullable(),
+  sana: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Sana noto'g'ri formatda").optional().nullable(),
+});
+
 /** Sotuvni bekor qilish — sabab MAJBURIY (audit uchun). */
 export const cancelSaleSchema = z.object({
   sabab: z.string().trim().min(3, "Bekor qilish sababini yozing").max(300),
@@ -115,6 +143,7 @@ export type UpdateProductInput = z.infer<typeof updateProductSchema>;
 export type BulkProductsInput = z.infer<typeof bulkProductsSchema>;
 export type StockEntryInput = z.infer<typeof stockEntrySchema>;
 export type CreateSaleInput = z.infer<typeof createSaleSchema>;
+export type CreateSaleKopInput = z.infer<typeof createSaleKopSchema>;
 export type DebtPaymentInput = z.infer<typeof debtPaymentSchema>;
 export type CreateAvtoInput = z.infer<typeof createAvtoSchema>;
 export type CreateProductExpenseInput = z.infer<typeof createProductExpenseSchema>;

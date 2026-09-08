@@ -52,7 +52,11 @@ export interface QarzFiltr {
 }
 
 function qarzWhere(businessId: string, filtr: QarzFiltr): Prisma.DebtWhereInput {
-  const where: Prisma.DebtWhereInput = { businessId };
+  // O'CHIRILGAN QARZ RO'YXATDA KO'RINMAYDI (direktor o'chirgan — `deletedAt`).
+  // Pul JAMLARIGA u allaqachon kirmaydi: o'chirish `status = "CANCELLED"`
+  // ham qo'yadi va jamlar `isYopilgan: false` bo'yicha hisoblanadi
+  // (lib/services/qarzTuzatish.ts). Bu yerdagi filtr faqat KO'RINISH uchun.
+  const where: Prisma.DebtWhereInput = { businessId, deletedAt: null };
   if (filtr.turi === "olinadigan" || filtr.turi === "beriladigan") where.turi = filtr.turi;
   if (filtr.status && filtr.status !== "HAMMASI") where.status = filtr.status;
   if (filtr.muddatOtgan) {
@@ -158,7 +162,7 @@ export async function getQarzTafsilot(
   debtId: string
 ): Promise<QarzTafsilotDTO | null> {
   const d = await prisma.debt.findFirst({
-    where: { id: debtId, businessId },
+    where: { id: debtId, businessId, deletedAt: null },
     include: {
       product: { select: { nomi: true, avtoRaqam: true } },
       category: { select: { nomi: true } },
@@ -392,7 +396,7 @@ export async function listQarzdorlar(
   businessId: string,
   filtr: QarzdorFiltr = {}
 ): Promise<QarzdorDTO[]> {
-  const where: Prisma.DebtWhereInput = { businessId, isYopilgan: false };
+  const where: Prisma.DebtWhereInput = { businessId, isYopilgan: false, deletedAt: null };
   if (filtr.turi === "olinadigan" || filtr.turi === "beriladigan") where.turi = filtr.turi;
   if (filtr.q) {
     const rejim = qidiruvRejimi();
@@ -619,7 +623,7 @@ export async function getQarzdorTafsilot(
   const ismKalit = kalit.startsWith("ism:") ? kalit.slice("ism:".length) : null;
   if (!contactId && !ismKalit) return null;
 
-  const where: Prisma.DebtWhereInput = { businessId, turi };
+  const where: Prisma.DebtWhereInput = { businessId, turi, deletedAt: null };
   if (contactId) {
     where.contactId = contactId;
   } else {
@@ -969,6 +973,7 @@ export async function qarzMijozlariTakror(
     prisma.debt.findMany({
       where: {
         businessId,
+        deletedAt: null,
         turi: "olinadigan",
         contactId: null,
         ...izla([
