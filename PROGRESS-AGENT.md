@@ -6358,3 +6358,218 @@ GitHub'da "mergeable" degani "sinovdan o'tgan" degani emas.
 **Smoke (faqat o'qish, production'ga hech narsa yozilmadi):**
 `/api/health` 200 · `/api/moliya` 401 · `/api/moliya/shaxslar` 401 ·
 `/app/moliya` 200 (login) · `/app/tranzaksiyalar` 200 (login).
+
+---
+
+# YETTI VAZIFA: moliya sabablari, CRM qarz ustuni, kassa, sotuv savati, qarz huquqi va auditi (2026-09-08)
+
+## 1. Ta'minotchi sabablari qisqartirildi
+
+`lib/moliya/sabablar.ts` ga QAT'IY TOMON tushunchasi qo'shildi: ta'minotchi
+tanlanganda ro'yxatda faqat "Ta'minotchiga pul berish" va "Ta'minotchi
+qarzini to'lash" qoladi; umumiy variantlar (Xarajat, Qarz berdik, Boshqa
+chiqim) va direktor qo'shgan erkin kategoriyalar YASHIRILADI. Boshqa
+tomonlarda (mijoz, xodim, filial) umumiylar ATAYLAB qoldi — u yerda ular
+haqiqatan uchraydi.
+
+Sababning nomi "Ta'minotchiga to'lov" → "Ta'minotchiga pul berish".
+Migratsiya (`20260908090100`) mavjud kategoriyani QAYTA NOMLAYDI, yangisini
+yaratmaydi: `Category.id` saqlanadi, ya'ni barcha tranzaksiyalar o'sha
+qatorga bog'langanicha qoladi va hisobot ikkiga bo'linib ketmaydi. Unique
+cheklovga urilmasligi uchun yangi nom shu biznesda allaqachon bo'lsa qator
+tegilmaydi.
+
+## 2. CRM doskasida "Qarz" ustuni
+
+"Yutildi"dan KEYIN turadi. Zakaz BIR VAQTDA BITTA ustunda: ochiq qarzi bor
+yutilgan zakaz "Yutildi"dan chiqib "Qarz"ga o'tadi, qarz yopilgach o'zi
+qaytadi. Aks holda ustun sarlavhalaridagi "N ta • summa" ikki marta
+sanalardi.
+
+QARZDORLIK MANBAI — `Deal.summa − tolangan` EMAS, HAQIQIY `Debt` YOZUVI
+(`isYopilgan` + `status`). Sabab: zakaz yutilgandan KEYIN qilingan to'lovlar
+qarz yozuviga tushadi, zakaz maydonlariga emas — shu bois faqat qarz
+qoldig'i to'g'ri javob beradi. Yangi `Deal.holat` qiymati QO'SHILMADI:
+ustun hisoblanadi, eski yozuvlar tegilmadi. "Qarz" ustuniga qo'lda
+ko'chirib bo'lmaydi (ikki qavat to'siq: `CrmClient` va `useZakazAmallari`).
+
+## 3. TUZATILGAN XATO — xodim o'z kassasini ocha olmasdi
+
+`/app/kassa/[id]` sahifa boshida `kassa.korish` huquqini talab qilardi.
+SOTUVCHIDA (SELLER) bu huquq YO'Q (`lib/permissions/katalog.ts`), shuning
+uchun u kassadagi summani ko'rardi-yu, ustiga bosganda "Kirim/Chiqim"ga
+uloqtirilardi.
+
+Qoida endi `XodimKassaKartasi` va "Mening kassam" bilan BIR XIL: xodimning
+O'Z kassasi undan yopilmaydi (u kun oxirida shu pulni topshiradi),
+`kassa.korish` esa BOSHQA kassalar uchun talab bo'lib qoladi — maxfiylik
+chegarasi joyida. Orqaga havola ham huquqqa moslashtirildi.
+
+## 4. Sotuv ro'yxati qoldiq bo'yicha
+
+`lib/mahsulotTartib.ts` (sof funksiya) — qoldig'i ko'pi tepada, tugagani
+eng pastda. Ayni qoida SQL'da (`orderBy: miqdor desc`) ham, brauzerdagi
+qidiruvda ham qo'llanadi, shunda qidirgandan keyin ro'yxat sakramaydi.
+Tugagan mahsulotda "Qolmadi" belgisi qoladi va uni tanlab bo'lmaydi.
+
+`ProductKassirDTO` ga `qoldiq` qo'shildi: savatda har qatorga miqdor
+kiritilgani uchun brauzer "nechtagacha mumkin"ni bilishi shart. Server
+tekshiruvi (atomik `miqdor: { gte }`) o'z o'rnida qoldi.
+
+## 5. Sotuvda savat (ko'p mahsulot)
+
+`createSale` ichi `bittaSotuvTx` ga ajratildi, ustiga `createSaleKop`
+qo'shildi: savat BITTA `runBusinessTx` da yoziladi — yo hammasi, yo hech
+nimasi. Bitta mahsulotli eski yo'l (bot, POS, testlar) o'zgarmagan imzo
+bilan shu yangi yo'ldan o'tadi, ya'ni ikkinchi buxgalteriya yo'q.
+
+MIJOZ SAVAT BO'YICHA BIR MARTA aniqlanadi (`sotuvKontekstiTx`) — har qator
+uchun qayta aniqlansa bitta mijozdan bir necha kartochka paydo bo'lish
+xavfi bor edi. Har qator o'z `Sale` va (qarzga sotuvda) o'z `Debt` yozuvini
+qoldiradi: model "bir sotuv = bir qarz" deb qurilgan (`Debt.saleId` UNIQUE),
+qatorlar esa baribir bitta qarzdor ostida jamlanadi va to'lov ular bo'ylab
+FIFO taqsimlanadi.
+
+Takror tanlangan mahsulot yangi qator ochmaydi — miqdor qo'shiladi
+(`savatniBirlashtir`, brauzer va server AYNI qoidadan).
+
+## 6-7. Qarzni tuzatish/o'chirish va audit
+
+IKKI QAVAT HIMOYA, ikkalasi ham SERVERDA: `requireManager` (OWNER/ADMIN) +
+yangi `qarz.tahrir` granular huquqi (kassir va sotuvchining standart
+to'plamida ATAYLAB yo'q). Interfeysdagi tugmani yashirish himoya emas.
+
+O'CHIRISH YUMSHOQ (`Debt.deletedAt` + `deletedBy`, migratsiya
+`20260908090000`). Ayni paytda `status = CANCELLED` ham qo'yiladi — shu
+bois pul jamlarini hisoblaydigan MAVJUD 72 ta so'rov (ular bekor
+qilinganni allaqachon chiqarib tashlaydi) o'zgarishsiz to'g'ri ishlaydi va
+bironta hisobot jimgina yolg'on bo'lib qolmaydi. `deletedAt` filtri faqat
+KO'RINISH so'rovlariga qo'shildi (`lib/queries/qarz.ts` da 5 joy).
+
+TO'LOVGA TEGILMAYDI: summani to'langan qismdan past qilib bo'lmaydi va
+to'lovi bor qarz o'chirilmaydi — avval to'lov Moliya bo'limidan bekor
+qilinadi. Aks holda kassadagi kirim "havoda" qolardi.
+
+AUDIT — mavjud `AuditLog` jadvali (yangi jurnal ochilmadi). `auditYoz` ga
+`sabab` qo'shildi: ustun sxemada bor edi, lekin hech qayerdan
+to'ldirilmasdi. O'chirilgan qarzning yozuvi yo'qolmaydi — `AuditLog` da
+qarzga FK YO'Q, mijoz nomi va summa esa `before` suratida saqlanadi.
+Direktorga alohida sahifa: `/app/qarzlar/audit`.
+
+## Yo'l-yo'lakay tuzatilgan xato
+
+`tests/deploy-mashq.test.ts` "aynan bitta migratsiya qo'llanadi" deb
+qotirilgan edi — har yangi migratsiya qo'shilganda mashq sababsiz
+qizarardi. Endi kutayotganlar soni chegaradan HISOBLANADI; mashqning
+maqsadi (kutayotganlar qo'llanadi, qo'llanganlar qayta ishlamaydi)
+o'zgarmadi.
+
+## Testlar
+
+`npm run test:vazifalar` (17 ta) — sabab ro'yxati, "Qarz" ustuni qoidasi,
+mahsulot tartibi (sof funksiya + baza), savat birlashtirish, ko'p
+mahsulotli sotuvning ATOMIKLIGI, huquq katalogi va `requirePermission`,
+summa tuzatish chegarasi, o'chirish + audit tarixi.
+
+Regressiya: 800+ test (ikki bo'lakda) — hammasi yashil. `npm run build` va
+`tsc --noEmit` toza.
+
+## Qayta tekshiruv va tuzatishlar (2026-09-08, ikkinchi o'tish)
+
+**1. TA'MINOTCHIDA BITTA VARIANT.** `QATIY_SHAXSLAR` endi ro'yxat emas,
+XARITA: tomon → ruxsat etilgan sabab kodlari. Ta'minotchida faqat
+`taminotchi-tolov` ("Ta'minotchiga pul berish") qoladi; "Ta'minotchi
+qarzini to'lash" ham yashirildi.
+
+Sabab katalogdan O'CHIRILMADI (`sababTop` uni hali ham topadi): eski
+yozuvlar tuzatilganda ular o'z sababini yo'qotmasligi kerak. `PulModal`
+endi ro'yxatda yo'q joriy sababni "(avvalgi)" belgisi bilan qo'shib
+qo'yadi — aks holda tuzatish oynasida Select bo'sh ko'rinardi.
+
+OQIBAT (bilib turib): ta'minotchi qarzini Moliya formasidan yopib
+bo'lmaydi — bu amal QARZLAR bo'limida qoladi, u yerda qaysi qarzga qancha
+tushayotgani ko'rinib turadi.
+
+**2. DIREKTOR = FAQAT `OWNER`.** Yangi `isDirektor` (lib/auth/roles.ts) —
+`isManager` dan ataylab ajratilgan, chunki boshqa amallar administratorda
+qoladi. Uch joyda qo'llandi: API (`/api/debts/[id]` PATCH/DELETE), audit
+sahifasi va `qarzlar` sahifasidagi tugmalar. Nav yozuvi ham `["OWNER"]`.
+
+Huquq katalogida `FAQAT_DIREKTOR` to'plami paydo bo'ldi: u
+`ROL_DEFAULT_HUQUQLAR.ADMIN` dan chiqarib tashlanadi, ya'ni administrator
+`qarz.tahrir` ni STANDART holatda olmaydi. Rol tekshiruvi va huquq
+tekshiruvi ikkalasi ham serverda, birga ishlaydi.
+
+**3. SAVAT — INTERFEYS DARAJASIDA TEKSHIRILDI.** Ikkita haqiqiy nuqson
+topildi va tuzatildi:
+
+- **Holat mutatsiyasi.** `qoshish()` mavjud qatorni JOYIDA o'zgartirardi
+  (`bor.miqdor += ...`). React StrictMode yangilagichni ikki marta
+  chaqiradi va miqdor ikki barobar oshib ketardi. Endi har qator yangi
+  obyekt bo'lib quriladi (`Map` orqali).
+- **"Ko'rib chiqish" qadami yo'q edi.** Oyna faqat sonni ko'rsatardi.
+  Endi tanlanganlar pastda alohida blokda ro'yxat bo'lib turadi va shu
+  yerdan olib tashlanadi.
+
+Mobil uchun: qator `flex-wrap` (375px da stepper pastga tushadi), tugmalar
+44px, "Savatga qo'shish" pastda yopishqoq. Savat qatorida miqdorni
+tozalab qayta yozish mumkin (ilgari 1 ga qaytib ketardi).
+
+Yangi brauzer to'plami — `npm run test:sotuv-savat` (10 ta), 390×844
+telefon ekranida: bitta oynada uch mahsulot + miqdor + ko'rib chiqish +
+bitta bosishda savat; takror tanlov birlashishi; qoldiq chegarasi;
+tugagan mahsulot; savatning bitta so'rovda sotilishi (baza tekshiruvi
+bilan); ta'minotchi sababi; administratorning audit sahifasiga va API'ga
+kira olmasligi (403).
+
+## Ikki RED suita topildi (ikkalasi ham main'da edi)
+
+**`test:modules`** — nav ro'yxatlari qotirilgan. `/app/moliya` (mening
+oldingi o'tishim) va `/app/kassa-topshirish` (boshqa agent) qo'shilgach
+suita qizargan, lekin ikkalamiz ham uni yugurtirmagan edik. TUZATILDI.
+
+**XULOSA (o'zim uchun):** nav registry'ga tegilgan har safar
+`test:modules` majburiy. Kengroq qoida — "o'zgargan MODUL bo'yicha barcha
+suitalar" degani faqat modul kodi emas, o'sha modulning REGISTRY yozuvi
+ham.
+
+**`test:cron`** — `vercel.json` da 5 ta cron, test 4 tasini kutadi
+(`/api/cron/davomat` HR modulida qo'shilgan, `ee224d8`). MENING ISHIMGA
+ALOQADOR EMAS va tegilmadi — foydalanuvchiga xabar berildi.
+
+## `test:cron` qotirilgan ro'yxatdan qoidalarga o'tkazildi (2026-09-08)
+
+`/api/cron/davomat` QONUNIY: route, ishi (`davomatIshi`) va `vercel.json`
+yozuvi bitta commitda kelgan (`ee224d8`, HR moduli). Faqat test yangilanmay
+qolgan edi.
+
+Sonni 4 dan 5 ga o'zgartirish muammoni QAYTARARDI: keyingi qonuniy cron
+yana shu testni yiqitardi. Shuning uchun test RO'YXATNI emas, QOIDALARNI
+tekshiradigan qilib qayta yozildi:
+
+| Tekshiruv | Nimani ushlaydi |
+| --- | --- |
+| Majburiy cronlar mavjud | backup/billing/reports/tasks tushib qolsa |
+| Yozuv shakli va jadval | `/api/cron/<nom>` bo'lmasa, jadval buzuq bo'lsa |
+| Yo'l takrorlanmaydi | bitta cron ikki marta yozilsa |
+| Jadval takrorlanmaydi | ikki cron bir vaqtda ishga tushsa |
+| Route ro'yxatga olingan | route yozilib, `vercel.json` ga qo'shilmasa |
+
+Jadval tekshiruvi qo'lda yozilgan (loyihada cron parser yo'q va bittasini
+shu uchun qo'shish ortiqcha): 5 maydon, har maydon o'z chegarasida,
+qadam noldan katta, oy/hafta kuni nom bilan ham yozilishi mumkin. Uning
+O'ZI ham sinaladi (`cron jadvali tekshiruvining o'zi ishlaydi`) — aks
+holda hech narsani ushlamaydigan tekshiruv yolg'on tinchlik berardi.
+
+`ROYXATSIZ_CRONLAR` — ataylab `vercel.json` dan tashqaridagi route'lar
+ro'yxati. Hozircha bitta: `monthly-report` (eski yagona cron, faqat qo'lda
+chaqiriladi). Yangi route shu ro'yxatga tushsa — bu ONGLI qaror bo'ladi.
+
+MUTATSIYA BILAN TEKSHIRILDI (vercel.json vaqtincha buzilib, keyin
+tiklandi): majburiy cron olib tashlansa, jadval buzuq bo'lsa, maydon
+yetishmasa, yo'l yoki jadval takrorlansa, route ro'yxatga olinmasa — test
+YIQILADI. QONUNIY yangi cron (route + guard + vercel.json yozuvi)
+qo'shilganda esa 15/15 yashil qoladi.
+
+PRODUKSIYA KONFIGURATSIYASI TEGILMADI: `vercel.json` o'zgarmagan, faqat
+`tests/cron.test.ts`.

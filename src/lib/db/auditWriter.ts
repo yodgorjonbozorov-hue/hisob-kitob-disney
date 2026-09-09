@@ -55,6 +55,12 @@ export interface AuditYozuv {
   entityId: string;
   before?: unknown;
   after?: unknown;
+  /**
+   * XAVFLI AMAL SABABI — foydalanuvchi kiritgan izoh (qarzni tuzatish,
+   * o'chirish, superadmin amallari). Ustun sxemada bor edi, lekin hech
+   * qayerdan to'ldirilmasdi.
+   */
+  sabab?: string | null;
 }
 
 /**
@@ -76,6 +82,7 @@ export async function auditYoz(yozuv: AuditYozuv): Promise<void> {
         before: json(yozuv.before),
         after: json(yozuv.after),
         ip: aktor?.ip ?? null,
+        sabab: yozuv.sabab?.trim() || null,
       },
     });
   } catch (error) {

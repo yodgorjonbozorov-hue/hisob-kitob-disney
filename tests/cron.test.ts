@@ -18,7 +18,7 @@ process.env.DATABASE_URL = "file:./prisma/test-cron.db";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { rmSync, readFileSync, existsSync } from "node:fs";
+import { rmSync, readFileSync, existsSync, readdirSync } from "node:fs";
 
 let cronGuard: any;
 let tenantlarBoylab: any;
@@ -138,20 +138,163 @@ test("hamma tenant yiqilsa ham funksiya xato otmaydi", async () => {
 });
 
 // ---------- vercel.json ----------
+//
+// TEST QOTIRILGAN RO'YXATNI TEKSHIRMAYDI.
+//
+// Ilgari bu yerda "aynan to'rtta cron" deb qotirilgan ro'yxat turardi.
+// Natijada HR moduli qonuniy `/api/cron/davomat` ni qo'shganda (route,
+// ishi va vercel.json yozuvi bitta commitda — `ee224d8`) suita sababsiz
+// qizarib qoldi va shu holda qolib ketdi.
+//
+// Endi tekshiriladigan narsa RO'YXAT emas, QOIDALAR:
+//   · majburiy cronlar joyidami (yangisini qo'shish buzmaydi);
+//   · har yozuvning shakli, jadvali va yo'li to'g'rimi;
+//   · takrorlanish yo'qmi;
+//   · cron route'i vercel.json ga yozilmay qolmaganmi.
+// Shunda yangi cron qo'shish testni buzmaydi, XATO qo'shish esa buzadi.
 
-test("vercel.json da to'rt alohida cron ro'yxatga olingan", () => {
+/** Bu ishlar bo'lmasa mahsulot jimgina buziladi — ular HAR DOIM bo'lishi shart. */
+const MAJBURIY_CRONLAR = [
+  "/api/cron/backup",
+  "/api/cron/billing",
+  "/api/cron/reports",
+  "/api/cron/tasks",
+];
+
+/**
+ * ATAYLAB `vercel.json` DAN TASHQARIDAGI cron route'lari.
+ *
+ * `monthly-report` — eski yagona cron: u rejalashtiruvchidan emas, faqat
+ * qo'lda yoki tashqi chaqiruvdan ishlatiladi (route faylining o'zida
+ * izohlangan). Yangi route shu ro'yxatga qo'shilsa — bu ONGLI qaror
+ * bo'lishi kerak, unutish emas.
+ */
+const ROYXATSIZ_CRONLAR = new Set(["monthly-report"]);
+
+interface CronYozuv {
+  path: string;
+  schedule: string;
+}
+
+function cronlar(): CronYozuv[] {
   const conf = JSON.parse(readFileSync("vercel.json", "utf8"));
-  const yollar = conf.crons.map((c: any) => c.path).sort();
-  assert.deepEqual(yollar, [
-    "/api/cron/backup",
-    "/api/cron/billing",
-    "/api/cron/reports",
-    "/api/cron/tasks",
-  ]);
+  assert.ok(Array.isArray(conf.crons), "vercel.json da `crons` massivi bo'lishi kerak");
+  return conf.crons as CronYozuv[];
+}
 
-  // Vaqtlar ustma-ust tushmasin — bittasi cho'zilsa keyingisiga xalaqit bermaydi.
-  const soatlar = conf.crons.map((c: any) => c.schedule);
-  assert.equal(new Set(soatlar).size, 4, "har cron o'z vaqtida ishlashi kerak");
+/**
+ * CRON JADVALINI TEKSHIRADI (5 maydonli standart sintaksis).
+ *
+ * Nega qo'lda: loyihada cron parser kutubxonasi yo'q va bittasini shu
+ * tekshiruv uchun qo'shish ortiqcha. Maqsad — "0 3 * * *" kabi to'g'ri
+ * yozuvni o'tkazish va quyidagilarni ushlash: maydon yetishmagan
+ * ("0 3 * *"), chegaradan tashqari qiymat ("0 99 * * *") va nol qadam
+ * (yulduzcha bilan yozilgan qadamning noli).
+ *
+ * Xato bo'lsa SABABNI qaytaradi, aks holda `null`.
+ */
+function jadvalXatosi(schedule: string): string | null {
+  if (typeof schedule !== "string" || !schedule.trim()) return "jadval bo'sh";
+  const maydonlar = schedule.trim().split(/\s+/);
+  if (maydonlar.length !== 5) {
+    return `5 ta maydon kutilgan, ${maydonlar.length} ta berilgan`;
+  }
+
+  const chegara: [number, number][] = [
+    [0, 59], // daqiqa
+    [0, 23], // soat
+    [1, 31], // oyning kuni
+    [1, 12], // oy
+    [0, 7], // hafta kuni (0 va 7 — yakshanba)
+  ];
+  const nomlar = ["daqiqa", "soat", "oy kuni", "oy", "hafta kuni"];
+  // Oy va hafta kuni nom bilan ham yozilishi mumkin (JAN, MON...).
+  const NOMLI = /^[A-Z]{3}$/i;
+
+  for (let i = 0; i < 5; i++) {
+    const [min, max] = chegara[i];
+    for (const bolak of maydonlar[i].split(",")) {
+      if (!bolak) return `${nomlar[i]}: bo'sh bo'lak`;
+      const [oraliq, qadamMatn] = bolak.split("/");
+      if (bolak.includes("/")) {
+        const qadam = Number(qadamMatn);
+        if (!Number.isInteger(qadam) || qadam <= 0) {
+          return `${nomlar[i]}: qadam noto'g'ri ("${bolak}")`;
+        }
+      }
+      if (oraliq === "*") continue;
+      for (const son of oraliq.split("-")) {
+        if (NOMLI.test(son) && i >= 3) continue;
+        const n = Number(son);
+        if (!Number.isInteger(n) || n < min || n > max) {
+          return `${nomlar[i]}: "${son}" ${min}-${max} oralig'idan tashqarida`;
+        }
+      }
+    }
+  }
+  return null;
+}
+
+test("majburiy cronlar vercel.json da ro'yxatga olingan", () => {
+  const yollar = new Set(cronlar().map((c) => c.path));
+  for (const kerak of MAJBURIY_CRONLAR) {
+    assert.ok(yollar.has(kerak), `${kerak} vercel.json dan tushib qolgan`);
+  }
+});
+
+test("har cron yozuvining shakli to'g'ri", () => {
+  for (const c of cronlar()) {
+    assert.match(
+      c.path,
+      /^\/api\/cron\/[a-z0-9-]+$/,
+      `cron yo'li "/api/cron/<nom>" ko'rinishida bo'lishi kerak: ${c.path}`
+    );
+    const xato = jadvalXatosi(c.schedule);
+    assert.equal(xato, null, `${c.path} jadvali noto'g'ri ("${c.schedule}"): ${xato}`);
+  }
+});
+
+test("cron jadvali tekshiruvining o'zi ishlaydi", () => {
+  // Tekshiruv haqiqiy xatoni ushlashiga ishonch: soxta jadvallar RAD etilsin.
+  assert.equal(jadvalXatosi("0 3 * * *"), null);
+  assert.equal(jadvalXatosi("*/15 * * * *"), null);
+  assert.equal(jadvalXatosi("0 0 1 * MON"), null, "nom bilan yozilgan hafta kuni");
+  assert.ok(jadvalXatosi("0 3 * *"), "maydon yetishmasa xato");
+  assert.ok(jadvalXatosi("0 99 * * *"), "soat chegaradan tashqarida");
+  assert.ok(jadvalXatosi("0 3 0 * *"), "oyning 0-kuni yo'q");
+  assert.ok(jadvalXatosi("*/0 * * * *"), "qadam 0 bo'lmaydi");
+  assert.ok(jadvalXatosi(""), "bo'sh jadval");
+});
+
+test("cron yo'llari takrorlanmaydi", () => {
+  const yollar = cronlar().map((c) => c.path);
+  const takror = yollar.filter((y, i) => yollar.indexOf(y) !== i);
+  assert.deepEqual(takror, [], `takrorlangan cron yo'li: ${takror.join(", ")}`);
+});
+
+test("har cron o'z vaqtida ishlaydi — jadvallar ustma-ust tushmaydi", () => {
+  // Bittasi cho'zilib ketsa keyingisiga xalaqit bermasligi kerak.
+  const jadvallar = cronlar().map((c) => c.schedule);
+  const takror = jadvallar.filter((j, i) => jadvallar.indexOf(j) !== i);
+  assert.deepEqual(takror, [], `ikki cron bir vaqtda: ${takror.join(", ")}`);
+});
+
+test("cron route'i vercel.json ga yozilmay qolmagan", () => {
+  // ENG MUHIM TEKSHIRUV: route yozilib, rejalashtiruvchiga qo'shilmasa u
+  // hech qachon ishlamaydi va buni hech kim sezmaydi.
+  const royxat = new Set(cronlar().map((c) => c.path));
+  const papkalar = readdirSync("src/app/api/cron", { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name);
+
+  for (const nom of papkalar) {
+    if (ROYXATSIZ_CRONLAR.has(nom)) continue;
+    assert.ok(
+      royxat.has(`/api/cron/${nom}`),
+      `src/app/api/cron/${nom} route'i bor, lekin vercel.json da yo'q — ` +
+        `qo'shing yoki ataylab bo'lsa ROYXATSIZ_CRONLAR ga yozing`
+    );
+  }
 });
 
 test("har cron yo'li uchun route fayli mavjud", () => {

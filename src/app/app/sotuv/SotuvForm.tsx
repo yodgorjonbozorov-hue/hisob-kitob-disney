@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useMemo, FormEvent } from "react";
+import { useState, FormEvent } from "react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Money } from "@/components/ui/Money";
 import { Select } from "@/components/ui/Select";
-import { formatSom, formatSomLabel, parseSomInput } from "@/lib/format";
+import { formatSomLabel } from "@/lib/format";
 import { isAvto, omborMatn } from "@/lib/biznesTuri";
 import type { ProductKassirDTO, SaleDTO } from "@/lib/queries/inventory";
 import { MijozTanlash, type MijozTanlov } from "@/components/qarz/MijozTanlash";
@@ -13,16 +12,25 @@ import type { AccountDTO } from "@/lib/queries/accounts";
 import { todayDateOnlyString } from "@/lib/date";
 import { INPUT_CLASS, LABEL_CLASS } from "@/components/ui/fieldStyles";
 import { TolovTuriTanlov } from "./TolovTuriTanlov";
+import { MahsulotTanlashModal } from "./MahsulotTanlashModal";
+import { SavatRoyxat, type SavatQatori } from "./SavatRoyxat";
 
 /**
  * Yangi sotuv formasi. Narx siyosati:
- * - Mahsulot tanlanganda standart sotuv narxi maydonga to'ldiriladi.
- * - Savdolashib boshqa narxga kelishilgan bo'lsa — kassir shu maydonda
+ * - Mahsulot tanlanganda standart sotuv narxi qatorga to'ldiriladi.
+ * - Savdolashib boshqa narxga kelishilgan bo'lsa — kassir shu qatorda
  *   o'zgartiradi; sotuv haqiqiy kelishilgan narxda yoziladi.
  *
- * MIJOZ endi har sotuvda tanlanadi (tepada): optom biznesda MAJBURIY,
+ * MIJOZ har sotuvda tanlanadi (tepada): optom biznesda MAJBURIY,
  * chakanada ixtiyoriy, qarzga sotuvda har doim majburiy. Server ham xuddi
  * shu qoidani tekshiradi (lib/services/inventory.ts).
+ *
+ * ═══ SAVAT ═══
+ * Mijoz tanlangach BIR OYNADA bir necha mahsulot tanlanadi va hammasi
+ * savatga tushadi (`MahsulotTanlashModal`). Ilgari har mahsulot uchun
+ * forma qaytadan to'ldirilardi — 6 ta tovar sotish 6 ta alohida sotuv
+ * demakdi. Endi savat BITTA atomik so'rovda yoziladi: yo hammasi, yo
+ * hech nimasi (lib/services/inventory.ts → `createSaleKop`).
  */
 export function SotuvForm({
   products,
@@ -37,14 +45,13 @@ export function SotuvForm({
   kassalar: AccountDTO[];
   /** Optom biznes — mijoz naqd sotuvda ham majburiy. */
   optom?: boolean;
-  onSold: (sale: SaleDTO) => void;
+  onSold: (sales: SaleDTO[]) => void;
 }) {
   const avto = isAvto(biznesTuri);
   const M = omborMatn(biznesTuri);
-  const [productId, setProductId] = useState("");
-  const [miqdor, setMiqdor] = useState("1");
+  const [savat, setSavat] = useState<SavatQatori[]>([]);
+  const [tanlovOchiq, setTanlovOchiq] = useState(false);
   const [tolovTuri, setTolovTuri] = useState<"naqd" | "qarz">("naqd");
-  const [narx, setNarx] = useState("");
   const [accountId, setAccountId] = useState("");
   const [mijoz, setMijoz] = useState<MijozTanlov>({ contactId: null, ism: "", tel: "" });
   const [error, setError] = useState<string | null>(null);
@@ -52,33 +59,65 @@ export function SotuvForm({
   const [loading, setLoading] = useState(false);
   const [sana, setSana] = useState(todayDateOnlyString());
 
-  const selected = useMemo(() => products.find((p) => p.id === productId), [products, productId]);
-  const qty = avto ? 1 : parseSomInput(miqdor);
-  const kelishilgan = parseSomInput(narx);
-  const birlikNarx = kelishilgan > 0 ? kelishilgan : (selected?.sotuvNarx ?? 0);
-  const jami = birlikNarx * qty;
-  const farq = selected && selected.sotuvNarx > 0 && kelishilgan > 0 ? kelishilgan - selected.sotuvNarx : 0;
+  const jami = savat.reduce((s, q) => s + q.miqdor * q.narx, 0);
   const mijozMajburiy = tolovTuri === "qarz" || optom;
   const mijozBor = Boolean(mijoz.contactId || mijoz.ism.trim());
+  const savatda = Object.fromEntries(savat.map((q) => [q.productId, q.miqdor]));
 
-  function mahsulotTanlandi(id: string) {
-    setProductId(id);
-    const p = products.find((x) => x.id === id);
-    setNarx(p && p.sotuvNarx > 0 ? formatSom(p.sotuvNarx) : "");
+  /**
+   * TANLANGANLARNI SAVATGA QO'SHISH.
+   *
+   * Takror tanlangan mahsulot yangi qator ochmaydi — mavjud qatorning
+   * miqdori oshadi va qoldiq bilan cheklanadi (`createSaleKop` serverda
+   * ayni birlashtirishni takrorlaydi).
+   */
+  function qoshish(tanlov: { productId: string; miqdor: number }[]) {
+    setError(null);
+    setSavat((oldingi) => {
+      // HOLAT O'ZGARTIRILMAYDI, QAYTA QURILADI: mavjud qatorni joyida
+      // (`bor.miqdor += ...`) o'zgartirish React holatini buzadi — StrictMode
+      // yangilagichni ikki marta chaqiradi va miqdor ikki barobar oshib
+      // ketardi. Shuning uchun har qator YANGI obyekt bo'lib chiqadi.
+      const xarita = new Map(oldingi.map((q) => [q.productId, { ...q }]));
+      for (const t of tanlov) {
+        const p = products.find((x) => x.id === t.productId);
+        if (!p) continue;
+        const bor = xarita.get(t.productId);
+        if (bor) {
+          xarita.set(t.productId, {
+            ...bor,
+            miqdor: Math.min(p.qoldiq, bor.miqdor + t.miqdor),
+          });
+        } else {
+          xarita.set(p.id, {
+            productId: p.id,
+            nomi: p.nomi,
+            birlik: p.birlik,
+            qoldiq: p.qoldiq,
+            miqdor: Math.min(p.qoldiq, t.miqdor),
+            narx: p.sotuvNarx,
+            standartNarx: p.sotuvNarx,
+          });
+        }
+      }
+      return [...xarita.values()];
+    });
+  }
+
+  function qatorniOzgart(productId: string, qism: Partial<SavatQatori>) {
+    setSavat((s) => s.map((q) => (q.productId === productId ? { ...q, ...qism } : q)));
   }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setOk(null);
-    if (!selected) return setError(avto ? "Mashinani tanlang" : "Mahsulot tanlang");
-    if (!selected.mavjud)
-      return setError(avto ? "Bu mashina allaqachon sotilgan" : "Bu mahsulot omborda qolmadi");
-    if (qty <= 0) return setError("Miqdorni kiriting");
-    if (birlikNarx <= 0)
-      return setError(
-        avto ? "Kelishilgan narxni kiriting" : "Narxni kiriting — bu mahsulotga standart narx qo'yilmagan"
-      );
+    if (savat.length === 0) return setError(avto ? "Mashinani tanlang" : "Mahsulot tanlang");
+    if (savat.some((q) => q.miqdor <= 0)) return setError("Miqdorni kiriting");
+    const narxsiz = savat.find((q) => q.narx <= 0);
+    if (narxsiz) return setError(`Narxni kiriting: ${narxsiz.nomi}`);
+    if (savat.some((q) => q.miqdor > q.qoldiq))
+      return setError("Miqdor ombordagi qoldiqdan ko'p bo'lmasligi kerak");
     if (mijozMajburiy && !mijozBor)
       return setError(
         tolovTuri === "qarz"
@@ -91,14 +130,15 @@ export function SotuvForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          productId: selected.id,
-          miqdor: qty,
+          qatorlar: savat.map((q) => ({
+            productId: q.productId,
+            miqdor: q.miqdor,
+            narx: q.narx > 0 ? q.narx : undefined,
+          })),
           tolovTuri,
-          // Mijoz endi naqd sotuvda ham yuboriladi (tanlangan bo'lsa).
           contactId: mijozBor ? (mijoz.contactId ?? undefined) : undefined,
           mijozNomi: mijozBor ? mijoz.ism.trim() || undefined : undefined,
           mijozTel: mijozBor ? mijoz.tel.trim() || undefined : undefined,
-          narx: kelishilgan > 0 ? kelishilgan : undefined,
           accountId: tolovTuri === "naqd" && accountId ? accountId : undefined,
           sana,
         }),
@@ -110,25 +150,26 @@ export function SotuvForm({
       }
       setOk(
         tolovTuri === "naqd"
-          ? `Sotildi: ${selected.nomi}${avto ? "" : ` × ${qty}`} = ${formatSomLabel(jami)}`
+          ? `Sotildi: ${savat.length} ta mahsulot = ${formatSomLabel(jami)}`
           : `Qarzga sotildi: ${mijoz.ism} — ${formatSomLabel(jami)}`
       );
-      onSold({
-        id: data.id ?? Math.random().toString(),
-        productNomi: selected.nomi,
-        miqdor: qty,
-        jamiSumma: jami,
-        tolovTuri,
-        mijozNomi: mijozBor ? mijoz.ism : null,
-        sana: new Date(`${sana}T00:00:00.000Z`).toISOString(),
-        vaqt: new Date().toISOString(),
-        bekorQilingan: false,
-        bekorSabab: null,
-      });
-      setMiqdor("1");
-      setNarx("");
+      const vaqt = new Date().toISOString();
+      onSold(
+        savat.map((q, i) => ({
+          id: data.sotuvlar?.[i]?.id ?? `${Math.random()}`,
+          productNomi: q.nomi,
+          miqdor: q.miqdor,
+          jamiSumma: q.miqdor * q.narx,
+          tolovTuri,
+          mijozNomi: mijozBor ? mijoz.ism : null,
+          sana: new Date(`${sana}T00:00:00.000Z`).toISOString(),
+          vaqt,
+          bekorQilingan: false,
+          bekorSabab: null,
+        }))
+      );
+      setSavat([]);
       setMijoz({ contactId: null, ism: "", tel: "" });
-      setProductId("");
     } finally {
       setLoading(false);
     }
@@ -148,89 +189,24 @@ export function SotuvForm({
         />
 
         <div>
-          <label className={LABEL_CLASS} htmlFor="sotuv-mahsulot">{M.birlikBosh}</label>
-          <Select
-            id="sotuv-mahsulot"
-            value={productId}
-            onChange={mahsulotTanlandi}
-            searchable={products.length > 7}
-            searchPlaceholder={avto ? "Mashinani qidiring..." : "Mahsulotni qidiring..."}
-            placeholder="Tanlang..."
-            disabled={loading}
-            options={products.map((p) => ({
-              value: p.id,
-              label: p.nomi,
-              tavsif: `${p.sotuvNarx > 0 ? formatSomLabel(p.sotuvNarx) : "narx kelishiladi"}${
-                p.mavjud ? "" : avto ? " · Sotilgan" : " · Qolmadi"
-              }`,
-              disabled: !p.mavjud,
-            }))}
-          />
-        </div>
-
-        {avto ? (
-          <div>
-            <label className={LABEL_CLASS} htmlFor="sotuv-narx">Kelishilgan narx (sotilgan summa)</label>
-            <input
-              id="sotuv-narx"
-              type="text"
-              inputMode="numeric"
-              value={narx}
-              onChange={(e) => setNarx(e.target.value ? formatSom(parseSomInput(e.target.value)) : "")}
-              placeholder="0"
-              className={INPUT_CLASS}
-            />
-            <p className="text-xs text-faint mt-1">
-              Savdolashib boshqa narxga kelishilgan bo'lsa — shu yerga yozing, mashina kartochkasi
-              ham yangilanadi.
-            </p>
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            <span className={`${LABEL_CLASS} mb-0`}>{M.birlikBosh}</span>
+            <Button
+              size="sm"
+              onClick={() => setTanlovOchiq(true)}
+              disabled={loading}
+              data-test="mahsulot-qoshish"
+            >
+              + Mahsulot qo&apos;shish
+            </Button>
           </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={LABEL_CLASS} htmlFor="sotuv-miqdor">Miqdor (dona)</label>
-                <input
-                  id="sotuv-miqdor"
-                  type="text"
-                  inputMode="numeric"
-                  value={miqdor}
-                  onChange={(e) => setMiqdor(e.target.value ? formatSom(parseSomInput(e.target.value)) : "")}
-                  className={INPUT_CLASS}
-                />
-              </div>
-              <div>
-                <label className={LABEL_CLASS} htmlFor="sotuv-birlik-narx">Birlik narx</label>
-                <input
-                  id="sotuv-birlik-narx"
-                  type="text"
-                  inputMode="numeric"
-                  value={narx}
-                  onChange={(e) => setNarx(e.target.value ? formatSom(parseSomInput(e.target.value)) : "")}
-                  placeholder={selected && selected.sotuvNarx === 0 ? "Narxni yozing" : "0"}
-                  className={INPUT_CLASS}
-                />
-              </div>
-            </div>
-            {farq !== 0 && (
-              <p className={`text-xs ${farq < 0 ? "text-expense" : "text-income"}`}>
-                Standart narx {formatSomLabel(selected!.sotuvNarx)} — bu sotuv{" "}
-                {formatSomLabel(Math.abs(farq))} {farq < 0 ? "arzon" : "qimmat"} ketmoqda.
-              </p>
-            )}
-            {selected && selected.sotuvNarx === 0 && (
-              <p className="text-xs text-faint">
-                Bu mahsulotga standart narx qo'yilmagan — kelishilgan narxni har sotuvda yozasiz.
-                Standart narxni Ombor bo'limida («Narx» tugmasi) belgilash mumkin.
-              </p>
-            )}
-          </>
-        )}
-
-        {/* JAMI — oddiy input emas, alohida ajralib turadigan yakuniy summa. */}
-        <div className="rounded-xl border border-brand/25 bg-brand-wash px-4 py-3 flex items-center justify-between gap-3">
-          <span className="text-sm font-medium text-muted">Jami</span>
-          <Money value={jami} size="xl" tone="brand" />
+          <SavatRoyxat
+            qatorlar={savat}
+            onOzgart={qatorniOzgart}
+            onOchir={(id) => setSavat((s) => s.filter((q) => q.productId !== id))}
+            disabled={loading}
+            avto={avto}
+          />
         </div>
 
         <TolovTuriTanlov value={tolovTuri} onChange={setTolovTuri} disabled={loading} />
@@ -246,8 +222,8 @@ export function SotuvForm({
               options={kassalar.map((k, i) => ({ value: i === 0 ? "" : k.id, label: k.nomi }))}
             />
             <p className="text-2xs text-faint mt-1">
-              Click yoki terminal orqali to'langan bo'lsa — tegishli kassani tanlang, hisobot
-              kassalar bo'yicha to'g'ri chiqadi.
+              Click yoki terminal orqali to&apos;langan bo&apos;lsa — tegishli kassani tanlang,
+              hisobot kassalar bo&apos;yicha to&apos;g&apos;ri chiqadi.
             </p>
           </div>
         )}
@@ -266,10 +242,19 @@ export function SotuvForm({
         {error && <p className="text-expense text-sm" role="alert">{error}</p>}
         {ok && <p className="text-income text-sm" role="status">{ok}</p>}
 
-        <Button type="submit" disabled={loading} loading={loading} className="w-full" size="lg">
+        <Button type="submit" disabled={loading || savat.length === 0} loading={loading} className="w-full" size="lg">
           {avto ? "Mashinani sotish" : "Sotuvni yakunlash"}
         </Button>
       </form>
+
+      <MahsulotTanlashModal
+        ochiq={tanlovOchiq}
+        onClose={() => setTanlovOchiq(false)}
+        products={products}
+        savatda={savatda}
+        onQoshish={qoshish}
+        avto={avto}
+      />
     </Card>
   );
 }

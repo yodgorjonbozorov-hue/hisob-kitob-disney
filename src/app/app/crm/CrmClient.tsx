@@ -99,14 +99,24 @@ export function CrmClient({
   const [yoqotiladi, setYoqotiladi] = useState<BuyurtmaDTO | null>(null);
   const [ochiriladi, setOchiriladi] = useState<BuyurtmaDTO | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
-  const ustuni = (b: BuyurtmaDTO): Ustun => zakazUstuni(b.holat, b.sana, bugun);
+  // Ustun serverdagi qoida bilan AYNI: ochiq qarzi bor yutilgan zakaz
+  // "Qarz" ustunida turadi (lib/crm/pipeline.ts).
+  const ustuni = (b: BuyurtmaDTO): Ustun => zakazUstuni(b.holat, b.sana, bugun, b.qarzOchiq);
 
   const amallar = useZakazAmallari({ bugun, onOzgardi: mahalliyYoz });
 
-  /** Ustunga ko'chirish. "Yutildi" va "Yo'qotildi" — tasdiq oynasi orqali. */
+  /**
+   * Ustunga ko'chirish. "Yutildi" va "Yo'qotildi" — tasdiq oynasi orqali.
+   *
+   * "QARZ" ustuniga QO'LDA ko'chirib bo'lmaydi: u holat emas, ochiq qarzdan
+   * HISOBLANADIGAN ustun (lib/crm/pipeline.ts). Zakaz u yerga faqat yutilib,
+   * puli to'liq kelmagan holda tushadi va qarz yopilgach o'zi chiqadi —
+   * qo'lda surish qarz yozuvi bilan doskani zid holatga tushirardi.
+   */
   function ustunga(id: string, ustun: Ustun) {
     const b = zakazlar.find((x) => x.id === id) ?? (tanlangan?.id === id ? tanlangan : undefined);
     if (!b || ustuni(b) === ustun) return;
+    if (ustun === "QARZ") return;
     setTanlangan(null);
     if (ustun === "YUTILDI") return setYakunlanadi(b);
     if (ustun === "YOQOTILDI") return setYoqotiladi(b);

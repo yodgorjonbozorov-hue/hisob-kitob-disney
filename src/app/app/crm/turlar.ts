@@ -141,6 +141,11 @@ export interface BuyurtmaDTO {
   /** Ochilgan qarzning qoldig'i (qarz yozuvidan). */
   qarzQoldiq: number;
   /**
+   * Zakazda OCHIQ qarz bormi — "Qarz" ustunining sharti.
+   * `qarzQoldiq > 0` dan farqi: bekor qilingan qarz qarzdorlik emas.
+   */
+  qarzOchiq: boolean;
+  /**
    * ARALASH TO'LOV qatorlari (naqd + click + terminal...). Bo'sh — bir
    * kanalli eski zakaz: pul `tolangan`/`tolovTuri` da.
    */

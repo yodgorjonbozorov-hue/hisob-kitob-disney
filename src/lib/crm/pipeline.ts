@@ -41,27 +41,68 @@ export function yopiqHolat(holat: ZakazHolat): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * DOSKA USTUNLARI. `YOQOTILDI` — arxiv: asosiy 4 ustundan tashqarida turadi
- * va odatda ko'rsatilmaydi (16-talab: mobil gorizontal svayp 4 ustun bilan).
+ * DOSKA USTUNLARI. `YOQOTILDI` — arxiv: asosiy ustunlardan tashqarida turadi
+ * va odatda ko'rsatilmaydi (16-talab: mobil gorizontal svayp).
+ *
+ * `QARZ` — "Yutildi"dan KEYINGI ustun: zakaz yutilgan, lekin puli to'liq
+ * kelmagan. Bu ish jarayoni holati (`Deal.holat`) EMAS — u baribir
+ * "YUTILDI" bo'lib qoladi; ustun esa ochiq qarzdan HISOBLANADI. Shu bois
+ * yangi holat qo'shilmadi va eski yozuvlar tegilmadi.
  */
-export const USTUNLAR = ["KUTILAYOTGAN", "BUGUNGI", "JARAYONDA", "YUTILDI", "YOQOTILDI"] as const;
+export const USTUNLAR = [
+  "KUTILAYOTGAN",
+  "BUGUNGI",
+  "JARAYONDA",
+  "YUTILDI",
+  "QARZ",
+  "YOQOTILDI",
+] as const;
 export type Ustun = (typeof USTUNLAR)[number];
 
 /** Asosiy (ko'rinadigan) ustunlar — arxivsiz. */
-export const ASOSIY_USTUNLAR: Ustun[] = ["KUTILAYOTGAN", "BUGUNGI", "JARAYONDA", "YUTILDI"];
+export const ASOSIY_USTUNLAR: Ustun[] = [
+  "KUTILAYOTGAN",
+  "BUGUNGI",
+  "JARAYONDA",
+  "YUTILDI",
+  "QARZ",
+];
 
 export const USTUN_NOMI: Record<Ustun, string> = {
   KUTILAYOTGAN: "Kutilayotgan zakazlar",
   BUGUNGI: "Bugungi zakazlar",
   JARAYONDA: "Jarayonda",
   YUTILDI: "Yutildi",
+  QARZ: "Qarz",
   YOQOTILDI: "Yo'qotildi",
 };
 
 /**
+ * ZAKAZ QARZDORMI — yutilgan, lekin puli to'liq kelmagan.
+ *
+ * MANBA — ZAKAZNING O'ZI EMAS, HAQIQIY QARZ YOZUVI. Zakaz yutilganda
+ * qolgan summa uchun `Debt` ochiladi (`lib/crm/yakunlash.ts`), keyingi
+ * to'lovlar esa o'sha qarzga tushadi (`DebtPayment`). Shuning uchun
+ * "qarzdormi" savoliga `summa − tolangan` emas, aynan qarz qoldig'i javob
+ * beradi: zakaz yutilgandan KEYIN qilingan to'lov ham hisobga olinadi va
+ * qarz yopilgach karta ustundan o'zi chiqib ketadi.
+ *
+ * Bekor qilingan qarz (`CANCELLED`) qarzdorlik emas.
+ */
+export function zakazQarzdormi(qarz: {
+  isYopilgan: boolean;
+  status: string;
+} | null | undefined): boolean {
+  if (!qarz) return false;
+  return !qarz.isYopilgan && qarz.status !== "CANCELLED";
+}
+
+/**
  * ZAKAZ QAYSI USTUNDA TURADI.
  *
- *   YUTILDI/YOQOTILDI holati  → o'z ustuni (sana ahamiyatsiz);
+ *   YUTILDI + ochiq qarz      → "Qarz";
+ *   YUTILDI (qarzsiz)         → "Yutildi";
+ *   YOQOTILDI holati          → o'z ustuni (sana ahamiyatsiz);
  *   JARAYONDA holati          → "Jarayonda";
  *   KUTILMOQDA + sana = bugun → "Bugungi zakazlar";
  *   qolgani (kelajak, o'tgan  → "Kutilayotgan zakazlar".
@@ -70,9 +111,25 @@ export const USTUN_NOMI: Record<Ustun, string> = {
  * O'TGAN KUN ATAYLAB "Kutilayotgan"da: bajarilmagan eski zakaz "Bugungi"dan
  * chiqib ketib ko'zdan yo'qolmasin (7-talab). U `kechikkanKun` bilan
  * belgilanadi va ustunning boshida turadi.
+ *
+ * ZAKAZ BIR VAQTDA BITTA USTUNDA: qarzdor zakaz "Yutildi"da HAM ko'rinsa
+ * ustun sarlavhalaridagi "N ta • summa" ikki marta sanalardi. Shuning uchun
+ * ochiq qarzi bor zakaz "Yutildi"dan chiqib "Qarz"ga o'tadi — pul kelgach
+ * o'zi qaytadi.
  */
-export function zakazUstuni(holat: string, sana: string | null, bugun: string): Ustun {
-  if (holat === "YUTILDI") return "YUTILDI";
+export function zakazUstuni(
+  holat: string,
+  sana: string | null,
+  bugun: string,
+  /**
+   * Zakazda OCHIQ qarz bormi (`zakazQarzdormi` natijasi). Berilmasa zakaz
+   * qarzsiz deb qaraladi — eski chaqiruvchilar avvalgidek ishlaydi.
+   * Server DTO'da hisoblab beradi (`lib/crm/dto.ts` → `qarzOchiq`), shunda
+   * brauzer qarz yozuvining ichki maydonlarini bilishi shart emas.
+   */
+  qarzOchiq = false
+): Ustun {
+  if (holat === "YUTILDI") return qarzOchiq ? "QARZ" : "YUTILDI";
   if (holat === "YOQOTILDI") return "YOQOTILDI";
   if (holat === "JARAYONDA") return "JARAYONDA";
   if (sana && sana === bugun) return "BUGUNGI";
@@ -211,7 +268,7 @@ export function holatVaqti(z: TartibZakaz): number {
 export function zakazlarniTartibla<T extends TartibZakaz>(zakazlar: T[], ustun: Ustun, bugun: string): T[] {
   const yangiOldin = (a: T, b: T) => holatVaqti(b) - holatVaqti(a);
 
-  if (ustun === "YUTILDI" || ustun === "YOQOTILDI" || ustun === "JARAYONDA") {
+  if (ustun === "YUTILDI" || ustun === "QARZ" || ustun === "YOQOTILDI" || ustun === "JARAYONDA") {
     return [...zakazlar].sort(yangiOldin);
   }
 

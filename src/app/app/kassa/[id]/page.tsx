@@ -38,6 +38,17 @@ const TOLOV_NOMI: Record<string, string> = {
  * "kassa.jami" bo'lmagan xodim faqat O'Z shaxsiy kassasini ocha oladi;
  * boshqa kassa IDsi so'ralsa "Mening kassam"ga qaytariladi. Tekshiruv
  * kassa egasi bo'yicha SERVERDA — URL'ni qo'lda terish ham ochmaydi.
+ *
+ * ═══ O'Z KASSASI "kassa.korish" SIZ HAM OCHILADI ═══
+ * Ilgari sahifa boshida `kassa.korish` talab qilinardi. Sotuvchida
+ * (SELLER) bu huquq YO'Q (lib/permissions/katalog.ts), shuning uchun u
+ * o'z kassasidagi summani ko'rardi-yu, ustiga bosganda "Kirim/Chiqim"ga
+ * uloqtirilardi — tafsilot umuman ochilmasdi.
+ *
+ * Qoida endi `XodimKassaKartasi` va "Mening kassam" bilan BIR XIL:
+ * xodimning O'Z kassasi undan yopilmaydi (u kun oxirida shu pulni
+ * topshiradi). `kassa.korish` esa BOSHQA kassalar uchun talab bo'lib
+ * qoladi — maxfiylik chegarasi joyida.
  */
 export default async function KassaDetalPage({
   params,
@@ -50,9 +61,6 @@ export default async function KassaDetalPage({
   const { session, tenantId } = await requireTenantPage();
 
   return runWithTenant(tenantId, async () => {
-    if (!(await hasPermission(session.userId, "kassa.korish"))) {
-      redirect("/app/tranzaksiyalar");
-    }
     const businessId = await resolveActiveBusinessId(session);
     if (!businessId) notFound();
 
@@ -67,9 +75,15 @@ export default async function KassaDetalPage({
     if (!detal) notFound();
 
     const { kassa } = detal;
-    const jamiKoradi = await hasPermission(session.userId, "kassa.jami");
-    if (!jamiKoradi && kassa.userId !== session.userId) {
-      redirect("/app/kassam");
+    // O'Z shaxsiy kassasi — huquqsiz ham ochiladi (yuqoridagi izoh).
+    const oziniki = kassa.userId !== null && kassa.userId === session.userId;
+    if (!oziniki) {
+      if (!(await hasPermission(session.userId, "kassa.korish"))) {
+        redirect("/app/tranzaksiyalar");
+      }
+      if (!(await hasPermission(session.userId, "kassa.jami"))) {
+        redirect("/app/kassam");
+      }
     }
     const smenaIzoh = detal.smenaTopshirishdan
       ? `oxirgi topshirishdan (${formatToshkentVaqt(new Date(detal.smenaBoshi))})`
@@ -79,8 +93,15 @@ export default async function KassaDetalPage({
     return (
       <div className="space-y-4 sm:space-y-5">
         <div>
-          <Link href="/app/kassa" className="text-2xs text-muted hover:text-brand">
-            ← Kassalar
+          {/* Orqaga havola KIRISH HUQUQIGA mos bo'lsin: "Kassalar" sahifasi
+              boshqaruvchiga, o'z kassasini ochgan xodimga esa "Mening
+              kassam" — aks holda havola uni yana ruxsatsiz sahifaga olib
+              borardi. */}
+          <Link
+            href={oziniki ? "/app/kassam" : "/app/kassa"}
+            className="text-2xs text-muted hover:text-brand"
+          >
+            ← {oziniki ? "Mening kassam" : "Kassalar"}
           </Link>
           <h1 className="text-xl sm:text-2xl font-bold text-fg mt-1 break-words">{kassa.nomi}</h1>
           <p className="text-2xs sm:text-sm text-muted mt-0.5">

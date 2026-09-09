@@ -77,7 +77,10 @@ test("computeNav: aktiv biznes omborli bo'lmasa ham ombor ko'rinmaydi", () => {
 
 test("computeNav: SELLER faqat Yozuvlar ko'radi", () => {
   const items = registry.computeNav({ rol: "SELLER", yoqilgan: new Set(["MOLIYA", "OMBOR", "BOSHQARUV"]), omborli: true });
-  assert.deepEqual(items.map((i: any) => i.href), ["/app/tranzaksiyalar"]);
+  // "Moliya" — MOLIYA moduli ichidagi tez kiritish oqimi, hammaga ochiq
+  // (lib/modules/registry.ts). Sotuvchi ham pul harakatini shu yerdan
+  // kiritadi, shuning uchun u "Kirim / Chiqim" bilan yonma-yon turadi.
+  assert.deepEqual(items.map((i: any) => i.href), ["/app/moliya", "/app/tranzaksiyalar"]);
 });
 
 test("computeNav: CASHIER — yozuvlar, qarzlar, smena va (omborli bo'lsa) sotuv", () => {
@@ -89,6 +92,7 @@ test("computeNav: CASHIER — yozuvlar, qarzlar, smena va (omborli bo'lsa) sotuv
   // maxfiyligi: u boshqa xodimning kassasidagi pulni ko'rmaydi va o'z
   // kassasi bilan "Mening kassam"da ishlaydi.
   assert.deepEqual(hrefs, [
+    "/app/moliya",
     "/app/tranzaksiyalar",
     "/app/qarzlar",
     "/app/smena",
@@ -113,10 +117,12 @@ test("guruhlanganNav: asosiy / ish jarayoni / sozlamalar bo'limlari", () => {
   // Ustuvor havolalar — aynan shu tartibda.
   assert.deepEqual(asosiy, [
     "/app",
+    "/app/moliya",
     "/app/crm",
     "/app/tranzaksiyalar",
     "/app/qarzlar",
     "/app/kassa",
+    "/app/kassa-topshirish",
     "/app/ombor",
     "/app/hisobot",
   ]);
@@ -137,6 +143,8 @@ test("guruhlanganNav: asosiy / ish jarayoni / sozlamalar bo'limlari", () => {
     "/app/admin/audit",
     "/app/sozlamalar/modullar",
     "/billing",
+    // Qarz auditi — FAQAT direktor (OWNER) menyusida.
+    "/app/qarzlar/audit",
   ]);
 });
 
@@ -144,7 +152,10 @@ test("guruhlanganNav: bo'sh bo'lim chizilmaydi (SELLER)", () => {
   const items = registry.computeNav({ rol: "SELLER", yoqilgan: new Set(["MOLIYA", "BOSHQARUV"]), omborli: false });
   const bolimlar = registry.guruhlanganNav(items);
   assert.deepEqual(bolimlar.map((b: any) => b.guruh), ["asosiy"]);
-  assert.deepEqual(bolimlar[0].items.map((i: any) => i.href), ["/app/tranzaksiyalar"]);
+  assert.deepEqual(bolimlar[0].items.map((i: any) => i.href), [
+    "/app/moliya",
+    "/app/tranzaksiyalar",
+  ]);
 });
 
 test("guruhlanganNav: hech bir havola yo'qolmaydi", () => {

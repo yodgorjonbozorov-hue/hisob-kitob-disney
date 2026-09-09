@@ -30,18 +30,39 @@ export interface ProductKassirDTO {
   nomi: string;
   sotuvNarx: number;
   mavjud: boolean;
+  /**
+   * OMBORDAGI QOLDIQ.
+   *
+   * Ilgari kassirga faqat `mavjud` (ha/yo'q) berilardi. Sotuv formasida
+   * endi bir necha mahsulot savatga yig'iladi va HAR BIRIGA miqdor
+   * kiritiladi — shuning uchun brauzer "nechtagacha mumkin" degan
+   * savolga javob bilishi shart, aks holda foydalanuvchi faqat serverdan
+   * "Omborda yetarli emas" xatosini olib, qaysi raqam to'g'ri ekanini
+   * topa olmasdi. Server tekshiruvi (atomik `miqdor: { gte }`) o'z
+   * o'rnida qoladi — bu raqam faqat QULAYLIK uchun.
+   */
+  qoldiq: number;
   birlik: string;
   sku: string | null;
 }
 
-/** forKassir=true bo'lsa miqdor chiqarilmaydi — faqat mavjudlik. */
+/**
+ * Mahsulotlar ro'yxati.
+ *
+ * `forKassir=true` — SOTUV ro'yxati: qoldiq KAMAYISH tartibida (ko'pi
+ * tepada, tugagani eng pastda — `lib/mahsulotTartib.ts`). Tartib SQL
+ * darajasida beriladi, brauzerdagi qidiruv esa ayni qoidani takrorlaydi,
+ * shunda qidirgandan keyin ro'yxat sakramaydi.
+ */
 export async function listProducts(
   businessId: string,
   opts: { forKassir: boolean; faqatFaol?: boolean }
 ): Promise<ProductAdminDTO[] | ProductKassirDTO[]> {
   const products = await prisma.product.findMany({
     where: { businessId, ...(opts.faqatFaol ? { isActive: true } : {}) },
-    orderBy: [{ isActive: "desc" }, { createdAt: "asc" }],
+    orderBy: opts.forKassir
+      ? [{ miqdor: "desc" }, { nomi: "asc" }]
+      : [{ isActive: "desc" }, { createdAt: "asc" }],
   });
 
   if (opts.forKassir) {
@@ -52,6 +73,8 @@ export async function listProducts(
         nomi: p.nomi,
         sotuvNarx: p.sotuvNarx,
         mavjud: p.miqdor > 0,
+        // Manfiy qoldiq (tuzatish xatosi) sotuv formasida 0 kabi ko'rinadi.
+        qoldiq: Math.max(0, p.miqdor),
         birlik: p.birlik,
         sku: p.sku,
       }));

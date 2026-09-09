@@ -34,8 +34,21 @@ import { join } from "node:path";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const MIGRATSIYALAR = "prisma/migrations";
-/** Shu migratsiya deploy paytida qo'llanishi kerak (production'da hali yo'q). */
+/**
+ * PRODUCTION HOLATI shu migratsiyagacha quriladi — undan boshlab hammasi
+ * "kutayotgan" hisoblanadi va deploy paytida qo'llanadi.
+ *
+ * KUTAYOTGANLAR SONI QO'LDA YOZILMAYDI: u shu chegaradan keyingi
+ * migratsiyalar sonidan HISOBLANADI (`kutilayotganSoni`). Ilgari test
+ * "aynan bitta migratsiya qo'llanadi" deb qotirilgan edi va har yangi
+ * migratsiya qo'shilganda mashq sababsiz qizarardi — mashqning maqsadi
+ * esa SONNI emas, "kutayotganlar qo'llanadi, qo'llanganlar qayta
+ * ishlamaydi" qoidasini tekshirish.
+ */
 const YANGI_MIGRATSIYA = "20260905090000_zakaz_yoqotish_sababi_ochirgan";
+
+/** Deploy qo'llashi kerak bo'lgan migratsiyalar soni (setup'da hisoblanadi). */
+let kutilayotganSoni = 0;
 
 let client: any;
 let prisma: any;
@@ -100,6 +113,8 @@ before(async () => {
   const chegara = hammasi.indexOf(YANGI_MIGRATSIYA);
   assert.ok(chegara >= 0, `${YANGI_MIGRATSIYA} topilmadi`);
   qollanganlar = hammasi.slice(0, chegara);
+  kutilayotganSoni = hammasi.length - qollanganlar.length;
+  assert.ok(kutilayotganSoni >= 1, "kamida bitta kutayotgan migratsiya bo'lishi kerak");
 
   // ─── 1. PRODUCTION HOLATI: yangi migratsiyagacha bo'lgan sxema ───
   for (const dir of qollanganlar) {
@@ -228,7 +243,11 @@ test("db-migrate.mjs faqat KUTAYOTGAN migratsiyani qo'lladi", async () => {
   // Allaqachon qo'llanganlar QAYTA ishga tushmaydi (idempotentlik).
   assert.match(chiqish, /o'tkazib yuborildi \(allaqachon\)/);
   const qollanganSoni = (chiqish.match(/qo'llandi:/g) ?? []).length;
-  assert.equal(qollanganSoni, 1, "faqat bitta yangi migratsiya qo'llanishi kerak");
+  assert.equal(
+    qollanganSoni,
+    kutilayotganSoni,
+    "faqat KUTAYOTGAN migratsiyalar qo'llanishi kerak — kam ham, ko'p ham emas"
+  );
 });
 
 test("hisobot jadvaliga yozildi — qayta deployda takrorlanmaydi", async () => {

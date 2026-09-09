@@ -43,6 +43,11 @@ export const HUQUQLAR: Huquq[] = [
   { code: "sotuv.yaratish", label: "Sotuv yaratish", guruh: "Sotuv va qarz" },
   { code: "qarz.korish", label: "Qarzlarni ko'rish", guruh: "Sotuv va qarz" },
   { code: "qarz.tolash", label: "Qarz to'lash/yopish", guruh: "Sotuv va qarz" },
+  // QARZNI TUZATISH VA O'CHIRISH — FAQAT DIREKTOR (kompaniya egasi).
+  // Administrator ham, kassir ham standart to'plamda OLMAYDI
+  // (`FAQAT_DIREKTOR` — pastda): qarz summasini o'zgartirish mijoz bilan
+  // hisob-kitobni qayta yozish demakdir.
+  { code: "qarz.tahrir", label: "Qarzni tahrirlash va o'chirish", guruh: "Sotuv va qarz" },
   // Xarid
   { code: "xarid.korish", label: "Xarid buyurtmalarini ko'rish", guruh: "Xarid" },
   { code: "xarid.qabul", label: "Xarid qabul qilish va to'lash", guruh: "Xarid" },
@@ -76,8 +81,22 @@ export const HUQUQLAR: Huquq[] = [
 
 export const HUQUQ_KODLARI: ReadonlySet<string> = new Set(HUQUQLAR.map((h) => h.code));
 
-/** Katalogdagi barcha kodlar (OWNER/ADMIN uchun default to'plam). */
+/** Katalogdagi barcha kodlar. */
 export const BARCHA_HUQUQLAR: string[] = HUQUQLAR.map((h) => h.code);
+
+/**
+ * FAQAT DIREKTORGA (OWNER) beriladigan huquqlar — administratorda ham yo'q.
+ *
+ * Bu ro'yxat `ROL_DEFAULT_HUQUQLAR.ADMIN` dan chiqarib tashlanadi. Rol
+ * tekshiruvi (`isDirektor`) route qatlamida ALOHIDA turadi: huquq tizimi
+ * mijozga sozlanadigan, rol esa qat'iy chegara — ikkalasi birga ishlaydi.
+ */
+export const FAQAT_DIREKTOR: string[] = ["qarz.tahrir"];
+
+/** Administrator to'plami — direktorga xos huquqlarsiz. */
+const ADMIN_HUQUQLAR: string[] = BARCHA_HUQUQLAR.filter(
+  (k) => !FAQAT_DIREKTOR.includes(k)
+);
 
 /**
  * Tizim rollari uchun DEFAULT huquq to'plamlari — maxsus rol tayinlanmagan
@@ -87,7 +106,7 @@ export const BARCHA_HUQUQLAR: string[] = HUQUQLAR.map((h) => h.code);
 export const ROL_DEFAULT_HUQUQLAR: Record<Rol, string[]> = {
   SUPERADMIN: BARCHA_HUQUQLAR,
   OWNER: BARCHA_HUQUQLAR,
-  ADMIN: BARCHA_HUQUQLAR,
+  ADMIN: ADMIN_HUQUQLAR,
   CASHIER: [
     "mahsulot.korish",
     "ombor.korish",

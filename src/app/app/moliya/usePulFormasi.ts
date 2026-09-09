@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { parseSomInput } from "@/lib/format";
 import { todayDateOnlyString } from "@/lib/date";
-import { shaxsSabablari, sababTop } from "@/lib/moliya/sabablar";
+import { shaxsSabablari, sababTop, qatiyShaxsmi } from "@/lib/moliya/sabablar";
 import { kartochkaliMi } from "@/lib/moliya/shaxs";
 import type { KategoriyaOption, PulFormasi, TanlanganShaxs } from "./turlar";
 import { BOSH_SHAXS } from "./turlar";
@@ -86,13 +86,21 @@ export function usePulFormasi(boshlangich: PulFormasi, kategoriyalar: Kategoriya
     };
   }, [qarzgaBogliq, forma.shaxs.turi, forma.shaxs.id, forma.shaxs.ism, forma.yonalish]);
 
-  /** Yo'nalishga mos, direktor qo'shgan kategoriyalar (tayyor sabablardan tashqari). */
+  /**
+   * Yo'nalishga mos, direktor qo'shgan kategoriyalar (tayyor sabablardan
+   * tashqari).
+   *
+   * QAT'IY TOMONDA (ta'minotchi) ular ham YASHIRILADI: u yerda ro'yxat
+   * ataylab ikki variantdan iborat, erkin kategoriyalar esa "ortiqcha
+   * variant" bo'lib qaytib kelardi (lib/moliya/sabablar.ts).
+   */
   const qoshimchaKategoriyalar = useMemo(() => {
+    if (qatiyShaxsmi(forma.shaxs.turi)) return [];
     const tayyor = new Set(sabablar.map((s) => s.nomi.toLowerCase()));
     return kategoriyalar.filter(
       (k) => k.turi === forma.yonalish && !tayyor.has(k.nomi.toLowerCase())
     );
-  }, [kategoriyalar, sabablar, forma.yonalish]);
+  }, [kategoriyalar, sabablar, forma.yonalish, forma.shaxs.turi]);
 
   /** Yuborishga tayyormi — tugmani o'chirish uchun. */
   const xato = (() => {

@@ -95,6 +95,7 @@ export function QarzlarClient({
   products = [],
   biznesTuri = "umumiy",
   bekorQilaOladi = false,
+  qarzniBoshqaradi = false,
   boshlangichYonalish = "olinadigan",
 }: {
   initialDebts: QarzDTO[];
@@ -105,6 +106,8 @@ export function QarzlarClient({
   biznesTuri?: string;
   /** Qarzni bekor qilish faqat boshqaruvchida. */
   bekorQilaOladi?: boolean;
+  /** Qarzni tuzatish va o'chirish — direktor huquqi (6-talab). */
+  qarzniBoshqaradi?: boolean;
   /** URL'dagi `?turi=` — bosh sahifadagi karta shu bilan keladi. */
   boshlangichYonalish?: QarzYonalish;
 }) {
@@ -359,6 +362,7 @@ export function QarzlarClient({
           debtId={ochilgan}
           kassalar={kassalar}
           bekorQilaOladi={bekorQilaOladi}
+          qarzniBoshqaradi={qarzniBoshqaradi}
           onClose={() => setOchilgan(null)}
           onChanged={() => router.refresh()}
         />

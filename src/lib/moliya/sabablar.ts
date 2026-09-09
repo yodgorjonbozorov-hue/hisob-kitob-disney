@@ -49,7 +49,7 @@ export const KIRIM_SABABLARI: Sabab[] = [
 
 /** "− Pul berdim" sabablari (chiqim kategoriyalari). */
 export const CHIQIM_SABABLARI: Sabab[] = [
-  { kod: "taminotchi-tolov", nomi: "Ta'minotchiga to'lov", qarz: false, shaxslar: ["taminotchi"] },
+  { kod: "taminotchi-tolov", nomi: "Ta'minotchiga pul berish", qarz: false, shaxslar: ["taminotchi"] },
   { kod: "taminotchi-qarz", nomi: "Ta'minotchi qarzini to'lash", qarz: true, shaxslar: ["taminotchi"] },
   { kod: "xodimga", nomi: "Xodimga pul berildi", qarz: false, shaxslar: ["xodim"] },
   { kod: "avans", nomi: "Avans", qarz: false, shaxslar: ["xodim"] },
@@ -65,8 +65,37 @@ export function sabablar(yonalish: "kirim" | "chiqim"): Sabab[] {
   return yonalish === "kirim" ? KIRIM_SABABLARI : CHIQIM_SABABLARI;
 }
 
+/**
+ * QAT'IY TOMONLAR — ro'yxatda FAQAT shu yerda sanab o'tilgan sabablar
+ * qoladi; boshqasining hammasi (umumiy sabablar ham, direktor qo'shgan
+ * kategoriyalar ham) YASHIRILADI.
+ *
+ * TA'MINOTCHIDA BITTA VARIANT: "Ta'minotchiga pul berish". Ta'minotchiga
+ * pul berish — bitta amal, uni "Xarajat" yoki "Boshqa chiqim" ga yozib
+ * yuborish ta'minotchi kesimidagi hisobotni yolg'onga aylantirardi,
+ * ikkinchi variant esa kassirni har safar "qaysi birini tanlayman?"
+ * degan ikkilanishga solardi.
+ *
+ * QARZ TO'LOVI BU RO'YXATDAN CHIQARILDI: ta'minotchi qarzini yopish
+ * QARZLAR bo'limidan bajariladi — u yerda qaysi qarzga, qancha va qanday
+ * taqsimlanishi ko'rinib turadi. Sabab katalogda QOLADI (o'chirilmaydi):
+ * eski yozuvlar tahrirlanganda ular o'z sababini yo'qotmasligi kerak.
+ *
+ * Boshqa tomonlarda (mijoz, xodim, filial) umumiy sabablar ATAYLAB
+ * qoladi: u yerda "Xarajat" yoki "Qaytim" haqiqatan ham uchraydi.
+ */
+const QATIY_SHAXSLAR: Partial<Record<ShaxsTuri, string[]>> = {
+  taminotchi: ["taminotchi-tolov"],
+};
+
+export function qatiyShaxsmi(shaxsTuri: ShaxsTuri): boolean {
+  return QATIY_SHAXSLAR[shaxsTuri] !== undefined;
+}
+
 /** Tomonga mos sabablar — ro'yxat qisqarsa tanlash tezlashadi. */
 export function shaxsSabablari(yonalish: "kirim" | "chiqim", shaxsTuri: ShaxsTuri): Sabab[] {
+  const qatiy = QATIY_SHAXSLAR[shaxsTuri];
+  if (qatiy) return sabablar(yonalish).filter((s) => qatiy.includes(s.kod));
   return sabablar(yonalish).filter((s) => !s.shaxslar || s.shaxslar.includes(shaxsTuri));
 }
 

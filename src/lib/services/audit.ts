@@ -73,6 +73,8 @@ interface AuditInput {
   before?: unknown;
   after?: unknown;
   ip?: string | null;
+  /** Xavfli amal sababi (qarz tuzatish/o'chirish) — jurnalda saqlanadi. */
+  sabab?: string | null;
 }
 
 /** So'rovdan mijoz IP manzilini oladi (Vercel x-forwarded-for beradi). */
@@ -95,5 +97,6 @@ export async function logAudit(input: AuditInput): Promise<void> {
     entityId: input.entityId,
     before: input.before,
     after: input.after,
+    sabab: input.sabab,
   });
 }

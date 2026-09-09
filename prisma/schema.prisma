@@ -979,6 +979,17 @@ model Debt {
   cancelledAt        DateTime?
   cancelledBy        String?
   cancelReason       String?
+  /// DIREKTOR O'CHIRGAN QARZ (yumshoq o'chirish).
+  ///
+  /// Yozuv BAZADA QOLADI: unga bog'langan sotuv, zakaz va audit izi
+  /// uzilmasligi kerak. O'chirilgan qarz `status = "CANCELLED"` ham
+  /// bo'ladi — pul jamlarini hisoblaydigan barcha so'rovlar allaqachon
+  /// bekor qilinganni chiqarib tashlaydi, ya'ni yangi filtr qidirib
+  /// yurish shart emas va bironta hisobot jimgina yolg'on bo'lib
+  /// qolmaydi. `deletedAt` esa RO'YXATLARDA "bekor qilingan"dan ajratib
+  /// turadi (lib/queries/qarz.ts).
+  deletedAt          DateTime?
+  deletedBy          String?
   payments           DebtPayment[]
   /// CRM zakazi shu qarzni ochgan bo'lsa — teskari bog'lanish (1:1).
   crmZakaz           Deal?         @relation("CrmBuyurtmaQarzi")

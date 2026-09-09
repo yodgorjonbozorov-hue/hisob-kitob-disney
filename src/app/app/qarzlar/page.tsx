@@ -3,7 +3,8 @@ import { requireTenantPage } from "@/lib/auth/tenant";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { isModuleOnForTenant } from "@/lib/modules/guard";
 import { getActiveBusiness } from "@/lib/business";
-import { isManager } from "@/lib/auth/roles";
+import { isManager, isDirektor } from "@/lib/auth/roles";
+import { hasPermission } from "@/lib/permissions/tekshir";
 import { listQarzlar, getQarzDashboard, listQarzdorlar } from "@/lib/queries/qarz";
 import { listAccounts } from "@/lib/queries/accounts";
 import { listProducts, type ProductAdminDTO } from "@/lib/queries/inventory";
@@ -37,15 +38,17 @@ export default async function QarzlarPage({
 
     const omborBor = business.omborli && (await isModuleOnForTenant(tenantId, "OMBOR"));
 
-    const [debts, qarzdorlar, dashboard, kassalar, products] = await Promise.all([
-      listQarzlar(business.id),
-      listQarzdorlar(business.id),
-      getQarzDashboard(business.id),
-      listAccounts(business.id, true),
-      omborBor
-        ? (listProducts(business.id, { forKassir: false }) as Promise<ProductAdminDTO[]>)
-        : Promise.resolve([] as ProductAdminDTO[]),
-    ]);
+    const [debts, qarzdorlar, dashboard, kassalar, products, qarzTahrirHuquqi] =
+      await Promise.all([
+        listQarzlar(business.id),
+        listQarzdorlar(business.id),
+        getQarzDashboard(business.id),
+        listAccounts(business.id, true),
+        omborBor
+          ? (listProducts(business.id, { forKassir: false }) as Promise<ProductAdminDTO[]>)
+          : Promise.resolve([] as ProductAdminDTO[]),
+        hasPermission(session.userId, "qarz.tahrir"),
+      ]);
 
     // Qarzni mahsulot/mashinaga bog'lash uchun ro'yxat.
     const productOptions = products.map((p) => ({
@@ -80,6 +83,10 @@ export default async function QarzlarPage({
           products={productOptions}
           biznesTuri={business.turi}
           bekorQilaOladi={isManager(session.rol)}
+          // Tuzatish/o'chirish — FAQAT DIREKTOR (OWNER), administrator ham
+          // emas. Server ham ikkala qavatni tekshiradi
+          // (src/app/api/debts/[id]/route.ts).
+          qarzniBoshqaradi={isDirektor(session.rol) && qarzTahrirHuquqi}
           boshlangichYonalish={yonalish}
         />
       </div>

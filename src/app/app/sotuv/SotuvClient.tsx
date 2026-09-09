@@ -108,8 +108,9 @@ export function SotuvClient({
         biznesTuri={biznesTuri}
         kassalar={kassalar}
         optom={optom}
-        onSold={(sale) => {
-          setSales((prev) => [sale, ...prev]);
+        onSold={(yangilar) => {
+          // Savat bir necha sotuv qoldiradi — hammasi lentaga tushadi.
+          setSales((prev) => [...yangilar, ...prev]);
           router.refresh();
         }}
       />
