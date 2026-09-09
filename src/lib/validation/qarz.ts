@@ -256,24 +256,48 @@ export const qarzBekorSchema = z.object({
 });
 
 /**
+ * TAHRIR uchun telefon maydoni — `telMaydoni` dan FARQI: `.optional()` eng
+ * TASHQARIDA turadi.
+ *
+ * Nega muhim: `telMaydoni` da `.optional()` `.transform()` dan ICHKARIDA,
+ * shuning uchun kalit umuman yuborilmasa ham transform ishlab `null`
+ * qaytarardi. Yaratishda bu to'g'ri (telefon berilmagan = yo'q), lekin
+ * TAHRIRDA halokatli edi: direktor faqat summani to'g'irlasa ham mijozning
+ * telefoni jimgina o'chib ketardi — qarzni undirish uchun yagona bog'lanish
+ * yo'li. Endi kalit yuborilmasa `undefined` bo'lib qoladi va xizmat qatlami
+ * maydonga TEGMAYDI; ataylab o'chirish uchun ochiq `null` yuboriladi.
+ */
+const telMaydoniTahrir = z
+  .string()
+  .max(30)
+  .nullable()
+  .superRefine((v, ctx) => {
+    if (v && v.trim() && telNormalize(v) === null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Telefon raqami noto'g'ri (masalan: +998 90 123 45 67)",
+      });
+    }
+  })
+  .transform((v) => (v && v.trim() ? telNormalize(v) : null))
+  .optional();
+
+/**
  * QARZNI TAHRIRLASH (direktor). Barcha maydonlar IXTIYORIY — faqat
  * o'zgartirilgani yuboriladi. `sabab` majburiy: audit jurnalida "nega
  * o'zgardi" degan savol javobsiz qolmasligi kerak.
+ *
+ * `contactId` — qarz BOSHQA mijozga yozilib qolgan bo'lsa uni ko'chirish
+ * uchun. `null` — kartochka bog'lanishi uziladi (qarz ism bo'yicha
+ * jamlanadigan holatga qaytadi).
  */
 export const qarzTahrirSchema = z.object({
   jamiSumma: z.number().int().positive("Summa musbat bo'lishi kerak").optional().nullable(),
+  contactId: z.string().min(1).nullable().optional(),
   mijozNomi: z.string().trim().min(1).max(100).optional().nullable(),
-  mijozTel: telMaydoni,
-  sana: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Sana noto'g'ri formatda")
-    .optional()
-    .nullable(),
-  muddat: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Muddat noto'g'ri formatda")
-    .optional()
-    .nullable(),
+  mijozTel: telMaydoniTahrir,
+  sana: sanaSchema.optional().nullable(),
+  muddat: sanaSchema.optional().nullable(),
   izoh: z.string().trim().max(500).optional().nullable(),
   sabab: z.string().trim().min(3, "Tuzatish sababini yozing").max(300),
 });

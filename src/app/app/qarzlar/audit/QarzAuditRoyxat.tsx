@@ -58,7 +58,26 @@ export function QarzAuditRoyxat({ items }: { items: QarzAuditDTO[] }) {
               <Badge tone={AMAL_TONE[a.amal] ?? "neutral"}>{AMAL_NOMI[a.amal] ?? a.amal}</Badge>
             </div>
 
-            {summaOzgardi ? (
+            {a.ozgarishlar.length > 0 ? (
+              /* MAYDONMA-MAYDON "eski → yangi". Ilgari bu yerda faqat summa
+                 ko'rinardi: direktor mijozni yoki sanani to'g'irlaganda
+                 kartada hech narsa o'zgarmagandek turardi. */
+              <ul className="mt-2 space-y-1">
+                {a.ozgarishlar.map((o) => (
+                  <li key={o.maydon} className="text-xs">
+                    <span className="text-faint">{o.maydon}: </span>
+                    <span className={`text-faint line-through ${o.pulmi ? "tnum" : ""}`}>
+                      {o.pulmi && o.eski !== "—" ? formatSom(Number(o.eski)) : o.eski}
+                    </span>
+                    <span className="text-faint"> → </span>
+                    <span className={`font-medium text-fg ${o.pulmi ? "tnum" : ""}`}>
+                      {o.pulmi && o.yangi !== "—" ? formatSom(Number(o.yangi)) : o.yangi}
+                    </span>
+                    {o.pulmi && <span className="text-faint"> so&apos;m</span>}
+                  </li>
+                ))}
+              </ul>
+            ) : summaOzgardi ? (
               <p className="mt-2 text-sm tnum text-fg">
                 <span className="text-faint line-through">{formatSom(a.eskiSumma!)}</span>
                 {" → "}

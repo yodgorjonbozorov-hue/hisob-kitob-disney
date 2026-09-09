@@ -6573,3 +6573,74 @@ qo'shilganda esa 15/15 yashil qoladi.
 
 PRODUKSIYA KONFIGURATSIYASI TEGILMADI: `vercel.json` o'zgarmagan, faqat
 `tests/cron.test.ts`.
+
+---
+
+## Qarzni tahrirlash — direktor huquqi to'ldirildi (2026-09-09)
+
+Asos allaqachon bor edi (`qarzTuzatish.ts`, `qarz.tahrir` huquqi, audit
+sahifasi). Bu ish talabdagi TESHIKLARNI yopdi.
+
+### 1. TELEFON JIMGINA O'CHIB KETARDI (eng jiddiy)
+
+`qarzTahrirSchema` da `mijozTel` maydoni umumiy `telMaydoni` dan olingan
+edi, unda esa `.optional()` `.transform()` DAN ICHKARIDA turadi. Natijada
+kalit umuman yuborilmasa ham transform ishlab `null` qaytarardi, xizmat
+qatlami esa `!== undefined` shartini ko'rib maydonni `null` qilib
+YOZARDI. Ya'ni direktor faqat summani to'g'irlaganda mijozning telefoni
+o'chib ketardi — "olinadigan" qarzda u yaratishda MAJBURIY bo'lgan yagona
+bog'lanish yo'li.
+
+Tuzatish: tahrir uchun alohida `telMaydoniTahrir` — `.optional()` eng
+tashqarida. Kalit yuborilmasa `undefined` bo'lib qoladi (maydonga
+tegilmaydi), ataylab o'chirish esa ochiq `null` bilan.
+
+### 2. Sana tahrirlanmasdi
+
+Sxema va xizmat qatlami `sana` ni allaqachon qo'llab-quvvatlardi, lekin
+formada maydon YO'Q edi — talabdagi to'rt maydondan biri interfeysdan
+tushib qolgan. Qo'shildi.
+
+### 3. Mijozni almashtirish endi kartochkani ham ko'chiradi
+
+Ilgari forma faqat ism MATNINI o'zgartirardi. Qarz kartochkaga bog'langan
+bo'lsa (`contactId`) bu yetmasdi: qarzdorlar aynan kartochka bo'yicha
+jamlanadi (`qarzdorKalit`), ya'ni yozuv baribir ESKI mijozning
+kartochkasida qolib ketardi va ekranda ikki xil ism ko'rinardi. Endi
+formada qarz yaratishdagi AYNI `MijozTanlash` ishlatiladi, `contactId`
+serverga boradi va kartochka SHU biznesniki ekani tranzaksiya ichida
+tekshiriladi (xom `tx` da tenant filtri avtomatik EMAS).
+
+### 4. Audit lentasi faqat summani ko'rsatardi
+
+Mijoz, sana yoki izoh to'g'irlanganda karta bo'sh turardi — "eski qiymat →
+yangi qiymat" talabi yarim bajarilgan edi. `listQarzAudit` endi
+`before`/`after` suratlarini taqqoslab MAYDONMA-MAYDON farq qaytaradi
+(o'zgarmagani ro'yxatga tushmaydi, sana kun aniqligida taqqoslanadi).
+
+### 5. Yopilgan qarz tuzatilmasdi
+
+Tugmalar `!isYopilgan` ichida edi. Aynan eng ko'p uchraydigan xato shu
+holatga tushadi: 5 mln o'rniga 500 ming yozilgan qarz mijoz 500 ming
+to'lagach YOPIQ bo'ladi. Endi direktor uni tuzata oladi (bekor
+qilinganidan tashqari) — summa oshirilsa holat MAVJUD `qarzHolatHisobla`
+bilan qayta ochiladi.
+
+### Balans buzilmasligi
+
+`tolangan` ustuniga tahrirda UMUMAN tegilmaydi — u faqat to'lov qabul
+qilish/bekor qilish orqali o'zgaradi. Shuning uchun `qolgan = jamiSumma −
+tolangan` invarianti va kassadagi kirim o'z joyida qoladi. Mavjud
+"to'langandan past bo'lmaydi" qoidasi qoldiqni manfiyga tushishdan
+saqlaydi. Testda tekshirildi.
+
+### Tekshirish
+
+`npm run test:qarz-tahrir` (12 ta yangi test) — huquq, balans butunligi,
+holat qayta hisobi, tenant izolyatsiyasi, telefon saqlanishi, audit farqi.
+Regressiya: isolation, izolyatsiya-royxati, qarz, qarz-mijoz,
+qarz-mijoz-bogla, qarzdorlik, qarz-taqsimot, tolov-taqsimoti, audit,
+moliya-audit, qarzlar-brauzer — hammasi yashil. `npm run build` o'tadi.
+
+`QarzTafsilot.tsx` 250 satr chegarasidan oshgani uchun `BekorForm`
+alohida faylga (`QarzBekorForm.tsx`) chiqarildi.

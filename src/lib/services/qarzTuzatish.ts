@@ -36,6 +36,7 @@ import { qarzHolatHisobla, qarzYopiqmi } from "@/lib/validation/qarz";
 function qarzSurati(d: {
   id: string;
   turi: string;
+  contactId: string | null;
   mijozNomi: string;
   mijozTel: string | null;
   jamiSumma: number;
@@ -49,6 +50,7 @@ function qarzSurati(d: {
   return {
     id: d.id,
     turi: d.turi,
+    contactId: d.contactId,
     mijozNomi: d.mijozNomi,
     mijozTel: d.mijozTel,
     jamiSumma: d.jamiSumma,
@@ -67,6 +69,11 @@ export interface QarzTahrirParams {
   debtId: string;
   userId: string;
   jamiSumma?: number | null;
+  /**
+   * Qarz BOSHQA mijozga yozilib qolgan bo'lsa — kartochkani almashtirish.
+   * `null` — bog'lanishni uzish, `undefined` — tegilmaydi.
+   */
+  contactId?: string | null;
   mijozNomi?: string | null;
   mijozTel?: string | null;
   /** "YYYY-MM-DD" — qarz berilgan sana. */
@@ -79,7 +86,15 @@ export interface QarzTahrirParams {
 }
 
 /**
- * QARZNI TAHRIRLASH — summa, mijoz nomi/telefoni, sana, muddat va izoh.
+ * QARZNI TAHRIRLASH — summa, mijoz (kartochka/ism/telefon), sana, muddat
+ * va izoh.
+ *
+ * TO'LOV BALANSI BUZILMAYDI. `tolangan` ustuniga bu yerda UMUMAN
+ * tegilmaydi — u faqat to'lov qabul qilish va to'lovni bekor qilish
+ * orqali o'zgaradi. Shuning uchun tahrirdan keyin ham
+ * `qolgan = jamiSumma − tolangan` invarianti saqlanadi, kassadagi kirim
+ * esa o'z joyida qoladi. Yagona qoida — yuqoridagi "to'langandan past
+ * bo'lmaydi" tekshiruvi: u qoldiqni manfiyga tushishdan saqlaydi.
  *
  * Summa o'zgarsa holat (`status`, `isYopilgan`) MAVJUD `qarzHolatHisobla`
  * bilan qayta hisoblanadi: 5 mln qarzdan 5 mln to'langan bo'lsa u PAID,
@@ -106,6 +121,21 @@ export async function qarzTahrirla(params: QarzTahrirParams) {
       );
     }
 
+    // MIJOZNI ALMASHTIRISH — qarz boshqa odamning kartochkasiga yozilib
+    // qolgan holat. Kartochka SHU biznesniki ekani tekshiriladi: tranzaksiya
+    // ichida xom `tx` ishlatiladi, ya'ni tenant filtri avtomatik EMAS.
+    let kartochkaIsm: string | null = null;
+    let kartochkaTel: string | null = null;
+    if (params.contactId) {
+      const contact = await tx.contact.findFirst({
+        where: { id: params.contactId, businessId: params.businessId, deletedAt: null },
+        select: { ism: true, tel: true },
+      });
+      if (!contact) throw new BadRequestError("Mijoz kartochkasi topilmadi");
+      kartochkaIsm = contact.ism;
+      kartochkaTel = contact.tel;
+    }
+
     const bekorMi = debt.status === "CANCELLED";
     const status = qarzHolatHisobla(jamiSumma, debt.tolangan, bekorMi);
 
@@ -115,8 +145,20 @@ export async function qarzTahrirla(params: QarzTahrirParams) {
         jamiSumma,
         status,
         isYopilgan: qarzYopiqmi(status),
-        ...(params.mijozNomi != null ? { mijozNomi: params.mijozNomi.trim() } : {}),
-        ...(params.mijozTel !== undefined ? { mijozTel: params.mijozTel } : {}),
+        ...(params.contactId !== undefined ? { contactId: params.contactId } : {}),
+        // Ism/telefon ochiq berilmasa, kartochka almashtirilganda undan
+        // olinadi — aks holda qarz yangi mijozga bog'lanib, ekranda ESKI
+        // ismni ko'rsatib turardi.
+        ...(params.mijozNomi != null
+          ? { mijozNomi: params.mijozNomi.trim() }
+          : kartochkaIsm
+            ? { mijozNomi: kartochkaIsm }
+            : {}),
+        ...(params.mijozTel !== undefined
+          ? { mijozTel: params.mijozTel }
+          : kartochkaTel
+            ? { mijozTel: kartochkaTel }
+            : {}),
         ...(params.sana ? { sana: dateOnlyStringToUTCDate(params.sana) } : {}),
         ...(params.muddat !== undefined
           ? { muddat: params.muddat ? dateOnlyStringToUTCDate(params.muddat) : null }

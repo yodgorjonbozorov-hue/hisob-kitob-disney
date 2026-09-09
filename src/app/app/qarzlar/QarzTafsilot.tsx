@@ -10,6 +10,7 @@ import { QarzHolatBadge } from "./QarzHolatBadge";
 import { QarzTolovForm, type KassaOption } from "./QarzTolovForm";
 import { QarzTahrirForm } from "./QarzTahrirForm";
 import { QarzOchirForm } from "./QarzOchirForm";
+import { QarzBekorForm } from "./QarzBekorForm";
 
 /**
  * QARZ TAFSILOTI — mijoz, summalar, to'lov tarixi va to'lov qabul qilish.
@@ -153,12 +154,29 @@ export function QarzTafsilot({
             </div>
           )}
 
+          {/* YOPILGAN QARZ ham tuzatiladi — faqat direktor va faqat
+              "Tuzatish". Sabab: 5 mln o'rniga 500 ming yozilgan qarz mijoz
+              500 ming to'lagach YOPIQ bo'lib qoladi va aynan o'shanda
+              to'g'irlash kerak. Summa oshirilsa holat MAVJUD qoida bilan
+              qayta ochiladi (lib/validation/qarz.ts `qarzHolatHisobla`).
+              Bekor qilingan qarz bundan tashqarida — u undirilmaydi. */}
+          {qarz.isYopilgan && qarz.status !== "CANCELLED" && qarzniBoshqaradi && !tahrirOchiq && (
+            <div className="flex justify-end">
+              <Button variant="secondary" onClick={() => setTahrirOchiq(true)}>
+                Tuzatish
+              </Button>
+            </div>
+          )}
+
           {tahrirOchiq && (
             <QarzTahrirForm
               debtId={qarz.id}
               jamiSumma={qarz.jamiSumma}
               tolangan={qarz.tolangan}
+              contactId={qarz.contactId}
               mijozNomi={qarz.mijozNomi}
+              mijozTel={qarz.mijozTel}
+              sana={qarz.sana.slice(0, 10)}
               muddat={qarz.muddat ? qarz.muddat.slice(0, 10) : ""}
               izoh={qarz.izoh ?? ""}
               onCancel={() => setTahrirOchiq(false)}
@@ -198,7 +216,7 @@ export function QarzTafsilot({
           )}
 
           {bekorOchiq && (
-            <BekorForm
+            <QarzBekorForm
               debtId={qarz.id}
               onCancel={() => setBekorOchiq(false)}
               onDone={async () => {
@@ -229,68 +247,5 @@ function Qator({ k, v }: { k: string; v: string }) {
       <dt className="text-faint">{k}</dt>
       <dd className="text-fg">{v}</dd>
     </>
-  );
-}
-
-function BekorForm({
-  debtId,
-  onCancel,
-  onDone,
-}: {
-  debtId: string;
-  onCancel: () => void;
-  onDone: () => void;
-}) {
-  const [sabab, setSabab] = useState("");
-  const [xato, setXato] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  async function yubor() {
-    setXato(null);
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/debts/${debtId}/bekor`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sabab }),
-      });
-      if (!res.ok) {
-        setXato((await res.json()).error ?? "Xatolik");
-        return;
-      }
-      onDone();
-    } catch {
-      setXato("Serverga ulanib bo'lmadi");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <div className="space-y-2 border-t border-line pt-3">
-      <label className="block text-xs text-muted" htmlFor="qarz-bekor-sabab">
-        Bekor qilish sababi
-      </label>
-      <input
-        id="qarz-bekor-sabab"
-        type="text"
-        value={sabab}
-        onChange={(e) => setSabab(e.target.value)}
-        className="w-full rounded-lg border border-line px-3 py-2 text-sm"
-        autoFocus
-      />
-      <p className="text-2xs text-faint">
-        Yozuv o&apos;chirilmaydi — kim, qachon va nega bekor qilgani saqlanadi.
-      </p>
-      {xato && <p className="text-expense text-sm">{xato}</p>}
-      <div className="flex gap-2 justify-end">
-        <Button variant="secondary" type="button" onClick={onCancel}>
-          Yopish
-        </Button>
-        <Button type="button" onClick={yubor} disabled={loading || sabab.trim().length < 3}>
-          {loading ? "..." : "Bekor qilish"}
-        </Button>
-      </div>
-    </div>
   );
 }
