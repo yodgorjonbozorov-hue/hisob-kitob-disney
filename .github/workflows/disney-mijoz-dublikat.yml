@@ -1,0 +1,157 @@
+# DISNEY FLOWERS — MIJOZ DUBLIKATLARINI BIRLASHTIRISH.
+#
+# Nima uchun: `createMijoz()` ilgari telefonni xom saqlar va dublikat
+# tekshiruvini chetlab o'tardi, shuning uchun ayni bir odam bir necha
+# `Contact` bo'lib qolgan (qarzdorlar ro'yxatida bitta odam ikki karta).
+# Yozish yo'li tuzatildi (`src/lib/services/mijoz.ts`); bu workflow
+# ALLAQACHON paydo bo'lgan dublikatlarni birlashtiradi.
+#
+# IKKI REJIM:
+#   korish (standart) — bazaga YOZMAYDI, faqat nechta guruh, nechta karta
+#                       va nechta yozuv ko'chishini hisoblab beradi;
+#   yozish            — `tasdiq = HA` va MAJBURIY zaxira bilan.
+#
+# ATAYLAB QILINMAYDIGAN ISHLAR:
+#   · faqat Disney Flowers biznesi — boshqa Business ma'lumotlariga tegilmaydi
+#     (biznes topilmasa yoki bir nechta topilsa skript XATO bilan to'xtaydi);
+#   · Debt, DebtPayment, Transaction, Sale summalariga UMUMAN tegilmaydi;
+#   · qarzlar bitta Debt ga QO'SHILMAYDI — har biri alohida tarix bo'lib
+#     qoladi, faqat kanonik `contactId` ga bog'lanadi;
+#   · dublikat kartochka QATTIQ o'chirilmaydi — `deletedAt` bilan yopiladi;
+#   · bir xil ismli, lekin boshqa telefonli kartochkalar birlashtirilmaydi.
+#
+# ⚠️ REPOZITORIYA OMMAVIY: artefakt yuklanmaydi, log'ga mijoz ismi ham,
+# biznes nomi ham chiqmaydi — telefon niqoblanadi (`+998 91 *** ** 08`),
+# qolgani faqat sonlar va opaque IDlar.
+#
+# MOLIYA IZI: yozishdan oldin va keyin `production-holat.mjs` ishlaydi.
+# Bu amal faqat bog'lanish ko'chiradi, shuning uchun IKKALA iz AYNAN BIR XIL
+# bo'lishi shart. Skriptning o'zi ham jami ochiq qarzni tranzaksiya ICHIDA
+# qayta o'lchaydi: bir so'm farq chiqsa hammasi orqaga qaytadi.
+#
+# Ishga tushirish: Actions -> "Disney Flowers: mijoz dublikatlari" -> Run
+name: "Disney Flowers: mijoz dublikatlari"
+
+on:
+  workflow_dispatch:
+    inputs:
+      rejim:
+        description: "Rejim"
+        type: choice
+        options:
+          - korish
+          - yozish
+        default: korish
+      tasdiq:
+        description: 'Faqat "yozish" uchun: bazaga yoziladi, "HA" deb yozing'
+        required: false
+        default: ""
+
+# Migratsiya va ko'chirish bilan bir vaqtda ishlamasin — bitta bazaga tegadi.
+concurrency:
+  group: migratsiya
+  cancel-in-progress: false
+
+jobs:
+  birlashtir:
+    name: Ko'rish / zaxira + birlashtirish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Tasdiqni tekshirish
+        if: inputs.rejim == 'yozish' && inputs.tasdiq != 'HA'
+        run: |
+          echo "::error::Yozish rejimi tanlandi, lekin tasdiq berilmadi."
+          echo "::error::Bazaga yozadigan amal tasodifan ishga tushmasligi uchun 'HA' shart."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Bog'liqliklar
+        run: npm ci
+
+      # Sirlar yo'q bo'lsa shu yerda to'xtaydi — bazaga ulanish bo'lmaydi.
+      # Qiymatlar chiqarilmaydi, faqat "bor/yo'q".
+      - name: Sirlarni tekshirish
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BACKUP_CHAT_ID: ${{ secrets.BACKUP_CHAT_ID }}
+          BACKUP_BOT_TOKEN: ${{ secrets.BACKUP_BOT_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          REJIM: ${{ inputs.rejim }}
+        run: |
+          xato=0
+          if [ -z "$DATABASE_URL" ]; then echo "::error::DATABASE_URL sozlanmagan"; xato=1; fi
+          if [ "$REJIM" = "yozish" ]; then
+            if [ -z "$BACKUP_CHAT_ID" ]; then echo "::error::BACKUP_CHAT_ID sozlanmagan"; xato=1; fi
+            if [ -z "$BACKUP_BOT_TOKEN" ] && [ -z "$TELEGRAM_BOT_TOKEN" ]; then
+              echo "::error::BACKUP_BOT_TOKEN yoki TELEGRAM_BOT_TOKEN sozlanmagan"; xato=1
+            fi
+            if [ "$xato" = "1" ]; then
+              echo "::error::Zaxirasiz yozilmaydi — baza O'ZGARTIRILMADI."
+            fi
+          fi
+          [ "$xato" = "0" ] || exit 1
+          echo "Kerakli sirlar sozlangan."
+
+      - name: OLDINGI holat (faqat o'qish)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: node scripts/production-holat.mjs
+
+      # KO'RISH — ikkala rejimda ham ishlaydi: yozishdan oldin ham nima
+      # o'zgarishi log'da qolsin.
+      - name: Ko'rish (bazaga yozmaydi)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: node -r ts-node/register scripts/disney-flowers-mijoz-dublikat-birlashtir.ts
+
+      # Migratsiya kutmayotgani uchun `deploy-zaxira.mjs` zaxira OLMAYDI —
+      # shuning uchun shartsiz zaxira skripti ishlatiladi. Yuborilmasa exit 1.
+      - name: ZAXIRA -> Telegram (majburiy)
+        if: inputs.rejim == 'yozish'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          BACKUP_CHAT_ID: ${{ secrets.BACKUP_CHAT_ID }}
+          BACKUP_BOT_TOKEN: ${{ secrets.BACKUP_BOT_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: node scripts/zaxira-majburiy.mjs "disney-mijoz-dublikat oldidan"
+
+      - name: Birlashtirish (bazaga yoziladi)
+        if: inputs.rejim == 'yozish'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: node -r ts-node/register scripts/disney-flowers-mijoz-dublikat-birlashtir.ts --write
+
+      - name: KEYINGI holat (moliya izi o'zgarmagani tekshiriladi)
+        if: always()
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+        run: node scripts/production-holat.mjs
+
+      - name: Yakun
+        if: success()
+        run: |
+          if [ "${{ inputs.rejim }}" = "yozish" ]; then
+            echo "### ✅ Mijoz dublikatlari birlashtirildi" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Zaxira Telegram kanalida (artefakt yuklanmadi — repo ommaviy)." >> $GITHUB_STEP_SUMMARY
+            echo "Log'dagi OLDINGI va KEYINGI \`UMUMIY MOLIYA IZI\` **bir xil** bo'lishi shart," >> $GITHUB_STEP_SUMMARY
+            echo "skript hisobotidagi \`Jami ochiq qarz (oldin)\` va \`(keyin)\` ham." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### 👀 Ko'rish rejimi — baza o'zgartirilmadi" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Hisobotdagi guruhlar va ko'chadigan yozuvlar sonini tekshiring." >> $GITHUB_STEP_SUMMARY
+            echo "Yozish uchun: rejim = \`yozish\`, tasdiq = \`HA\`." >> $GITHUB_STEP_SUMMARY
+          fi
