@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { qidiruvRejimi } from "@/lib/db/dialect";
 import { withTenant } from "@/lib/auth/tenant";
 import { resolveActiveBusinessId } from "@/lib/business";
+import { createMijoz } from "@/lib/services/mijoz";
 import { z } from "zod";
 
 /** Kontaktlar ro'yxati (qidiruv bilan). */
@@ -52,9 +53,11 @@ export const POST = withTenant(
       return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
     }
 
-    const contact = await prisma.contact.create({
-      data: { businessId, createdBy: user.userId, ...parsed.data },
-    });
+    // CRM ham AYNI xizmatdan o'tadi: telefon normallashadi va shu raqamli
+    // kartochka bo'lsa yangisi ochilmaydi (409 "Bu mijoz mavjud"). Ilgari
+    // bu yo'l to'g'ridan-to'g'ri `contact.create()` qilardi — CRM'dan
+    // kiritilgan mijoz Mijozlar sahifasidagisi bilan ikkilanardi.
+    const contact = await createMijoz(businessId, user.userId, parsed.data);
     return NextResponse.json(contact, { status: 201 });
   },
   { module: "CRM" }

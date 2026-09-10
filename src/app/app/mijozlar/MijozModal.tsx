@@ -3,7 +3,15 @@
 import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { telKorinish } from "@/lib/tel";
 import type { MijozDTO } from "@/lib/queries/mijoz";
+
+/** Server 409 bilan qaytargan mavjud kartochka (`MijozDublikatError`). */
+interface MavjudMijoz {
+  id: string;
+  ism: string;
+  tel: string | null;
+}
 
 /**
  * Mijoz qo'shish/tahrirlash. Qarz limiti bo'sh qoldirilsa — chegara yo'q;
@@ -33,6 +41,8 @@ export function MijozModal({
   const [limit, setLimit] = useState(mijoz?.qarzLimit === null || mijoz === null ? "" : String(mijoz.qarzLimit));
   const [loading, setLoading] = useState(false);
   const [xato, setXato] = useState<string | null>(null);
+  /** Dublikat: server topgan mavjud kartochka — xato matni ostida ko'rsatiladi. */
+  const [mavjudMijoz, setMavjudMijoz] = useState<MavjudMijoz | null>(null);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -48,6 +58,7 @@ export function MijozModal({
 
     setLoading(true);
     setXato(null);
+    setMavjudMijoz(null);
     try {
       const res = await fetch(tahrir ? `/api/mijozlar/${mijoz!.id}` : "/api/mijozlar", {
         method: tahrir ? "PATCH" : "POST",
@@ -65,6 +76,9 @@ export function MijozModal({
       const data = await res.json();
       if (!res.ok) {
         setXato(data.error ?? "Xatolik yuz berdi");
+        // Dublikat: server QAYSI kartochka ekanini ham qaytaradi — usiz
+        // operator ko'rmagan kartochkasini qidirib topa olmaydi.
+        if (data.code === "MIJOZ_DUBLIKAT" && data.mavjud) setMavjudMijoz(data.mavjud);
         return;
       }
       onDone();
@@ -78,6 +92,7 @@ export function MijozModal({
   async function ochirish() {
     setLoading(true);
     setXato(null);
+    setMavjudMijoz(null);
     try {
       const res = await fetch(`/api/mijozlar/${mijoz!.id}`, { method: "DELETE" });
       const data = await res.json();
@@ -162,6 +177,13 @@ export function MijozModal({
         </div>
 
         {xato && <p className="text-sm text-expense">{xato}</p>}
+        {mavjudMijoz && (
+          <p className="text-2xs text-muted">
+            Mavjud kartochka: {mavjudMijoz.ism}
+            {mavjudMijoz.tel ? ` — ${telKorinish(mavjudMijoz.tel)}` : ""}. Yangi kartochka
+            ochilmadi — qarzlar shu mijoz ostida yig&apos;iladi.
+          </p>
+        )}
 
         <div className="flex gap-2 pt-1">
           <Button type="submit" loading={loading}>

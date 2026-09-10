@@ -4,6 +4,7 @@ import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { dateOnlyStringToUTCDate, todayTashkentDateOnlyString, utcDateToDateOnlyString } from "@/lib/date";
 import { runBusinessTx } from "@/lib/db/businessTx";
 import { logAudit } from "@/lib/services/audit";
+import { telAjrat } from "@/lib/tel";
 import { kirimgaKochirish } from "@/lib/crm/kirim";
 // Aylanma import (yakunlash.ts ham shu fayldan `pipelineBosqichlari` ni oladi)
 // xavfsiz: ikkala tomon ham faqat CHAQIRUV vaqtida murojaat qiladi.
@@ -783,7 +784,10 @@ async function kontaktTop(params: YangiBuyurtma): Promise<string | null> {
   if (!params.kontaktIsm?.trim()) return null;
 
   // Telefon bo'yicha mavjud kontaktni qayta ishlatamiz (dublikat oldini olish).
-  const tel = params.kontaktTel?.trim() || null;
+  // Raqam `lib/tel.ts` bilan normallashtiriladi: xom matn bilan qidirilganda
+  // "+998 91 332 00 08" bazadagi "+998913320008" ni topmay, ayni odamga
+  // ikkinchi kartochka ochib yuborardi.
+  const tel = telAjrat(params.kontaktTel).saqlash;
   const existing = tel
     ? await prisma.contact.findFirst({ where: { businessId: params.businessId, tel, deletedAt: null } })
     : null;
@@ -829,7 +833,9 @@ export async function zakazMijoziniOzgartirish(params: {
 
   // Berilmagan maydon o'zgarmaydi — mavjud qiymat asos qilib olinadi.
   const ism = (params.kontaktIsm !== undefined ? params.kontaktIsm : deal.contact?.ism)?.trim() || null;
-  const tel = (params.kontaktTel !== undefined ? params.kontaktTel : deal.contact?.tel)?.trim() || null;
+  // Telefon normal ko'rinishda saqlanadi va shu ko'rinishda qidiriladi —
+  // `kontaktTop` bilan bir xil qoida (lib/tel.ts).
+  const tel = telAjrat(params.kontaktTel !== undefined ? params.kontaktTel : deal.contact?.tel).saqlash;
 
   if (!ism) {
     if (!deal.contactId) return deal;

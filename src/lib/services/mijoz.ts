@@ -1,41 +1,111 @@
 import { prisma } from "@/lib/prisma";
-import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
-import type { BusinessTx } from "@/lib/db/businessTx";
+import { BadRequestError, ConflictError, ForbiddenError } from "@/lib/auth/guard";
+import { runBusinessTx, type BusinessTx } from "@/lib/db/businessTx";
 import { logAudit } from "@/lib/services/audit";
 import { formatSom } from "@/lib/format";
+import { telAjrat } from "@/lib/tel";
+import { mijozTelBoyichaTopTx, type MijozQisqa } from "@/lib/services/mijozAniqla";
 import type { CreateMijozInput, UpdateMijozInput } from "@/lib/validation/mijoz";
 
+/**
+ * MIJOZ DUBLIKATI — 409 ziddiyat.
+ *
+ * Javob tanasida `mavjud` maydoni bilan chiqadi (id, ism, tel), shuning
+ * uchun UI operatorni to'g'ridan-to'g'ri mavjud kartochkaga yo'naltira
+ * oladi: "Bu mijoz mavjud" xabari o'zi yetarli emas — qaysi kartochka
+ * ekani ko'rinmasa operator baribir yangisini ochishga urinadi.
+ */
+export class MijozDublikatError extends ConflictError {
+  constructor(xabar: string, mavjud: MijozQisqa) {
+    super(xabar, "MIJOZ_DUBLIKAT", { mavjud });
+    this.name = "MijozDublikatError";
+  }
+}
+
+/**
+ * YANGI MIJOZ KARTOCHKASI.
+ *
+ * DUBLIKAT HIMOYASI SHU YERDA. Ilgari bu funksiya to'g'ridan-to'g'ri
+ * `contact.create()` chaqirardi va shu sabab qarz oynasidagi
+ * (`mijozniAniqlaTx`) himoyani CHETLAB O'TARDI: Mijozlar sahifasidan
+ * kiritilgan raqam xom ko'rinishda saqlanar, keyin ayni odam qarz
+ * oynasidan yana bir marta kiritilganda tizim uni topolmay ikkinchi
+ * kartochka ochardi. Bir mijoz — ikki qarzdor kartasi.
+ *
+ * Endi:
+ *   · telefon `lib/tel.ts` orqali YAGONA formatga keltiriladi
+ *     (`+998913320008`) — bazaga faqat shu ko'rinish tushadi;
+ *   · yaratishdan OLDIN `businessId + normal telefon + deletedAt:null`
+ *     bo'yicha mavjud kartochka qidiriladi;
+ *   · topilsa YANGISI YARATILMAYDI — `MijozDublikatError` (409).
+ *
+ * Tekshiruv va yozuv bitta tranzaksiyada: ikki so'rov bir vaqtda kelsa
+ * ikkalasi ham "yo'q ekan" degan qarorga kelib ikki kartochka ochib
+ * yuborardi.
+ *
+ * ISM bo'yicha birlashtirish ATAYLAB YO'Q: bir xil ismli ikki odam —
+ * odatiy hol, asosiy identifikator telefon raqami.
+ */
 export async function createMijoz(businessId: string, userId: string, data: CreateMijozInput) {
-  return prisma.contact.create({
-    data: {
-      businessId,
-      ism: data.ism,
-      tel: data.tel?.trim() || undefined,
-      telegram: data.telegram?.trim() || undefined,
-      manzil: data.manzil?.trim() || undefined,
-      masulShaxs: data.masulShaxs?.trim() || undefined,
-      izoh: data.izoh?.trim() || undefined,
-      qarzLimit: data.qarzLimit ?? null,
-      createdBy: userId,
-    },
+  const { saqlash: tel } = telAjrat(data.tel);
+
+  return runBusinessTx(businessId, async (tx) => {
+    const mavjud = await mijozTelBoyichaTopTx(tx, businessId, tel);
+    if (mavjud) throw new MijozDublikatError("Bu mijoz mavjud", mavjud);
+
+    return tx.contact.create({
+      data: {
+        businessId,
+        ism: data.ism,
+        tel: tel ?? undefined,
+        telegram: data.telegram?.trim() || undefined,
+        manzil: data.manzil?.trim() || undefined,
+        masulShaxs: data.masulShaxs?.trim() || undefined,
+        izoh: data.izoh?.trim() || undefined,
+        qarzLimit: data.qarzLimit ?? null,
+        createdBy: userId,
+      },
+    });
   });
 }
 
+/**
+ * MIJOZNI TAHRIRLASH.
+ *
+ * Telefon bu yerda ham normallashtiriladi va BOSHQA kartochkaniki bo'lsa
+ * bloklanadi — aks holda dublikat "yaratish" yo'lidan emas, "tahrirlash"
+ * yo'lidan kirib kelardi: direktor ikkinchi kartochkaga birinchisining
+ * raqamini yozib qo'yishi bilan bir raqamda ikki mijoz paydo bo'lardi.
+ */
 export async function updateMijoz(businessId: string, id: string, data: UpdateMijozInput) {
-  const mavjud = await prisma.contact.findFirst({ where: { id, businessId, deletedAt: null } });
-  if (!mavjud) throw new ForbiddenError("Mijoz topilmadi");
+  const tel = data.tel !== undefined ? telAjrat(data.tel).saqlash : undefined;
 
-  return prisma.contact.update({
-    where: { id },
-    data: {
-      ...(data.ism ? { ism: data.ism } : {}),
-      ...(data.tel !== undefined ? { tel: data.tel?.trim() || null } : {}),
-      ...(data.telegram !== undefined ? { telegram: data.telegram?.trim() || null } : {}),
-      ...(data.manzil !== undefined ? { manzil: data.manzil?.trim() || null } : {}),
-      ...(data.masulShaxs !== undefined ? { masulShaxs: data.masulShaxs?.trim() || null } : {}),
-      ...(data.izoh !== undefined ? { izoh: data.izoh?.trim() || null } : {}),
-      ...(data.qarzLimit !== undefined ? { qarzLimit: data.qarzLimit } : {}),
-    },
+  return runBusinessTx(businessId, async (tx) => {
+    const mavjud = await tx.contact.findFirst({
+      where: { id, businessId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!mavjud) throw new ForbiddenError("Mijoz topilmadi");
+
+    if (tel) {
+      // Mijozning O'ZI natijaga tushmasligi kerak — o'z raqamini qayta
+      // saqlash dublikat emas.
+      const band = await mijozTelBoyichaTopTx(tx, businessId, tel, id);
+      if (band) throw new MijozDublikatError("Bu telefon raqamli mijoz mavjud", band);
+    }
+
+    return tx.contact.update({
+      where: { id },
+      data: {
+        ...(data.ism ? { ism: data.ism } : {}),
+        ...(tel !== undefined ? { tel } : {}),
+        ...(data.telegram !== undefined ? { telegram: data.telegram?.trim() || null } : {}),
+        ...(data.manzil !== undefined ? { manzil: data.manzil?.trim() || null } : {}),
+        ...(data.masulShaxs !== undefined ? { masulShaxs: data.masulShaxs?.trim() || null } : {}),
+        ...(data.izoh !== undefined ? { izoh: data.izoh?.trim() || null } : {}),
+        ...(data.qarzLimit !== undefined ? { qarzLimit: data.qarzLimit } : {}),
+      },
+    });
   });
 }
 

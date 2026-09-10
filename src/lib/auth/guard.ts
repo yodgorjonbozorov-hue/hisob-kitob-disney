@@ -29,9 +29,26 @@ export class UnauthorizedError extends Error {
  * masalan shu nomli biznes allaqachon bor yoki biznes bo'sh emas.
  */
 export class ConflictError extends Error {
-  constructor(message = "Amalni bajarib bo'lmadi") {
+  /** Mashina o'qiydigan sabab kodi (`ForbiddenError.code` bilan bir xil qoida). */
+  readonly code?: string;
+  /**
+   * Javob TANASIGA qo'shiladigan qo'shimcha maydonlar.
+   *
+   * Nega kerak: ziddiyatni hal qilish uchun ba'zan matn yetmaydi — masalan
+   * "bu mijoz mavjud" xabari bilan birga QAYSI kartochka ekani (id, ism,
+   * telefon) kerak, aks holda operator uni qidirib topishga majbur bo'ladi.
+   */
+  readonly qoshimcha?: Record<string, unknown>;
+
+  constructor(
+    message = "Amalni bajarib bo'lmadi",
+    code?: string,
+    qoshimcha?: Record<string, unknown>
+  ) {
     super(message);
     this.name = "ConflictError";
+    this.code = code;
+    this.qoshimcha = qoshimcha;
   }
 }
 
@@ -85,7 +102,14 @@ export function handleApiError(error: unknown): NextResponse {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
   if (error instanceof ConflictError) {
-    return NextResponse.json({ error: error.message }, { status: 409 });
+    return NextResponse.json(
+      {
+        error: error.message,
+        ...(error.code ? { code: error.code } : {}),
+        ...(error.qoshimcha ?? {}),
+      },
+      { status: 409 }
+    );
   }
   console.error(error);
   return NextResponse.json({ error: "Server xatosi yuz berdi" }, { status: 500 });

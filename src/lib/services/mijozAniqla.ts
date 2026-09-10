@@ -1,7 +1,7 @@
 import { ForbiddenError, BadRequestError } from "@/lib/auth/guard";
 import { runBusinessTx, type BusinessTx } from "@/lib/db/businessTx";
 import { qidiruvRejimi } from "@/lib/db/dialect";
-import { telNormalize } from "@/lib/validation/qarz";
+import { telAjrat, telNormalize } from "@/lib/tel";
 
 /**
  * MIJOZNI ANIQLASH — qarzning YAGONA egasini topadigan bitta joy.
@@ -46,20 +46,67 @@ function ismKalit(ism: string): string {
   return ism.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+/** Dublikat tekshiruvi qaytaradigan qisqa kartochka. */
+export interface MijozQisqa {
+  id: string;
+  ism: string;
+  tel: string | null;
+}
+
 /**
- * Telefonni ikki qiymatga ajratadi: SOLISHTIRISH uchun normal ko'rinish va
- * SAQLASH uchun matn.
+ * TELEFON BO'YICHA MAVJUD KARTOCHKANI TOPADI — dublikat himoyasining
+ * YAGONA qidiruvi. Mijozlar sahifasi ham, qarz oynasi ham, CRM ham shu
+ * yerdan o'tadi.
  *
- * Qarzlar sahifasidagi forma raqamni zod bilan normallashtirib yuboradi
- * (`telMaydoni`), kassa esa xom matn yuborishi mumkin. Normallashmagan
- * raqam (masalan shahar raqami) bo'yicha kartochka QIDIRILMAYDI — lekin
- * operator kiritgan matn baribir saqlanadi, aks holda ma'lumot yo'qolardi.
+ * Ikki qadam ATAYLAB:
+ *   1. Indeksli aniq qidiruv (`businessId, tel`) — yangi yozuvlar normal
+ *      ko'rinishda saqlanadi, shuning uchun kundalik holat shu qadamda hal
+ *      bo'ladi va so'rov arzon.
+ *   2. Topilmasa — biznesning telefonli kartochkalarini ko'rib chiqib
+ *      normallashgan qiymatni solishtiradi. Bu ESKI yozuvlar uchun: tuzatish
+ *      kiritilgunicha baza ichida "91 332 00 08" ko'rinishidagi raqamlar
+ *      qolgan va ular indeks bo'yicha topilmaydi. Ularsiz himoya jimgina
+ *      chetlab o'tilardi — aynan shu dublikatni tug'dirgan xato.
+ *
+ * `bundanTashqari` — tahrirda mijozning O'ZI natijaga tushmasligi uchun.
  */
-function telAjrat(xom: string | null | undefined): { mos: string | null; saqlash: string | null } {
-  const normal = telNormalize(xom);
-  if (normal) return { mos: normal, saqlash: normal };
-  const matn = xom?.trim();
-  return { mos: null, saqlash: matn || null };
+export async function mijozTelBoyichaTopTx(
+  tx: BusinessTx,
+  businessId: string,
+  xomTel: string | null | undefined,
+  bundanTashqari?: string
+): Promise<MijozQisqa | null> {
+  const { mos, saqlash } = telAjrat(xomTel);
+  const variantlar = [...new Set([mos, saqlash].filter((v): v is string => Boolean(v)))];
+  if (variantlar.length === 0) return null;
+
+  const aniq = await tx.contact.findFirst({
+    where: {
+      businessId,
+      deletedAt: null,
+      tel: { in: variantlar },
+      ...(bundanTashqari ? { id: { not: bundanTashqari } } : {}),
+    },
+    select: { id: true, ism: true, tel: true },
+    orderBy: { createdAt: "asc" },
+  });
+  if (aniq) return aniq;
+
+  // Normallashmaydigan matn uchun ikkinchi qadam ma'nosiz — solishtirish
+  // kaliti yo'q, aniq tenglik esa yuqorida tekshirildi.
+  if (!mos) return null;
+
+  const telefonlilar = await tx.contact.findMany({
+    where: {
+      businessId,
+      deletedAt: null,
+      tel: { not: null },
+      ...(bundanTashqari ? { id: { not: bundanTashqari } } : {}),
+    },
+    select: { id: true, ism: true, tel: true },
+    orderBy: { createdAt: "asc" },
+  });
+  return telefonlilar.find((c) => telNormalize(c.tel) === mos) ?? null;
 }
 
 /**
@@ -107,11 +154,7 @@ export async function mijozniAniqlaTx(
 
   // ---- 2. Telefon bo'yicha aniq moslik ----
   if (telMos) {
-    const mos = await tx.contact.findFirst({
-      where: { businessId: params.businessId, tel: telMos, deletedAt: null },
-      select: { id: true, ism: true, tel: true },
-      orderBy: { createdAt: "asc" },
-    });
+    const mos = await mijozTelBoyichaTopTx(tx, params.businessId, telMos);
     if (mos) return { contactId: mos.id, ism: mos.ism, tel: mos.tel };
   }
 
@@ -133,8 +176,11 @@ export async function mijozniAniqlaTx(
   // Telefon berilgan bo'lsa, BOSHQA telefonli bir xil ismli kartochka —
   // boshqa odam; u nomzod emas. Telefonsiz kartochka esa aynan shu mijozning
   // to'ldirilmagan kartochkasi bo'lishi mumkin.
+  // Telefon SOLISHTIRISHDA normallashtiriladi: eski yozuvlarda raqam xom
+  // ko'rinishda yotgan bo'lishi mumkin va aniq tenglik uni "boshqa odam"
+  // deb hisoblab yangi dublikat ochib yuborardi.
   const nomzodlar = oxshashlar.filter(
-    (c) => ismKalit(c.ism) === kalit && (!telMos || !c.tel || c.tel === telMos)
+    (c) => ismKalit(c.ism) === kalit && (!telMos || !c.tel || telNormalize(c.tel) === telMos)
   );
 
   if (nomzodlar.length === 1) {

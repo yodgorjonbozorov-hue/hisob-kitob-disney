@@ -6644,3 +6644,65 @@ moliya-audit, qarzlar-brauzer — hammasi yashil. `npm run build` o'tadi.
 
 `QarzTafsilot.tsx` 250 satr chegarasidan oshgani uchun `BekorForm`
 alohida faylga (`QarzBekorForm.tsx`) chiqarildi.
+
+## Mijoz dublikati — yozish yo'li yopildi, mavjudlari birlashtiriladi (2026-09-10)
+
+### Ildiz sabab
+
+`src/lib/services/mijoz.ts` dagi `createMijoz()` to'g'ridan-to'g'ri
+`prisma.contact.create()` chaqirardi: telefonni XOM ko'rinishda saqlar va
+dublikat tekshiruvini UMUMAN qilmasdi. Qarz oynasidagi yo'l
+(`mijozniAniqlaTx`) esa raqamni normal ko'rinishda (`+998913320008`)
+qidirardi. Ikki yo'l bir-birini topmasdi: Mijozlar sahifasidan
+"+998 91 332 00 08" deb kiritilgan odam qarz oynasidan yana bir marta
+kiritilganda YANGI kartochka olardi. Natijada Disney Flowers'da bitta
+odam ikki qarzdor kartasi bo'lib chiqardi (800 000 va 300 000 so'm).
+
+Ikkinchi darajali manba — CRM: `/api/crm/contacts` POST dublikatni
+umuman tekshirmasdi, `kontaktTop`/`zakazMijoziniOzgartirish` esa XOM matn
+bo'yicha qidirardi.
+
+### Tuzatish
+
+- `src/lib/tel.ts` — telefon normalizatsiyasining YAGONA manbai
+  (`telNormalize`, `telKorinish`, `telAjrat`). `validation/qarz.ts` endi
+  faqat qayta eksport qiladi; ikkinchi mantiq yo'q.
+- `mijozTelBoyichaTopTx()` (`services/mijozAniqla.ts`) — dublikat
+  qidiruvining yagona joyi. Indeksli aniq qidiruv, topilmasa ESKI xom
+  yozuvlar uchun normallashtirib solishtirish.
+- `createMijoz()` va `updateMijoz()` `runBusinessTx` ichida ishlaydi:
+  tekshiruv va yozuv bitta qaror. Dublikat topilsa `MijozDublikatError`
+  (409, `code: "MIJOZ_DUBLIKAT"`) — javob tanasida `mavjud` kartochka
+  (id, ism, tel). UI (`MijozModal`) "Bu mijoz mavjud" xabari ostida qaysi
+  kartochka ekanini ko'rsatadi.
+- CRM ham AYNI xizmatdan o'tadi; CRM servisidagi qidiruvlar `telAjrat`
+  bilan normallashadi.
+- `ConflictError` endi `code` va `qoshimcha` oladi (`ForbiddenError.code`
+  bilan bir xil qoida) — mavjud chaqiruvlar o'zgarmadi.
+
+Ism bo'yicha avtomatik birlashtirish ATAYLAB YO'Q: bir xil ismli ikki
+odam odatiy hol, asosiy identifikator — telefon.
+
+### Mavjud dublikatlar
+
+`scripts/disney-flowers-mijoz-dublikat-birlashtir.ts` — standart holatda
+DRY RUN, `--write` bilangina yozadi. FAQAT Disney Flowers biznesiga
+ishlaydi (0 ta yoki bir nechta topilsa xato bilan to'xtaydi). Kanonik —
+eng eski `createdAt`; dublikatdan Debt, Sale, Deal, Activity, Contract va
+PosChek ko'chadi (vazifada to'rttasi sanalgan edi, sxemada relation
+OLTITA — qolgani osilib qolmasin), keyin dublikat YUMSHOQ o'chiriladi.
+Summalarga tegilmaydi va qarzlar bitta Debt ga QO'SHILMAYDI — har biri
+alohida tarix bo'lib qoladi. Jami ochiq qarz tranzaksiya ICHIDA qayta
+o'lchanadi: farq chiqsa hammasi orqaga qaytadi.
+
+### Tekshirish
+
+`npm run test:mijoz-dublikat` (9 ta yangi test): format har xil bo'lsa ham
+dublikat ochilmaydi, xabar va `mavjud` maydoni, boshqa biznesda ayni
+raqamga ruxsat, bir xil ism + boshqa telefon = ikki mijoz, mavjud mijozga
+qarz Contact sonini oshirmaydi, skriptning quruq/yozish rejimi, jami qarz
+o'zgarmasligi, idempotentlik, tahrirda dublikat blokirovkasi.
+Regressiya: mijozlar, qarz, qarz-mijoz, qarz-mijoz-bogla, qarz-tahrir,
+qarz-taqsimot, qarzdorlik, crm, crm-pipeline, crm-tolovlar, crm-sotuvchi,
+zakaz-jamoasi, optom, magazin, atomik, soft-delete, tozalash, isolation,
+izolyatsiya-royxati, mijoz-xos — hammasi yashil. `npm run build` o'tadi.
