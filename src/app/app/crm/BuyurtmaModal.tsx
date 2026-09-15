@@ -125,8 +125,10 @@ export function BuyurtmaModal({
         categoryId,
         summa: narx,
         tolovlar: tolovSatrlari,
-        // QARZGA — faqat to'lovsiz zakazda va faqat foydalanuvchi tanlasa.
-        tolovTuri: tolovSatrlari.length === 0 && qarzga ? "qarz" : null,
+        // QARZGA — faqat foydalanuvchi ATAYLAB tanlaganda. Qisman to'langan
+        // zakazda ham mumkin (zalog + qolgani qarzga); belgisiz zakaz esa
+        // qarz YARATMAYDI va to'liq to'langunga qadar yutilmaydi.
+        tolovTuri: qarzga ? "qarz" : null,
         kontaktIsm: kontaktIsm || null,
         kontaktTel: kontaktTel || null,
         sana,

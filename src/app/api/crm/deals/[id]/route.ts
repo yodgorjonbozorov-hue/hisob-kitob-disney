@@ -12,7 +12,9 @@ import {
   zakazMijoziniOzgartirish,
   zakazniOchirish,
   zakazTolovlariniAlmashtirish,
+  zakazQarzBelgisi,
 } from "@/lib/crm/service";
+import { zakazTolovHisobi } from "@/lib/crm/tolovOqish";
 import { zakazniYakunlash } from "@/lib/crm/yakunlash";
 import { buyurtmaPatchSchema } from "@/lib/validation/crm";
 import { dashboardYangilandi } from "@/lib/cache";
@@ -47,12 +49,18 @@ export const GET = withTenant<{ params: { id: string } }>(
     if (!deal) return NextResponse.json({ error: "Buyurtma topilmadi" }, { status: 404 });
     // Zakazdagi xodimlar (kategoriya kesimida) — tafsilot oynasi ko'rsatadi.
     // `sotuvchi` alohida qaytadi: u ijrochilardan boshqa tushuncha (38-talab).
-    const [xodimlar, sotuvchi, baho] = await Promise.all([
+    //
+    // TO'LOV HISOBI shu yerdan keladi (`lib/crm/tolovOqish.ts`) — ilgari
+    // tafsilot javobida to'lov qatorlari UMUMAN yo'q edi, shuning uchun
+    // oyna doskadan kelgan eski suratga tayanar va aralash to'lovning bir
+    // qismi ko'rinmay qolardi.
+    const [xodimlar, sotuvchi, baho, tolov] = await Promise.all([
       zakazXodimlari(businessId ?? "-", deal.id),
       zakazSotuvchisi(businessId ?? "-", deal.id),
       zakazBahosi(businessId ?? "-", deal.id),
+      zakazTolovHisobi(businessId ?? "-", deal.id),
     ]);
-    return NextResponse.json({ ...deal, xodimlar, sotuvchi, baho });
+    return NextResponse.json({ ...deal, xodimlar, sotuvchi, baho, tolov });
   },
   { module: "CRM" }
 );
@@ -93,23 +101,32 @@ export const PATCH = withTenant<{ params: { id: string } }>(
       });
       if (!existing) throw new ForbiddenError("Buyurtma topilmadi");
 
-      if (existing.transactionId && (data.summa !== undefined || data.categoryId !== undefined)) {
+      // KATEGORIYA kirim yozilgach QULFLANADI: tranzaksiyada kategoriya
+      // SNAPSHOT bo'lib turadi, zakazda uni keyin almashtirish CRM va Kirim
+      // hisobotini zid holatga tushirardi.
+      if (existing.transactionId && data.categoryId !== undefined) {
+        throw new BadRequestError("Kirim yozilgan buyurtmaning kategoriyasi o'zgartirilmaydi");
+      }
+      // NARX endi kirim yozilgandan KEYIN ham tuzatilaveradi. Sabab: kirim
+      // tranzaksiyasining summasi — TO'LOV summasi, zakaz narxi emas
+      // (`lib/crm/tolovKirimi.ts`). Ya'ni narxni o'zgartirish yozilgan
+      // yozuvni yolg'onga aylantirmaydi; u faqat to'langan puldan kam
+      // bo'lmasligi kerak (pastda tekshiriladi). Qarz ochilgan zakazda esa
+      // narx qarz summasini keltirib chiqargani uchun qulflanadi.
+      if (existing.debtId && data.summa !== undefined && data.summa !== existing.summa) {
         throw new BadRequestError(
-          "Kirim yozilgan buyurtmaning summasi va kategoriyasi o'zgartirilmaydi"
+          "Qarz ochilgan zakazning summasi o'zgartirilmaydi — Qarzdorlik bo'limidan tuzating"
         );
       }
-      // TO'LOV moliyaga o'tgach QULFLANADI: kirim/qarz yozuvlari allaqachon
-      // shu raqamlardan chiqqan, ularni keyin surish CRM va moliyani zid
-      // holatga tushirardi (summa/kategoriya bilan bir xil qoida).
+      // TO'LOV QATORLARINI TO'LIQ ALMASHTIRISH moliyaga o'tgach yopiq:
+      // kirim allaqachon kassada. Yangi to'lov esa QO'SHILADI —
+      // `POST /api/crm/deals/[id]/tolovlar` (`lib/crm/tolovQoshish.ts`).
       if (
         (existing.transactionId || existing.debtId) &&
-        (data.tolangan !== undefined ||
-          data.tolovTuri !== undefined ||
-          data.tolovlar !== undefined ||
-          (data.summa !== undefined && data.summa !== existing.summa))
+        (data.tolangan !== undefined || data.tolovTuri !== undefined || data.tolovlar !== undefined)
       ) {
         throw new BadRequestError(
-          "Moliyaga o'tgan zakazning summasi va to'lovi o'zgartirilmaydi — Kirim yoki Qarzdorlik bo'limidan tuzating"
+          "Moliyaga o'tgan zakazning to'lovi bu yo'l bilan o'zgartirilmaydi — to'lov qo'shing yoki Kirim/Qarzdorlik bo'limidan tuzating"
         );
       }
       const yangiSumma = data.summa ?? existing.summa;
@@ -153,6 +170,7 @@ export const PATCH = withTenant<{ params: { id: string } }>(
         await zakazTolovlariniAlmashtirish({
           businessId,
           dealId: params.id,
+          userId: user.userId,
           tolovlar: data.tolovlar,
           tolovTuri: data.tolovTuri ?? null,
           summa: yangiSumma,
@@ -171,6 +189,18 @@ export const PATCH = withTenant<{ params: { id: string } }>(
       if (existing.holat === "YUTILDI" && !existing.transactionId && !existing.debtId && tolovOzgardi && !data.holat) {
         await zakazniYakunlash({ businessId, dealId: params.id, userId: user.userId });
       }
+    }
+
+    // "QOLGAN SUMMA QARZDORLIKKA" BELGISI — to'lov qatorlariga tegmaydi,
+    // shuning uchun zalog kelgan zakazda ham qo'yila oladi. Qarz FAQAT shu
+    // tanlov bilan ochiladi (`lib/crm/pipeline.ts` → `qarzUlushi`).
+    if (data.qarzga !== undefined) {
+      await zakazQarzBelgisi({
+        businessId,
+        dealId: params.id,
+        qarzga: data.qarzga,
+        userId: user.userId,
+      });
     }
 
     // SOTUVCHINI ALMASHTIRISH (10-talab) — CRM'ga kira olgan har bir xodim
@@ -281,7 +311,11 @@ export const PATCH = withTenant<{ params: { id: string } }>(
         category: { select: { id: true, nomi: true } },
       },
     });
-    return NextResponse.json(deal);
+    // TO'LOV HISOBI javobga QO'SHILADI: brauzer saqlagandan keyin
+    // qatorlarni bazadagi holatidan qayta chizadi. Ilgari u eski suratda
+    // qolib ketar va aralash to'lovning bir qismi ekrandan yo'qolardi.
+    const tolov = await zakazTolovHisobi(businessId, params.id);
+    return NextResponse.json({ ...deal, tolov });
   },
   { module: "CRM" }
 );

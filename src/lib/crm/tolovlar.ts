@@ -7,19 +7,24 @@ import type { Prisma } from "@prisma/client";
  * Misol: 1 000 000 lik zakaz — naqd 300 000 + click 400 000 + terminal
  * 200 000, qolgan 100 000 esa QARZ.
  *
- * IKKI QOIDA, ular buzilsa moliya yolg'on ko'rsatadi:
+ * UCH QOIDA, ular buzilsa moliya yolg'on ko'rsatadi:
  *
- * 1. QARZ — KANAL EMAS. Qarz "to'lov turi" sifatida yozilmaydi: u zakaz
- *    summasidan QOLGAN qism (`lib/crm/pipeline.ts` → `qarzUlushi`). Shu
- *    sabab bu yerdagi kanallar ro'yxatida "qarz" YO'Q — aks holda bir
- *    zakazda qarz ikki xil joyda (qator va qoldiq) turib, ikki xil javob
- *    berardi.
+ * 1. QARZ — KANAL EMAS. Qarz "to'lov turi" sifatida yozilmaydi. U zakazning
+ *    QOLDIG'I ham EMAS: to'lanmagan qism o'z-o'zidan qarz bo'lmaydi (zalog
+ *    bergan mijoz qarzdor emas). Qarz FAQAT savdo ataylab qarzga
+ *    yopilganda tug'iladi — `Deal.tolovTuri = "qarz"` tanlovi bilan
+ *    (`lib/crm/pipeline.ts` → `qarzUlushi`). Shu sabab bu yerdagi
+ *    kanallar ro'yxatida "qarz" YO'Q.
  *
  * 2. HAR KANAL — ALOHIDA KIRIM. Bitta `Transaction` da bitta `accountId`
  *    bo'ladi, ya'ni bitta yozuv pulni ikki kassaga bo'la olmaydi. Shuning
  *    uchun naqd qism naqd kassaga, click/terminal qismi karta/hisob
  *    kassasiga ALOHIDA yozuv bilan tushadi ("naqd kassa faqat naqd qismga
  *    oshsin" talabi shundan bajariladi).
+ *
+ * 3. KIRIM PUL KELGANDA YOZILADI, "Yutildi" da emas. Har qator tug'ilishi
+ *    bilan o'z tranzaksiyasini oladi (`lib/crm/tolovKirimi.ts`). "Yutildi"
+ *    — zakazning yakunlangan statusi, pul yozadigan amal emas.
  *
  * ORQAGA MOSLIK: eski, bir kanalli zakazlarda qator UMUMAN YO'Q — pul
  * `Deal.tolangan` + `Deal.tolovTuri` da turadi va hamma joyda avvalgidek
@@ -82,8 +87,16 @@ export function tolovlarJami(satrlar: TolovSatri[]): number {
  * ZAKAZ TO'LOV BELGISI (`Deal.tolovTuri`) qatorlardan hisoblanadi:
  * bitta qator — o'sha kanal (eski zakazlar bilan bir xil ko'rinish),
  * bir nechta — "aralash", qatorsiz — tanlov (odatda `null` yoki "qarz").
+ *
+ * "QARZGA" TANLOVI HAR DOIM USTUN. Qoldiq qarzdorlikka yozilishi
+ * foydalanuvchining ATAYLAB qilgan tanlovi (`lib/crm/pipeline.ts` →
+ * `qarzUlushi`), shuning uchun u qatorlar bilan yuvilib ketmasligi kerak:
+ * 750 000 lik zakazga 200 000 zalog kelib, qolgani ataylab qarzga
+ * yopilayotgan bo'lsa belgi "qarz" bo'lib qoladi. Kanal ma'lumoti
+ * yo'qolmaydi — u qatorlarning o'zida (`DealTolov.kanal`).
  */
 export function tolovTuriBelgisi(satrlar: TolovSatri[], tanlov: string | null | undefined): string | null {
+  if (tanlov === "qarz") return "qarz";
   if (satrlar.length === 1) return satrlar[0].kanal;
   if (satrlar.length > 1) return ARALASH;
   return tanlov ?? null;
@@ -183,7 +196,7 @@ export async function tolovSatrlariniYoz(
   businessId: string,
   dealId: string,
   satrlar: TolovSatri[]
-): Promise<void> {
+): Promise<Array<{ id: string; kanal: string; summa: number }>> {
   const mavjud = await db.dealTolov.findMany({
     where: { businessId, dealId },
     select: { id: true, transactionId: true },
@@ -194,7 +207,16 @@ export async function tolovSatrlariniYoz(
   if (mavjud.length > 0) {
     await db.dealTolov.deleteMany({ where: { businessId, dealId } });
   }
+  // Yaratilgan qatorlar QAYTARILADI: chaqiruvchi har biriga AYNI
+  // tranzaksiyada kirim yozadi (`lib/crm/tolovKirimi.ts`) — pul kelgan
+  // paytda hisobga tushsin, "Yutildi" ni kutmasin.
+  const yaratilgan: Array<{ id: string; kanal: string; summa: number }> = [];
   for (const t of satrlar) {
-    await db.dealTolov.create({ data: { businessId, dealId, kanal: t.kanal, summa: t.summa } });
+    const qator = await db.dealTolov.create({
+      data: { businessId, dealId, kanal: t.kanal, summa: t.summa },
+      select: { id: true, kanal: true, summa: true },
+    });
+    yaratilgan.push(qator);
   }
+  return yaratilgan;
 }

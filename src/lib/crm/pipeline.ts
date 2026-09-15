@@ -17,6 +17,8 @@
  * zakazni bir kun oldin/keyin surib yubormaydi.
  */
 
+import { formatMoney } from "@/lib/format";
+
 // ---------------------------------------------------------------------------
 // Ish jarayoni holati (Deal.holat)
 // ---------------------------------------------------------------------------
@@ -199,17 +201,63 @@ export function kirimUlushi(summa: number, tolangan: number): number {
   return Math.max(0, Math.min(tolangan, summa));
 }
 
+/** Zakazning to'lanmagan QOLDIG'I (so'm). Qarz BILAN BIR XIL NARSA EMAS. */
+export function qoldiqSumma(summa: number, tolangan: number): number {
+  return Math.max(0, summa - kirimUlushi(summa, tolangan));
+}
+
 /**
- * Yutilganda QARZDORLIKKA o'tadigan summa (qolgan qism).
+ * Yutilganda QARZDORLIKKA o'tadigan summa.
  *
- * FAQAT foydalanuvchi tanlovi bo'lganda: qisman to'lovda qolgani, "Qarzga"
- * tanlanganda butun summa. To'lov tanlanmagan zakazga qarz OCHILMAYDI —
- * YUTILDI bilan QARZ orasidagi avtomatik bog'lanish ataylab yo'q.
+ * ═══ QOLDIQ ≠ QARZ ═══
+ * Ilgari bu funksiya QISMAN to'langan zakazning qoldig'ini ham qarzga
+ * yozardi: 750 000 lik zakazga 200 000 zalog berilsa, YUTILDI bosilishi
+ * bilan qolgan 550 000 o'z-o'zidan qarzdorlikka tushib qolardi. Bu YOLG'ON
+ * edi — zalog qarz degani emas, u shunchaki hali to'lanmagan qoldiq.
+ *
+ * ENDI QARZ FAQAT ATAYLAB OCHILADI: foydalanuvchi "Qolgan summa
+ * qarzdorlikka yozilsin" ni tanlaganda (`Deal.tolovTuri = "qarz"`), ya'ni
+ * savdo haqiqatan QARZGA yopilganda. Boshqa hech qanday yo'l bilan zakaz
+ * qarz yaratmaydi; to'liq to'lanmagan zakaz esa umuman YUTILDI bo'lmaydi
+ * (`yutishTosigi`).
  */
 export function qarzUlushi(summa: number, tolangan: number, tolovTuri: string | null | undefined): number {
-  const holat = tolovHolati(summa, tolangan, tolovTuri);
-  if (holat !== "QISMAN" && holat !== "QARZ") return 0;
-  return Math.max(0, summa - kirimUlushi(summa, tolangan));
+  if (tolovTuri !== QARZ_KANALI) return 0;
+  return qoldiqSumma(summa, tolangan);
+}
+
+/**
+ * "YUTILDI" GA O'TISHGA TO'SIQ BORMI — sabab matni yoki `null`.
+ *
+ * QOIDA (topshiriqning 2- va 3-bandi): zakaz faqat puli TO'LIQ kelganda
+ * yutiladi. Yarim to'langan zakazni yutilgan deb belgilash moliyani
+ * yolg'on ko'rsatardi — qolgan pul hech qayerda kutilmay qolardi.
+ *
+ * UCH ISTISNO, har biri ataylab:
+ *   1. `summa <= 0` — narxsiz zakaz (bot leadi, xayriya ish): moliyaviy
+ *      ma'nosi yo'q, avvalgidek yutiladi;
+ *   2. `tolovTuri = "qarz"` — savdo ATAYLAB qarzga yopilmoqda: bu biznesda
+ *      mavjud va qonuniy amal, qoldiq esa qarzdorlik yozuvi bo'lib qoladi;
+ *   3. `tolangan >= summa` — to'liq to'langan (asosiy yo'l).
+ *
+ * ORTIQCHA TO'LOV ham to'siq: jimgina ruxsat berilsa kassa zakazdan katta
+ * bo'lib, qoldiq manfiyga aylanardi.
+ *
+ * SERVERDA MAJBURLANADI (`lib/crm/yakunlash.ts`) — frontendda tugmani
+ * o'chirish himoya emas.
+ */
+export function yutishTosigi(
+  summa: number,
+  tolangan: number,
+  tolovTuri: string | null | undefined
+): string | null {
+  if (summa <= 0) return null;
+  if (tolangan > summa) {
+    return `Zakazga narxidan ko'p to'lov kiritilgan (${formatMoney(tolangan)} / ${formatMoney(summa)}) — avval to'lovlarni tuzating`;
+  }
+  if (tolangan >= summa) return null;
+  if (tolovTuri === QARZ_KANALI) return null;
+  return `Zakaz to'liq to'lanmagan. Qoldiq: ${formatMoney(qoldiqSumma(summa, tolangan))}`;
 }
 
 // ---------------------------------------------------------------------------

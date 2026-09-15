@@ -2,7 +2,14 @@
 
 import { useState } from "react";
 import { formatMoney } from "@/lib/format";
-import { kirimUlushi, qarzUlushi, tolovHolati, TOLOV_HOLAT_NOMI } from "@/lib/crm/pipeline";
+import {
+  kirimUlushi,
+  qarzUlushi,
+  qoldiqSumma,
+  tolovHolati,
+  yutishTosigi,
+  TOLOV_HOLAT_NOMI,
+} from "@/lib/crm/pipeline";
 import type { BuyurtmaDTO } from "./turlar";
 
 /**
@@ -12,13 +19,25 @@ import type { BuyurtmaDTO } from "./turlar";
  * QAYERGA tushishi — kirimga qancha, qarzdorlikka qancha — oldindan
  * ko'rsatiladi. Taqsimot brauzerda ham, serverda ham AYNI funksiyalardan
  * (`lib/crm/pipeline.ts`) chiqadi, ya'ni ko'rsatilgan raqam yozilgan raqam.
+ *
+ * ═══ TO'LIQ TO'LANMAGAN ZAKAZ O'TMAYDI ═══
+ * `yutishTosigi` bo'lsa tugma o'chiriladi va qoldiq ko'rsatiladi. Bu FAQAT
+ * qulaylik: server ayni qoidani mustaqil majburlaydi
+ * (`lib/crm/yakunlash.ts`), ya'ni tugmani chetlab o'tish yordam bermaydi.
  */
 export function YakunlashTasdiq({
   b,
+  tosiq: berilganTosiq,
   onClose,
   onDone,
 }: {
   b: BuyurtmaDTO;
+  /**
+   * Serverdan kelgan to'siq sababi (`lib/crm/tolovOqish.ts`). Berilmasa
+   * kartadagi suratdan hisoblanadi — doskadan to'g'ridan-to'g'ri
+   * chaqirilganda ham tekshiruv ishlasin.
+   */
+  tosiq?: string | null;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -28,6 +47,7 @@ export function YakunlashTasdiq({
   const kirim = kirimUlushi(b.summa, b.tolangan);
   const qarz = qarzUlushi(b.summa, b.tolangan, b.tolovTuri);
   const holat = tolovHolati(b.summa, b.tolangan, b.tolovTuri);
+  const tosiq = berilganTosiq ?? yutishTosigi(b.summa, b.tolangan, b.tolovTuri);
 
   async function yakunlash() {
     setLoading(true);
@@ -80,10 +100,10 @@ export function YakunlashTasdiq({
             Narx kiritilmagan — zakaz yutildi bo&apos;ladi, lekin moliyaviy yozuv bo&apos;lmaydi.
           </p>
         )}
-        {b.summa > 0 && holat === "TANLANMAGAN" && (
-          <p className="text-2xs text-debt-fg">
-            To&apos;lov tanlanmagan — zakaz yutildi bo&apos;ladi, lekin kirim ham, qarz ham yozilmaydi.
-            To&apos;lovni keyin belgilasangiz kirim o&apos;zi yoziladi.
+        {tosiq && (
+          <p className="text-2xs text-expense">
+            {tosiq}. To&apos;lovni qabul qiling yoki &quot;qolgan summa qarzdorlikka&quot; ni
+            belgilang — qoldiq {formatMoney(qoldiqSumma(b.summa, b.tolangan))}.
           </p>
         )}
         {xato && <p className="text-expense text-sm">{xato}</p>}
@@ -93,7 +113,7 @@ export function YakunlashTasdiq({
           </button>
           <button
             onClick={yakunlash}
-            disabled={loading}
+            disabled={loading || Boolean(tosiq)}
             className="px-5 py-2 rounded-lg bg-income text-white text-sm font-medium disabled:opacity-60"
           >
             {loading ? "Yozilmoqda..." : "Ha, yutildi"}

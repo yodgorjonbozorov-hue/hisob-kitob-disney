@@ -22,6 +22,8 @@ import type { ZakazBahoDTO } from "@/lib/services/zakazBaho";
 import { ZakazAmalPaneli } from "./ZakazAmalPaneli";
 import { ZakazDirektorTahriri } from "./ZakazDirektorTahriri";
 import { ZakazMoliya } from "./ZakazMoliya";
+import { ZakazTolovlari } from "./ZakazTolovlari";
+import type { ZakazTolovHisobiDTO } from "@/lib/crm/tolovOqish";
 import { ZakazTarix, type ActivityDTO } from "./ZakazTarix";
 import type {
   BuyurtmaDTO,
@@ -77,15 +79,12 @@ export function BuyurtmaSheet({
   onYoqotildi: () => void;
   /** Zakazni o'chirish (tasdiq oynasi doskada ochiladi) — faqat direktor. */
   onOchirish: () => void;
-  onTahrirlandi: (yangi: {
-    categoryId: string;
-    kategoriya: string;
-    summa: number;
-    tolangan: number;
-    tolovTuri: string | null;
-    debtId: string | null;
-    transactionId: string | null; // server yutilgan zakazda moliyani darhol yozadi
-  }) => void;
+  /**
+   * Ochiq oynadagi zakaz maydonlari o'zgardi (narx, to'lov, moliya) —
+   * doska shu qismlarni mahalliy yozib qo'yadi. `Partial` ataylab:
+   * chaqiruvchi faqat O'ZGARGANINI uzatadi, qolgani eski suratdan qoladi.
+   */
+  onTahrirlandi: (yangi: Partial<BuyurtmaDTO>) => void;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -93,14 +92,19 @@ export function BuyurtmaSheet({
   const [zakazXodimlar, setZakazXodimlar] = useState<ZakazXodimDTO[] | null>(null);
   const [sotuvchi, setSotuvchi] = useState<ZakazSotuvchiDTO | null>(b.sotuvchi);
   const [baho, setBaho] = useState<ZakazBahoDTO | null>(null);
+  // TO'LOV HISOBI — serverdagi HOLAT (`lib/crm/tolovOqish.ts`). Doskadan
+  // kelgan surat emas: aynan eski suratga tayanish tufayli aralash
+  // to'lovning bir qismi ekrandan yo'qolib qolardi.
+  const [tolov, setTolov] = useState<ZakazTolovHisobiDTO | null>(null);
   const [tasdiq, setTasdiq] = useState(false);
   const kirimBor = Boolean(b.transactionId);
   // Jamoani o'zgartirish (37-talab): huquq yoki zakazning o'z mas'uli
   // (yakunlangunga qadar) — server ham AYNI qoidani tekshiradi.
   const jamoaOzgartira = jamoaHuquqi || (b.masulId === meId && b.holat !== "YUTILDI");
-  const moliyaYozilgan = Boolean(b.transactionId || b.debtId);
   const kechikkan = kechikkanKun(b.holat, b.sana, bugun);
-  const tolov = tolovHolati(b.summa, b.tolangan, b.tolovTuri);
+  // To'lov belgisi: hisob kelgan bo'lsa serverdan, aks holda kartadagi surat.
+  const tolangan = tolov?.tolangan ?? b.tolangan;
+  const tolovHolat = tolov?.holati ?? tolovHolati(b.summa, b.tolangan, b.tolovTuri);
 
   const yuklash = useCallback(async () => {
     const res = await fetch(`/api/crm/deals/${b.id}`);
@@ -110,6 +114,7 @@ export function BuyurtmaSheet({
       setZakazXodimlar(data.xodimlar ?? []);
       setSotuvchi(data.sotuvchi ?? null);
       setBaho(data.baho ?? null);
+      if (data.tolov) setTolov(data.tolov as ZakazTolovHisobiDTO);
     }
   }, [b.id]);
 
@@ -153,9 +158,9 @@ export function BuyurtmaSheet({
           {b.masulIsm && !sotuvchi && <p className="text-xs text-faint">Mas&apos;ul: {b.masulIsm}</p>}
           <div className="flex gap-1.5 flex-wrap pt-1">
             <Badge tone="neutral">{USTUN_NOMI[ustun]}</Badge>
-            <Badge tone={TOLOV_BELGISI[tolov].tone}>
-              {TOLOV_HOLAT_NOMI[tolov]}
-              {tolov === "QISMAN" ? `: ${formatMoney(b.tolangan)}` : ""}
+            <Badge tone={TOLOV_BELGISI[tolovHolat].tone}>
+              {TOLOV_HOLAT_NOMI[tolovHolat]}
+              {tolovHolat === "QISMAN" ? `: ${formatMoney(tolangan)}` : ""}
             </Badge>
             {kechikkan > 0 && <Badge tone="chiqim">🔴 {kechikkan} kun kechikkan</Badge>}
           </div>
@@ -171,10 +176,41 @@ export function BuyurtmaSheet({
           onOchirish={onOchirish}
         />
 
-        {/* Kategoriya/narx/to'lov — faqat moliyaga o'tmagan zakazda (server ham qulflaydi). */}
-        {!moliyaYozilgan && (
-          <BuyurtmaTahrir b={b} kategoriyalar={kategoriyalar} onSaqlandi={onTahrirlandi} />
-        )}
+        {/* Kategoriya va narx. Kirim/qarz yozilgan bo'lsa tegishli maydon
+            qulflanadi — server ham AYNI qoidani mustaqil majburlaydi. */}
+        <BuyurtmaTahrir
+          b={b}
+          kategoriyalar={kategoriyalar}
+          kirimBor={kirimBor}
+          qarzBor={Boolean(b.debtId)}
+          tolangan={tolangan}
+          onSaqlandi={(yangi) => {
+            onTahrirlandi(yangi);
+            void yuklash();
+          }}
+        />
+
+        {/* TO'LOVLAR — Jami / To'langan / Qoldiq, to'lov tarixi va yangi
+            to'lov qo'shish. To'lov QO'SHILADI: oldingilari yuvilmaydi. */}
+        <ZakazTolovlari
+          dealId={b.id}
+          hisob={tolov}
+          qulf={Boolean(b.debtId)}
+          onYangilandi={(h) => {
+            setTolov(h);
+            onTahrirlandi({
+              tolangan: h.tolangan,
+              tolovTuri: h.tolovTuri,
+              tolovlar: h.tolovlar.map((t) => ({ id: t.id, kanal: t.kanal, summa: t.summa })),
+              kirimSumma: h.kirimSumma,
+              transactionId: h.transactionId,
+              debtId: h.debtId,
+              qarzQoldiq: h.qarzQoldiq,
+              qarzOchiq: h.qarzOchiq,
+            });
+            router.refresh();
+          }}
+        />
 
         {/* Pulga tegmaydigan tuzatishlar — moliyaga o'tgan zakazda ham ochiq. */}
         {boshqaruvchi && (
@@ -219,6 +255,7 @@ export function BuyurtmaSheet({
 
         <ZakazMoliya
           b={b}
+          tosiq={tolov?.yutishTosigi ?? null}
           yakunlanganmi={ustun === "YUTILDI"}
           onYakunlash={() => setTasdiq(true)}
           onClose={onClose}
@@ -234,6 +271,7 @@ export function BuyurtmaSheet({
       {tasdiq && (
         <YakunlashTasdiq
           b={b}
+          tosiq={tolov?.yutishTosigi ?? null}
           onClose={() => setTasdiq(false)}
           onDone={() => {
             setTasdiq(false);

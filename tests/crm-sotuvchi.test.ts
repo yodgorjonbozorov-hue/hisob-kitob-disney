@@ -373,7 +373,9 @@ test("qisman to'langan zakaz: kirim + qarz, bonus bazasi hali 0", async () => {
     userId: tA.user.id,
     sotuvchiId: rustam.id,
     tolangan: 200_000,
-    tolovTuri: "naqd",
+    // ATAYLAB QARZGA: qoldiqning o'zi qarz emas — belgi qo'yilmasa zakaz
+    // umuman yutilmaydi (`lib/crm/pipeline.ts` → `yutishTosigi`).
+    tolovTuri: "qarz",
   });
   const natija = await yakunla(d.id);
   assert.equal(natija.kirimSumma, 200_000, "olingan qism kirimga");

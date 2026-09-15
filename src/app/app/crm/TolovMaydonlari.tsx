@@ -13,15 +13,13 @@ const INPUT =
  * Misol: 1 000 000 lik zakaz — naqd 300 000 + click 400 000 + terminal
  * 200 000, qolgan 100 000 esa QARZ.
  *
- * QARZ QATOR EMAS (`lib/crm/tolovlar.ts` bilan bir xil qoida): u zakaz
- * summasidan QOLGAN qism. Shuning uchun kanallar ro'yxatida "qarz" yo'q va
- * pastda faqat "Qoldiq" ko'rsatiladi — u Yutildi bosilganda qarzdorlikka
- * yoziladi.
+ * QARZ QATOR EMAS (`lib/crm/tolovlar.ts` bilan bir xil qoida) va QOLDIQ
+ * HAM EMAS: to'lanmagan qism o'z-o'zidan qarzdorlik yaratmaydi. Qarz FAQAT
+ * pastdagi belgi bilan — savdo ataylab qarzga yopilganda — ochiladi.
  *
- * TO'LOV QATORI UMUMAN BO'LMASA zakaz "to'lovi tanlanmagan" bo'lib qoladi
- * va Yutildi hech qanday moliyaviy yozuv yaratmaydi. To'lovsiz zakazni
- * ataylab qarzga yozish uchun "Qarzga" belgisi bor — qarz FAQAT
- * foydalanuvchi tanlovi bilan ochiladi.
+ * DIQQAT: bu forma faqat YANGI zakaz yaratishda ishlatiladi (bir necha
+ * to'lov birato'la kiritiladi). Mavjud zakazga to'lov QO'SHISH esa
+ * `ZakazTolovlari` blokida — u oldingi to'lovlarni almashtirmaydi.
  */
 
 /** Forma qatori: summa XOM MATN (foydalanuvchi kiritayotgan holat). */
@@ -131,22 +129,21 @@ export function TolovMaydonlari({
         </div>
       )}
 
-      {/* QARZ — kanal emas, QOLDIQ. Qator bo'lsa qoldiq o'zi qarzdorlikka
-          yoziladi; qatorsiz zakazda esa qarz FAQAT shu belgi bilan ochiladi. */}
-      {narx > 0 && qoldiq > 0 && satrlar.length > 0 && (
-        <p className="text-2xs text-faint">
-          Yutildi bosilganda: Kirim {formatMoney(tolangan)} · Qarzdorlik {formatMoney(qoldiq)}
-        </p>
-      )}
-      {narx > 0 && satrlar.length === 0 && (
-        <label className="flex items-center gap-2 text-xs text-muted">
+      {/* QARZ — KANAL HAM, QOLDIQ HAM EMAS: u ATAYLAB qilinadigan tanlov.
+          Belgisiz zakaz qarz yaratmaydi va to'liq to'langunga qadar
+          "Yutildi" ga o'tmaydi (`lib/crm/pipeline.ts` → `yutishTosigi`). */}
+      {narx > 0 && qoldiq > 0 && (
+        <label className="flex items-start gap-2 text-xs text-muted">
           <input
             type="checkbox"
             checked={qarzga}
             onChange={(e) => onQarzga(e.target.checked)}
-            className="w-5 h-5"
+            className="w-5 h-5 mt-0.5"
           />
-          Qarzga: butun summa ({formatMoney(narx)}) qarzdorlikka yozilsin
+          <span>
+            Qolgan {formatMoney(qoldiq)} qarzdorlikka yozilsin — savdo qarzga yopiladi.
+            Belgilanmasa qoldiq shunchaki to&apos;lanmagan qism bo&apos;lib qoladi.
+          </span>
         </label>
       )}
     </div>

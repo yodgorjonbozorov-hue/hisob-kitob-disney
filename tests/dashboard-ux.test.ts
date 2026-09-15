@@ -215,6 +215,10 @@ test("getBugungiHolat: CRM o'chiq bo'lsa CRM ko'rsatkichlari qaytarilmaydi", asy
       userId: tA.user.id,
       nomi: "Bugungi buyurtma",
       summa: 300_000,
+      // Puli to'liq kelgan: to'lanmagan zakaz "Yutildi" ga o'tmaydi
+      // (`lib/crm/pipeline.ts` → `yutishTosigi`).
+      tolangan: 300_000,
+      tolovTuri: "naqd",
       sana: BUGUN,
     })
   );

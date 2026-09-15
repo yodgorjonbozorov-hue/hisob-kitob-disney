@@ -12,8 +12,10 @@ import { zakazniYakunlash } from "@/lib/crm/yakunlash";
 // Aylanma import YO'Q: `qaytarish.ts` bu fayldan hech narsa olmaydi.
 import { zakazMoliyasiniQaytarish } from "@/lib/crm/qaytarish";
 import {
+  QARZ_KANALI,
   tolovHolati,
   yopiqHolat,
+  yutishTosigi,
   zakazQarzdormi,
   zakazUstuni,
   type TolovHolat,
@@ -22,12 +24,15 @@ import {
 } from "@/lib/crm/pipeline";
 import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
 import {
+  kanalTolovTuri,
   tolovlarJami,
   tolovlarniTekshir,
   tolovSatrlariniYoz,
   tolovTuriBelgisi,
   type TolovSatri,
 } from "@/lib/crm/tolovlar";
+import { zakazKirimKonteksti, tolovKirimiYoz } from "@/lib/crm/tolovKirimi";
+import { kunlikSinxron } from "@/lib/services/kunlik";
 import {
   sotuvchiUserIdTop,
   zakazXodimlariniSaqlash,
@@ -595,10 +600,20 @@ export async function zakazniOchirish(params: {
  * MOLIYAGA O'TGAN zakaz QULFLANADI: kirim yoki qarz yozilgan bo'lsa pul
  * allaqachon kassada/qarzdorlikda — uni CRM formasidan o'zgartirish ikki
  * hisobni zid holatga tushirardi (summa/kategoriya bilan bir xil qoida).
+ *
+ * ═══ BU ALMASHTIRISH, QO'SHISH EMAS ═══
+ * Shu sabab u faqat HALI TO'LOVI YO'Q zakazda ishlaydi (bot, import, eski
+ * integratsiyalar). Kundalik ish — to'lov QO'SHISH: bir zakazga zalog,
+ * keyin ikkinchi to'lov, keyin uchinchisi, oldingilari tegilmagan holda
+ * (`lib/crm/tolovQoshish.ts`). Ilgari forma ham shu almashtirish yo'lidan
+ * yurgani uchun yangi to'lov oldingilarini yuvib yuborardi.
+ *
+ * Yaratilgan har qator o'z KIRIM tranzaksiyasini darhol oladi.
  */
 export async function zakazTolovlariniAlmashtirish(params: {
   businessId: string;
   dealId: string;
+  userId: string;
   /** Yangi qatorlar (bo'sh massiv — to'lov qatorlari olib tashlanadi). */
   tolovlar: TolovSatri[];
   /** Qatorsiz holatdagi tanlov: "qarz" — qolgani qarzdorlikka. */
@@ -608,7 +623,10 @@ export async function zakazTolovlariniAlmashtirish(params: {
 }): Promise<{ tolangan: number; tolovTuri: string | null }> {
   const deal = await prisma.deal.findFirst({
     where: { id: params.dealId, businessId: params.businessId, deletedAt: null },
-    select: { id: true, summa: true, transactionId: true, debtId: true },
+    include: {
+      contact: { select: { ism: true } },
+      category: { select: { turi: true } },
+    },
   });
   if (!deal) throw new ForbiddenError("Zakaz topilmadi");
   if (deal.transactionId || deal.debtId) {
@@ -616,22 +634,125 @@ export async function zakazTolovlariniAlmashtirish(params: {
       "Moliyaga o'tgan zakazning to'lovi o'zgartirilmaydi — Kirim yoki Qarzdorlik bo'limidan tuzating"
     );
   }
+  if (deal.category && deal.category.turi !== "kirim") {
+    throw new BadRequestError("Zakaz kategoriyasi kirim turida emas");
+  }
 
   const summa = params.summa ?? deal.summa;
   tolovlarniTekshir(summa, params.tolovlar);
   const tolangan = tolovlarJami(params.tolovlar);
   const tolovTuri = tolovTuriBelgisi(params.tolovlar, params.tolovTuri);
 
-  await runBusinessTx(params.businessId, async (tx) => {
+  // KIRIM KONTEKSTI tranzaksiyadan TASHQARIDA yig'iladi (SQLite yozuv
+  // qulfi qisqa bo'lsin) — `lib/crm/tolovKirimi.ts`.
+  const ktx = await zakazKirimKonteksti(deal, {
+    businessId: params.businessId,
+    userId: params.userId,
+    kopKanal: params.tolovlar.length > 1,
+  });
+
+  const yangiKirimlar = await runBusinessTx(params.businessId, async (tx) => {
     // Tranzaksiya ichida xom `tx` — HAR so'rovga `businessId` sharti QO'LDA.
-    await tolovSatrlariniYoz(tx, params.businessId, params.dealId, params.tolovlar);
+    const yaratilgan = await tolovSatrlariniYoz(tx, params.businessId, params.dealId, params.tolovlar);
+    // PUL KELGAN PAYTDA KIRIMGA: har qator o'z tranzaksiyasini shu yerda
+    // oladi, "Yutildi" ni kutmaydi (`lib/crm/tolovQoshish.ts` bilan bir xil
+    // qoida). Yakunlash esa kirimi bor qatorni o'tkazib yuboradi — dublikat
+    // bo'lmaydi.
+    const kirimlar = [];
+    for (const q of yaratilgan) {
+      kirimlar.push(
+        await tolovKirimiYoz(tx, ktx, params.dealId, {
+          satrId: q.id,
+          tolovTuri: kanalTolovTuri(q.kanal),
+          kanal: q.kanal,
+          summa: q.summa,
+          transactionId: null,
+        })
+      );
+    }
     await tx.deal.updateMany({
       where: { id: params.dealId, businessId: params.businessId, deletedAt: null },
       data: { tolangan, tolovTuri },
     });
+    return kirimlar;
   });
 
+  // KUNLIK hisobot sinxroni tranzaksiyadan TASHQARIDA (`lib/crm/yakunlash.ts`
+  // bilan bir xil sabab: `kunlikSinxron` o'zi `runBusinessTx` ochadi).
+  if (yangiKirimlar.length > 0) {
+    const kim = await prisma.user.findFirst({ where: { id: params.userId }, select: { ism: true } });
+    for (const kirim of yangiKirimlar) await kunlikSinxron(kirim, kim?.ism ?? null);
+  }
+
   return { tolangan, tolovTuri };
+}
+
+/**
+ * "QOLGAN SUMMA QARZDORLIKKA YOZILSIN" BELGISI.
+ *
+ * ═══ NEGA ALOHIDA AMAL ═══
+ * QOLDIQ va QARZ — ikki xil narsa. Zakazning to'lanmagan qismi o'z-o'zidan
+ * qarz EMAS: zalog bergan mijoz qarzdor emas, u shunchaki hali to'lab
+ * bo'lmagan. Qarz FAQAT savdo ataylab qarzga yopilganda tug'iladi — shu
+ * belgi aynan o'sha tanlov (`Deal.tolovTuri = "qarz"`).
+ *
+ * Belgi qo'yilgan zakaz to'liq to'lanmagan bo'lsa ham "Yutildi" ga o'ta
+ * oladi (`lib/crm/pipeline.ts` → `yutishTosigi`) va yakunlashda qoldiq
+ * uchun `Debt` ochiladi (`lib/crm/yakunlash.ts`).
+ *
+ * KANAL MA'LUMOTI YO'QOLMAYDI: belgi olib tashlanganda `Deal.tolovTuri`
+ * to'lov qatorlaridan qayta hisoblanadi (bitta kanal — o'sha kanal,
+ * bir nechta — "aralash").
+ */
+export async function zakazQarzBelgisi(params: {
+  businessId: string;
+  dealId: string;
+  /** `true` — qoldiq qarzdorlikka yoziladi; `false` — belgi olinadi. */
+  qarzga: boolean;
+  userId: string;
+}): Promise<{ tolovTuri: string | null }> {
+  const deal = await prisma.deal.findFirst({
+    where: { id: params.dealId, businessId: params.businessId, deletedAt: null },
+    select: { id: true, contactId: true, summa: true, tolangan: true, debtId: true },
+  });
+  if (!deal) throw new ForbiddenError("Zakaz topilmadi");
+  if (deal.debtId) {
+    throw new BadRequestError(
+      "Bu zakaz bo'yicha qarz allaqachon ochilgan — tuzatish Qarzdorlik bo'limidan qilinadi"
+    );
+  }
+  if (params.qarzga && deal.summa > 0 && deal.tolangan >= deal.summa) {
+    throw new BadRequestError("Zakaz to'liq to'langan — qarzga yoziladigan qoldiq yo'q");
+  }
+
+  const satrlar = await prisma.dealTolov.findMany({
+    where: { businessId: params.businessId, dealId: deal.id },
+    select: { kanal: true, summa: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const tolovTuri = tolovTuriBelgisi(satrlar, params.qarzga ? QARZ_KANALI : null);
+
+  await runBusinessTx(params.businessId, async (tx) => {
+    // Tranzaksiya ichida xom `tx` — HAR so'rovga `businessId` sharti QO'LDA.
+    await tx.deal.updateMany({
+      where: { id: deal.id, businessId: params.businessId, deletedAt: null },
+      data: { tolovTuri },
+    });
+    await tx.activity.create({
+      data: {
+        businessId: params.businessId,
+        dealId: deal.id,
+        contactId: deal.contactId,
+        turi: "tizim",
+        matn: params.qarzga
+          ? `Qoldiq qarzdorlikka belgilandi: ${Math.max(0, deal.summa - deal.tolangan)} so'm`
+          : "Qarzdorlik belgisi olib tashlandi",
+        userId: params.userId,
+      },
+    });
+  });
+
+  return { tolovTuri };
 }
 
 /**
@@ -961,6 +1082,15 @@ export async function createDeal(params: YangiBuyurtma) {
     ? tolovTuriBelgisi(tolovSatrlari, params.tolovTuri)
     : params.tolovTuri ?? null;
 
+  // TO'G'RIDAN-TO'G'RI "YUTILDI" BOSQICHIDA yaratish (eski yo'l: import,
+  // tarixiy yozuv) ham AYNI qoidaga bo'ysunadi: to'liq to'lanmagan zakaz
+  // yutilgan bo'la olmaydi (`lib/crm/pipeline.ts`). Aks holda bu yo'l
+  // tekshiruvni chetlab o'tadigan teshik bo'lib qolardi.
+  if (holat === "YUTILDI") {
+    const tosiq = yutishTosigi(summa, tolangan, tolovTuri);
+    if (tosiq) throw new BadRequestError(tosiq);
+  }
+
   const categoryId = params.categoryId ? await kirimKategoriyasi(params.businessId, params.categoryId) : null;
 
   // SOTUVCHI — mijoz yaratilishidan OLDIN hal qilinadi: xato bo'lsa yon
@@ -1027,8 +1157,37 @@ export async function createDeal(params: YangiBuyurtma) {
 
   // ARALASH TO'LOV qatorlari. `Deal.tolangan` allaqachon shu yig'indidan
   // yozilgan — qatorlar va yig'indi bir manbadan chiqadi.
+  //
+  // HAR QATOR O'Z KIRIMINI DARHOL OLADI (`lib/crm/tolovKirimi.ts`): zakaz
+  // yaratilishida kelgan zalog o'sha kuniyoq kassada ko'rinadi, "Yutildi"
+  // ni kutmaydi. Yakunlash kirimi bor qatorni o'tkazib yuboradi.
   if (tolovSatrlari?.length) {
-    await tolovSatrlariniYoz(prisma, params.businessId, deal.id, tolovSatrlari);
+    const ktx = await zakazKirimKonteksti(deal, {
+      businessId: params.businessId,
+      userId: params.userId,
+      kopKanal: tolovSatrlari.length > 1,
+    });
+    const yangiKirimlar = await runBusinessTx(params.businessId, async (tx) => {
+      // Tranzaksiya ichida xom `tx` — HAR so'rovga `businessId` sharti QO'LDA.
+      const yaratilgan = await tolovSatrlariniYoz(tx, params.businessId, deal.id, tolovSatrlari);
+      const kirimlar = [];
+      for (const q of yaratilgan) {
+        kirimlar.push(
+          await tolovKirimiYoz(tx, ktx, deal.id, {
+            satrId: q.id,
+            tolovTuri: kanalTolovTuri(q.kanal),
+            kanal: q.kanal,
+            summa: q.summa,
+            transactionId: null,
+          })
+        );
+      }
+      return kirimlar;
+    });
+    // KUNLIK sinxron tranzaksiyadan TASHQARIDA (`kunlikSinxron` o'zi
+    // `runBusinessTx` ochadi — ichkarida deadlock bo'lardi).
+    const kim = await prisma.user.findFirst({ where: { id: params.userId }, select: { ism: true } });
+    for (const kirim of yangiKirimlar) await kunlikSinxron(kirim, kim?.ism ?? null);
   }
 
   await prisma.activity.create({

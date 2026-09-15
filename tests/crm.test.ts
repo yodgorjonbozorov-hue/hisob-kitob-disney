@@ -251,6 +251,10 @@ test("moveDeal WON + kirimYoz: eski yo'l ham bitta kirim yozadi", async () => {
       nomi: "Katta bitim",
       categoryId: katOnajon.id,
       summa: 2_000_000,
+      // Puli TO'LIQ kelgan: to'liq to'lanmagan zakaz "Yutildi" ga o'tmaydi
+      // (`lib/crm/pipeline.ts` → `yutishTosigi`).
+      tolangan: 2_000_000,
+      tolovTuri: "naqd",
       userId: tA.user.id,
     })
   );
@@ -505,6 +509,9 @@ test("TO'LIQ OQIM: yangi buyurtma -> Yutildi -> Kirim -> Dashboard kategoriya ke
       nomi: "Bantik buyurtmasi",
       categoryId: katBantik.id,
       summa: 500_000,
+      // Puli TO'LIQ kelgan — shundagina "Yutildi" ga o'tadi.
+      tolangan: 500_000,
+      tolovTuri: "naqd",
       kontaktIsm: "Zilola",
       kontaktTel: "+998907778899",
       sana,

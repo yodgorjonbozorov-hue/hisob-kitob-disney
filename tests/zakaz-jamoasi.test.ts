@@ -180,6 +180,10 @@ test("40: Panda Masha — sotuvchi + 6 lavozimli jamoa (2 videochi) saqlanadi", 
       businessId: tA.business.id,
       nomi: "Panda Masha",
       summa: 500_000,
+      // Puli to'liq kelgan: to'lanmagan zakaz "Yutildi" ga o'tmaydi
+      // (`lib/crm/pipeline.ts` → `yutishTosigi`).
+      tolangan: 500_000,
+      tolovTuri: "naqd",
       categoryId: katBantik.id,
       sana: bugun,
       userId: tA.user.id,
@@ -292,7 +296,7 @@ test("43: Videochi Sardor → Ilhom: Sardor chiqadi, Ilhom kiradi, lentaga yozil
 test("44: uchta videochi — uchalasida 1 tadan qatnashuv, zakaz soni 1", async () => {
   const deal = await A(() =>
     crm.createDeal({
-      businessId: tA.business.id, nomi: "Katta to'y", summa: 900_000, categoryId: katBantik.id,
+      businessId: tA.business.id, nomi: "Katta to'y", summa: 900_000, tolangan: 900_000, tolovTuri: "naqd", categoryId: katBantik.id,
       sana: bugun, stageId: wonStage.id, userId: tA.user.id, sotuvchiId: doston.id,
       xodimlar: [
         { categoryId: kVideochi.id, employeeId: sardor.id },
@@ -380,7 +384,7 @@ test("45: B biznes xodimi/lavozimi A zakaziga biriktirilmaydi", async () => {
 test("46: o'tgan oy zakazi 'Bu oy' KPI'siga qo'shilmaydi", async () => {
   await A(() =>
     crm.createDeal({
-      businessId: tA.business.id, nomi: "O'tgan oy tabrigi", summa: 300_000, categoryId: katBantik.id,
+      businessId: tA.business.id, nomi: "O'tgan oy tabrigi", summa: 300_000, tolangan: 300_000, tolovTuri: "naqd", categoryId: katBantik.id,
       sana: otganOy.to, stageId: wonStage.id, userId: tA.user.id, sotuvchiId: doston.id,
       xodimlar: [{ categoryId: kAnimator.id, employeeId: jajon.id }],
     })
@@ -485,8 +489,11 @@ test("kirim yozilgach jamoa OCHIQ qoladi, pul yozuvi esa tegilmaydi", async () =
   // attribution tuzatish qo'llab-quvvatlanadi (xodimlar tarixni to'ldirib
   // chiqadi), pul esa alohida yo'lda qulf: bu funksiya `Transaction` ga
   // umuman tegmaydi.
-  const crmKirim = await import("@/lib/crm/kirim");
-  await A(() => crmKirim.kirimgaKochirish({ businessId: tA.business.id, dealId: panda.id, userId: tA.user.id }));
+  // `panda` puli to'liq kelgan va yutilgan — kirimi allaqachon yozilgan
+  // (to'lov kelgan paytda, `lib/crm/tolovKirimi.ts`). Alohida "kirimga
+  // o'tkazish" endi kerak emas va qayta chaqirilsa rad etiladi.
+  const pandaHozir = await A(() => prisma.deal.findFirst({ where: { id: panda.id } }));
+  assert.ok(pandaHozir.transactionId, "yutilgan zakazda kirim yozilgan");
   const oldin = await A(() =>
     prisma.transaction.aggregate({
       where: { businessId: tA.business.id, turi: "kirim", deletedAt: null },
@@ -580,7 +587,7 @@ test("kirim yozilgan zakazda ham xodim attribution tahrirlanadi (pul tegilmaydi)
 test("tasdiqlanmagan biriktiruv KPI'ga kirmaydi; saqlansa TASDIQLANADI", async () => {
   const deal = await A(() =>
     crm.createDeal({
-      businessId: tA.business.id, nomi: "Taxmin qilingan zakaz", summa: 150_000, categoryId: katBantik.id,
+      businessId: tA.business.id, nomi: "Taxmin qilingan zakaz", summa: 150_000, tolangan: 150_000, tolovTuri: "naqd", categoryId: katBantik.id,
       sana: bugun, stageId: wonStage.id, userId: tA.user.id, sotuvchiId: doston.id,
     })
   );

@@ -114,6 +114,33 @@ export const buyurtmaPatchSchema = z.object({
   sotuvchiId: z.string().trim().min(1).optional(),
   /** Zakaz xodimlarini TO'LIQ almashtirish (kirim yozilgach qulflanadi). */
   xodimlar: zakazXodimlariSchema.optional(),
+  /**
+   * "QOLGAN SUMMA QARZDORLIKKA YOZILSIN" belgisi.
+   *
+   * `tolovTuri: "qarz"` dan FARQI: bu belgi to'lov qatorlarini yuvib
+   * yubormaydi — zalog kelgan zakazda ham qo'yila oladi. Qarz FAQAT shu
+   * tanlov bilan ochiladi (`lib/crm/pipeline.ts` → `qarzUlushi`).
+   */
+  qarzga: z.boolean().optional(),
+});
+
+/**
+ * ZAKAZGA TO'LOV QO'SHISH — bitta qator, oldingilari tegilmaydi.
+ *
+ * `buyurtmaPatchSchema.tolovlar` dan FARQI: u qatorlarni TO'LIQ
+ * almashtiradi (forma yo'li), bu esa QO'SHADI (`lib/crm/tolovQoshish.ts`).
+ * Aynan shu farq "yangi to'lov oldingisini yuvib yuboradi" xatosini yopadi.
+ */
+export const zakazTolovSchema = z.object({
+  kanal: z.enum(TOLOV_KANALLARI, { errorMap: () => ({ message: "To'lov turi tanlansin" }) }),
+  summa: z
+    .number()
+    .int("To'lov summasi butun so'mda bo'lishi kerak")
+    .positive("To'lov summasi noldan katta bo'lsin"),
+  /** Pul qaysi kunda keldi — berilmasa bugun. */
+  sana: z.string().regex(sanaRegex, "Sana YYYY-MM-DD ko'rinishida").optional().nullable(),
+  /** Qaysi kassaga tushdi (ixtiyoriy). */
+  accountId: z.string().trim().min(1).optional().nullable(),
 });
 
 /**
@@ -140,4 +167,5 @@ export const kirimgaSchema = z.object({
 
 export type BuyurtmaInput = z.infer<typeof buyurtmaSchema>;
 export type BuyurtmaPatchInput = z.infer<typeof buyurtmaPatchSchema>;
+export type ZakazTolovInput = z.infer<typeof zakazTolovSchema>;
 export type DoskaFiltrInput = z.infer<typeof doskaFiltrSchema>;

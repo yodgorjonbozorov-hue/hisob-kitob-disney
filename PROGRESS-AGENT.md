@@ -6706,3 +6706,85 @@ Regressiya: mijozlar, qarz, qarz-mijoz, qarz-mijoz-bogla, qarz-tahrir,
 qarz-taqsimot, qarzdorlik, crm, crm-pipeline, crm-tolovlar, crm-sotuvchi,
 zakaz-jamoasi, optom, magazin, atomik, soft-delete, tozalash, isolation,
 izolyatsiya-royxati, mijoz-xos — hammasi yashil. `npm run build` o'tadi.
+
+## Zakaz to'lovi: zalog qarz emas, "Yutildi" pul yozmaydi (2026-09-15)
+
+### Muammo qayerdan chiqqan edi
+
+Uchta qoida bir-biriga bog'lanib noto'g'ri natija berardi:
+
+1. `pipeline.qarzUlushi()` QISMAN to'langan zakazning qoldig'ini qarz deb
+   hisoblardi. 750 000 lik zakazga 200 000 zalog bergan mijoz "Yutildi"
+   bosilishi bilan 550 000 QARZDOR bo'lib qolardi. QOLDIQ bilan QARZ bir
+   narsa deb qaralgani — asosiy xato.
+2. `yakunlash.ts` da "Yutildi" ga TO'SIQ yo'q edi: qisman to'langan zakaz
+   ham yutilaverardi va yuqoridagi qarzni ochib yuborardi.
+3. KIRIM faqat "Yutildi" da yozilardi. Ya'ni bugun kelgan zalog kassada
+   ko'rinmasdi va zakaz to'liq to'langunga qadar moliyada yo'q edi.
+
+To'lov YO'QOLISHI esa alohida zanjirdan kelardi: forma to'lov qatorlarini
+TO'LIQ ALMASHTIRARDI (`zakazTolovlariniAlmashtirish`), tafsilot javobida
+(`GET /api/crm/deals/[id]`) `tolovlar` UMUMAN yo'q edi va `onTahrirlandi`
+qatorlarni yangilamasdi. Saqlashdan keyin forma eski suratda qayta
+tug'ilib, oldingi to'lovlarni yuvib yuborardi.
+
+### Yechim
+
+- **QARZ FAQAT ATAYLAB.** `qarzUlushi` endi faqat `tolovTuri = "qarz"`
+  bo'lganda qoldiqni qaytaradi. Boshqa hech qanday yo'l bilan zakaz qarz
+  yaratmaydi. Belgi `zakazQarzBelgisi()` bilan qo'yiladi va u to'lov
+  qatorlarini yuvmaydi (zalog + qolgani qarzga — mumkin).
+- **TO'LIQ TO'LANMAGAN ZAKAZ YUTILMAYDI.** `pipeline.yutishTosigi()` —
+  yagona qoida; `zakazniYakunlash` va `createDeal` (YUTILDI bosqichida
+  yaratish) uni SERVERDA majburlaydi, ya'ni `moveDeal`, doskadan sudrash
+  va API ning o'zi ham shu to'siqdan o'tadi. Istisnolar: narxsiz zakaz va
+  ataylab qarzga yopilgan savdo. ALLAQACHON yutilgan eski yozuvlar
+  tekshiruvdan o'tkazilmaydi — ular avvalgidek to'ldirilaveradi.
+- **KIRIM PUL KELGAN PAYTDA.** `lib/crm/tolovKirimi.ts` — har `DealTolov`
+  qatori o'z `Transaction` ini tug'ilishi bilan oladi (naqd naqd kassaga,
+  click/terminal karta-hisobga). Yakunlash sikli saqlandi, lekin u endi
+  faqat KIRIMI YO'Q qatorlarni to'ldiradi — shuning uchun "Yutildi"
+  DUBLIKAT kirim yaratmaydi.
+- **TO'LOV QO'SHILADI, ALMASHTIRILMAYDI.** `lib/crm/tolovQoshish.ts`:
+  `zakazgaTolovQoshish` (poyga himoyasi — yig'indi `tolangan` ning eski
+  qiymati sharti bilan yoziladi) va `zakazTolovniBekorQilish` (kirim
+  yumshoq o'chadi, jamlar qayta hisoblanadi).
+- **BIR MANBA.** `lib/crm/tolovOqish.ts` → `zakazTolovHisobi()`: Jami /
+  To'langan / Qoldiq / holat / to'lov tarixi / to'siq. GET tafsiloti,
+  PATCH javobi va to'lov route'lari AYNI shu obyektni qaytaradi, UI esa
+  raqamlarni qayta hisoblamaydi.
+
+### O'zgargan fayllar
+
+Yangi: `lib/crm/tolovKirimi.ts`, `lib/crm/tolovQoshish.ts`,
+`lib/crm/tolovOqish.ts`, `api/crm/deals/[id]/tolovlar/route.ts` (+
+`[tolovId]`), `app/crm/ZakazTolovlari.tsx`, `tests/zakaz-tolov.test.ts`.
+
+Tuzatilgan: `lib/crm/pipeline.ts` (`qarzUlushi`, `qoldiqSumma`,
+`yutishTosigi`), `lib/crm/tolovlar.ts` (`tolovTuriBelgisi` da "qarz"
+tanlovi ustun), `lib/crm/yakunlash.ts`, `lib/crm/service.ts`
+(`createDeal`, `zakazTolovlariniAlmashtirish`, `zakazQarzBelgisi`),
+`validation/crm.ts`, `api/crm/deals/[id]/route.ts`, `services/audit.ts`
+va CRM UI (`BuyurtmaSheet`, `BuyurtmaTahrir`, `BuyurtmaKarta`,
+`BuyurtmaModal`, `TolovMaydonlari`, `YakunlashTasdiq`, `ZakazMoliya`,
+`CrmClient`).
+
+Sxema O'ZGARMADI — migratsiya kerak emas. `DealTolov` allaqachon mavjud
+edi; eski, qatorsiz zakazlar `Deal.tolangan` bilan avvalgidek ishlaydi.
+
+### Qulflar qayta ko'rildi
+
+Narx endi kirim yozilgandan keyin ham tuzatiladi (kirim summasi — TO'LOV
+summasi, zakaz narxi emas; u faqat to'langan puldan kam bo'lolmaydi).
+Qarz ochilgach narx qulflanadi. Kategoriya avvalgidek kirim yozilgach
+qulflanadi (tranzaksiyada kategoriya snapshot).
+
+### Tekshirish
+
+`npm run test:zakaz-tolov` — 12 ta yangi test (topshiriqdagi 9 ta qabul
+testi + sof qoidalar + ataylab qarzga + to'lovni bekor qilish).
+Regressiya yashil: crm, crm-pipeline, crm-tolovlar, crm-sotuvchi,
+crm-xodim-kassa, zakaz-jamoasi, direktor-oqimi, tolov-taqsimoti, kpi,
+kpi-hisob, xodim-statistika, panel, dashboard-ux, agregat, moliya-audit,
+kunlik, deploy-mashq, visibility, isolation, soft-delete, qarz,
+qarzdorlik. `npm run build` o'tadi.

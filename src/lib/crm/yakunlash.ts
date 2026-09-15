@@ -1,39 +1,40 @@
 import { prisma } from "@/lib/prisma";
 import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
 import { runBusinessTx } from "@/lib/db/businessTx";
-import { createTransactionTx } from "@/lib/services/transactionService";
-import { shaxsiyKassaId } from "@/lib/services/kassaTanlash";
-import { ensureCategoryTx } from "@/lib/services/inventory";
 import { qarzLimitTekshirTx } from "@/lib/services/mijoz";
 import { kunlikSinxron } from "@/lib/services/kunlik";
 import { qarzHolatHisobla, qarzYopiqmi } from "@/lib/validation/qarz";
-import { utcDateToDateOnlyString, todayTashkentDateOnlyString, dateOnlyStringToUTCDate } from "@/lib/date";
+import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { kirimIzohi } from "@/lib/crm/kirim";
 import { pipelineBosqichlari } from "@/lib/crm/service";
-import { kirimUlushi, qarzUlushi, tolovHolati, type TolovHolat } from "@/lib/crm/pipeline";
-import { kirimSatrlari, satrIzohi } from "@/lib/crm/tolovlar";
+import { kirimUlushi, qarzUlushi, tolovHolati, yutishTosigi, type TolovHolat } from "@/lib/crm/pipeline";
+import { kirimSatrlari } from "@/lib/crm/tolovlar";
+import { zakazKirimKonteksti, tolovKirimiYoz } from "@/lib/crm/tolovKirimi";
 
 /**
  * ZAKAZNI YUTILDI QILISH — CRM va MOLIYA o'rtasidagi yagona yakuniy ko'prik.
  *
- * "Yutildi" — BIZNES yakuni ("ish tugadi"), to'lov holati esa ALOHIDA
- * haqiqat manbai (5-talab). Shuning uchun yakunlash butun summani ko'r-ko'rona
- * kirimga yozmaydi, `Deal.tolangan` ni o'qiydi va pulni IKKIGA bo'ladi:
+ * ═══ "YUTILDI" — STATUS, PUL YOZADIGAN AMAL EMAS ═══
+ * Pul endi KELGAN PAYTDA kirimga tushadi (`lib/crm/tolovQoshish.ts`): har
+ * `DealTolov` qatori o'z `Transaction` i bilan tug'iladi. Shuning uchun bu
+ * yerda odatda YOZILADIGAN HECH NARSA QOLMAYDI — sikl faqat KIRIMI YO'Q
+ * qatorlarni to'ldiradi:
+ *   - eski (qatorsiz) zakazlar — pul `Deal.tolangan` da turadi;
+ *   - "Yutildidan qaytarish" dan keyin qayta yakunlash (bog'lanish uzilgan).
+ * Aynan shu sabab TO'LIQ TO'LANGAN zakazni yutish DUBLIKAT KIRIM
+ * yaratmaydi (5-test).
  *
- *   to'liq to'langan  → butun summa KIRIM;
- *   qisman to'langan  → to'langan qism KIRIM, qolgani QARZDORLIK;
- *   aralash to'lov    → HAR KANAL uchun alohida KIRIM (naqd qism naqd
- *                       kassaga, click/terminal karta/hisob kassasiga),
- *                       qolgani QARZDORLIK;
- *   qarzga            → kirim YO'Q, butun summa QARZDORLIK —
- *                       FAQAT foydalanuvchi "Qarzga" ni tanlaganda;
- *   to'lov tanlanmagan→ kirim ham, qarz ham YO'Q (holat YUTILDI bo'ladi).
+ * ═══ TO'LIQ TO'LANMAGAN ZAKAZ YUTILMAYDI ═══
+ * `yutishTosigi` (`lib/crm/pipeline.ts`) SERVERDA majburlaydi: qoldig'i bor
+ * zakaz "Yutildi" ga o'tmaydi. Ilgari u o'tib ketar va qolgan summa
+ * O'ZIDAN QARZGA yozilardi — 750 000 lik zakazga 200 000 zalog bergan mijoz
+ * darhol 550 000 qarzdorga aylanardi. ZALOG QARZ EMAS.
  *
- * YUTILDI QARZNI AVTOMATIK OCHMAYDI. To'lov holati faqat foydalanuvchi
- * tanlovidan (`lib/crm/pipeline.ts` → `tolovHolati`): `tolangan = 0` ning
- * o'zi "qarzga" emas. To'lovi keyin belgilangan yutilgan zakazda shu
- * funksiya qayta chaqiriladi (API PATCH) va yetishmayotgan yozuv yoziladi —
- * foydalanuvchi alohida "kirimga o'tkazish" bosmaydi.
+ * QARZ FAQAT ATAYLAB: `Deal.tolovTuri = "qarz"` — foydalanuvchi savdoni
+ * qarzga yopishni tanlagan bo'lsa (`qarzUlushi`). Boshqa hech qanday yo'l
+ * bilan zakaz qarz yaratmaydi.
+ *
+ * `summa <= 0` (narxsiz zakaz) — moliyaviy yozuvsiz yutiladi, avvalgidek.
  *
  * Qarzga berilgan savdo kirim yozmasligi — mavjud qarz moduli qoidasi
  * (`lib/services/qarz.ts`): mahsulot ketdi, pul kelmadi, balans o'zgarmaydi.
@@ -47,9 +48,6 @@ import { kirimSatrlari, satrIzohi } from "@/lib/crm/tolovlar";
  *      natija qaytadi (takror bosish xato emas — ish allaqachon bajarilgan).
  *   3. Frontend: tugma o'rniga "Kirim yaratildi" ko'rsatiladi.
  */
-
-/** Kategoriyasiz eski zakazlar uchun zaxira kategoriya (kirim.ts bilan bir xil). */
-const ZAXIRA_KATEGORIYA = "Sotuv";
 
 /** Faoliyat jurnalidagi to'lov holati matni. */
 const TOLOV_MATNI: Record<TolovHolat, string> = {
@@ -97,6 +95,18 @@ export async function zakazniYakunlash(params: YakunlashParams): Promise<Yakunla
     throw new BadRequestError("Zakaz kategoriyasi kirim turida emas");
   }
 
+  // TO'LIQ TO'LANMAGAN ZAKAZ YUTILMAYDI — SERVERDA. Frontendda tugmani
+  // o'chirish himoya emas: bu yo'lga doskadan sudrash, tez amallar paneli,
+  // bosqichga ko'chirish va API ning o'zi ham kiradi (4-test).
+  //
+  // ALLAQACHON YUTILGAN zakaz tekshiruvdan o'tkazilmaydi: bu chaqiruv unda
+  // faqat yetishmayotgan moliyaviy yozuvni to'ldiradi (eski yozuvlar,
+  // qaytarishdan keyingi qayta yakunlash). Eski ma'lumotlar tegilmaydi.
+  if (deal.holat !== "YUTILDI") {
+    const tosiq = yutishTosigi(deal.summa, deal.tolangan, deal.tolovTuri);
+    if (tosiq) throw new BadRequestError(tosiq);
+  }
+
   const kirimSumma = kirimUlushi(deal.summa, deal.tolangan);
   const qarzSumma = qarzUlushi(deal.summa, deal.tolangan, deal.tolovTuri);
 
@@ -130,17 +140,21 @@ export async function zakazniYakunlash(params: YakunlashParams): Promise<Yakunla
 
   const bosqichlar = await pipelineBosqichlari(params.businessId);
   const izoh = kirimIzohi(deal.nomi, deal.contact?.ism);
-  // Kirim/qarz sanasi — ZAKAZ SANASI (xizmat qaysi kunga bo'lgan bo'lsa),
-  // sanasiz eski zakazlarda bugun.
-  const sana = deal.sana ? utcDateToDateOnlyString(deal.sana) : todayTashkentDateOnlyString();
 
-  // SOTUVCHI = zakaz MAS'ULI (kirim.ts bilan AYNI qoida): xodim statistikasi
-  // zakazni kim olgan bo'lsa o'shanga yoziladi, tugmani kim bosgani emas.
-  const masul = await prisma.user.findFirst({
-    where: { id: deal.masulId },
-    select: { id: true, ism: true },
+  // KIRIM KONTEKSTI — sotuvchi (zakaz mas'uli), kategoriya, izoh va sana
+  // bir marta yig'iladi (`lib/crm/tolovKirimi.ts`). Kirim/qarz sanasi —
+  // ZAKAZ SANASI (xizmat qaysi kunga bo'lgan bo'lsa), sanasiz eski
+  // zakazlarda bugun.
+  const ktx = await zakazKirimKonteksti(deal, {
+    businessId: params.businessId,
+    userId: params.userId,
+    kopKanal,
+    // Kassa faqat BITTA qator bo'lganda tanlanadi: aralash to'lovda har
+    // kanal o'z kassasiga tushishi kerak.
+    accountId: satrlar.length === 1 ? params.accountId : null,
   });
-  const sotuvchiId = masul?.id ?? params.userId;
+  const sana = ktx.sana;
+  const masul = ktx.masul;
 
   const natija = await runBusinessTx(params.businessId, async (tx) => {
     // Tranzaksiya ichida xom `tx` — HAR so'rovga `businessId` sharti QO'LDA
@@ -148,59 +162,15 @@ export async function zakazniYakunlash(params: YakunlashParams): Promise<Yakunla
     let transactionId = deal.transactionId;
     let debtId = deal.debtId;
     /** Shu chaqiruvda yozilgan kirimlar — kunlik sinxron uchun (tx dan tashqarida). */
-    const yangiKirimlar: Array<Awaited<ReturnType<typeof createTransactionTx>>> = [];
+    const yangiKirimlar: Array<Awaited<ReturnType<typeof tolovKirimiYoz>>> = [];
 
+    // KIRIMI YO'Q qatorlarni to'ldirish. To'lov paytida kirim yozilgan
+    // qatorlar (odatiy yo'l) bu yerda O'TKAZIB YUBORILADI — dublikat kirim
+    // shu tekshiruv bilan oldini olinadi (`lib/crm/tolovKirimi.ts`).
     for (const satr of satrlar) {
       if (satr.summa <= 0 || satr.transactionId) continue;
-      const categoryId =
-        deal.categoryId ?? (await ensureCategoryTx(tx, params.businessId, ZAXIRA_KATEGORIYA, "kirim"));
-      // KASSA — ZAKAZ MAS'ULINIKI (sotuvchi bilan AYNI qoida): zakazni
-      // yutgan xodimning kassasi ko'payadi va u shu pulni topshiradi.
-      // Shaxsiy kassa rejimi o'chiq bo'lsa `null` — eski xatti-harakat.
-      // NAQD bo'lmagan qism bu yerda hech qachon shaxsiy kassaga tushmaydi
-      // (`shaxsiyKassaId` faqat naqdga ishlaydi), demak click/terminal puli
-      // karta/hisob kassasiga boradi.
-      const accountId =
-        (satrlar.length === 1 ? params.accountId : null) ??
-        (await shaxsiyKassaId(tx, params.businessId, sotuvchiId, satr.tolovTuri));
-      const created = await createTransactionTx(tx, params.userId, params.businessId, {
-        turi: "kirim",
-        categoryId,
-        summa: satr.summa,
-        sana,
-        izoh: satrIzohi(izoh, satr.kanal, kopKanal),
-        accountId,
-        // QARZ kanali kirimga uzatilmaydi: bu yerda yoziladigan summa
-        // HAQIQATDA olingan pul, qolgani alohida qarz yozuvi bo'ladi.
-        tolovTuri: satr.tolovTuri,
-        sotuvchiId,
-      });
-      // ATOMIK BOG'LASH: `transactionId: null` sharti — poyga himoyasi.
-      // Ikki so'rov bir vaqtda kelsa ikkinchisining butun tranzaksiyasi
-      // qaytariladi, ya'ni dublikat kirim BAZAGA TUSHMAYDI.
-      const bogland = satr.satrId
-        ? await tx.dealTolov.updateMany({
-            where: { id: satr.satrId, businessId: params.businessId, transactionId: null },
-            data: { transactionId: created.id },
-          })
-        : await tx.deal.updateMany({
-            where: { id: deal.id, businessId: params.businessId, transactionId: null, deletedAt: null },
-            data: { transactionId: created.id },
-          });
-      if (bogland.count !== 1) {
-        throw new BadRequestError("Bu zakaz bo'yicha kirim allaqachon yozilgan");
-      }
-      // ORQAGA MOSLIK: `Deal.transactionId` — "kirim yozilganmi" degan
-      // savolning eski javobi (ZakazMoliya, jamoa qulfi, KPI). Aralash
-      // to'lovda u BIRINCHI kirimga bog'lanadi; to'liq summa esa
-      // qatorlardan yig'iladi.
-      if (!transactionId) {
-        await tx.deal.updateMany({
-          where: { id: deal.id, businessId: params.businessId, transactionId: null, deletedAt: null },
-          data: { transactionId: created.id },
-        });
-        transactionId = created.id;
-      }
+      const created = await tolovKirimiYoz(tx, ktx, deal.id, satr);
+      if (!transactionId) transactionId = created.id;
       yangiKirimlar.push(created);
     }
 

@@ -2,7 +2,7 @@
 
 import { formatMoney, formatDateUZ } from "@/lib/format";
 import { Badge } from "@/components/ui/Badge";
-import { kechikkanKun, tolovHolati, TOLOV_HOLAT_NOMI, type TolovHolat, type Ustun } from "@/lib/crm/pipeline";
+import { kechikkanKun, qoldiqSumma, tolovHolati, type TolovHolat, type Ustun } from "@/lib/crm/pipeline";
 import type { BuyurtmaDTO } from "./turlar";
 
 /** Ustun bo'yicha workflow belgisi — kartada zakaz qayerda turgani ko'rinsin. */
@@ -53,6 +53,7 @@ export function BuyurtmaKarta({
 }) {
   const kechikkan = kechikkanKun(b.holat, b.sana, bugun);
   const tolov = tolovHolati(b.summa, b.tolangan, b.tolovTuri);
+  const qoldiq = qoldiqSumma(b.summa, b.tolangan);
   const belgi = USTUN_BELGISI[ustun];
 
   return (
@@ -132,9 +133,11 @@ export function BuyurtmaKarta({
         )}
         {b.qarzQoldiq > 0 && <Badge tone="chiqim">Qarz {formatMoney(b.qarzQoldiq)}</Badge>}
       </div>
-      {tolov === "QISMAN" && (
+      {/* TO'LANGAN / QOLDIQ — kartadan ham ko'rinsin. QOLDIQ QARZ EMAS:
+          qarz alohida belgi bilan yuqorida ko'rsatiladi (`b.qarzQoldiq`). */}
+      {b.summa > 0 && qoldiq > 0 && b.tolangan > 0 && (
         <p className="text-2xs text-faint tnum">
-          {TOLOV_HOLAT_NOMI.QISMAN}: {formatMoney(b.tolangan)} / {formatMoney(b.summa)}
+          To&apos;langan {formatMoney(b.tolangan)} · Qoldiq {formatMoney(qoldiq)}
         </p>
       )}
     </button>

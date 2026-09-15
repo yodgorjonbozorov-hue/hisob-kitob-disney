@@ -5,7 +5,8 @@
  *   1. 100% naqd — bitta kirim, naqd kassaga;
  *   2. 50% naqd + 50% click — IKKI kirim, har biri O'Z kassasiga;
  *   3. naqd + click + terminal — uch kirim, naqd kassa faqat naqd qismga oshadi;
- *   4. to'langan qism + qarz — kirim faqat to'langan qism, qolgani Debt;
+ *   4. to'langan qism + ATAYLAB qarzga yopilgan savdo — kirim faqat
+ *      to'langan qism, qolgani Debt (qoldiqning O'ZI qarz emas);
  *   5. to'lovlar yig'indisi zakazdan oshsa — BLOK;
  *   6. Yutildi qayta bosilsa — dublikat kirim YO'Q;
  *   7. qarz keyin yopilsa — o'sha payt yangi kirim yoziladi.
@@ -87,6 +88,19 @@ async function yakunla(dealId: string) {
   return A(() => yakunlash.zakazniYakunlash({ businessId: t.business.id, dealId, userId: t.user.id }));
 }
 
+/**
+ * Qoldiqni ATAYLAB qarzdorlikka belgilash.
+ *
+ * To'liq to'lanmagan zakaz o'z-o'zidan yutilmaydi va qarz ham yaratmaydi
+ * (`lib/crm/pipeline.ts` → `yutishTosigi`, `qarzUlushi`) — savdoni qarzga
+ * yopish alohida, ko'rinadigan qaror.
+ */
+async function qarzgaBelgila(dealId: string) {
+  return A(() =>
+    crm.zakazQarzBelgisi({ businessId: t.business.id, dealId, qarzga: true, userId: t.user.id })
+  );
+}
+
 before(async () => {
   rmSync("prisma/test-crm-tolovlar.db", { force: true });
   const res = spawnSync(process.execPath, ["scripts/db-migrate.mjs"], { env: { ...process.env }, encoding: "utf8" });
@@ -153,6 +167,11 @@ test("KANAL → MOLIYA: naqd naqdga, click/terminal/boshqa karta-hisobga", () =>
     ARALASH
   );
   assert.equal(tolovTuriBelgisi([], "qarz"), "qarz", "qatorsiz — tanlov saqlanadi");
+  assert.equal(
+    tolovTuriBelgisi([{ kanal: "naqd", summa: 1 }], "qarz"),
+    "qarz",
+    "qator bo'lsa ham 'qarzga' tanlovi yuvilmaydi — zalog + qarz mumkin"
+  );
   assert.equal(tolovTuriBelgisi([], null), null);
 });
 
@@ -247,6 +266,9 @@ test("TEST 4: 1 000 000 zakaz, 900 000 to'landi — kirim 900 000, qarz 100 000"
     { kanal: "click", summa: 400_000 },
     { kanal: "terminal", summa: 200_000 },
   ]);
+  // QOLDIQNING O'ZI QARZ EMAS: belgilanmaguncha zakaz yutilmaydi ham.
+  await assert.rejects(yakunla(d.id), BadRequestError, "to'liq to'lanmagan zakaz yutilmaydi");
+  await qarzgaBelgila(d.id);
   const n = await yakunla(d.id);
   assert.equal(n.kirimSumma, 900_000, "faqat REAL to'langan qism kirimga");
   assert.equal(n.qarzSumma, 100_000, "qoldiq — qarzdorlik");
@@ -315,6 +337,7 @@ test("TEST 6: Yutildi qayta bosilsa dublikat kirim yo'q", async () => {
 
 test("TEST 7: qarz to'langanda o'sha payt yangi kirim yoziladi", async () => {
   const d = await zakaz("T7 qarz yopildi", 800_000, [{ kanal: "naqd", summa: 500_000 }]);
+  await qarzgaBelgila(d.id);
   const n = await yakunla(d.id);
   assert.equal(n.kirimSumma, 500_000);
   assert.equal(n.qarzSumma, 300_000);
@@ -422,13 +445,24 @@ test("Aralash to'lovli zakaz eski 'kirimga o'tkazish' yo'lidan o'tmaydi", async 
   );
 });
 
-test("TAHRIR: to'lovlar almashtiriladi, moliyaga o'tgach QULFLANADI", async () => {
-  const d = await zakaz("Tahrir sinovi", 500_000, [{ kanal: "naqd", summa: 100_000 }]);
+test("TAHRIR: almashtirish faqat TO'LOVSIZ zakazda, keyin QULFLANADI", async () => {
+  // To'lovi hali yo'q zakaz — almashtirish yo'li ochiq (bot/import yo'li).
+  const d = await A(() =>
+    crm.createDeal({
+      businessId: t.business.id,
+      nomi: "Tahrir sinovi",
+      summa: 500_000,
+      categoryId: kat.id,
+      sana: bugun,
+      userId: t.user.id,
+    })
+  );
 
   await A(() =>
     crm.zakazTolovlariniAlmashtirish({
       businessId: t.business.id,
       dealId: d.id,
+      userId: t.user.id,
       tolovlar: [
         { kanal: "naqd", summa: 200_000 },
         { kanal: "terminal", summa: 300_000 },
@@ -439,31 +473,45 @@ test("TAHRIR: to'lovlar almashtiriladi, moliyaga o'tgach QULFLANADI", async () =
   assert.equal(keyin.tolangan, 500_000, "yig'indi qatorlar bilan birga yangilandi");
   assert.equal(keyin.tolovTuri, "aralash");
   assert.equal(keyin.tolovlar.length, 2);
-
-  // Oshib ketgan tahrir ham rad etiladi.
-  await assert.rejects(
-    A(() =>
-      crm.zakazTolovlariniAlmashtirish({
-        businessId: t.business.id,
-        dealId: d.id,
-        tolovlar: [{ kanal: "naqd", summa: 600_000 }],
-      })
-    ),
-    BadRequestError
+  assert.ok(
+    keyin.tolovlar.every((x: any) => x.transactionId),
+    "har qator PUL KELGAN PAYTDA o'z kirimini oldi — 'Yutildi' kutilmaydi"
   );
 
-  await yakunla(d.id);
+  // Endi pul kassada: almashtirish yopiladi. Tuzatish yo'li — to'lovni
+  // bekor qilish yoki yangisini QO'SHISH.
   await assert.rejects(
     A(() =>
       crm.zakazTolovlariniAlmashtirish({
         businessId: t.business.id,
         dealId: d.id,
+        userId: t.user.id,
         tolovlar: [{ kanal: "naqd", summa: 10_000 }],
       })
     ),
     BadRequestError,
-    "moliyaga o'tgan zakaz to'lovi qulflanadi"
+    "kirim yozilgan to'lov almashtirilmaydi"
   );
+
+  // Oshib ketgan to'lov ham rad etiladi (endi QO'SHISH yo'lida).
+  const tolovQoshish = await import("@/lib/crm/tolovQoshish");
+  await assert.rejects(
+    A(() =>
+      tolovQoshish.zakazgaTolovQoshish({
+        businessId: t.business.id,
+        dealId: d.id,
+        userId: t.user.id,
+        kanal: "naqd",
+        summa: 1,
+      })
+    ),
+    BadRequestError,
+    "zakaz allaqachon to'liq to'langan"
+  );
+
+  await yakunla(d.id);
+  const kirimlarRoyxati = await kirimlar("Tahrir sinovi");
+  assert.equal(kirimlarRoyxati.length, 2, "Yutildi yangi kirim yaratmadi");
 });
 
 // ---------------------------------------------------------------------------
