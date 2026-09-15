@@ -6,12 +6,11 @@ import { Badge } from "@/components/ui/Badge";
 import { kirimHavolasi, QARZ_HAVOLASI, type BuyurtmaDTO } from "./turlar";
 
 /**
- * ZAKAZNING MOLIYAVIY NATIJASI — KIRIM VA QARZ YOZUVLARIGA HAVOLALAR.
+ * ZAKAZNING MOLIYAVIY NATIJASI (4-, 5- va 13-talab).
  *
- * Pul zakazga TO'LOV QILINGAN paytda kirimga tushadi (`ZakazTolovlari`),
- * shuning uchun bu blok "pulni o'tkazish" tugmasi emas, NATIJA ko'rsatgichi:
- * qaysi yozuvlar yaratilgan va ular qayerda. "Yana kirim yaratish" tugmasi
- * ATAYLAB yo'q — dublikat yozuvga yo'l ochilmaydi.
+ * Yakunlangach kirim va qarz yozuvlari SHU YERDA ko'rinadi va havolalar
+ * asl yozuvlarga olib boradi. "Yana kirim yaratish" tugmasi ATAYLAB yo'q:
+ * yozuv mavjud bo'lsa faqat "Kirim yaratildi" ko'rsatiladi (13-talab).
  */
 export function ZakazMoliya({
   b,
@@ -58,23 +57,22 @@ export function ZakazMoliya({
             </div>
           )}
           <p className="text-2xs text-faint">
-            Har to&apos;lov bir marta kirimga tushadi — &quot;Yutildi&quot; yangi kirim
-            yaratmaydi (dublikat bo&apos;lmaydi).
+            Yozuv bir marta yaratiladi — takroriy yakunlash yangi kirim/qarz ochmaydi.
           </p>
         </>
       ) : (
         <>
-          <Badge tone="warning">🟠 To&apos;lov kelmagan</Badge>
+          <Badge tone="warning">🟠 Moliyaga o&apos;tmagan</Badge>
           {yakunlanganmi ? (
             <p className="text-xs text-muted">
-              Zakaz yutilgan, lekin unga to&apos;lov yozilmagan. To&apos;lovni yuqoridagi
-              &quot;To&apos;lovlar&quot; bo&apos;limidan qo&apos;shing.
+              Zakaz yutilgan, lekin to&apos;lovi belgilanmagan. Yuqorida to&apos;lovni tanlab saqlang —
+              kirim (va qisman/qarzga bo&apos;lsa qarzdorlik) o&apos;zi yoziladi.
             </p>
           ) : (
             <p className="text-xs text-muted">
-              Pul kelganda uni &quot;To&apos;lovlar&quot; bo&apos;limiga yozing — o&apos;sha zahoti
-              Kirimga tushadi. Zakaz to&apos;liq to&apos;langach &quot;Yutildi&quot; bosiladi;
-              qolgan summa esa QOLDIQ bo&apos;lib turadi, qarz hisoblanmaydi.
+              Ish yakunlangach &quot;Yutildi&quot; bosiladi: to&apos;langan qism Kirimga, qisman
+              to&apos;lovda qolgani, &quot;Qarzga&quot; tanlanganda butun summa Qarzdorlikka yoziladi.
+              To&apos;lov tanlanmagan bo&apos;lsa hech narsa yozilmaydi.
             </p>
           )}
           {!yakunlanganmi && (
@@ -82,7 +80,7 @@ export function ZakazMoliya({
               onClick={onYakunlash}
               className="w-full rounded-lg bg-income text-white text-sm font-medium py-2"
             >
-              Zakazni yutildi qilish
+              Yutildi va moliyaga o&apos;tkazish
             </button>
           )}
         </>

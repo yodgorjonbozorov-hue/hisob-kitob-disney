@@ -95,7 +95,6 @@
     "test:deploy-mashq": "node -r ts-node/register tests/deploy-mashq.test.ts",
     "test:crm-pipeline": "node -r ts-node/register tests/crm-pipeline.test.ts",
     "test:crm-tolovlar": "node -r ts-node/register tests/crm-tolovlar.test.ts",
-    "test:zakaz-tolov": "node -r ts-node/register tests/zakaz-tolov-qabul.test.ts",
     "test:crm-sotuvchi": "node -r ts-node/register tests/crm-sotuvchi.test.ts",
     "test:crm-xodim-kassa": "node -r ts-node/register tests/crm-xodim-kassa.test.ts",
     "test:xodim-statistika": "node -r ts-node/register tests/xodim-statistika.test.ts",

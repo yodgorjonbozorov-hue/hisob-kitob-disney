@@ -215,9 +215,6 @@ test("getBugungiHolat: CRM o'chiq bo'lsa CRM ko'rsatkichlari qaytarilmaydi", asy
       userId: tA.user.id,
       nomi: "Bugungi buyurtma",
       summa: 300_000,
-      // "Yutildi" faqat to'liq to'langan zakazda (`lib/crm/yakunlash.ts`).
-      tolangan: 300_000,
-      tolovTuri: "naqd",
       sana: BUGUN,
     })
   );

@@ -14,7 +14,6 @@ import { zakazMoliyasiniQaytarish } from "@/lib/crm/qaytarish";
 import {
   tolovHolati,
   yopiqHolat,
-  yutildiTekshiruvi,
   zakazQarzdormi,
   zakazUstuni,
   type TolovHolat,
@@ -29,7 +28,6 @@ import {
   tolovTuriBelgisi,
   type TolovSatri,
 } from "@/lib/crm/tolovlar";
-import { boshlangichTolovlarniYoz } from "@/lib/crm/tolovQoshish";
 import {
   sotuvchiUserIdTop,
   zakazXodimlariniSaqlash,
@@ -998,12 +996,8 @@ export async function createDeal(params: YangiBuyurtma) {
       businessId: params.businessId,
       nomi: params.nomi.trim(),
       summa,
-      // TO'LOV QATORLARI berilgan bo'lsa `tolangan` NOLDAN boshlanadi: har
-      // qator alohida yoziladi va yig'indini `zakazgaTolovQoshish` o'zi
-      // oshirib boradi (pul o'sha paytda kirimga ham tushadi). Qatorsiz
-      // eski yo'lda esa raqam avvalgidek to'g'ridan-to'g'ri yoziladi.
-      tolangan: tolovSatrlari?.length ? 0 : tolangan,
-      tolovTuri: tolovSatrlari?.length ? null : tolovTuri,
+      tolangan,
+      tolovTuri,
       holat,
       yopilganAt: yopiqHolat(holat) ? new Date() : null,
       // Yaratilish — zakazning BIRINCHI holati, shu bois tartib vaqti ham shu.
@@ -1031,18 +1025,10 @@ export async function createDeal(params: YangiBuyurtma) {
     await zakazXodimlariniSaqlash(params.businessId, deal.id, xodimlar);
   }
 
-  // BOSHLANG'ICH TO'LOVLAR (zalog). Har qator O'Z kirim tranzaksiyasini
-  // yozadi — zalog kassada DARHOL ko'rinadi, "Yutildi" ni kutmaydi
-  // (`lib/crm/tolovQoshish.ts`). `Deal.tolangan` ham o'sha yerda, ayni
-  // tranzaksiyada oshiriladi.
+  // ARALASH TO'LOV qatorlari. `Deal.tolangan` allaqachon shu yig'indidan
+  // yozilgan — qatorlar va yig'indi bir manbadan chiqadi.
   if (tolovSatrlari?.length) {
-    await boshlangichTolovlarniYoz({
-      businessId: params.businessId,
-      dealId: deal.id,
-      userId: params.userId,
-      satrlar: tolovSatrlari,
-      sana: params.sana ?? null,
-    });
+    await tolovSatrlariniYoz(prisma, params.businessId, deal.id, tolovSatrlari);
   }
 
   await prisma.activity.create({
@@ -1057,18 +1043,11 @@ export async function createDeal(params: YangiBuyurtma) {
   });
 
   // To'g'ridan-to'g'ri YUTILDI bosqichida yaratilgan (eski yo'l: import,
-  // tarixiy yozuv) zakazning yakuni ham DARHOL yoziladi. TEKSHIRUV SHU
-  // YERDA HAM: to'liq to'lanmagan import zakazi yakunlanmaydi — u YUTILDI
-  // bosqichida qoladi, lekin unga JIMGINA qarz OCHILMAYDI (to'lovlari
-  // allaqachon kirimga tushgan).
-  if (holat === "YUTILDI" && yutildiTekshiruvi(summa, tolangan, tolovTuri).mumkin) {
+  // tarixiy yozuv) zakazning moliyasi ham DARHOL yoziladi — "yutilgan, lekin
+  // kirimi yo'q" holat paydo bo'lmasin. To'lov tanlanmagan bo'lsa hech
+  // narsa yozilmaydi (yakunlash.ts qoidasi).
+  if (holat === "YUTILDI") {
     await zakazniYakunlash({ businessId: params.businessId, dealId: deal.id, userId: params.userId });
-  }
-
-  // Qatorlar yoki yakunlash `Deal` ni o'zgartirgan bo'lsa (tolangan,
-  // tolovTuri, transactionId) chaqiruvchiga YANGI holat qaytadi — eski
-  // snapshot bilan ishlaganlar noto'g'ri raqam ko'rmasin.
-  if (tolovSatrlari?.length || holat === "YUTILDI") {
     const yangilangan = await prisma.deal.findFirst({
       where: { id: deal.id, businessId: params.businessId },
       include: {

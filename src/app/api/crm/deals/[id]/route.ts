@@ -14,7 +14,6 @@ import {
   zakazTolovlariniAlmashtirish,
 } from "@/lib/crm/service";
 import { zakazniYakunlash } from "@/lib/crm/yakunlash";
-import { zakazTolovHisobi } from "@/lib/crm/tolovQoshish";
 import { buyurtmaPatchSchema } from "@/lib/validation/crm";
 import { dashboardYangilandi } from "@/lib/cache";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
@@ -48,18 +47,12 @@ export const GET = withTenant<{ params: { id: string } }>(
     if (!deal) return NextResponse.json({ error: "Buyurtma topilmadi" }, { status: 404 });
     // Zakazdagi xodimlar (kategoriya kesimida) — tafsilot oynasi ko'rsatadi.
     // `sotuvchi` alohida qaytadi: u ijrochilardan boshqa tushuncha (38-talab).
-    //
-    // TO'LOV HISOBI HAM SHU YERDA: tafsilot oynasi jami/to'langan/qoldiq va
-    // to'lovlar ro'yxatini doskadan kelgan ESKI snapshotdan emas, har
-    // ochilganda SERVERDAN oladi — shuning uchun qo'shilgan to'lov sahifa
-    // yangilanmasa ham ko'rinadi va yo'qolib qolmaydi.
-    const [xodimlar, sotuvchi, baho, tolovHisobi] = await Promise.all([
+    const [xodimlar, sotuvchi, baho] = await Promise.all([
       zakazXodimlari(businessId ?? "-", deal.id),
       zakazSotuvchisi(businessId ?? "-", deal.id),
       zakazBahosi(businessId ?? "-", deal.id),
-      zakazTolovHisobi(businessId ?? "-", deal.id),
     ]);
-    return NextResponse.json({ ...deal, xodimlar, sotuvchi, baho, tolovHisobi });
+    return NextResponse.json({ ...deal, xodimlar, sotuvchi, baho });
   },
   { module: "CRM" }
 );
@@ -67,19 +60,9 @@ export const GET = withTenant<{ params: { id: string } }>(
 /**
  * Buyurtmani tahrirlash / holatga ko'chirish.
  *
- * TO'LOV BU YERDA YOZILMAYDI. Zakaz to'lovi — LEDGER: yangi to'lov
- * `POST /api/crm/deals/[id]/tolov` orqali QO'SHILADI (oldingilariga
- * tegilmaydi va pul o'sha zahoti kirimga tushadi), xato yozilgani esa
- * `DELETE .../tolov/[tolovId]` bilan direktor tomonidan olib tashlanadi.
- * Bu route'dagi `tolangan`/`tolovTuri`/`tolovlar` maydonlari faqat hali
- * kirimi bo'lmagan eski zakazlarni tuzatish uchun qolgan.
- *
- * QULFLAR:
- *   - KATEGORIYA — birinchi kirim yozilgach (yozuv o'sha kategoriyada);
- *   - NARX — zakaz yakunlangach yoki qarzga yopilgach; har qanday holatda
- *     to'langan summadan past qilib bo'lmaydi;
- *   - "YUTILDI" — faqat to'liq to'langan (yoki ataylab qarzga yopilgan)
- *     zakazda (`lib/crm/yakunlash.ts`).
+ * DIQQAT: kirim yozilgandan keyin SUMMA va KATEGORIYA qulflanadi — aks holda
+ * CRM bir raqamni, Kirim boshqasini ko'rsatardi (yozilgan tranzaksiya
+ * o'zgarmaydi). Ularni o'zgartirish uchun avval Kirimdagi yozuv tahrirlanadi.
  */
 export const PATCH = withTenant<{ params: { id: string } }>(
   async (request, { params }, { session: user }) => {
@@ -110,49 +93,29 @@ export const PATCH = withTenant<{ params: { id: string } }>(
       });
       if (!existing) throw new ForbiddenError("Buyurtma topilmadi");
 
-      // KATEGORIYA — kirim yozilgach qulflanadi: yozilgan tranzaksiya o'sha
-      // kategoriyada turadi, CRM esa boshqasini ko'rsatib qolardi.
-      if (existing.transactionId && data.categoryId !== undefined) {
+      if (existing.transactionId && (data.summa !== undefined || data.categoryId !== undefined)) {
         throw new BadRequestError(
-          "Kirim yozilgan buyurtmaning kategoriyasi o'zgartirilmaydi"
+          "Kirim yozilgan buyurtmaning summasi va kategoriyasi o'zgartirilmaydi"
         );
       }
-      // NARX — to'lov kelgani narxni QULFLAMAYDI (aks holda birinchi
-      // zalogdan keyin zakaz narxini umuman tuzatib bo'lmasdi: to'lovlar
-      // endi alohida kirim yozuvlari, ular narxga bog'lanmagan). Narx
-      // YAKUNLANGAN yoki qarzga yopilgan zakazdagina qulflanadi, va hech
-      // qachon to'langan summadan past bo'la olmaydi (pastda).
-      if (
-        data.summa !== undefined &&
-        data.summa !== existing.summa &&
-        (existing.holat === "YUTILDI" || existing.debtId)
-      ) {
-        throw new BadRequestError(
-          "Yakunlangan zakaz summasi o'zgartirilmaydi — avval \"Yutildi\"dan qaytaring"
-        );
-      }
-      // TO'LOVNI BU YO'LDAN ALMASHTIRISH moliyaga o'tgach QULFLANADI.
-      // To'lov endi LEDGER: yangi to'lov `POST /api/crm/deals/[id]/tolov`
-      // orqali QO'SHILADI (oldingilariga tegmaydi), xatosi esa direktor
-      // tomonidan o'chiriladi. Bu maydonlar faqat hali kirimi yo'q eski
-      // zakazlarni tuzatish uchun qoldi.
+      // TO'LOV moliyaga o'tgach QULFLANADI: kirim/qarz yozuvlari allaqachon
+      // shu raqamlardan chiqqan, ularni keyin surish CRM va moliyani zid
+      // holatga tushirardi (summa/kategoriya bilan bir xil qoida).
       if (
         (existing.transactionId || existing.debtId) &&
-        (data.tolangan !== undefined || data.tolovTuri !== undefined || data.tolovlar !== undefined)
+        (data.tolangan !== undefined ||
+          data.tolovTuri !== undefined ||
+          data.tolovlar !== undefined ||
+          (data.summa !== undefined && data.summa !== existing.summa))
       ) {
         throw new BadRequestError(
-          "Zakaz to'lovi bu yerdan o'zgartirilmaydi — to'lovni \"To'lovlar\" bo'limidan qo'shing " +
-            "yoki Kirim/Qarzdorlik bo'limidan tuzating"
+          "Moliyaga o'tgan zakazning summasi va to'lovi o'zgartirilmaydi — Kirim yoki Qarzdorlik bo'limidan tuzating"
         );
       }
       const yangiSumma = data.summa ?? existing.summa;
       const yangiTolangan = data.tolangan ?? existing.tolangan;
-      // NARX TO'LANGANDAN PAST BO'LMAYDI: aks holda zakaz "ortiqcha
-      // to'langan" holatga tushib, qoldiq manfiy bo'lib qolardi.
       if (yangiTolangan > yangiSumma) {
-        throw new BadRequestError(
-          `Narx to'langan summadan kam bo'lmasligi kerak (to'langan: ${yangiTolangan} so'm)`
-        );
+        throw new BadRequestError("To'langan summa zakaz narxidan ko'p bo'lmasligi kerak");
       }
 
       if (data.categoryId) {
@@ -196,11 +159,10 @@ export const PATCH = withTenant<{ params: { id: string } }>(
         });
       }
 
-      // ESKI ZAKAZNI TUZATISH YO'LI: zakaz YUTILDI, lekin moliyasi hali
-      // yozilmagan (to'lovi endi belgilandi) — kirim darhol yoziladi.
-      // Yangi zakazlarda bu yo'lga ehtiyoj yo'q: to'lov qo'shilgan paytda
-      // kirim allaqachon yozilgan bo'ladi (`lib/crm/tolovQoshish.ts`).
-      // To'liq to'lanmagan bo'lsa `zakazniYakunlash` RAD ETADI.
+      // YUTILGAN, lekin moliyasi hali yozilmagan zakazda (to'lov endi
+      // belgilandi) kirim/qarz DARHOL yoziladi — foydalanuvchi alohida
+      // "kirimga o'tkazish" bosmaydi. Idempotent: mavjud yozuv takrorlanmaydi.
+      // `holat` ham kelgan bo'lsa quyidagi blok o'zi hal qiladi.
       const tolovOzgardi =
         data.tolangan !== undefined ||
         data.tolovTuri !== undefined ||
@@ -276,16 +238,9 @@ export const PATCH = withTenant<{ params: { id: string } }>(
     // yakunlansin.
     if (data.holat) {
       if (data.holat === "YUTILDI") {
-        // YAKUN: holat + (kerak bo'lsa) yetishmagan kirim va ANIQ tanlov
-        // bilan qarzdorlik — atomik va idempotent (`lib/crm/yakunlash.ts`).
-        // To'liq to'lanmagan zakaz shu yerda RAD ETILADI: himoya serverda,
-        // brauzerdagi tugmani o'chirish yetarli emas.
-        await zakazniYakunlash({
-          businessId,
-          dealId: params.id,
-          userId: user.userId,
-          qarzgaYopish: data.qarzgaYopish,
-        });
+        // MOLIYAVIY YAKUN: kirim + qarzdorlik, atomik va idempotent
+        // (`lib/crm/yakunlash.ts`). Takroriy bosish yangi kirim yaratmaydi.
+        await zakazniYakunlash({ businessId, dealId: params.id, userId: user.userId });
       } else {
         // YO'QOTISH SABABI va DIREKTOR HUQUQI xizmat qatlamiga uzatiladi:
         // moliyaga o'tgan "Yutildi" ni faqat boshqaruvchi qaytara oladi

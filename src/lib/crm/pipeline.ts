@@ -173,13 +173,9 @@ export const QARZ_KANALI = "qarz";
  * aylanardi).
  *
  *   to'liq to'langan (tolangan >= summa)  → TOLANGAN
- *   qisman (0 < tolangan < summa)         → QISMAN (qolgani QOLDIQ, qarz EMAS)
+ *   qisman (0 < tolangan < summa)         → QISMAN (qolgani qarz)
  *   "Qarzga" tanlangan (tolovTuri="qarz") → QARZ
  *   boshqasi                              → TANLANMAGAN
- *
- * QISMAN ≠ QARZ. Qisman to'langan zakazning qolgan qismi — QOLDIQ: zakaz
- * hali jarayonda, mijoz qarzdor emas. Qarz faqat ANIQ tanlov bilan ochiladi
- * (`qarzUlushi` izohiga qarang).
  *
  * ESKI XATO: `tolangan = 0` ning o'zi "Qarzga" deb o'qilardi. Shunda to'lovi
  * hali belgilanmagan zakaz (bot orqali kelgan lead, narxsiz yaratilgan
@@ -188,9 +184,8 @@ export const QARZ_KANALI = "qarz";
  * foydalanuvchi shuni tanlaganda; tanlov yo'q — holat yo'q (TANLANMAGAN),
  * moliyaviy yozuv ham yo'q.
  *
- * YUTILDI bilan BOG'LIQ: zakaz "Yutildi" ga faqat to'liq to'langanda (yoki
- * ataylab qarzga yopilganda) o'tadi — `yutildiTekshiruvi` shu qoidani
- * majburlaydi.
+ * YUTILDI — biznes yakuni, to'lov holati esa ALOHIDA o'lchov (5-talab):
+ * zakaz yutilgan bo'lishi va shu bilan birga to'liq qarzga qolishi mumkin.
  */
 export function tolovHolati(summa: number, tolangan: number, tolovTuri: string | null | undefined): TolovHolat {
   if (summa > 0 && tolangan >= summa) return "TOLANGAN";
@@ -207,93 +202,14 @@ export function kirimUlushi(summa: number, tolangan: number): number {
 /**
  * Yutilganda QARZDORLIKKA o'tadigan summa (qolgan qism).
  *
- * ═══ QOLDIQ ≠ QARZ (eng muhim qoida) ═══
- * Zakazning to'lanmagan qismi O'Z-O'ZIDAN qarz EMAS. 750 000 lik zakazga
- * 200 000 zalog berilgan bo'lsa, qolgan 550 000 — shunchaki QOLDIQ: ish
- * hali davom etmoqda, mijoz hech narsa qarz emas. Ilgari bu funksiya
- * "qisman to'langan" holatning o'zini qarz deb o'qir va YUTILDI bosilganda
- * mijozga avtomatik qarzdorlik ochib qo'yardi.
- *
- * Endi qarz FAQAT IKKI HOLDA, va ikkalasi ham ODAMNING ANIQ TANLOVI:
- *   1. `tolovTuri = "qarz"` — zakaz yaratilishida "Qarzga" belgilangan
- *      (butun savdo nasiyaga berilgan);
- *   2. `qarzgaYopish = true` — yakunlash oynasida "qolgan summani
- *      qarzdorlikka yozib yakunlash" ataylab bosilgan.
- * Boshqa hech qanday yo'l bilan zakazdan qarz TUG'ILMAYDI.
+ * FAQAT foydalanuvchi tanlovi bo'lganda: qisman to'lovda qolgani, "Qarzga"
+ * tanlanganda butun summa. To'lov tanlanmagan zakazga qarz OCHILMAYDI —
+ * YUTILDI bilan QARZ orasidagi avtomatik bog'lanish ataylab yo'q.
  */
-export function qarzUlushi(
-  summa: number,
-  tolangan: number,
-  tolovTuri: string | null | undefined,
-  /** Yakunlash paytidagi ANIQ tanlov: qolgan summa qarzdorlikka yozilsin. */
-  qarzgaYopish = false
-): number {
-  if (tolovTuri !== QARZ_KANALI && !qarzgaYopish) return 0;
+export function qarzUlushi(summa: number, tolangan: number, tolovTuri: string | null | undefined): number {
+  const holat = tolovHolati(summa, tolangan, tolovTuri);
+  if (holat !== "QISMAN" && holat !== "QARZ") return 0;
   return Math.max(0, summa - kirimUlushi(summa, tolangan));
-}
-
-// ---------------------------------------------------------------------------
-// "YUTILDI" ga o'tish sharti
-// ---------------------------------------------------------------------------
-
-/** `yutildiTekshiruvi` natijasi — brauzer ham, server ham AYNI javobni oladi. */
-export interface YutildiTekshiruvi {
-  /** Zakazni "Yutildi" ga o'tkazish mumkinmi. */
-  mumkin: boolean;
-  /** Mumkin bo'lmasa — foydalanuvchiga ko'rsatiladigan sabab. */
-  xato: string | null;
-  /** To'lanmagan qoldiq (so'm). */
-  qoldiq: number;
-  /** Zakaz summasidan OSHIB ketgan to'lov (so'm) — sog'lom holatda 0. */
-  ortiqcha: number;
-}
-
-/**
- * ZAKAZNI "YUTILDI" QILISH MUMKINMI — YAGONA QOIDA (sof funksiya).
- *
- * "Yutildi" — zakaz PULI TO'LIQ KELGAN holat. Qisman to'langan zakaz
- * "Jarayonda" bo'lib qolishi kerak: aks holda yarim puli kelgan ish
- * yakunlangan bo'lib ko'rinadi va qolgan summa jimgina qarzga aylanadi.
- *
- * Qoidalar:
- *   summa <= 0            → mumkin (narxsiz zakaz — moliyaviy yozuv yo'q);
- *   tolangan > summa      → MUMKIN EMAS (ortiqcha to'lov jimgina o'tmaydi);
- *   tolangan >= summa     → mumkin (to'liq to'langan);
- *   "Qarzga" tanlangan    → mumkin (nasiya savdo — qoldiq qarzdorlikka);
- *   qarzgaYopish = true   → mumkin (yakunlashda ataylab qarzga yopildi);
- *   qolgani (qisman/to'lovsiz) → MUMKIN EMAS.
- *
- * Bu tekshiruv BRAUZERDA tugmani o'chirish uchun emas — serverda
- * (`lib/crm/yakunlash.ts`) majburlanadi; brauzer faqat ayni javobni
- * oldindan ko'rsatadi.
- */
-export function yutildiTekshiruvi(
-  summa: number,
-  tolangan: number,
-  tolovTuri: string | null | undefined,
-  qarzgaYopish = false
-): YutildiTekshiruvi {
-  const qoldiq = Math.max(0, summa - tolangan);
-  const ortiqcha = Math.max(0, tolangan - summa);
-
-  if (ortiqcha > 0) {
-    return {
-      mumkin: false,
-      xato: `Zakazga summasidan ${ortiqcha} so'm ko'p to'lov kiritilgan — avval to'lovlarni tuzating`,
-      qoldiq,
-      ortiqcha,
-    };
-  }
-  if (summa <= 0 || qoldiq === 0) return { mumkin: true, xato: null, qoldiq, ortiqcha };
-  if (tolovTuri === QARZ_KANALI || qarzgaYopish) {
-    return { mumkin: true, xato: null, qoldiq, ortiqcha };
-  }
-  return {
-    mumkin: false,
-    xato: `Zakaz to'liq to'lanmagan. Qoldiq: ${qoldiq} so'm.`,
-    qoldiq,
-    ortiqcha,
-  };
 }
 
 // ---------------------------------------------------------------------------

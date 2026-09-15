@@ -81,33 +81,6 @@ export interface ZakazTolovDTO {
 }
 
 /**
- * ZAKAZ TO'LOV HISOBI — tafsilot oynasining YAGONA to'lov manbai.
- *
- * Doskadagi kartochka snapshoti EMAS: bu hisob har oyna ochilganda va har
- * to'lovdan keyin SERVERDAN keladi (`GET /api/crm/deals/[id]` →
- * `tolovHisobi`, `POST .../tolov` javobi). Shuning uchun yangi qo'shilgan
- * to'lov darhol ko'rinadi va eski snapshot uni "yo'qotib" qo'ymaydi.
- */
-export interface ZakazTolovHisobiDTO {
-  dealId: string;
-  summa: number;
-  tolangan: number;
-  qoldiq: number;
-  /** Zakaz summasidan oshib ketgan to'lov (sog'lom holatda 0). */
-  ortiqcha: number;
-  /** "TOLANGAN" | "QISMAN" | "QARZ" | "TANLANMAGAN". */
-  holati: string;
-  tolovlar: Array<{
-    id: string;
-    kanal: string;
-    summa: number;
-    createdAt: string;
-    transactionId: string | null;
-    kirimSana: string | null;
-  }>;
-}
-
-/**
  * DOSKA USTUNINING BIR SAHIFASI (server tomonda kesilgan, 10 tadan).
  * `kursor` — "Yana ko'rsatish" uchun kalit; `null` bo'lsa boshqa zakaz yo'q.
  * `jami`/`summa` — SAHIFADAN emas, butun ustundan (sarlavha raqamlari).

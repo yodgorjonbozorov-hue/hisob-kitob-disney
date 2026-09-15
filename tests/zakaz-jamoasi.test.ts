@@ -179,7 +179,7 @@ test("40: Panda Masha — sotuvchi + 6 lavozimli jamoa (2 videochi) saqlanadi", 
     crm.createDeal({
       businessId: tA.business.id,
       nomi: "Panda Masha",
-      summa: 500_000, tolangan: 500_000, tolovTuri: "naqd",
+      summa: 500_000,
       categoryId: katBantik.id,
       sana: bugun,
       userId: tA.user.id,
@@ -292,7 +292,7 @@ test("43: Videochi Sardor → Ilhom: Sardor chiqadi, Ilhom kiradi, lentaga yozil
 test("44: uchta videochi — uchalasida 1 tadan qatnashuv, zakaz soni 1", async () => {
   const deal = await A(() =>
     crm.createDeal({
-      businessId: tA.business.id, nomi: "Katta to'y", summa: 900_000, tolangan: 900_000, tolovTuri: "naqd", categoryId: katBantik.id,
+      businessId: tA.business.id, nomi: "Katta to'y", summa: 900_000, categoryId: katBantik.id,
       sana: bugun, stageId: wonStage.id, userId: tA.user.id, sotuvchiId: doston.id,
       xodimlar: [
         { categoryId: kVideochi.id, employeeId: sardor.id },
@@ -331,7 +331,7 @@ test("44b: to'rt animator + so'rovda takrorlangan xodim — 4 qatnashuv, zakaz s
   // Yutilgan QILINMAYDI: sotuvchi summasi boshqa stsenariylarda qat'iy tekshiriladi.
   const deal = await A(() =>
     crm.createDeal({
-      businessId: tA.business.id, nomi: "To'rt animatorli bayram", summa: 500_000, tolangan: 500_000, tolovTuri: "naqd", categoryId: katBantik.id,
+      businessId: tA.business.id, nomi: "To'rt animatorli bayram", summa: 500_000, categoryId: katBantik.id,
       sana: bugun, userId: tA.user.id, sotuvchiId: doston.id,
       xodimlar: [
         ...jamoaAzo.map((x) => ({ categoryId: kAnimator.id, employeeId: x.id })),
@@ -380,7 +380,7 @@ test("45: B biznes xodimi/lavozimi A zakaziga biriktirilmaydi", async () => {
 test("46: o'tgan oy zakazi 'Bu oy' KPI'siga qo'shilmaydi", async () => {
   await A(() =>
     crm.createDeal({
-      businessId: tA.business.id, nomi: "O'tgan oy tabrigi", summa: 300_000, tolangan: 300_000, tolovTuri: "naqd", categoryId: katBantik.id,
+      businessId: tA.business.id, nomi: "O'tgan oy tabrigi", summa: 300_000, categoryId: katBantik.id,
       sana: otganOy.to, stageId: wonStage.id, userId: tA.user.id, sotuvchiId: doston.id,
       xodimlar: [{ categoryId: kAnimator.id, employeeId: jajon.id }],
     })
@@ -395,7 +395,7 @@ test("46: o'tgan oy zakazi 'Bu oy' KPI'siga qo'shilmaydi", async () => {
 test("baho: faqat yutilgan zakaz baholanadi; servis + xodim bahosi saqlanadi", async () => {
   const ochiq = await A(() =>
     crm.createDeal({
-      businessId: tA.business.id, nomi: "Hali ochiq", summa: 100_000, tolangan: 100_000, tolovTuri: "naqd", categoryId: katBantik.id,
+      businessId: tA.business.id, nomi: "Hali ochiq", summa: 100_000, categoryId: katBantik.id,
       sana: bugun, userId: tA.user.id, sotuvchiId: doston.id,
     })
   );
@@ -445,7 +445,7 @@ test("baho: xodim profilida o'rtacha baho; diff saqlash bahoni yo'qotmaydi", asy
 test("baho: B biznes biriktiruvi id'siga baho tushmaydi", async () => {
   const bDeal = await B(() =>
     crm.createDeal({
-      businessId: tB.business.id, nomi: "B zakaz", summa: 50_000, tolangan: 50_000, tolovTuri: "naqd", sana: bugun, userId: tB.user.id,
+      businessId: tB.business.id, nomi: "B zakaz", summa: 50_000, sana: bugun, userId: tB.user.id,
       xodimlar: [{ categoryId: kBVideochi.id, employeeId: bXodim.id }],
     })
   );
@@ -467,7 +467,7 @@ test("baho: B biznes biriktiruvi id'siga baho tushmaydi", async () => {
 test("jamoa huquqi: huquqsiz foydalanuvchi faqat o'z (yakunlanmagan) zakazini o'zgartiradi", async () => {
   const ozi = await A(() =>
     crm.createDeal({
-      businessId: tA.business.id, nomi: "Doston zakazi", summa: 10_000, tolangan: 10_000, tolovTuri: "naqd", categoryId: katBantik.id,
+      businessId: tA.business.id, nomi: "Doston zakazi", summa: 10_000, categoryId: katBantik.id,
       sana: bugun, userId: dostonUser.id, sotuvchiId: doston.id,
     })
   );
@@ -485,11 +485,8 @@ test("kirim yozilgach jamoa OCHIQ qoladi, pul yozuvi esa tegilmaydi", async () =
   // attribution tuzatish qo'llab-quvvatlanadi (xodimlar tarixni to'ldirib
   // chiqadi), pul esa alohida yo'lda qulf: bu funksiya `Transaction` ga
   // umuman tegmaydi.
-  // Zakaz allaqachon yutilgan va to'liq to'langan — pul TO'LOV QILINGAN
-  // paytda kirimga tushgan (`lib/crm/tolovQoshish.ts`), shuning uchun
-  // alohida "kirimga o'tkazish" qadami kerak emas.
-  const pandaHolati = await A(() => prisma.deal.findFirst({ where: { id: panda.id } }));
-  assert.ok(pandaHolati.transactionId, "zakazda kirim yozuvi bor");
+  const crmKirim = await import("@/lib/crm/kirim");
+  await A(() => crmKirim.kirimgaKochirish({ businessId: tA.business.id, dealId: panda.id, userId: tA.user.id }));
   const oldin = await A(() =>
     prisma.transaction.aggregate({
       where: { businessId: tA.business.id, turi: "kirim", deletedAt: null },
@@ -533,7 +530,7 @@ test("avto-tanlash yo'q: sotuvchi yuborilmasa zakaz SOTUVCHISIZ tug'iladi", asyn
   // kompyuterda kirgan hisob zakazni kim sotganini bildirmaydi.
   const deal = await A(() =>
     crm.createDeal({
-      businessId: tA.business.id, nomi: "Sotuvchisiz zakaz", summa: 200_000, tolangan: 200_000, tolovTuri: "naqd", categoryId: katBantik.id,
+      businessId: tA.business.id, nomi: "Sotuvchisiz zakaz", summa: 200_000, categoryId: katBantik.id,
       sana: bugun, userId: dostonUser.id,
     })
   );
@@ -583,7 +580,7 @@ test("kirim yozilgan zakazda ham xodim attribution tahrirlanadi (pul tegilmaydi)
 test("tasdiqlanmagan biriktiruv KPI'ga kirmaydi; saqlansa TASDIQLANADI", async () => {
   const deal = await A(() =>
     crm.createDeal({
-      businessId: tA.business.id, nomi: "Taxmin qilingan zakaz", summa: 150_000, tolangan: 150_000, tolovTuri: "naqd", categoryId: katBantik.id,
+      businessId: tA.business.id, nomi: "Taxmin qilingan zakaz", summa: 150_000, categoryId: katBantik.id,
       sana: bugun, stageId: wonStage.id, userId: tA.user.id, sotuvchiId: doston.id,
     })
   );

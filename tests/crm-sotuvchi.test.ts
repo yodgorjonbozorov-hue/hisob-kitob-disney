@@ -89,9 +89,9 @@ async function zakaz(opts: {
 }
 
 /** Zakazni YUTILDI qilish — moliyaviy yakun (kirim + qarzdorlik). */
-async function yakunla(dealId: string, qarzgaYopish = false) {
+async function yakunla(dealId: string) {
   return A(() =>
-    yakunlash.zakazniYakunlash({ businessId: tA.business.id, dealId, userId: tA.user.id, qarzgaYopish })
+    yakunlash.zakazniYakunlash({ businessId: tA.business.id, dealId, userId: tA.user.id })
   );
 }
 
@@ -375,10 +375,7 @@ test("qisman to'langan zakaz: kirim + qarz, bonus bazasi hali 0", async () => {
     tolangan: 200_000,
     tolovTuri: "naqd",
   });
-  // Qisman to'langan zakaz o'z-o'zidan yakunlanmaydi — nasiya savdo ekani
-  // ANIQ belgilanadi (`lib/crm/yakunlash.ts`).
-  await assert.rejects(yakunla(d.id), BadRequestError);
-  const natija = await yakunla(d.id, true);
+  const natija = await yakunla(d.id);
   assert.equal(natija.kirimSumma, 200_000, "olingan qism kirimga");
   assert.equal(natija.qarzSumma, 300_000, "qolgani qarzdorlikka");
 
