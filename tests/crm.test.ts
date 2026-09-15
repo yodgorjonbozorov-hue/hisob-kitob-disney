@@ -245,16 +245,21 @@ test("kirimgaKochirish: summasiz buyurtma rad etiladi", async () => {
 });
 
 test("moveDeal WON + kirimYoz: eski yo'l ham bitta kirim yozadi", async () => {
+  // "Yutildi" faqat TO'LIQ TO'LANGAN zakazda mumkin (`lib/crm/yakunlash.ts`),
+  // shuning uchun eski yo'l ham to'langan zakazda sinaladi.
   const deal = await A(() =>
     crm.createDeal({
       businessId: tA.business.id,
       nomi: "Katta bitim",
       categoryId: katOnajon.id,
       summa: 2_000_000,
+      tolangan: 2_000_000,
+      tolovTuri: "naqd",
       userId: tA.user.id,
     })
   );
   const won = await A(() => prisma.stage.findFirst({ where: { businessId: tA.business.id, turi: "WON" } }));
+
 
   await A(() =>
     crm.moveDeal({ businessId: tA.business.id, dealId: deal.id, stageId: won.id, kirimYoz: true, userId: tA.user.id })
@@ -505,6 +510,9 @@ test("TO'LIQ OQIM: yangi buyurtma -> Yutildi -> Kirim -> Dashboard kategoriya ke
       nomi: "Bantik buyurtmasi",
       categoryId: katBantik.id,
       summa: 500_000,
+      // Pul to'liq kelgan — shundagina zakaz "Yutildi" ga o'tadi.
+      tolangan: 500_000,
+      tolovTuri: "naqd",
       kontaktIsm: "Zilola",
       kontaktTel: "+998907778899",
       sana,

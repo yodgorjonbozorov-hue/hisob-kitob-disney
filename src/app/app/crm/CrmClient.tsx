@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { kirimUlushi, qarzUlushi, zakazUstuni, type Ustun } from "@/lib/crm/pipeline";
+import { zakazUstuni, type Ustun } from "@/lib/crm/pipeline";
 import { BuyurtmaModal } from "./BuyurtmaModal";
 import { BuyurtmaSheet } from "./BuyurtmaSheet";
 import { DoskaFiltr } from "./DoskaFiltr";
@@ -202,13 +202,11 @@ export function CrmClient({
             setTanlangan(null);
           }}
           onTahrirlandi={(yangi) => {
-            // Ochiq oyna serverdan kelgan snapshot ustida ishlaydi — yangi
-            // qiymatlar darhol ko'rinsin. Yutilgan zakazda to'lov belgilansa
-            // server kirim/qarzni darhol yozadi, shuning uchun moliya bloki
-            // ham shu yerda yangilanadi (AYNI qoidadan: kirimUlushi/qarzUlushi).
-            const kirimSumma = yangi.transactionId ? kirimUlushi(yangi.summa, yangi.tolangan) : 0;
-            const qarzQoldiq = yangi.debtId ? qarzUlushi(yangi.summa, yangi.tolangan, yangi.tolovTuri) : 0;
-            setTanlangan({ ...tanlangan, ...yangi, kirimSumma, qarzQoldiq });
+            // Ochiq oyna serverdan kelgan snapshot ustida ishlaydi — kategoriya
+            // va narx darhol ko'rinsin. TO'LOV raqamlari bu yerda emas: ular
+            // tafsilot oynasining o'z hisobidan (serverdan) keladi
+            // (`ZakazTolovlari`), shuning uchun mahalliy hisob-kitob yo'q.
+            setTanlangan({ ...tanlangan, ...yangi });
             router.refresh();
           }}
           onClose={() => setTanlangan(null)}

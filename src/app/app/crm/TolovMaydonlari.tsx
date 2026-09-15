@@ -8,20 +8,20 @@ const INPUT =
   "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand";
 
 /**
- * TO'LOVLAR BLOKI — bitta zakaz bir necha KANAL bilan to'lanishi mumkin.
+ * BOSHLANG'ICH TO'LOVLAR (ZALOG) — YANGI ZAKAZ FORMASIDA.
  *
- * Misol: 1 000 000 lik zakaz — naqd 300 000 + click 400 000 + terminal
- * 200 000, qolgan 100 000 esa QARZ.
+ * Bir zakaz bir necha KANAL bilan to'lanishi mumkin: naqd 300 000 +
+ * click 400 000 + terminal 200 000. Har qator O'Z kirim yozuvini oladi va
+ * pul o'sha zahoti tegishli kassaga tushadi (`lib/crm/tolovQoshish.ts`).
  *
- * QARZ QATOR EMAS (`lib/crm/tolovlar.ts` bilan bir xil qoida): u zakaz
- * summasidan QOLGAN qism. Shuning uchun kanallar ro'yxatida "qarz" yo'q va
- * pastda faqat "Qoldiq" ko'rsatiladi — u Yutildi bosilganda qarzdorlikka
- * yoziladi.
+ * MAVJUD ZAKAZGA to'lov bu forma orqali EMAS, tafsilot oynasidagi
+ * "To'lovlar" bo'limidan QO'SHILADI — u yerda har to'lov alohida yoziladi
+ * va oldingilariga tegilmaydi.
  *
- * TO'LOV QATORI UMUMAN BO'LMASA zakaz "to'lovi tanlanmagan" bo'lib qoladi
- * va Yutildi hech qanday moliyaviy yozuv yaratmaydi. To'lovsiz zakazni
- * ataylab qarzga yozish uchun "Qarzga" belgisi bor — qarz FAQAT
- * foydalanuvchi tanlovi bilan ochiladi.
+ * QOLDIQ ≠ QARZ. Pastdagi "Qoldiq" — hali kelmagan pul; zakaz jarayonda
+ * turganda u QARZ HISOBLANMAYDI va hech qanday qarzdorlik yozuvi
+ * ochilmaydi. Qarz faqat ANIQ tanlov bilan: to'lovsiz zakazda "Qarzga"
+ * belgisi, yakunlashda esa "qarzdorlikka yozib yakunlash" tanlovi.
  */
 
 /** Forma qatori: summa XOM MATN (foydalanuvchi kiritayotgan holat). */
@@ -131,11 +131,12 @@ export function TolovMaydonlari({
         </div>
       )}
 
-      {/* QARZ — kanal emas, QOLDIQ. Qator bo'lsa qoldiq o'zi qarzdorlikka
-          yoziladi; qatorsiz zakazda esa qarz FAQAT shu belgi bilan ochiladi. */}
+      {/* QARZ — kanal emas, QOLDIQ. Zakaz jarayonda turganda qoldiq QARZ
+          EMAS; u faqat hali kelmagan pul. */}
       {narx > 0 && qoldiq > 0 && satrlar.length > 0 && (
         <p className="text-2xs text-faint">
-          Yutildi bosilganda: Kirim {formatMoney(tolangan)} · Qarzdorlik {formatMoney(qoldiq)}
+          {formatMoney(tolangan)} darhol Kirimga tushadi. Qolgan {formatMoney(qoldiq)} —
+          qoldiq (qarz emas): pul kelganda &quot;To&apos;lovlar&quot; bo&apos;limidan qo&apos;shiladi.
         </p>
       )}
       {narx > 0 && satrlar.length === 0 && (
