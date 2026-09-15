@@ -455,3 +455,50 @@ test("TUZATISH: xato to'lov olib tashlanadi — kirim savatga, hisob qayta hisob
   assert.equal(n.yangiYakun, true);
   assert.equal(n.qarzSumma, 0);
 });
+
+// ---------------------------------------------------------------------------
+// ORQAGA MOSLIK: qatorsiz ESKI zakazga yangi to'lov qo'shish
+// ---------------------------------------------------------------------------
+
+test("ESKI ZAKAZ: pul `Deal.tolangan` da — yangi to'lov eskisini YO'QOTMAYDI", async () => {
+  // Qatorlar paydo bo'lishidan oldingi yozuv: pul faqat `Deal.tolangan` da.
+  const d = await A(() =>
+    crm.createDeal({
+      businessId: t.business.id,
+      nomi: "Q11 eski uslub",
+      summa: 900_000,
+      tolangan: 200_000,
+      tolovTuri: "naqd",
+      categoryId: kat.id,
+      sana: bugun,
+      userId: t.user.id,
+    })
+  );
+  const satrSoni = await A(() =>
+    prisma.dealTolov.count({ where: { businessId: t.business.id, dealId: d.id } })
+  );
+  assert.equal(satrSoni, 0, "eski yo'lda qator yozilmaydi");
+
+  // Yangi to'lov qo'shilganda eski summa ledgerga KO'CHADI, tushib qolmaydi.
+  await tolov(d.id, "click", 700_000);
+
+  const h = await hisob(d.id);
+  assert.equal(h.tolangan, 900_000, "eski 200k + yangi 700k");
+  assert.equal(h.qoldiq, 0);
+  assert.equal(h.tolovlar.length, 2, "eski summa o'z qatoriga ko'chdi");
+  assert.deepEqual(
+    h.tolovlar.map((x: any) => `${x.kanal}:${x.summa}`),
+    ["naqd:200000", "click:700000"]
+  );
+
+  // `Deal.tolangan` keshi ham qatorlar bilan bir xil.
+  const deal = await A(() => prisma.deal.findFirst({ where: { id: d.id } }));
+  assert.equal(deal.tolangan, 900_000);
+
+  // To'liq to'langani uchun yakunlash mumkin va eski qism ham kirimga tushadi.
+  const n = await yakunla(d.id);
+  assert.equal(n.yangiYakun, true);
+  assert.equal(n.qarzSumma, 0);
+  const k = await kirimlar("Q11 eski uslub");
+  assert.equal(k.reduce((sum: number, x: any) => sum + x.summa, 0), 900_000, "jami kirim to'liq");
+});

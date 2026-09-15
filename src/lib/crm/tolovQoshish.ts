@@ -248,19 +248,55 @@ export async function zakazgaTolovQoshish(
     });
     if (!joriy) throw new ForbiddenError("Zakaz topilmadi");
 
-    const satrlar = await tx.dealTolov.findMany({
+    let satrlar = await tx.dealTolov.findMany({
       where: { businessId: params.businessId, dealId: params.dealId },
       select: { id: true, summa: true },
     });
+
+    // ═══ ESKI ZAKAZNI LEDGERGA KO'CHIRISH ═══
+    // Qatorlar paydo bo'lishidan OLDIN yaratilgan zakazlarda pul faqat
+    // `Deal.tolangan` da turadi (bot orqali kelgan, bir kanalli eski yozuv).
+    // Bunday zakazga yangi to'lov qo'shilsa eski summa ledgerdan TUSHIB
+    // QOLARDI: yig'indi qatorlardan hisoblanadi, qator esa faqat yangisi
+    // bo'lardi. Shuning uchun eski summa avval O'Z qatoriga ko'chiriladi —
+    // shundan keyin `Σ qatorlar === Deal.tolangan` invarianti hech qachon
+    // buzilmaydi.
+    //
+    // Kanal — zakazning o'z `tolovTuri` si; "qarz" yoki noma'lum bo'lsa
+    // "boshqa" (naqd EMAS deb qaraladi, ya'ni pul naqd kassaga jimgina
+    // yozilib qolmaydi). Kirim bog'lanishi ham saqlanadi: eski zakazda
+    // kirim `Deal.transactionId` da bo'lsa, u shu qatorga o'tadi va
+    // yakunlashda IKKINCHI marta yozilmaydi.
+    if (satrlar.length === 0 && joriy.tolangan > 0) {
+      const eskiKanal = tolovKanalimi(deal.tolovTuri) ? deal.tolovTuri : "boshqa";
+      const eskiKirim = joriy.transactionId
+        ? await tx.transaction.findFirst({
+            where: { id: joriy.transactionId, businessId: params.businessId },
+            select: { id: true },
+          })
+        : null;
+      const eskiSatr = await tx.dealTolov.create({
+        data: {
+          businessId: params.businessId,
+          dealId: params.dealId,
+          kanal: eskiKanal,
+          summa: joriy.tolangan,
+          transactionId: eskiKirim?.id ?? null,
+        },
+        select: { id: true, summa: true },
+      });
+      satrlar = [eskiSatr];
+    }
+
     if (satrlar.length >= TOLOV_SATR_LIMITI) {
       throw new BadRequestError(
         `Bir zakazda ${TOLOV_SATR_LIMITI} tadan ko'p to'lov qatori bo'lmaydi`
       );
     }
 
-    // ESKI KESH bilan qatorlar ajralib qolgan bo'lsa yig'indi QATORLARDAN
-    // (qatorsiz eski zakazda esa keshdan) — hisob har doim haqiqatdan.
-    const eskiTolangan = satrlar.length > 0 ? satrlarJami(satrlar) : joriy.tolangan;
+    // Yig'indi endi HAR DOIM qatorlardan (yuqoridagi ko'chirishdan keyin
+    // qatorsiz, lekin puli bor zakaz qolmaydi).
+    const eskiTolangan = satrlarJami(satrlar);
     const yangiTolangan = eskiTolangan + params.summa;
     if (yangiTolangan > joriy.summa) {
       const qoldiq = Math.max(0, joriy.summa - eskiTolangan);
