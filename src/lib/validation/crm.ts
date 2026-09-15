@@ -23,6 +23,25 @@ export const zakazTolovlariSchema = z
 const sanaRegex = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
+ * ZAKAZGA BITTA TO'LOV QO'SHISH (`POST /api/crm/deals/[id]/tolov`).
+ *
+ * Qator massivi EMAS: har so'rov ayni bitta to'lovni QO'SHADI, mavjudlarini
+ * almashtirmaydi. Qoldiqdan oshib ketishini server tekshiradi
+ * (`lib/crm/tolovQoshish.ts`) — bu yerda faqat shakl tekshiriladi.
+ */
+export const zakazTolovSchema = z.object({
+  kanal: z.enum(TOLOV_KANALLARI, { errorMap: () => ({ message: "To'lov turi tanlansin" }) }),
+  summa: z
+    .number()
+    .int("To'lov summasi butun so'mda bo'lishi kerak")
+    .positive("To'lov summasi noldan katta bo'lsin"),
+  /** To'lov sanasi (berilmasa — bugun). */
+  sana: z.string().regex(sanaRegex, "Sana YYYY-MM-DD ko'rinishida").optional().nullable(),
+  /** Qaysi kassaga tushdi (berilmasa — kanalga mos kassa). */
+  accountId: z.string().trim().optional().nullable(),
+});
+
+/**
  * Yangi buyurtma. Kategoriya — KIRIM modulidagi kategoriya id'si
  * (alohida CRM kategoriya tizimi yo'q). Summa `Int` (so'm), hech qachon float.
  */
@@ -86,6 +105,13 @@ export const buyurtmaPatchSchema = z.object({
    * orqali (kirim + qarzdorlik) bajariladi, boshqalari oddiy o'tish.
    */
   holat: z.enum(ZAKAZ_HOLATLARI).optional(),
+  /**
+   * QOLGAN SUMMANI QARZDORLIKKA YOZIB YAKUNLASH — faqat `holat: "YUTILDI"`
+   * bilan birga ma'noli. To'liq to'lanmagan zakaz odatda yakunlanmaydi;
+   * nasiya savdoda esa foydalanuvchi shu bayroq bilan ANIQ tanlov qiladi va
+   * qoldiq uchun qarz ochiladi. Bayroqsiz qarz yaratilmaydi.
+   */
+  qarzgaYopish: z.boolean().optional(),
   /** "Bugungi zakazga o'tkazish": sanani bugunga suradi. */
   bugungaKochir: z.boolean().optional(),
   /**
@@ -138,6 +164,7 @@ export const kirimgaSchema = z.object({
   tolovTuri: z.enum(["naqd", "click", "qarz"]).optional().nullable(),
 });
 
+export type ZakazTolovInput = z.infer<typeof zakazTolovSchema>;
 export type BuyurtmaInput = z.infer<typeof buyurtmaSchema>;
 export type BuyurtmaPatchInput = z.infer<typeof buyurtmaPatchSchema>;
 export type DoskaFiltrInput = z.infer<typeof doskaFiltrSchema>;

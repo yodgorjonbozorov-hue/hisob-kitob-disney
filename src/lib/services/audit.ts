@@ -60,7 +60,10 @@ export type AuditEntity =
   | "employeePenalty"
   | "employeeBonus"
   // CRM: zakaz sotuvchisini almashtirish (kim → kimga, kim o'zgartirdi)
-  | "deal";
+  | "deal"
+  // CRM: zakaz to'lov qatori — xato yozilgan to'lovni olib tashlash
+  // (kirim yozuvi savatga o'tadi, shuning uchun iz auditda qolishi shart)
+  | "dealTolov";
 
 interface AuditInput {
   businessId?: string | null;

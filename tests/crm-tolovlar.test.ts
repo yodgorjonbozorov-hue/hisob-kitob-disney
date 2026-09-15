@@ -32,6 +32,7 @@ let crmKirim: any;
 let yakunlash: any;
 let qarz: any;
 let tolovlar: any;
+let tolovQoshish: any;
 let xodimStat: any;
 let BadRequestError: any;
 let todayTashkentDateOnlyString: any;
@@ -83,8 +84,17 @@ async function kassaKirimi(accountId: string) {
   return agg._sum.summa ?? 0;
 }
 
-async function yakunla(dealId: string) {
-  return A(() => yakunlash.zakazniYakunlash({ businessId: t.business.id, dealId, userId: t.user.id }));
+async function yakunla(dealId: string, qarzgaYopish = false) {
+  return A(() =>
+    yakunlash.zakazniYakunlash({ businessId: t.business.id, dealId, userId: t.user.id, qarzgaYopish })
+  );
+}
+
+/** Mavjud zakazga BITTA to'lov qo'shish (oldingilariga tegilmaydi). */
+async function tolovQosh(dealId: string, kanal: string, summa: number) {
+  return A(() =>
+    tolovQoshish.zakazgaTolovQoshish({ businessId: t.business.id, dealId, userId: t.user.id, kanal, summa })
+  );
 }
 
 before(async () => {
@@ -101,6 +111,7 @@ before(async () => {
   yakunlash = await import("@/lib/crm/yakunlash");
   qarz = await import("@/lib/services/qarz");
   tolovlar = await import("@/lib/crm/tolovlar");
+  tolovQoshish = await import("@/lib/crm/tolovQoshish");
   xodimStat = await import("@/lib/queries/xodimStatistika");
   ({ BadRequestError } = await import("@/lib/auth/guard"));
   ({ todayTashkentDateOnlyString } = await import("@/lib/date"));
@@ -241,13 +252,24 @@ test("TEST 3: naqd + click + terminal — uch kirim, naqd kassa faqat naqd qismg
 // TEST 4: to'langan qism + qarz
 // ---------------------------------------------------------------------------
 
-test("TEST 4: 1 000 000 zakaz, 900 000 to'landi — kirim 900 000, qarz 100 000", async () => {
+test("TEST 4: 1 000 000 zakaz, 900 000 to'landi — Yutildi bloklanadi, nasiyada qarz 100 000", async () => {
   const d = await zakaz("T4 qoldiq", 1_000_000, [
     { kanal: "naqd", summa: 300_000 },
     { kanal: "click", summa: 400_000 },
     { kanal: "terminal", summa: 200_000 },
   ]);
-  const n = await yakunla(d.id);
+
+  // Qolgan 100 000 — QOLDIQ: zakaz yakunlanmaydi va qarz ochilmaydi.
+  await assert.rejects(
+    yakunla(d.id),
+    (e: any) => e instanceof BadRequestError && /to'liq to'lanmagan/i.test(e.message)
+  );
+  const oraliq = await A(() => prisma.deal.findFirst({ where: { id: d.id } }));
+  assert.notEqual(oraliq.holat, "YUTILDI");
+  assert.equal(oraliq.debtId, null, "zalog qarz yaratmaydi");
+
+  // NASIYA SAVDO — ANIQ tanlov bilan yakunlanadi.
+  const n = await yakunla(d.id, true);
   assert.equal(n.kirimSumma, 900_000, "faqat REAL to'langan qism kirimga");
   assert.equal(n.qarzSumma, 100_000, "qoldiq — qarzdorlik");
 
@@ -315,7 +337,8 @@ test("TEST 6: Yutildi qayta bosilsa dublikat kirim yo'q", async () => {
 
 test("TEST 7: qarz to'langanda o'sha payt yangi kirim yoziladi", async () => {
   const d = await zakaz("T7 qarz yopildi", 800_000, [{ kanal: "naqd", summa: 500_000 }]);
-  const n = await yakunla(d.id);
+  // Nasiya savdo: qolgan 300 000 ataylab qarzdorlikka yoziladi.
+  const n = await yakunla(d.id, true);
   assert.equal(n.kirimSumma, 500_000);
   assert.equal(n.qarzSumma, 300_000);
 
@@ -422,37 +445,35 @@ test("Aralash to'lovli zakaz eski 'kirimga o'tkazish' yo'lidan o'tmaydi", async 
   );
 });
 
-test("TAHRIR: to'lovlar almashtiriladi, moliyaga o'tgach QULFLANADI", async () => {
-  const d = await zakaz("Tahrir sinovi", 500_000, [{ kanal: "naqd", summa: 100_000 }]);
+test("LEDGER: yangi to'lov QO'SHILADI — oldingilari o'chmaydi va almashtirilmaydi", async () => {
+  const d = await zakaz("Ledger sinovi", 500_000, [{ kanal: "naqd", summa: 100_000 }]);
 
-  await A(() =>
-    crm.zakazTolovlariniAlmashtirish({
-      businessId: t.business.id,
-      dealId: d.id,
-      tolovlar: [
-        { kanal: "naqd", summa: 200_000 },
-        { kanal: "terminal", summa: 300_000 },
-      ],
-    })
+  // Ikkinchi va uchinchi to'lov — har biri ALOHIDA qator va ALOHIDA kirim.
+  await tolovQosh(d.id, "terminal", 300_000);
+  const oxirgi = await tolovQosh(d.id, "click", 100_000);
+  assert.equal(oxirgi.tolangan, 500_000);
+  assert.equal(oxirgi.qoldiq, 0);
+
+  const keyin = await A(() =>
+    prisma.deal.findFirst({ where: { id: d.id }, include: { tolovlar: { orderBy: { createdAt: "asc" } } } })
   );
-  const keyin = await A(() => prisma.deal.findFirst({ where: { id: d.id }, include: { tolovlar: true } }));
-  assert.equal(keyin.tolangan, 500_000, "yig'indi qatorlar bilan birga yangilandi");
+  assert.equal(keyin.tolovlar.length, 3, "uchala to'lov ham saqlanib qoldi");
+  assert.deepEqual(
+    keyin.tolovlar.map((x: any) => `${x.kanal}:${x.summa}`),
+    ["naqd:100000", "terminal:300000", "click:100000"],
+    "oldingi to'lovlarni yangisi OVERWRITE qilmaydi"
+  );
+  assert.equal(keyin.tolangan, 500_000, "yig'indi qatorlardan");
   assert.equal(keyin.tolovTuri, "aralash");
-  assert.equal(keyin.tolovlar.length, 2);
-
-  // Oshib ketgan tahrir ham rad etiladi.
-  await assert.rejects(
-    A(() =>
-      crm.zakazTolovlariniAlmashtirish({
-        businessId: t.business.id,
-        dealId: d.id,
-        tolovlar: [{ kanal: "naqd", summa: 600_000 }],
-      })
-    ),
-    BadRequestError
+  assert.ok(
+    keyin.tolovlar.every((x: any) => x.transactionId),
+    "har to'lov o'z kirim yozuvini oldi"
   );
 
-  await yakunla(d.id);
+  // Qoldiqdan oshib ketadigan to'lov RAD ETILADI.
+  await assert.rejects(tolovQosh(d.id, "naqd", 1), BadRequestError);
+
+  // ESKI ALMASHTIRISH YO'LI kirim yozilgan zakazda QULFLANADI.
   await assert.rejects(
     A(() =>
       crm.zakazTolovlariniAlmashtirish({
@@ -462,9 +483,18 @@ test("TAHRIR: to'lovlar almashtiriladi, moliyaga o'tgach QULFLANADI", async () =
       })
     ),
     BadRequestError,
-    "moliyaga o'tgan zakaz to'lovi qulflanadi"
+    "kirim yozilgan to'lov formadan almashtirilmaydi"
   );
+
+  // To'liq to'langani uchun yakunlash MUMKIN va yangi kirim yozilmaydi.
+  const n = await yakunla(d.id);
+  assert.equal(n.yangiYakun, true);
+  assert.equal(n.yangiKirimSoni, 0, "Yutildi yangi kirim yaratmaydi — pul avval kelgan");
+  const k = await kirimlar("Ledger sinovi");
+  assert.equal(k.length, 3, "uch to'lov — uch kirim, ko'p emas");
+  assert.equal(k.reduce((sum: number, x: any) => sum + x.summa, 0), 500_000);
 });
+
 
 // ---------------------------------------------------------------------------
 // DOSKA SAHIFALASHI — 10 tadan, "Yana ko'rsatish" serverdan

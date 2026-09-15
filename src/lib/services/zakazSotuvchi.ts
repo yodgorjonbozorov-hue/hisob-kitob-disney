@@ -258,10 +258,21 @@ export async function sotuvchiniOzgartirish(params: {
     });
     if (sotuvchiUser) {
       await tx.deal.updateMany({ where: { id: dealId, businessId }, data: { masulId: sotuvchiUser.id } });
-      if (deal.transactionId) {
+      // ZAKAZNING BARCHA KIRIMLARI. Har to'lov o'z kirim yozuvini yozadi
+      // (`lib/crm/tolovQoshish.ts`), ya'ni bitta zakazda bir nechta kirim
+      // bo'lishi mumkin. Ilgari faqat `Deal.transactionId` yangilanardi va
+      // qolgan kirimlar ESKI sotuvchida qolib, statistika ikkiga bo'linardi.
+      const satrlar = await tx.dealTolov.findMany({
+        where: { businessId, dealId },
+        select: { transactionId: true },
+      });
+      const kirimIdlar = Array.from(
+        new Set([deal.transactionId, ...satrlar.map((x) => x.transactionId)].filter((x): x is string => !!x))
+      );
+      if (kirimIdlar.length > 0) {
         // Pul yozuvi o'zgarmaydi — faqat "savdo kimniki" biriktiruvi.
         await tx.transaction.updateMany({
-          where: { id: deal.transactionId, businessId, turi: "kirim" },
+          where: { id: { in: kirimIdlar }, businessId, turi: "kirim" },
           data: { sotuvchiId: sotuvchiUser.id },
         });
       }
