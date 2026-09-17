@@ -39,10 +39,31 @@ YARATISHDA emas, KO'RSATISHDA edi:
    moliyani qayta hisoblaydi. Shu sabab "Yutildi → Jarayonda → Yutildi"
    ham, to'g'ridan-to'g'ri tuzatish ham AYNI ikki yadroni ishlatadi va
    dublikat kirim/qarz/to'lov paydo bo'lmaydi.
+4. TO'LOV SNAPSHOTIGA SO'RALMASA TEGILMAYDI. Direktor faqat narxni
+   tuzatsa (`tolovlar` uzatilmasa) mavjud qatorlar — naqd 200 000 +
+   Click 300 000 — AYNI `id` bilan joyida qoladi va qoldiq
+   750 000 − 500 000 = 250 000 bo'ladi. Ilgari test chaqiruviga
+   `tolovlar: [{naqd: 200 000}]` uzatilardi, ya'ni Click qatori jimgina
+   tushib qolardi va qarz 550 000 chiqardi — arifmetik to'g'ri, lekin
+   stsenariy yolg'on. Qatorlar endi FAQAT chaqiruvchi yangi kesim berganda
+   VA u eskisidan farq qilganda almashtiriladi (`satrlarTeng`).
 
 Yadrolar ajratildi: `zakazniYakunlashTx` va `zakazMoliyasiniQaytarTx` endi
 tayyor `tx` ichida ishlaydi, mustaqil amallar (`zakazniYakunlash`,
 `zakazMoliyasiniQaytarish`) esa avvalgidek o'ramada qoladi.
+
+## Moliyaviy tarix fizik o'chirilmaydi
+
+- KIRIM (`Transaction`) — YUMSHOQ o'chirish: `deletedAt` + `deletedBy`.
+  Yozuv bazada qoladi, savatdan tiklanadi, ledger append-only.
+- QARZ (`Debt`) — o'chirilmaydi: `status = "CANCELLED"` + `cancelledAt` /
+  `cancelledBy` / `cancelReason`, `deletedAt` tegilmaydi.
+- QARZ TO'LOVI (`DebtPayment`) — umuman tegilmaydi: to'lovi bor qarzda
+  tuzatish boshidanoq rad etiladi.
+- TO'LOV QATORI (`DealTolov`) — YAGONA jadval, unda `deletedAt` yo'q, ya'ni
+  o'chirish qaytarilmaydi. Shuning uchun u FAQAT kesim ataylab berilganda
+  va u eskisidan farq qilganda almashtiriladi; o'sha holatda eski kesim
+  audit jurnalining `before.tolovlar` iga snapshot bo'lib tushadi.
 
 ## Direktor huquqi
 
@@ -81,11 +102,22 @@ ham yopmaydi (`getSmenaBoshlari` endi `summa > 0` shartini qo'yadi).
 
 ## Testlar
 
-`npm run test:crm-qarz-direktor` (17 ta test, topshiriqdagi 10 qadam
-stsenariysi to'liq): 1M zakaz → 200k naqd + 300k Click → 500k qarz →
-Qarzdorlarda aynan 500 000 → deep link → direktor tuzatishi (550k qarz)
-→ Yutildi/Jarayonda/Yutildi dublikatsiz → topshirishda naqd va Click
-alohida → topshirilgandan keyin balansga qayta qo'shilmaydi.
+`npm run test:crm-qarz-direktor` (19 ta test). Yakuniy stsenariy BITTA
+zakaz ustida ketma-ket tekshiriladi va har bosqichda AYNI raqamlar
+kutiladi:
+
+```
+Zakaz: 750 000 · Naqd: 200 000 · Click: 300 000
+Jami to'langan: 500 000 · Qarz: 250 000
+```
+
+Qadamlar: 1M zakaz → 200k naqd + 300k Click → 500k qarz → Qarzdorlarda
+aynan 500 000 → deep link → direktor FAQAT narxni 750 000 ga tuzatadi
+(Click saqlanadi, qarz 250 000, to'lov qatorlari `id` bilan o'zgarmaydi,
+eski kirimlar bazada `deletedAt` bilan qoladi) → Yutildi/Jarayonda/Yutildi
+(naqd 200k, Click 300k, qarz 250k, dublikat kirim/qarz/to'lov yo'q) →
+kassa topshirishda 200 000 Naqd va 300 000 Click alohida, jami 500 000 →
+qabuldan keyin ikkalasi ham balansga qayta qo'shilmaydi.
 
 Regressiya (hammasi yashil): crm, crm-pipeline, crm-tolovlar,
 crm-xodim-kassa, crm-sotuvchi, zakaz-jamoasi, kassa, kassa-transfer,

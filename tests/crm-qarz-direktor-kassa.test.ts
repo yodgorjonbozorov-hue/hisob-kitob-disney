@@ -55,6 +55,16 @@ let sKassa: any;
 let dKassa: any;
 /** Karta/terminal kassasi — click/payme puli shunga tushadi. */
 let kartaKassa: any;
+/**
+ * IKKINCHI SOTUVCHI — YAKUNIY STSENARIY uchun ATAYLAB ajratilgan.
+ *
+ * Kassa topshirishning kanal kesimi XODIM bo'yicha hisoblanadi, shuning
+ * uchun yakuniy stsenariy (1M → 750k → topshirish) o'z sotuvchisida
+ * bajariladi: "200 000 Naqd + 300 000 Click" raqamlari boshqa testlarning
+ * zakazlaridan mustaqil bo'lsin.
+ */
+let ikkinchi: any;
+let iKassa: any;
 let bugun: string;
 
 const A = <T>(fn: () => Promise<T>): Promise<T> => runWithTenant(t.tenant.id, fn);
@@ -64,7 +74,12 @@ async function zakaz(
   nomi: string,
   summa: number,
   satrlar: Array<{ kanal: string; summa: number }>,
-  opts: { tolovTuri?: string | null; mijoz?: { ism: string; tel: string } } = {}
+  opts: {
+    tolovTuri?: string | null;
+    mijoz?: { ism: string; tel: string };
+    /** Zakazni kim oladi (mas'ul) — berilmasa asosiy sotuvchi. */
+    kim?: string;
+  } = {}
 ) {
   return A(() =>
     crm.createDeal({
@@ -73,7 +88,7 @@ async function zakaz(
       summa,
       categoryId: kat.id,
       sana: bugun,
-      userId: sotuvchi.id,
+      userId: opts.kim ?? sotuvchi.id,
       tolovlar: satrlar,
       ...(opts.mijoz ? { kontaktIsm: opts.mijoz.ism, kontaktTel: opts.mijoz.tel } : {}),
       ...(opts.tolovTuri === undefined ? {} : { tolovTuri: opts.tolovTuri }),
@@ -170,6 +185,19 @@ before(async () => {
   });
   kartaKassa = await rawPrisma.account.create({
     data: { businessId: t.business.id, nomi: "Karta / terminal", turi: "plastik", tartib: 5 },
+  });
+  ikkinchi = await rawPrisma.user.create({
+    data: {
+      ism: "Dilnoza",
+      login: "qd_dilnoza",
+      parolHash: "x",
+      rol: "SELLER",
+      tenantId: t.tenant.id,
+      businessId: t.business.id,
+    },
+  });
+  iKassa = await rawPrisma.account.create({
+    data: { businessId: t.business.id, nomi: "Dilnoza (shaxsiy)", turi: "naqd", userId: ikkinchi.id },
   });
   kat = await rawPrisma.category.create({
     data: { businessId: t.business.id, nomi: "Guldasta", turi: "kirim" },
@@ -321,114 +349,288 @@ test("DTO: qarz holati serverdan keladi — to'langan qarz 'qarzdorlik' deb ko'r
 // 2-VAZIFA: DIREKTOR TUZATISHI
 // ---------------------------------------------------------------------------
 
-test("QADAM 7: direktor summani tuzatadi — kirim, qarz va kassa QAYTA hisoblanadi", async () => {
-  const d = await zakaz("Direktor tuzatadi", 1_000_000, [
-    { kanal: "naqd", summa: 200_000 },
-    { kanal: "click", summa: 300_000 },
-  ]);
+/**
+ * YAKUNIY STSENARIY — bitta zakaz ustida ketma-ket (7 → 8 → 9 → 10 qadam).
+ *
+ * KUTILGAN NATIJA (direktor FAQAT narxni tuzatgandan keyin):
+ *   Zakaz: 750 000 · Naqd: 200 000 · Click: 300 000
+ *   Jami to'langan: 500 000 · Qarz: 250 000
+ *
+ * ═══ NEGA BU TEST AYNI SHU KO'RINISHDA ═══
+ * Avvalgi variantda tuzatish chaqiruviga `tolovlar: [{naqd: 200 000}]`
+ * uzatilardi, ya'ni Click qatori JIMGINA olib tashlanardi va qoldiq
+ * 750 000 − 200 000 = 550 000 chiqardi. Raqam arifmetik to'g'ri edi,
+ * lekin stsenariy YOLG'ON edi: direktor "faqat narxni tuzatdim" desa,
+ * Click to'lovi joyida qolishi SHART. Endi tuzatishga FAQAT `summa`
+ * uzatiladi va to'lov snapshotiga umuman tegilmaydi.
+ */
+let stsenariyDealId: string;
+
+test("QADAM 7: direktor FAQAT narxni tuzatadi — Click saqlanadi, qarz 250 000", async () => {
+  const d = await zakaz(
+    "Yakuniy stsenariy",
+    1_000_000,
+    [
+      { kanal: "naqd", summa: 200_000 },
+      { kanal: "click", summa: 300_000 },
+    ],
+    { kim: ikkinchi.id, mijoz: { ism: "Gulnora Rashidova", tel: "+998907778899" } }
+  );
+  stsenariyDealId = d.id;
   const boshlangich = await yakunla(d.id);
-  assert.equal(boshlangich.qarzSumma, 500_000);
+  assert.equal(boshlangich.kirimSumma, 500_000);
+  assert.equal(boshlangich.qarzSumma, 500_000, "boshida qarz 1 000 000 − 500 000");
 
-  const naqdOldin = await kassaKirimi(sKassa.id);
-  const kartaOldin = await kassaKirimi(kartaKassa.id);
+  // TO'LOV QATORLARINING SNAPSHOTI (id bilan) — tuzatishdan keyin
+  // AYNI shu qatorlar qolishi kerak.
+  const satrOldin = await A(() =>
+    prisma.dealTolov.findMany({
+      where: { dealId: d.id },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, kanal: true, summa: true },
+    })
+  );
+  assert.deepEqual(
+    satrOldin.map((x: any) => [x.kanal, x.summa]),
+    [
+      ["naqd", 200_000],
+      ["click", 300_000],
+    ]
+  );
 
-  // Narx 750 000 ga tushirildi, to'lov esa 200 000 naqd bo'lib qoldi.
+  // ═══ DIREKTOR TUZATISHI: FAQAT NARX ═══
+  // `tolovlar` UMUMAN uzatilmaydi — to'lov kesimi tegilmasligi kerak.
   const natija = await A(() =>
     direktorTahrir.zakazniDirektorTahrirlash({
       businessId: t.business.id,
       dealId: d.id,
       userId: t.user.id,
       summa: 750_000,
-      tolovlar: [{ kanal: "naqd", summa: 200_000 }],
-      tolovTuri: null,
     })
   );
-  assert.equal(natija.summa, 750_000);
-  assert.equal(natija.tolangan, 200_000);
-  assert.equal(natija.kirimSumma, 200_000, "kirim — haqiqatda olingan pul");
-  assert.equal(natija.qarzSumma, 550_000, "qarz — YANGI qoldiq (750 000 − 200 000)");
-  assert.equal(natija.ochirilganKirimlar.length, 2, "eski ikki kirim yumshoq o'chirildi");
-  assert.ok(natija.bekorQilinganQarzId, "eski qarz bekor qilindi");
+
+  // ─── KUTILGAN NATIJA ───
+  assert.equal(natija.summa, 750_000, "Zakaz: 750 000");
+  assert.equal(natija.tolangan, 500_000, "Jami to'langan: 500 000 (Click YO'QOLMADI)");
+  assert.equal(natija.kirimSumma, 500_000, "kirimga o'tgan: 500 000");
+  assert.equal(natija.qarzSumma, 250_000, "Qarz: 750 000 − 500 000 = 250 000");
+  assert.equal(natija.tolovTuri, "aralash", "aralash to'lov belgisi saqlanadi");
+
+  // TO'LOV SNAPSHOTI QAYTA YARATILMADI — aynan o'sha qatorlar, o'sha `id`.
+  const satrKeyin = await A(() =>
+    prisma.dealTolov.findMany({
+      where: { dealId: d.id },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, kanal: true, summa: true },
+    })
+  );
+  assert.deepEqual(
+    satrKeyin.map((x: any) => x.id),
+    satrOldin.map((x: any) => x.id),
+    "to'lov qatorlari o'chirilib qayta yaratilmadi (id o'zgarmadi)"
+  );
+  assert.deepEqual(
+    satrKeyin.map((x: any) => [x.kanal, x.summa]),
+    [
+      ["naqd", 200_000],
+      ["click", 300_000],
+    ],
+    "Naqd: 200 000 · Click: 300 000"
+  );
 
   // CRM raqami.
   const keyin = await A(() => prisma.deal.findFirst({ where: { id: d.id } }));
   assert.equal(keyin.summa, 750_000);
-  assert.equal(keyin.tolangan, 200_000);
+  assert.equal(keyin.tolangan, 500_000);
   assert.equal(keyin.holat, "YUTILDI");
 
-  // KASSA: eski kirimlar o'chdi, yangisi faqat naqd 200 000.
-  assert.equal(await kassaKirimi(sKassa.id), naqdOldin, "naqd kassa: −200k +200k");
+  // KIRIM: yangi ikki yozuv (naqd 200k + click 300k), kanal kassalari joyida.
+  const faol = await kirimlar("Yakuniy stsenariy");
+  assert.equal(faol.length, 2, "faol kirim ikkita — naqd va click");
   assert.equal(
-    await kassaKirimi(kartaKassa.id),
-    kartaOldin - 300_000,
-    "click kirimi o'chirildi — karta kassasi kamaydi"
+    faol.reduce((x: number, k: any) => x + k.summa, 0),
+    500_000
   );
-  assert.equal((await kirimlar("Direktor tuzatadi")).length, 1, "faol kirim bitta");
+  assert.equal(await kassaKirimi(iKassa.id), 200_000, "naqd kassa: 200 000");
+  assert.equal(await kassaKirimi(kartaKassa.id) >= 300_000, true, "click puli karta kassasida");
 
-  // QARZDORLAR: aynan 550 000 (eski 500 000 bekor bo'ldi).
+  // ═══ MOLIYAVIY TARIX: FIZIK O'CHIRISH YO'Q ═══
+  // Eski kirimlar BAZADA QOLADI — faqat `deletedAt` + `deletedBy` qo'yiladi
+  // (savatdan tiklash mumkin, audit izi uzilmaydi).
+  assert.equal(natija.ochirilganKirimlar.length, 2);
+  const eskilar = await A(() =>
+    prisma.transaction.findMany({
+      where: { id: { in: natija.ochirilganKirimlar } },
+      select: { id: true, summa: true, deletedAt: true, deletedBy: true },
+    })
+  );
+  assert.equal(eskilar.length, 2, "eski kirim yozuvlari BAZADAN yo'qolmadi");
+  for (const e of eskilar) {
+    assert.ok(e.deletedAt, "yumshoq o'chirilgan (deletedAt bor)");
+    assert.equal(e.deletedBy, t.user.id, "kim o'chirgani yozuvning O'ZIDA");
+  }
+  // Eski qarz ham o'chirilmaydi — BEKOR qilinadi.
+  const eskiQarz = await A(() =>
+    prisma.debt.findFirst({ where: { id: natija.bekorQilinganQarzId } })
+  );
+  assert.ok(eskiQarz, "eski qarz yozuvi bazada qoldi");
+  assert.equal(eskiQarz.status, "CANCELLED", "o'chirilmadi — bekor qilindi");
+  assert.equal(eskiQarz.deletedAt, null, "fizik ham, yumshoq ham o'chirilmagan");
+  assert.ok(eskiQarz.cancelReason, "bekor qilish sababi yozilgan");
+
+  // QARZDORLAR: aynan 250 000 va bittadan ortiq emas.
   const ochiq = await A(() =>
     prisma.debt.findMany({
       where: {
         businessId: t.business.id,
-        izoh: { contains: "Direktor tuzatadi" },
+        izoh: { contains: "Yakuniy stsenariy" },
         status: { not: "CANCELLED" },
       },
     })
   );
   assert.equal(ochiq.length, 1, "bitta ochiq qarz");
-  assert.equal(ochiq[0].jamiSumma, 550_000);
-  assert.equal(ochiq[0].id, natija.debtId);
+  assert.equal(ochiq[0].jamiSumma, 250_000, "Qarz: 250 000");
+  const qarzdorlar = await A(() => qarzQ.listQarzdorlar(t.business.id, {}));
+  const mijoz = qarzdorlar.find((q: any) => q.ism === "Gulnora Rashidova");
+  assert.ok(mijoz, "mijoz Qarzdorlar bo'limida");
+  assert.equal(mijoz.qarz, 250_000, "Qarzdorlar bo'limi ham 250 000 ko'rsatadi");
 });
 
-test("QADAM 8: Yutildi → Jarayonda → Yutildi dublikat kirim/qarz/to'lov yaratmaydi", async () => {
-  const d = await zakaz("Qaytarish aylanishi", 800_000, [
-    { kanal: "naqd", summa: 300_000 },
-    { kanal: "payme", summa: 100_000 },
-  ]);
-  await yakunla(d.id);
+test("QADAM 8: Yutildi → Jarayonda → Yutildi — Naqd 200k, Click 300k, Qarz 250k, dublikatsiz", async () => {
+  const dealId = stsenariyDealId;
 
-  // DIREKTOR zakazni qaytaradi (moliya ham qaytadi).
+  // ─── Yutildi → Jarayonda (direktor) ───
   await A(() =>
     crm.holatniOzgartirish({
       businessId: t.business.id,
-      dealId: d.id,
+      dealId,
       holat: "JARAYONDA",
       userId: t.user.id,
       boshqaruvchi: true,
     })
   );
-  const orta = await A(() => prisma.deal.findFirst({ where: { id: d.id } }));
+  const orta = await A(() => prisma.deal.findFirst({ where: { id: dealId } }));
   assert.equal(orta.holat, "JARAYONDA");
   assert.equal(orta.transactionId, null);
   assert.equal(orta.debtId, null);
-  assert.equal((await kirimlar("Qaytarish aylanishi")).length, 0, "kirimlar o'chirildi");
+  assert.equal(orta.summa, 750_000, "narx saqlandi");
+  assert.equal(orta.tolangan, 500_000, "to'lov kesimi saqlandi");
+  assert.equal((await kirimlar("Yakuniy stsenariy")).length, 0, "kirimlar qaytarildi");
 
-  // Yana YUTILDI.
-  const qayta = await yakunla(d.id);
-  assert.equal(qayta.kirimSumma, 400_000);
-  assert.equal(qayta.qarzSumma, 400_000);
+  // To'lov qatorlari QAYTARISHDA HAM yo'qolmaydi (faqat kirim bog'lanishi uziladi).
+  const ortaSatr = await A(() =>
+    prisma.dealTolov.findMany({ where: { dealId }, orderBy: { createdAt: "asc" } })
+  );
+  assert.deepEqual(
+    ortaSatr.map((x: any) => [x.kanal, x.summa]),
+    [
+      ["naqd", 200_000],
+      ["click", 300_000],
+    ]
+  );
+  assert.deepEqual(
+    ortaSatr.map((x: any) => x.transactionId),
+    [null, null],
+    "kirim bog'lanishi uzildi — qayta yutilganda YANGI kirim yoziladi"
+  );
 
-  // DUBLIKAT YO'Q: faol kirim 2 ta (naqd + payme), ochiq qarz 1 ta.
-  assert.equal((await kirimlar("Qaytarish aylanishi")).length, 2, "faol kirim ikkita");
-  const ochiq = await A(() =>
-    prisma.debt.count({
+  // ─── Jarayonda → Yutildi ───
+  const qayta = await yakunla(dealId);
+  assert.equal(qayta.kirimSumma, 500_000, "Jami to'langan: 500 000");
+  assert.equal(qayta.qarzSumma, 250_000, "Qarz: 250 000");
+
+  // ═══ DUBLIKAT YO'Q ═══
+  const faol = await kirimlar("Yakuniy stsenariy");
+  assert.equal(faol.length, 2, "faol kirim AYNAN ikkita (naqd + click)");
+  assert.equal(
+    faol.reduce((x: number, k: any) => x + k.summa, 0),
+    500_000,
+    "faol kirim jami 500 000 — ikkilanmadi"
+  );
+  const naqdFaol = faol.filter((k: any) => k.tolovTuri === "naqd");
+  const clickFaol = faol.filter((k: any) => k.tolovTuri === "click");
+  assert.equal(naqdFaol.length, 1);
+  assert.equal(naqdFaol[0].summa, 200_000, "Naqd: 200 000");
+  assert.equal(clickFaol.length, 1);
+  assert.equal(clickFaol[0].summa, 300_000, "Click: 300 000");
+
+  const ochiqQarz = await A(() =>
+    prisma.debt.findMany({
       where: {
         businessId: t.business.id,
-        izoh: { contains: "Qaytarish aylanishi" },
+        izoh: { contains: "Yakuniy stsenariy" },
         status: { not: "CANCELLED" },
       },
     })
   );
-  assert.equal(ochiq, 1, "ochiq qarz bittadan oshmadi");
-  // To'lov yozuvlari (DebtPayment) umuman yaratilmaydi — pul kelmagan.
-  const tolovlar = await A(() =>
-    prisma.debtPayment.count({ where: { businessId: t.business.id } })
-  );
-  assert.equal(tolovlar, 0);
+  assert.equal(ochiqQarz.length, 1, "ochiq qarz bittadan oshmadi");
+  assert.equal(ochiqQarz[0].jamiSumma, 250_000);
 
-  // To'lov QATORLARI ham ikkilanmadi (har kanal bittadan).
-  const satrlar = await A(() => prisma.dealTolov.findMany({ where: { dealId: d.id } }));
-  assert.equal(satrlar.length, 2);
+  const tolovSoni = await A(() =>
+    prisma.debtPayment.count({ where: { businessId: t.business.id, debtId: ochiqQarz[0].id } })
+  );
+  assert.equal(tolovSoni, 0, "hech qanday to'lov yozuvi yaratilmadi");
+
+  const satrSoni = await A(() => prisma.dealTolov.count({ where: { dealId } }));
+  assert.equal(satrSoni, 2, "to'lov qatorlari ikkilanmadi");
+
+  // Kassa: naqd 200 000 (qaytarish −200k, qayta yozish +200k).
+  assert.equal(await kassaKirimi(iKassa.id), 200_000, "naqd kassa 200 000 da qoldi");
+});
+
+test("QADAM 9-10: yakuniy stsenariyda topshirish — 200k Naqd + 300k Click alohida", async () => {
+  // Kanal kesimi XODIM bo'yicha: bu sotuvchida faqat yakuniy stsenariy bor.
+  const kassa = await A(() => panel.xodimKassaHolati(t.business.id, ikkinchi.id, "Dilnoza"));
+  assert.ok(kassa);
+  const xarita = new Map(kassa.kanallar.map((k: any) => [k.kanal, k.summa]));
+  assert.equal(xarita.get("naqd"), 200_000, "Naqd: 200 000 so'm");
+  assert.equal(xarita.get("click"), 300_000, "Click: 300 000 so'm");
+  assert.equal(xarita.get("payme"), 0, "Payme bu stsenariyda yo'q");
+  assert.equal(kassa.mavjud, 200_000, "topshiriladigan naqd — ledgerdan");
+
+  // TOPSHIRISH: ikkala kanal birga.
+  const transfer = await A(() =>
+    kassaTransfer.kassaTransferYarat(
+      t.business.id,
+      { userId: ikkinchi.id, ism: "Dilnoza", rol: "SELLER" },
+      {
+        fromAccountId: iKassa.id,
+        toAccountId: dKassa.id,
+        summa: 200_000,
+        turi: "smena",
+        kanallar: ["click"],
+      }
+    )
+  );
+  assert.equal(transfer.summa, 200_000, "ledgerda faqat naqd ko'chadi");
+
+  // DIREKTOR QARORIDA kesim: 200 000 Naqd + 300 000 Click, jami 500 000.
+  const { listTopshirishlar } = await import("@/lib/queries/accounts");
+  const royxat = await A(() => listTopshirishlar(t.business.id, ["kutilmoqda"], 20));
+  const qator = royxat.find((x: any) => x.id === transfer.id);
+  assert.ok(qator);
+  const kesim = new Map(qator.kanallar.map((k: any) => [k.kanal, k.summa]));
+  assert.equal(kesim.get("naqd"), 200_000, "Naqd: 200 000");
+  assert.equal(kesim.get("click"), 300_000, "Click: 300 000");
+  assert.equal(
+    qator.kanallar.reduce((x: number, k: any) => x + k.summa, 0),
+    500_000,
+    "Jami topshirish: 500 000"
+  );
+
+  // QAYTA QO'SHILMAYDI: ikkalasi ham keyingi balansda yo'q.
+  await A(() =>
+    kassaTransfer.kassaTransferQaror(
+      t.business.id,
+      { userId: t.user.id, ism: "Direktor", rol: "OWNER" },
+      transfer.id,
+      { amal: "qabul" }
+    )
+  );
+  const keyin = await A(() => panel.xodimKassaHolati(t.business.id, ikkinchi.id, "Dilnoza"));
+  const keyingi = new Map(keyin.kanallar.map((k: any) => [k.kanal, k.summa]));
+  assert.equal(keyingi.get("naqd"), 0, "naqd topshirildi — balansda qolmadi");
+  assert.equal(keyingi.get("click"), 0, "Click ikkinchi marta topshirilmaydi");
 });
 
 test("DIREKTOR TUZATISHI: qarziga to'lov qabul qilingan zakaz RAD etiladi", async () => {
@@ -505,6 +707,45 @@ test("HUQUQ: moliya tuzatishi API darajasida FAQAT direktorga ochiq", () => {
   );
   // Oddiy yo'l avvalgidek qulflangan bo'lib qoladi.
   assert.match(route, /Moliyaga o'tgan zakazning summasi va to'lovi o'zgartirilmaydi/);
+});
+
+test("QAYTARISH AYLANISHI (naqd + Payme): dublikat kirim/qarz/to'lov yaratmaydi", async () => {
+  const d = await zakaz("Qaytarish aylanishi", 800_000, [
+    { kanal: "naqd", summa: 300_000 },
+    { kanal: "payme", summa: 100_000 },
+  ]);
+  await yakunla(d.id);
+
+  await A(() =>
+    crm.holatniOzgartirish({
+      businessId: t.business.id,
+      dealId: d.id,
+      holat: "JARAYONDA",
+      userId: t.user.id,
+      boshqaruvchi: true,
+    })
+  );
+  const orta = await A(() => prisma.deal.findFirst({ where: { id: d.id } }));
+  assert.equal(orta.transactionId, null);
+  assert.equal(orta.debtId, null);
+  assert.equal((await kirimlar("Qaytarish aylanishi")).length, 0);
+
+  const qayta = await yakunla(d.id);
+  assert.equal(qayta.kirimSumma, 400_000);
+  assert.equal(qayta.qarzSumma, 400_000);
+
+  assert.equal((await kirimlar("Qaytarish aylanishi")).length, 2, "faol kirim ikkita");
+  const ochiq = await A(() =>
+    prisma.debt.count({
+      where: {
+        businessId: t.business.id,
+        izoh: { contains: "Qaytarish aylanishi" },
+        status: { not: "CANCELLED" },
+      },
+    })
+  );
+  assert.equal(ochiq, 1, "ochiq qarz bittadan oshmadi");
+  assert.equal(await A(() => prisma.dealTolov.count({ where: { dealId: d.id } })), 2);
 });
 
 // ---------------------------------------------------------------------------

@@ -38,7 +38,8 @@ import {
  *   1. mavjud kirimlar YUMSHOQ o'chiriladi va qarz BEKOR qilinadi
  *      (`lib/crm/qaytarish.ts` → `zakazMoliyasiniQaytarTx`) — ledger
  *      append-only qoladi, audit izi uzilmaydi;
- *   2. zakazga yangi narx, kategoriya va to'lov qatorlari yoziladi;
+ *   2. zakazga yangi narx va kategoriya yoziladi; TO'LOV QATORLARIGA esa
+ *      faqat chaqiruvchi ularni ATAYLAB bergan bo'lsa tegiladi;
  *   3. zakaz yana "Yutildi" bo'lsa moliya YANGI raqamlardan qayta
  *      yoziladi (`lib/crm/yakunlash.ts` → `zakazniYakunlashTx`):
  *      to'langan qism kirim, QOLDIQ esa qarzdorlik.
@@ -47,6 +48,21 @@ import {
  * (kassa qoldig'idan chiqqan), yangilari esa bitta marta yoziladi.
  * "Yutildi → Jarayonda → Yutildi" yo'li ham ayni shu ikki yadroni
  * ishlatadi, ya'ni ikkala yo'lda natija BIR XIL.
+ *
+ * ═══ MOLIYAVIY TARIX FIZIK O'CHIRILMAYDI ═══
+ *   - KIRIM (`Transaction`): YUMSHOQ o'chirish — `deletedAt` + `deletedBy`.
+ *     Yozuv bazada qoladi, savatdan tiklanadi, ledger append-only.
+ *   - QARZ (`Debt`): O'CHIRILMAYDI, `status = "CANCELLED"` + `cancelledAt`
+ *     / `cancelledBy` / `cancelReason`. `deletedAt` tegilmaydi.
+ *   - QARZ TO'LOVI (`DebtPayment`): UMUMAN tegilmaydi — to'lovi bor qarzda
+ *     tuzatish boshidanoq rad etiladi.
+ *   - TO'LOV QATORI (`DealTolov`): bu jadvalda `deletedAt` YO'Q, ya'ni
+ *     o'chirish qaytarilmaydi. Shuning uchun qatorlar FAQAT chaqiruvchi
+ *     yangi kesim berganda va u eskisidan FARQ QILGANDA almashtiriladi;
+ *     bunday holatda eski kesim audit jurnalining `before.tolovlar` iga
+ *     snapshot bo'lib tushadi. Narx-only tuzatishda qatorlar umuman
+ *     tegilmaydi (misol: 1 000 000 → 750 000 da naqd 200 000 va Click
+ *     300 000 joyida qoladi, qoldiq 250 000 bo'ladi).
  *
  * ═══ CHEGARA ═══
  * Qarzga TO'LOV QABUL QILINGAN bo'lsa tuzatish rad etiladi (`qaytarTx`
@@ -59,6 +75,17 @@ import {
  * egasiga ochiq (`lib/auth/roles.ts` izohi). Tekshiruv API qatlamida
  * (`api/crm/deals/[id]`), UI tugmasi himoya emas.
  */
+
+/** Ikki to'lov qatori ro'yxati AYNI kesimni bildiradimi (tartib ahamiyatsiz). */
+function satrlarTeng(a: TolovSatri[], b: TolovSatri[]): boolean {
+  if (a.length !== b.length) return false;
+  const kalit = (s: TolovSatri[]) =>
+    s
+      .map((x) => `${x.kanal}:${x.summa}`)
+      .sort()
+      .join("|");
+  return kalit(a) === kalit(b);
+}
 
 export interface DirektorTahrirParams {
   businessId: string;
@@ -132,18 +159,41 @@ export async function zakazniDirektorTahrirlash(
   const yangiSumma = params.summa ?? deal.summa;
   const yangiHolat: ZakazHolat = params.holat ?? (deal.holat as ZakazHolat);
 
-  // TO'LOV QATORLARI. Berilmasa mavjudlari saqlanadi — lekin narx
-  // o'zgargan bo'lsa ular AYNI yangi narxga qarshi qayta tekshiriladi
-  // (eski qatorlar yangi narxdan oshib ketmasin).
+  /*
+   * TO'LOV QATORLARI — SNAPSHOT TEGILMAYDI, AGAR SO'RALMAGAN BO'LSA.
+   *
+   * ═══ NEGA BU MUHIM ═══
+   * Direktorning eng ko'p uchraydigan tuzatishi — FAQAT NARX (750 000
+   * o'rniga 75 000 yozilgan). Bunday so'rovda `tolovlar` UMUMAN
+   * yuborilmaydi va mavjud qatorlar (naqd 200 000 + Click 300 000)
+   * o'zgarishsiz qolishi shart: qoldiq 750 000 − 500 000 = 250 000
+   * bo'lishi kerak. Agar qatorlar jimgina qayta yozilsa (yoki tushib
+   * qolsa) Click puli yo'qolib, qarz 550 000 bo'lib ketardi — CRM,
+   * Kirim va Qarzdorlik uch xil raqam ko'rsatardi.
+   *
+   * Shuning uchun `tegilmaydi` bayrog'i: qatorlar FAQAT chaqiruvchi
+   * ularni ATAYLAB berganda o'chirib qayta yoziladi. Aks holda
+   * `tolovSatrlariniYoz` umuman chaqirilmaydi — jismoniy `deleteMany`
+   * ham bo'lmaydi (`DealTolov` da `deletedAt` yo'q, ya'ni o'chirish
+   * qaytarib bo'lmaydigan amal).
+   */
   const mavjudSatrlar = await prisma.dealTolov.findMany({
     where: { businessId: params.businessId, dealId: deal.id },
     orderBy: { createdAt: "asc" },
     select: { kanal: true, summa: true },
   });
+  const eskiSatrlar: TolovSatri[] = mavjudSatrlar.map((s) => ({
+    kanal: s.kanal,
+    summa: s.summa,
+  }));
   const satrlarBerildi = params.tolovlar !== undefined;
-  const yangiSatrlar: TolovSatri[] = satrlarBerildi
-    ? params.tolovlar!
-    : mavjudSatrlar.map((s) => ({ kanal: s.kanal, summa: s.summa }));
+  const yangiSatrlar: TolovSatri[] = satrlarBerildi ? params.tolovlar! : eskiSatrlar;
+  /**
+   * Qatorlar HAQIQATDA o'zgardimi. Berilgan ro'yxat mavjudining aynan
+   * o'zi bo'lsa ham tegilmaydi: bir xil qatorni o'chirib qayta yozish
+   * tarixni sababsiz uzadi (yangi `id`, yangi `createdAt`).
+   */
+  const satrlarOzgardi = satrlarBerildi && !satrlarTeng(eskiSatrlar, yangiSatrlar);
 
   tolovlarniTekshir(yangiSumma, yangiSatrlar);
 
@@ -189,8 +239,11 @@ export async function zakazniDirektorTahrirlash(
       : { kirimlar: [], kirimSumma: 0, bekorQilinganQarzId: null };
 
     // 2. YANGI RAQAMLAR. Qatorlar va yig'indi AYNI tranzaksiyada — doska
-    //    bir raqamni, qatorlar boshqasini ko'rsatmasin.
-    await tolovSatrlariniYoz(tx, params.businessId, deal.id, yangiSatrlar);
+    //    bir raqamni, qatorlar boshqasini ko'rsatmasin. Qatorlar o'zgarmagan
+    //    bo'lsa ULARGA TEGILMAYDI (yuqoridagi `satrlarOzgardi` izohi).
+    if (satrlarOzgardi) {
+      await tolovSatrlariniYoz(tx, params.businessId, deal.id, yangiSatrlar);
+    }
     const yangilash = await tx.deal.updateMany({
       where: { id: deal.id, businessId: params.businessId, deletedAt: null },
       data: {
@@ -259,6 +312,10 @@ export async function zakazniDirektorTahrirlash(
       tolovTuri: deal.tolovTuri,
       transactionId: deal.transactionId,
       debtId: deal.debtId,
+      // TO'LOV KESIMINING ESKI SNAPSHOTI. `DealTolov` da `deletedAt` yo'q,
+      // shuning uchun qatorlar ATAYLAB almashtirilganda eski kesim shu
+      // yerda — jurnaldan tiklab olish mumkin bo'lsin.
+      tolovlar: eskiSatrlar,
     },
     after: {
       amal: "direktor-tahriri",
@@ -270,6 +327,10 @@ export async function zakazniDirektorTahrirlash(
       qarzSumma: natija.yakun?.qarzSumma ?? 0,
       transactionId: natija.yakun?.transactionId ?? null,
       debtId: natija.yakun?.debtId ?? null,
+      tolovlar: yangiSatrlar,
+      satrlarOzgardi,
+      // Kirimlar YUMSHOQ o'chirildi (`deletedAt` + `deletedBy`): ledger
+      // append-only qoladi va yozuvlar savatdan tiklanadi.
       ochirilganKirimlar: natija.qaytarilgan.kirimlar.map((k) => k.id),
       bekorQilinganQarzId: natija.qaytarilgan.bekorQilinganQarzId,
     },
