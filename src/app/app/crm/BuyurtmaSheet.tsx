@@ -42,6 +42,7 @@ export function BuyurtmaSheet({
   ustun,
   bugun,
   boshqaruvchi,
+  direktor,
   kategoriyalar,
   xodimlar,
   xodimKategoriyalari,
@@ -60,6 +61,8 @@ export function BuyurtmaSheet({
   bugun: string;
   /** OWNER/ADMIN mi — arxivdan qaytarish va o'chirish tugmalari uchun. */
   boshqaruvchi: boolean;
+  /** FAQAT DIREKTOR (OWNER) mi — narx/to'lov tuzatishi shunga ochiladi. */
+  direktor: boolean;
   /** Kirim modulining kategoriyalari — tahrirlash uchun (CRM alohida ro'yxat yuritmaydi). */
   kategoriyalar: KategoriyaDTO[];
   /** Shu biznesning faol xodimlari — mas'ulni almashtirish uchun. */
@@ -77,15 +80,8 @@ export function BuyurtmaSheet({
   onYoqotildi: () => void;
   /** Zakazni o'chirish (tasdiq oynasi doskada ochiladi) — faqat direktor. */
   onOchirish: () => void;
-  onTahrirlandi: (yangi: {
-    categoryId: string;
-    kategoriya: string;
-    summa: number;
-    tolangan: number;
-    tolovTuri: string | null;
-    debtId: string | null;
-    transactionId: string | null; // server yutilgan zakazda moliyani darhol yozadi
-  }) => void;
+  /** Tahrirdan keyin SERVER bergan qiymatlar (`lib/crm/dto.ts` izohi). */
+  onTahrirlandi: (yangi: Partial<BuyurtmaDTO>) => void;
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -181,7 +177,12 @@ export function BuyurtmaSheet({
           <ZakazDirektorTahriri
             b={b}
             xodimlar={xodimlar}
-            onSaqlandi={() => {
+            kategoriyalar={kategoriyalar}
+            // Narx/to'lov bloki faqat direktorga va faqat moliyaga o'tgan
+            // zakazda (o'tmaganini yuqoridagi `BuyurtmaTahrir` boshqaradi).
+            moliyaTuzatadi={direktor && moliyaYozilgan}
+            onSaqlandi={(yangi) => {
+              if (yangi) onTahrirlandi(yangi);
               void yuklash();
               router.refresh();
             }}
@@ -219,7 +220,9 @@ export function BuyurtmaSheet({
 
         <ZakazMoliya
           b={b}
-          yakunlanganmi={ustun === "YUTILDI"}
+          // HOLATdan, USTUNdan emas: qarzi bor zakaz "Qarz" ustunida turadi,
+          // lekin u ALLAQACHON yutilgan.
+          yakunlanganmi={b.holat === "YUTILDI"}
           onYakunlash={() => setTasdiq(true)}
           onClose={onClose}
         />

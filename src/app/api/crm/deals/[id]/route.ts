@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withTenant } from "@/lib/auth/tenant";
 import { ForbiddenError, BadRequestError, requireManager } from "@/lib/auth/guard";
-import { isManager } from "@/lib/auth/roles";
+import { isManager, isDirektor } from "@/lib/auth/roles";
 import { resolveActiveBusinessId } from "@/lib/business";
 import {
   moveDeal,
@@ -14,6 +14,8 @@ import {
   zakazTolovlariniAlmashtirish,
 } from "@/lib/crm/service";
 import { zakazniYakunlash } from "@/lib/crm/yakunlash";
+import { zakazniDirektorTahrirlash } from "@/lib/crm/direktorTahrir";
+import { zakazMoliyaSnapshot } from "@/lib/crm/dto";
 import { buyurtmaPatchSchema } from "@/lib/validation/crm";
 import { dashboardYangilandi } from "@/lib/cache";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
@@ -40,7 +42,20 @@ export const GET = withTenant<{ params: { id: string } }>(
         stage: true,
         category: { select: { id: true, nomi: true } },
         transaction: { select: { id: true, summa: true, sana: true, deletedAt: true } },
-        debt: { select: { id: true, jamiSumma: true, tolangan: true, status: true } },
+        debt: {
+          select: { id: true, jamiSumma: true, tolangan: true, status: true, isYopilgan: true },
+        },
+        // ARALASH TO'LOV qatorlari — kirim summasi shu qatorlardan yig'iladi
+        // (`lib/crm/dto.ts` → `zakazMoliyaSnapshot`).
+        tolovlar: {
+          orderBy: { createdAt: "asc" },
+          select: {
+            id: true,
+            kanal: true,
+            summa: true,
+            transaction: { select: { summa: true, deletedAt: true } },
+          },
+        },
         activities: { orderBy: { createdAt: "desc" }, take: 50 },
       },
     });
@@ -52,7 +67,14 @@ export const GET = withTenant<{ params: { id: string } }>(
       zakazSotuvchisi(businessId ?? "-", deal.id),
       zakazBahosi(businessId ?? "-", deal.id),
     ]);
-    return NextResponse.json({ ...deal, xodimlar, sotuvchi, baho });
+    return NextResponse.json({
+      ...deal,
+      ...zakazMoliyaSnapshot(deal),
+      tolovlar: deal.tolovlar.map((t) => ({ id: t.id, kanal: t.kanal, summa: t.summa })),
+      xodimlar,
+      sotuvchi,
+      baho,
+    });
   },
   { module: "CRM" }
 );
@@ -63,6 +85,15 @@ export const GET = withTenant<{ params: { id: string } }>(
  * DIQQAT: kirim yozilgandan keyin SUMMA va KATEGORIYA qulflanadi — aks holda
  * CRM bir raqamni, Kirim boshqasini ko'rsatardi (yozilgan tranzaksiya
  * o'zgarmaydi). Ularni o'zgartirish uchun avval Kirimdagi yozuv tahrirlanadi.
+ *
+ * ═══ DIREKTOR ISTISNOSI ═══
+ * Qulf FAQAT DIREKTOR uchun ochiladi (`isDirektor` — OWNER): u yuborgan
+ * narx/to'lov/kategoriya o'zgarishi oddiy `update` bo'lmaydi, balki
+ * MOLIYANI QAYTARIB QAYTA YOZADIGAN atomik amalga tushadi
+ * (`lib/crm/direktorTahrir.ts`). Shu sabab CRM, Kirim va Qarzdorlik
+ * tuzatishdan keyin ham AYNI raqamni ko'rsatadi va dublikat yozuv paydo
+ * bo'lmaydi. Administrator ham, oddiy xodim ham avvalgi xatoni oladi —
+ * tekshiruv SERVERDA, UI tugmasi himoya emas.
  */
 export const PATCH = withTenant<{ params: { id: string } }>(
   async (request, { params }, { session: user }) => {
@@ -86,6 +117,9 @@ export const PATCH = withTenant<{ params: { id: string } }>(
       data.tolovTuri !== undefined ||
       data.tolovlar !== undefined;
 
+    /** Holat o'zgarishi direktor tuzatishi ichida bajarildimi (ikki marta bo'lmasin). */
+    let holatBajarildi = false;
+
     if (maydonlar) {
       const existing = await prisma.deal.findFirst({
         where: { id: params.id, businessId, deletedAt: null },
@@ -93,83 +127,124 @@ export const PATCH = withTenant<{ params: { id: string } }>(
       });
       if (!existing) throw new ForbiddenError("Buyurtma topilmadi");
 
-      if (existing.transactionId && (data.summa !== undefined || data.categoryId !== undefined)) {
-        throw new BadRequestError(
-          "Kirim yozilgan buyurtmaning summasi va kategoriyasi o'zgartirilmaydi"
-        );
-      }
-      // TO'LOV moliyaga o'tgach QULFLANADI: kirim/qarz yozuvlari allaqachon
-      // shu raqamlardan chiqqan, ularni keyin surish CRM va moliyani zid
-      // holatga tushirardi (summa/kategoriya bilan bir xil qoida).
-      if (
-        (existing.transactionId || existing.debtId) &&
-        (data.tolangan !== undefined ||
-          data.tolovTuri !== undefined ||
-          data.tolovlar !== undefined ||
-          (data.summa !== undefined && data.summa !== existing.summa))
-      ) {
-        throw new BadRequestError(
-          "Moliyaga o'tgan zakazning summasi va to'lovi o'zgartirilmaydi — Kirim yoki Qarzdorlik bo'limidan tuzating"
-        );
-      }
-      const yangiSumma = data.summa ?? existing.summa;
-      const yangiTolangan = data.tolangan ?? existing.tolangan;
-      if (yangiTolangan > yangiSumma) {
-        throw new BadRequestError("To'langan summa zakaz narxidan ko'p bo'lmasligi kerak");
-      }
-
-      if (data.categoryId) {
-        const cat = await prisma.category.findFirst({
-          where: { id: data.categoryId, businessId },
-          select: { turi: true },
-        });
-        if (!cat) throw new ForbiddenError("Kategoriya bu biznesga tegishli emas");
-        if (cat.turi !== "kirim") throw new BadRequestError("Kategoriya kirim turida bo'lishi kerak");
-      }
-      // Mas'ul xodim — shu BIZNESning xodimi (tenant filtri o'zi yetarli emas:
-      // bir kompaniyaning ikkinchi biznesidagi xodim ham o'tib ketardi).
-      if (data.masulId) await biznesXodimi(businessId, data.masulId);
-
-      const patch: Prisma.DealUpdateInput = {};
-      if (data.nomi !== undefined) patch.nomi = data.nomi;
-      if (data.summa !== undefined) patch.summa = data.summa;
-      if (data.izoh !== undefined) patch.izoh = data.izoh;
-      if (data.masulId !== undefined) patch.masulId = data.masulId;
-      if (data.sana !== undefined) patch.sana = data.sana ? dateOnlyStringToUTCDate(data.sana) : null;
-      // ARALASH TO'LOV berilganda `tolangan`/`tolovTuri` bu yerda YOZILMAYDI:
-      // ularni qatorlardan `zakazTolovlariniAlmashtirish` hisoblab, qatorlar
-      // bilan BITTA tranzaksiyada yozadi (ikki xil raqam bo'lmasin).
-      if (data.tolovlar === undefined && data.tolangan !== undefined) patch.tolangan = data.tolangan;
-      if (data.tolovlar === undefined && data.tolovTuri !== undefined) patch.tolovTuri = data.tolovTuri;
-      if (data.categoryId !== undefined) {
-        patch.category = data.categoryId ? { connect: { id: data.categoryId } } : { disconnect: true };
-      }
-      await prisma.deal.update({ where: { id: params.id }, data: patch });
-
-      // ARALASH TO'LOV qatorlari — atomik (qatorlar + yig'indi bir tranzaksiyada).
-      // Tekshiruv yozishdan OLDIN bo'lgani uchun bu qadam faqat baza xatosida
-      // yiqiladi; narx esa yuqorida allaqachon shu qatorlarga qarshi tekshirilgan.
-      if (data.tolovlar !== undefined) {
-        await zakazTolovlariniAlmashtirish({
-          businessId,
-          dealId: params.id,
-          tolovlar: data.tolovlar,
-          tolovTuri: data.tolovTuri ?? null,
-          summa: yangiSumma,
-        });
-      }
-
-      // YUTILGAN, lekin moliyasi hali yozilmagan zakazda (to'lov endi
-      // belgilandi) kirim/qarz DARHOL yoziladi — foydalanuvchi alohida
-      // "kirimga o'tkazish" bosmaydi. Idempotent: mavjud yozuv takrorlanmaydi.
-      // `holat` ham kelgan bo'lsa quyidagi blok o'zi hal qiladi.
-      const tolovOzgardi =
+      // PULGA TEGADIGAN maydonlar va zakaz moliyaga o'tganmi — direktor
+      // yo'lini shu ikkovi belgilaydi.
+      const moliyaMaydoni =
+        data.summa !== undefined ||
         data.tolangan !== undefined ||
         data.tolovTuri !== undefined ||
         data.tolovlar !== undefined ||
-        data.summa !== undefined;
-      if (existing.holat === "YUTILDI" && !existing.transactionId && !existing.debtId && tolovOzgardi && !data.holat) {
-        await zakazniYakunlash({ businessId, dealId: params.id, userId: user.userId });
+        data.categoryId !== undefined;
+      const moliyaYozilgan = Boolean(existing.transactionId || existing.debtId);
+      const direktorTuzatadi = moliyaYozilgan && moliyaMaydoni && isDirektor(user.rol);
+
+      // Mas'ul xodim — shu BIZNESning xodimi (ikkala yo'lda ham tekshiriladi).
+      if (data.masulId) await biznesXodimi(businessId, data.masulId);
+
+      if (direktorTuzatadi) {
+        // PULGA TEGMAYDIGAN maydonlar avvalgidek oddiy `update` bilan.
+        const tuzatish: Prisma.DealUpdateInput = {};
+        if (data.nomi !== undefined) tuzatish.nomi = data.nomi;
+        if (data.izoh !== undefined) tuzatish.izoh = data.izoh;
+        if (data.masulId !== undefined) tuzatish.masulId = data.masulId;
+        if (data.sana !== undefined) {
+          tuzatish.sana = data.sana ? dateOnlyStringToUTCDate(data.sana) : null;
+        }
+        if (Object.keys(tuzatish).length > 0) {
+          await prisma.deal.update({ where: { id: params.id }, data: tuzatish });
+        }
+
+        // MOLIYAVIY TUZATISH — qaytarish + yangi raqamlar + qayta yozish,
+        // hammasi BITTA tranzaksiyada (`lib/crm/direktorTahrir.ts`).
+        await zakazniDirektorTahrirlash({
+          businessId,
+          dealId: params.id,
+          userId: user.userId,
+          ...(data.summa !== undefined ? { summa: data.summa } : {}),
+          ...(data.categoryId !== undefined ? { categoryId: data.categoryId } : {}),
+          ...(data.tolovlar !== undefined ? { tolovlar: data.tolovlar } : {}),
+          ...(data.tolovTuri !== undefined ? { tolovTuri: data.tolovTuri } : {}),
+          ...(data.holat !== undefined ? { holat: data.holat } : {}),
+          yoqotishSababi: data.yoqotishSababi,
+        });
+        // Holat shu amal ichida hal qilindi — pastdagi blok takrorlamaydi.
+        holatBajarildi = true;
+      } else {
+
+        if (existing.transactionId && (data.summa !== undefined || data.categoryId !== undefined)) {
+          throw new BadRequestError(
+            "Kirim yozilgan buyurtmaning summasi va kategoriyasi o'zgartirilmaydi"
+          );
+        }
+        // TO'LOV moliyaga o'tgach QULFLANADI: kirim/qarz yozuvlari allaqachon
+        // shu raqamlardan chiqqan, ularni keyin surish CRM va moliyani zid
+        // holatga tushirardi (summa/kategoriya bilan bir xil qoida).
+        if (
+          (existing.transactionId || existing.debtId) &&
+          (data.tolangan !== undefined ||
+            data.tolovTuri !== undefined ||
+            data.tolovlar !== undefined ||
+            (data.summa !== undefined && data.summa !== existing.summa))
+        ) {
+          throw new BadRequestError(
+            "Moliyaga o'tgan zakazning summasi va to'lovi o'zgartirilmaydi — Kirim yoki Qarzdorlik bo'limidan tuzating"
+          );
+        }
+        const yangiSumma = data.summa ?? existing.summa;
+        const yangiTolangan = data.tolangan ?? existing.tolangan;
+        if (yangiTolangan > yangiSumma) {
+          throw new BadRequestError("To'langan summa zakaz narxidan ko'p bo'lmasligi kerak");
+        }
+
+        if (data.categoryId) {
+          const cat = await prisma.category.findFirst({
+            where: { id: data.categoryId, businessId },
+            select: { turi: true },
+          });
+          if (!cat) throw new ForbiddenError("Kategoriya bu biznesga tegishli emas");
+          if (cat.turi !== "kirim") throw new BadRequestError("Kategoriya kirim turida bo'lishi kerak");
+        }
+        const patch: Prisma.DealUpdateInput = {};
+        if (data.nomi !== undefined) patch.nomi = data.nomi;
+        if (data.summa !== undefined) patch.summa = data.summa;
+        if (data.izoh !== undefined) patch.izoh = data.izoh;
+        if (data.masulId !== undefined) patch.masulId = data.masulId;
+        if (data.sana !== undefined) patch.sana = data.sana ? dateOnlyStringToUTCDate(data.sana) : null;
+        // ARALASH TO'LOV berilganda `tolangan`/`tolovTuri` bu yerda YOZILMAYDI:
+        // ularni qatorlardan `zakazTolovlariniAlmashtirish` hisoblab, qatorlar
+        // bilan BITTA tranzaksiyada yozadi (ikki xil raqam bo'lmasin).
+        if (data.tolovlar === undefined && data.tolangan !== undefined) patch.tolangan = data.tolangan;
+        if (data.tolovlar === undefined && data.tolovTuri !== undefined) patch.tolovTuri = data.tolovTuri;
+        if (data.categoryId !== undefined) {
+          patch.category = data.categoryId ? { connect: { id: data.categoryId } } : { disconnect: true };
+        }
+        await prisma.deal.update({ where: { id: params.id }, data: patch });
+
+        // ARALASH TO'LOV qatorlari — atomik (qatorlar + yig'indi bir tranzaksiyada).
+        // Tekshiruv yozishdan OLDIN bo'lgani uchun bu qadam faqat baza xatosida
+        // yiqiladi; narx esa yuqorida allaqachon shu qatorlarga qarshi tekshirilgan.
+        if (data.tolovlar !== undefined) {
+          await zakazTolovlariniAlmashtirish({
+            businessId,
+            dealId: params.id,
+            tolovlar: data.tolovlar,
+            tolovTuri: data.tolovTuri ?? null,
+            summa: yangiSumma,
+          });
+        }
+
+        // YUTILGAN, lekin moliyasi hali yozilmagan zakazda (to'lov endi
+        // belgilandi) kirim/qarz DARHOL yoziladi — foydalanuvchi alohida
+        // "kirimga o'tkazish" bosmaydi. Idempotent: mavjud yozuv takrorlanmaydi.
+        // `holat` ham kelgan bo'lsa quyidagi blok o'zi hal qiladi.
+        const tolovOzgardi =
+          data.tolangan !== undefined ||
+          data.tolovTuri !== undefined ||
+          data.tolovlar !== undefined ||
+          data.summa !== undefined;
+        if (existing.holat === "YUTILDI" && !existing.transactionId && !existing.debtId && tolovOzgardi && !data.holat) {
+          await zakazniYakunlash({ businessId, dealId: params.id, userId: user.userId });
+        }
       }
     }
 
@@ -236,7 +311,7 @@ export const PATCH = withTenant<{ params: { id: string } }>(
 
     // HOLAT o'zgarishi maydonlardan KEYIN: YUTILDI yangi summa/to'lov bilan
     // yakunlansin.
-    if (data.holat) {
+    if (data.holat && !holatBajarildi) {
       if (data.holat === "YUTILDI") {
         // MOLIYAVIY YAKUN: kirim + qarzdorlik, atomik va idempotent
         // (`lib/crm/yakunlash.ts`). Takroriy bosish yangi kirim yaratmaydi.
@@ -273,15 +348,36 @@ export const PATCH = withTenant<{ params: { id: string } }>(
     // `kirimYoz` esa KIRIM tranzaksiyasini o'zgartiradi.
     dashboardYangilandi(businessId);
 
+    // JAVOB — MOLIYAVIY NATIJA BILAN. Brauzer raqamlarni O'ZI hisoblamaydi:
+    // ilgari CRM oynasi `qarzQoldiq` ni forma qiymatlaridan qayta hisoblardi
+    // va server yozgan qarz bilan mos kelmasa "Qarzdorlikka yozildi ·
+    // Qoldiq: 0 so'm" kabi yolg'on holat chiqardi. Endi haqiqat manbai
+    // bitta — server (`lib/crm/dto.ts` → `zakazMoliyaSnapshot`).
     const deal = await prisma.deal.findFirst({
       where: { id: params.id, businessId },
       include: {
         contact: { select: { ism: true, tel: true } },
         stage: true,
         category: { select: { id: true, nomi: true } },
+        transaction: { select: { summa: true, deletedAt: true } },
+        debt: { select: { jamiSumma: true, tolangan: true, status: true, isYopilgan: true } },
+        tolovlar: {
+          orderBy: { createdAt: "asc" },
+          select: {
+            id: true,
+            kanal: true,
+            summa: true,
+            transaction: { select: { summa: true, deletedAt: true } },
+          },
+        },
       },
     });
-    return NextResponse.json(deal);
+    if (!deal) return NextResponse.json({ error: "Buyurtma topilmadi" }, { status: 404 });
+    return NextResponse.json({
+      ...deal,
+      ...zakazMoliyaSnapshot(deal),
+      tolovlar: deal.tolovlar.map((t) => ({ id: t.id, kanal: t.kanal, summa: t.summa })),
+    });
   },
   { module: "CRM" }
 );

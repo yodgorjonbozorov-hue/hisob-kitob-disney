@@ -22,7 +22,7 @@ import type { QarzYonalish } from "./QarzFiltrPanel";
 export default async function QarzlarPage({
   searchParams,
 }: {
-  searchParams: { turi?: string };
+  searchParams: { turi?: string; qarz?: string };
 }) {
   const ctx = await requireTenantPage();
   const { session, tenantId } = ctx;
@@ -88,6 +88,11 @@ export default async function QarzlarPage({
           // (src/app/api/debts/[id]/route.ts).
           qarzniBoshqaradi={isDirektor(session.rol) && qarzTahrirHuquqi}
           boshlangichYonalish={yonalish}
+          // CRM'dagi "Qarzdorlikni ochish" havolasi AYNAN shu qarz yozuvi
+          // bilan keladi (`app/app/crm/turlar.ts` → `qarzHavolasi`).
+          // Yozuv ro'yxatda bo'lmasa ham (yopilgan, bekor qilingan yoki
+          // 1000 talik kesimdan tashqarida) tafsilot serverdan o'qiladi.
+          boshlangichQarzId={searchParams.qarz ?? null}
         />
       </div>
     );

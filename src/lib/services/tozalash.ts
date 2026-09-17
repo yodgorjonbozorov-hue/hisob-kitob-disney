@@ -48,6 +48,9 @@ const TOZALANADIGAN: ReadonlySet<string> = new Set([
   "task",
   "activity",
   "accountTransfer",
+  // Topshirishning kanal kesimi — o'tkazma bilan birga ketadi (FK Cascade
+  // ham o'chirardi, lekin ro'yxatda turishi hisobotni aniq qoldiradi).
+  "topshirishKanali",
   "purchaseOrder",
   "purchaseOrderItem",
   "approvalRequest",

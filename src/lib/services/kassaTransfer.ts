@@ -8,6 +8,8 @@ import {
   kassaQoldiqTx,
   mavjudQoldiqTx,
 } from "@/lib/services/userKassa";
+import { onlineKanalKesimi } from "@/lib/queries/topshirishKanali";
+import { kanalNomi } from "@/lib/crm/tolovlar";
 import type { KassaTransferInput, TransferQarorInput } from "@/lib/validation/account";
 
 /**
@@ -34,6 +36,23 @@ import type { KassaTransferInput, TransferQarorInput } from "@/lib/validation/ac
  * musbat bo'lishi mumkin emas, chunki mavjud qoldiqdan ko'p pul o'tkazishga
  * yo'l qo'yilmaydi. Kamomad kassirning kassasida OCHIQ qoladi — u yerdan
  * pul o'z-o'zidan yo'qolmaydi, direktor uni ko'radi va sababini o'qiydi.
+ *
+ * ═══ TO'LOV KANALI KESIMI (naqd + Click + Payme) ═══
+ * Topshirishda xodim qaysi kanallarni topshirayotganini tanlaydi. NAQD
+ * qismi — `summa`, ya'ni HAQIQIY pul harakati (ledger). ONLINE qismi esa
+ * HISOBOT: o'sha pul allaqachon karta/hisob kassasida va uni ikkinchi
+ * marta ko'chirish kassa qoldig'ini buzardi. Shu bois online kanallar
+ * `TopshirishKanali` qatorlarida saqlanadi va ledgerga TEGMAYDI.
+ *
+ * Online summa SERVER hisobidan olinadi (`lib/queries/topshirishKanali.ts`):
+ * brauzerdan faqat KANAL NOMI keladi, summa emas — "taxminiy Click
+ * summasi" kiritish yo'li ochiq qolmasin. Har kanalning o'z reset nuqtasi
+ * bor, shuning uchun bir to'lov ikki marta topshirilmaydi.
+ *
+ * NAQD SUMMASI NOL bo'lishi mumkin (faqat online topshirilsa): bunda
+ * `hisoblangan` va `farq` ham nol — tizim hisobiga qarshi "kamomad"
+ * yozish mantiqsiz, chunki naqd umuman topshirilmagan. Bunday topshiriq
+ * naqd smenani ham yopmaydi (`lib/queries/kassaSmena.ts`).
  *
  * ═══ NEGA "bekor" EMAS, "rad" ═══
  * `holat = "bekor"` yakunlangan o'tkazmani STORNO bilan qaytarish uchun va u
@@ -114,6 +133,30 @@ export async function kassaTransferYarat(
   data: KassaTransferInput
 ) {
   const turi = data.turi ?? "transfer";
+  const tanlanganKanallar = turi === "smena" ? (data.kanallar ?? []) : [];
+  /**
+   * ONLINE KESIM TRANZAKSIYADAN OLDIN o'qiladi: `onlineKanalKesimi` scoped
+   * `prisma` bilan ishlaydi va interaktiv tranzaksiya ichida chaqirilsa
+   * SQLite yozuv qulfida deadlock xavfi bor (lib/db/businessTx.ts izohi).
+   *
+   * `hozir` — kesimning YUQORI chegarasi VA yoziladigan qatorlarning
+   * `createdAt` i. Ikkalasi bir xil bo'lgani uchun shu paytdan keyin
+   * tushgan to'lov keyingi topshirishda chiqadi: na yo'qoladi, na ikki
+   * marta sanaladi.
+   */
+  const hozir = new Date();
+  const kassaEgasi = data.fromAccountId
+    ? (
+        await prisma.account.findFirst({
+          where: { id: data.fromAccountId, businessId },
+          select: { userId: true },
+        })
+      )?.userId ?? aktor.userId
+    : aktor.userId;
+  const onlineKesim =
+    tanlanganKanallar.length > 0
+      ? await onlineKanalKesimi(businessId, kassaEgasi, hozir)
+      : [];
 
   const transfer = await runBusinessTx(businessId, async (tx) => {
     // Yuboruvchi kassa: tanlangani yoki aktorning shaxsiy kassasi.
@@ -150,7 +193,11 @@ export async function kassaTransferYarat(
     // yangi yozuv tushsa ham direktor tasdiqlaydigan farq o'zgarmaydi.
     // Farq hech qachon musbat bo'lmaydi — yuqoridagi tekshiruv mavjuddan
     // ko'p pul o'tkazishga yo'l qo'ymaydi (manfiy qoldiq taqiqlangan).
-    const hisoblangan = turi === "smena" ? mavjud : null;
+    // NAQD TOPSHIRILMAGAN bo'lsa (faqat online kanal belgilangan) tizim
+    // hisobi va farq NOL: naqd kassaga qarshi "kamomad" yozishning ma'nosi
+    // yo'q, chunki naqd umuman topshirilmagan.
+    const naqdTopshiriladi = data.summa > 0;
+    const hisoblangan = turi === "smena" ? (naqdTopshiriladi ? mavjud : 0) : null;
     const farq = hisoblangan === null ? null : data.summa - hisoblangan;
     if (farq !== null && farq !== 0 && !data.izoh?.trim()) {
       throw new BadRequestError(
@@ -216,7 +263,7 @@ export async function kassaTransferYarat(
     const ism = (id: string | null) => (id ? egalar.find((u) => u.id === id)?.ism ?? null : null);
     const endi = new Date();
 
-    return tx.accountTransfer.create({
+    const yaratilgan = await tx.accountTransfer.create({
       data: {
         businessId,
         fromAccountId: from.id,
@@ -241,6 +288,49 @@ export async function kassaTransferYarat(
           : { tasdiqlaganId: aktor.userId, tasdiqlaganIsm: aktor.ism, tasdiqlanganAt: endi }),
       },
     });
+
+    // ═══ TO'LOV KANALI QATORLARI (faqat topshirishda) ═══
+    // NAQD qatori pul harakatini takrorlaydi (hisobotda kesim to'liq
+    // bo'lsin), ONLINE qatorlari esa faqat hisobot. Har qator `hozir`
+    // bilan yoziladi — u ayni vaqtda kesimning yuqori chegarasi ham.
+    if (turi === "smena") {
+      if (naqdTopshiriladi) {
+        await tx.topshirishKanali.create({
+          data: {
+            businessId,
+            transferId: yaratilgan.id,
+            kanal: "naqd",
+            summa: data.summa,
+            hisoblangan: mavjud,
+            createdAt: hozir,
+          },
+        });
+      }
+      for (const kanal of tanlanganKanallar) {
+        const kesim = onlineKesim.find((k) => k.kanal === kanal);
+        const summa = kesim?.summa ?? 0;
+        // SUMMA SERVERDAN. Nol bo'lsa topshiradigan narsa yo'q —
+        // bo'sh qator reset nuqtasini surib, keyingi hisobni buzardi.
+        if (summa <= 0) {
+          throw new BadRequestError(
+            `${kanalNomi(kanal)} bo'yicha topshiriladigan tushum yo'q — ` +
+              `avval CRM'da to'lovni yozing`
+          );
+        }
+        await tx.topshirishKanali.create({
+          data: {
+            businessId,
+            transferId: yaratilgan.id,
+            kanal,
+            summa,
+            hisoblangan: summa,
+            createdAt: hozir,
+          },
+        });
+      }
+    }
+
+    return yaratilgan;
   });
 
   await logAudit({
@@ -261,6 +351,12 @@ export async function kassaTransferYarat(
       farq: transfer.farq,
       izoh: transfer.izoh,
       holat: transfer.holat,
+      // TO'LOV KANALI KESIMI auditga ham TUSHADI: "qancha naqd, qancha
+      // Click, qancha Payme topshirildi" savolining javobi tarixda qoladi.
+      kanallar: tanlanganKanallar.map((k) => ({
+        kanal: k,
+        summa: onlineKesim.find((x) => x.kanal === k)?.summa ?? 0,
+      })),
     },
   });
   return transfer;

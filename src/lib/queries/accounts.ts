@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { businessQueryRaw, businessScope, songa } from "@/lib/db/businessRaw";
 import { QARZ_EMAS, qarzEmasSql } from "@/lib/qarzFiltr";
 import { getKassaSmenasi } from "@/lib/queries/kassaSmena";
+import { kanalNomi } from "@/lib/crm/tolovlar";
 
 export interface AccountDTO {
   id: string;
@@ -281,12 +282,21 @@ export interface TransferDTO {
   hisoblangan: number | null;
   /** `summa − hisoblangan` — kassa farqi. Manfiy = kamomad. */
   farq: number | null;
+  /**
+   * TO'LOV KANALI KESIMI (faqat `turi = "smena"`): qancha naqd, qancha
+   * Click, qancha Payme topshirildi. Bo'sh massiv — eski topshirishlar
+   * (kanal kesimi kiritilgunga qadar) va oddiy o'tkazmalar.
+   */
+  kanallar: Array<{ kanal: string; nomi: string; summa: number }>;
   createdAt: string;
 }
 
 const TRANSFER_INCLUDE = {
   fromAccount: { select: { nomi: true } },
   toAccount: { select: { nomi: true } },
+  // Kassa topshirishning to'lov kanali kesimi — direktor qarorida ham
+  // "qancha naqd, qancha Click, qancha Payme" ko'rinishi kerak.
+  kanallar: { select: { kanal: true, summa: true }, orderBy: { createdAt: "asc" } },
 } as const;
 
 type TransferRow = Prisma.AccountTransferGetPayload<{ include: typeof TRANSFER_INCLUDE }>;
@@ -312,6 +322,7 @@ function transferDto(t: TransferRow): TransferDTO {
     qarorIzoh: t.qarorIzoh,
     hisoblangan: t.hisoblangan,
     farq: t.farq,
+    kanallar: t.kanallar.map((k) => ({ kanal: k.kanal, nomi: kanalNomi(k.kanal), summa: k.summa })),
     createdAt: t.createdAt.toISOString(),
   };
 }

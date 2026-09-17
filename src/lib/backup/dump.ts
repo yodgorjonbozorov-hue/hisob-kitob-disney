@@ -71,6 +71,9 @@ export const ZAXIRA_JADVALLARI = [
   "deal",
   "activity",
   "accountTransfer",
+  // DIQQAT: `topshirishKanali` `accountTransfer`dan KEYIN turishi SHART —
+  // `transferId` unga FK bilan murojaat qiladi (`business`dan ham keyin).
+  "topshirishKanali",
   "stockAdjustment",
   "supplier",
   "purchaseOrder",

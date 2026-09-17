@@ -97,6 +97,7 @@ export function QarzlarClient({
   bekorQilaOladi = false,
   qarzniBoshqaradi = false,
   boshlangichYonalish = "olinadigan",
+  boshlangichQarzId = null,
 }: {
   initialDebts: QarzDTO[];
   qarzdorlar: QarzdorDTO[];
@@ -110,6 +111,11 @@ export function QarzlarClient({
   qarzniBoshqaradi?: boolean;
   /** URL'dagi `?turi=` — bosh sahifadagi karta shu bilan keladi. */
   boshlangichYonalish?: QarzYonalish;
+  /**
+   * URL'dagi `?qarz=<id>` — CRM'dan "Qarzdorlikni ochish" havolasi
+   * (`app/app/crm/turlar.ts`): sahifa AYNI shu qarz tafsilotini ochadi.
+   */
+  boshlangichQarzId?: string | null;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -122,12 +128,16 @@ export function QarzlarClient({
   const [yonalish, setYonalish] = useState<Exclude<QarzYonalish, "hammasi">>(
     boshlangichYonalish === "beriladigan" ? "beriladigan" : "olinadigan"
   );
-  const [korinish, setKorinish] = useState<QarzKorinish>("qarzdorlar");
+  // Aniq qarz so'ralgan bo'lsa "Yozuvlar" kesimi: tafsilot yopilgach yozuv
+  // ro'yxatda ham ko'rinadi (Qarzdorlar kesimi faqat OCHIQ qarzni beradi).
+  const [korinish, setKorinish] = useState<QarzKorinish>(
+    boshlangichQarzId ? "yozuvlar" : "qarzdorlar"
+  );
   const [tez, setTez] = useState<QarzTezFiltr>("hammasi");
   const [tartib, setTartib] = useState<QarzTartib>("kritik");
   const [kategoriya, setKategoriya] = useState("");
   const [q, setQ] = useState("");
-  const [ochilgan, setOchilgan] = useState<string | null>(null);
+  const [ochilgan, setOchilgan] = useState<string | null>(boshlangichQarzId);
   const [ochilganQarzdor, setOchilganQarzdor] = useState<QarzdorDTO | null>(null);
   const [tolov, setTolov] = useState<TolovNishoni | null>(null);
   // Bosh sahifadagi "+ Yangi → Qarz" shu havola bilan keladi (`?yangi=1`):

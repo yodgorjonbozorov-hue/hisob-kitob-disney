@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Money } from "@/components/ui/Money";
 import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
-import { formatToshkentVaqt } from "@/lib/format";
+import { formatSom, formatToshkentVaqt } from "@/lib/format";
 import { TRANSFER_TURI_NOMI, type TransferTuri } from "@/lib/validation/account";
 import type { TransferDTO } from "@/lib/queries/accounts";
 
@@ -95,6 +95,14 @@ export function KutilayotganTransferlar({
                 </div>
                 <div className="text-right">
                   <Money value={t.summa} size="lg" tone="brand" />
+                  {/* KASSA TOPSHIRISHDA to'lov kanali kesimi: katta raqam
+                      naqd qismi, online kanallar esa alohida (ular kassa
+                      qoldig'ini o'zgartirmaydi). */}
+                  {t.kanallar.length > 1 && (
+                    <p className="text-2xs text-faint tnum">
+                      {t.kanallar.map((k) => `${k.nomi} ${formatSom(k.summa)}`).join(" · ")}
+                    </p>
+                  )}
                   <div className="mt-1">
                     <Badge tone={menga ? "warning" : "neutral"}>
                       {menga ? "Sizga yuborildi" : mendan ? "Siz yubordingiz" : "Kutilmoqda"}

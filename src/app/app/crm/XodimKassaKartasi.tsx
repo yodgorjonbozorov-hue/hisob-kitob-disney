@@ -47,7 +47,14 @@ export function XodimKassaKartasi({
   // Topshirish chegarasi — BAND BO'LMAGAN qism (`mavjud`), ko'rsatiladigan
   // raqam esa kassadagi haqiqiy pul. Ikkisi ajratilgani uchun bir summani
   // ikki marta topshirib bo'lmaydi, lekin kassa ham sun'iy nolga tushmaydi.
-  const topshirolmaydi = kassa.mavjud <= 0 || kassa.nishonlar.length === 0 || !!kassa.ochiqTopshirish;
+  //
+  // ONLINE TUSHUM ham topshiriladi: naqd nol bo'lsa ham Click/Payme puli
+  // bo'lsa tugma ochiq qoladi (o'sha pul karta kassasida, lekin uni kim
+  // yig'ganini direktor tasdiqlashi kerak).
+  const onlineKanallar = kassa.kanallar.filter((k) => k.kanal !== "naqd" && k.summa > 0);
+  const onlineJami = onlineKanallar.reduce((s, k) => s + k.summa, 0);
+  const topshiriladigan = kassa.mavjud > 0 || onlineJami > 0;
+  const topshirolmaydi = !topshiriladigan || kassa.nishonlar.length === 0 || !!kassa.ochiqTopshirish;
 
   return (
     <section className="bg-surface rounded-2xl border border-line p-4 flex flex-col gap-3">
@@ -66,7 +73,7 @@ export function XodimKassaKartasi({
           <dd><Money value={kassa.chiqim} size="md" tone="expense" /></dd>
         </div>
         <div className="flex items-baseline justify-between gap-2 border-t border-line pt-2">
-          <dt className="text-sm font-medium text-fg">Kassada</dt>
+          <dt className="text-sm font-medium text-fg">Kassada (naqd)</dt>
           <dd>
             <Money
               value={kassa.kassada}
@@ -76,6 +83,28 @@ export function XodimKassaKartasi({
           </dd>
         </div>
       </dl>
+
+      {/* ONLINE TUSHUM — kassa qoldig'iga QO'SHILMAYDI: u karta/hisob
+          kassasida. Bu yerda faqat "topshirishga tayyor" kesim ko'rinadi. */}
+      {onlineKanallar.length > 0 && (
+        <dl className="rounded-lg bg-surface-2/60 p-2.5 space-y-1">
+          <div className="text-2xs uppercase tracking-wide text-faint">
+            Online tushum — topshirishga tayyor
+          </div>
+          {onlineKanallar.map((k) => (
+            <div key={k.kanal} className="flex items-baseline justify-between gap-2">
+              <dt className="text-sm text-muted">{k.nomi}</dt>
+              <dd className="tnum text-sm font-medium text-fg">{formatSom(k.summa)} so&apos;m</dd>
+            </div>
+          ))}
+          <div className="flex items-baseline justify-between gap-2 border-t border-line pt-1">
+            <dt className="text-sm font-medium text-fg">Jami topshirish</dt>
+            <dd className="tnum text-sm font-semibold text-fg">
+              {formatSom(Math.max(kassa.mavjud, 0) + onlineJami)} so&apos;m
+            </dd>
+          </div>
+        </dl>
+      )}
 
       {kassa.ochiqTopshirish && (
         <p className="text-2xs text-debt-fg bg-debt-soft rounded-lg px-2.5 py-1.5">
@@ -102,12 +131,18 @@ export function XodimKassaKartasi({
           Topshirish uchun boshqa faol kassa yo&apos;q — direktor bilan bog&apos;laning.
         </p>
       )}
+      {kassa.nishonlar.length > 0 && !topshiriladigan && !kassa.ochiqTopshirish && (
+        <p className="text-2xs text-faint">
+          Topshiriladigan naqd yoki online tushum yo&apos;q.
+        </p>
+      )}
 
       {modal && (
         <SmenaTopshirishModal
           sarlavha="Kassa topshirish"
           qoldiq={kassa.mavjud}
           nishonlar={kassa.nishonlar}
+          kanallar={kassa.kanallar}
           onClose={() => setModal(false)}
           onDone={() => {
             setModal(false);
