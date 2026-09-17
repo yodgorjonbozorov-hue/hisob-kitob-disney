@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { kirimUlushi, qarzUlushi, zakazUstuni, type Ustun } from "@/lib/crm/pipeline";
+import { zakazUstuni, type Ustun } from "@/lib/crm/pipeline";
 import { BuyurtmaModal } from "./BuyurtmaModal";
 import { BuyurtmaSheet } from "./BuyurtmaSheet";
 import { DoskaFiltr } from "./DoskaFiltr";
@@ -44,6 +44,7 @@ export function CrmClient({
   sahifalar,
   ustunlar,
   boshqaruvchi,
+  direktor,
   kategoriyalar,
   xodimlar,
   xodimKategoriyalari,
@@ -61,6 +62,8 @@ export function CrmClient({
   ustunlar: Ustun[];
   /** OWNER/ADMIN mi — o'chirish va "Yutildi"dan qaytarish tugmalari uchun. */
   boshqaruvchi: boolean;
+  /** FAQAT DIREKTOR (OWNER) mi — narx/to'lov tuzatishi shunga ochiladi. */
+  direktor: boolean;
   kategoriyalar: KategoriyaDTO[];
   xodimlar: XodimDTO[];
   /** Xodim kategoriyalari (Diktor/Dekorator/...) — bajaruvchi biriktiruvi. */
@@ -185,6 +188,7 @@ export function CrmClient({
           ustun={ustuni(tanlangan)}
           bugun={bugun}
           boshqaruvchi={boshqaruvchi}
+          direktor={direktor}
           kategoriyalar={kategoriyalar}
           xodimlar={xodimlar}
           xodimKategoriyalari={xodimKategoriyalari}
@@ -202,13 +206,10 @@ export function CrmClient({
             setTanlangan(null);
           }}
           onTahrirlandi={(yangi) => {
-            // Ochiq oyna serverdan kelgan snapshot ustida ishlaydi — yangi
-            // qiymatlar darhol ko'rinsin. Yutilgan zakazda to'lov belgilansa
-            // server kirim/qarzni darhol yozadi, shuning uchun moliya bloki
-            // ham shu yerda yangilanadi (AYNI qoidadan: kirimUlushi/qarzUlushi).
-            const kirimSumma = yangi.transactionId ? kirimUlushi(yangi.summa, yangi.tolangan) : 0;
-            const qarzQoldiq = yangi.debtId ? qarzUlushi(yangi.summa, yangi.tolangan, yangi.tolovTuri) : 0;
-            setTanlangan({ ...tanlangan, ...yangi, kirimSumma, qarzQoldiq });
+            // MOLIYA RAQAMLARI SERVERDAN (`api/crm/deals/[id]` javobi):
+            // brauzer kirim/qarzni O'ZI qayta hisoblamaydi, aks holda
+            // ko'rsatilgan raqam yozilgan qarzdan boshqa bo'lardi.
+            setTanlangan({ ...tanlangan, ...yangi });
             router.refresh();
           }}
           onClose={() => setTanlangan(null)}

@@ -11,7 +11,7 @@ import { biznesXodimlariWhere } from "@/lib/services/userBiznes";
 import { crmFormaKategoriyalari } from "@/lib/services/xodimKategoriya";
 import { sotuvchilarRoyxati, sotuvchiMajburiymi } from "@/lib/services/zakazSotuvchi";
 import { hasPermission } from "@/lib/permissions/tekshir";
-import { isManager } from "@/lib/auth/roles";
+import { isManager, isDirektor } from "@/lib/auth/roles";
 import { crmYuqoriPanel } from "@/lib/crm/yuqoriPanel";
 import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { listAccounts } from "@/lib/queries/accounts";
@@ -167,6 +167,7 @@ export default async function CrmPage({
         <CrmClient
           ustunlar={ustunlar}
           boshqaruvchi={boshqaruvchi}
+          direktor={isDirektor(session.rol)}
           kategoriyalar={kategoriyalar}
           xodimlar={xodimlar}
           filtr={{

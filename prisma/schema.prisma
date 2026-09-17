@@ -189,6 +189,8 @@ model Business {
   productExpenses    ProductExpense[]
   accounts           Account[]
   transfers          AccountTransfer[]
+  /// Kassa topshirishlarining to'lov kanali kesimi (naqd + online).
+  kassaKanallari     TopshirishKanali[]
   adjustments        StockAdjustment[]
   suppliers          Supplier[]
   purchaseOrders     PurchaseOrder[]
@@ -507,12 +509,55 @@ model AccountTransfer {
   relatedType          String?
   relatedId            String?
   createdAt            DateTime  @default(now())
+  /// KASSA TOPSHIRISHNING TO'LOV KANALI KESIMI (`turi = "smena"` da).
+  /// Naqd qatori PUL HARAKATI (`summa`), online qatorlari esa HISOBOT.
+  kanallar             TopshirishKanali[]
 
   @@index([businessId, sana])
   @@index([businessId, fromUserId])
   @@index([businessId, toUserId])
   /// Kutilayotgan o'tkazmalar paneli — eng ko'p o'qiladigan so'rov.
   @@index([businessId, holat, createdAt])
+}
+
+/// KASSA TOPSHIRISHNING TO'LOV KANALI KESIMI.
+///
+/// ═══ MUAMMO ═══
+/// Kassa topshirish faqat NAQD pulni bilardi: `AccountTransfer.summa` —
+/// xodim qo'lidan chiqqan naqd. CRM'da esa pul Click/Payme/terminal bilan
+/// ham keladi va u xodimning naqd kassasiga TUSHMAYDI (karta/hisob
+/// kassasiga boradi). Shu sabab "kun oxirida nima topshirdim" savoliga
+/// javob yarim edi: direktor qancha naqd, qancha Click, qancha Payme
+/// kelganini topshirish yozuvidan ko'ra olmasdi.
+///
+/// ═══ QOIDA: PUL HARAKATI FAQAT NAQD ═══
+/// Naqd qatori `AccountTransfer.summa` bilan AYNI raqam — pul haqiqatda
+/// ko'chadi (kassir ledgeri). Online qatorlari esa HISOBOT: o'sha pul
+/// allaqachon karta/hisob kassasida, uni ikkinchi marta ko'chirish kassa
+/// qoldig'ini buzardi. Shuning uchun bu jadval ledgerga TEGMAYDI.
+///
+/// ═══ NEGA `hisoblangan` ALOHIDA ═══
+/// `AccountTransfer.hisoblangan` bilan bir xil sabab: qaror kutayotganda
+/// yangi to'lov tushsa ham direktor tasdiqlaydigan raqam o'zgarmasin.
+/// Online kanalda `summa` har doim `hisoblangan` ga TENG — elektron pul
+/// "kamomad" bo'lmaydi va qo'lda kiritilmaydi (server o'zi hisoblaydi).
+model TopshirishKanali {
+  id          String          @id @default(cuid())
+  businessId  String
+  business    Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  transferId  String
+  transfer    AccountTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  /// "naqd" | "click" | "payme" | "terminal" | "boshqa" (`lib/crm/tolovlar.ts`).
+  kanal       String
+  /// Topshirilgan summa (so'm). Online kanalda — tizim hisobiga teng.
+  summa       Int
+  /// TIZIM hisoblagan summa — topshirish paytida MUZLATILADI.
+  hisoblangan Int
+  createdAt   DateTime        @default(now())
+
+  /// Bitta topshirishda bir kanal IKKI MARTA bo'lmaydi.
+  @@unique([transferId, kanal])
+  @@index([businessId, kanal, createdAt])
 }
 
 model Category {

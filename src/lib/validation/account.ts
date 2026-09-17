@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ONLINE_KANALLAR } from "@/lib/crm/tolovlar";
 
 /** Kassa turlari — UI va API bir xil ro'yxatdan foydalanadi. */
 export const ACCOUNT_TURLARI = ["naqd", "plastik", "bank"] as const;
@@ -82,13 +83,38 @@ export const TRANSFER_TURI_NOMI: Record<TransferTuri, string> = {
  * `toAccountId` — qabul qiluvchi kassa. Yuboruvchi kassa berilmasa, shaxsiy
  * kassa rejimidagi bizneste joriy foydalanuvchining kassasi olinadi.
  */
-export const kassaTransferSchema = z.object({
-  fromAccountId: z.string().min(1).optional().nullable(),
-  toAccountId: z.string().min(1, "Qaysi kassaga o'tkazilishini tanlang"),
-  summa: z.number().int().positive("Summa musbat bo'lishi kerak"),
-  turi: z.enum(TRANSFER_TURLARI).optional(),
-  izoh: z.string().max(300).optional().nullable(),
-});
+export const kassaTransferSchema = z
+  .object({
+    fromAccountId: z.string().min(1).optional().nullable(),
+    toAccountId: z.string().min(1, "Qaysi kassaga o'tkazilishini tanlang"),
+    /**
+     * NAQD summa (so'm) — pul HAQIQATDA shu miqdorda ko'chadi.
+     *
+     * Nol ATAYLAB ruxsat etiladi (ilgari faqat musbat edi): kassa
+     * topshirishda xodim faqat ONLINE kanalni (Click/Payme) belgilashi
+     * mumkin — naqd yo'q, lekin online tushum hisobot sifatida
+     * topshiriladi. Nol summa ledgerga tegmaydi va naqd smenani yopmaydi
+     * (`lib/queries/kassaSmena.ts`). Oddiy o'tkazmada nol summaning ma'nosi
+     * yo'q — pastdagi `refine` uni rad etadi.
+     */
+    summa: z.number().int().min(0, "Summa manfiy bo'lmasligi kerak"),
+    turi: z.enum(TRANSFER_TURLARI).optional(),
+    izoh: z.string().max(300).optional().nullable(),
+    /**
+     * TOPSHIRILAYOTGAN ONLINE KANALLAR (faqat `turi = "smena"`).
+     * Xodim FAQAT kanalni tanlaydi — summani server o'zi hisoblaydi
+     * (`lib/queries/topshirishKanali.ts`), shuning uchun bu yerda summa
+     * YO'Q: "taxminiy Click summasi" kiritish yo'li ochiq qolmasin.
+     */
+    kanallar: z
+      .array(z.enum(ONLINE_KANALLAR as [string, ...string[]]))
+      .max(ONLINE_KANALLAR.length)
+      .optional(),
+  })
+  .refine((d) => d.summa > 0 || (d.turi === "smena" && (d.kanallar?.length ?? 0) > 0), {
+    message: "Topshiriladigan summa yoki online kanal tanlansin",
+    path: ["summa"],
+  });
 
 /** Kutilayotgan o'tkazma bo'yicha qaror. */
 export const transferQarorSchema = z.object({

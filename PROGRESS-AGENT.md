@@ -1,3 +1,100 @@
+# CRM qarzdorligi, direktor tuzatishi va kanal kesimida kassa topshirish (2026-09-17)
+
+Uchta ish bitta zanjirda: CRM'dan ochilgan qarz Qarzdorlar bo'limida
+ko'rinmasligi, moliyaga o'tgan zakazni umuman tuzatib bo'lmasligi va kassa
+topshirishning faqat naqd pulni bilishi.
+
+## Auditning natijasi: server hisobi TO'G'RI edi
+
+`lib/crm/yakunlash.ts` 200 000 naqd + 300 000 Click bo'lgan 1 000 000 lik
+zakazda AYNAN 500 000 lik `Debt` yozadi: `businessId`, `contactId`, mijoz
+nomi va qoldiq to'g'ri, mijoz dublikati ochilmaydi, `listQarzdorlar` uni
+qaytaradi. Ya'ni "mijoz Qarzdorlar bo'limida yo'q" muammosi QARZ
+YARATISHDA emas, KO'RSATISHDA edi:
+
+1. "Qarzdorlikni ochish" havolasi `/app/qarzlar?turi=olinadigan` — oddiy
+   RO'YXAT edi. Ro'yxatning "Qarzdorlar" kesimi esa faqat OCHIQ qarzni
+   ko'rsatadi (`listQarzdorlar` qoldiqsizni tashlab ketadi), demak
+   to'langan, bekor qilingan yoki o'chirilgan qarz u yerda UMUMAN yo'q —
+   foydalanuvchi bo'sh ro'yxatga tushardi.
+2. "🔴 Qarzdorlikka yozildi" belgisi FAQAT `debtId` bor-yo'qligidan
+   chiqardi. Qarz keyin to'langan (`PAID`) yoki bekor qilingan
+   (`CANCELLED`) bo'lsa ham ayni qizil belgi "Qoldiq: 0 so'm" bilan turardi.
+3. `CrmClient` tahrirdan keyin `qarzQoldiq` ni FORMA qiymatlaridan qayta
+   hisoblardi — server yozgan qarzdan boshqa raqam ko'rsatishi mumkin edi.
+
+## Uchta invariant
+
+1. QOLDIQ NOL — QARZ YO'Q. `qarzUlushi` 0 qaytarsa `Debt` umuman
+   yaratilmaydi (shart ilgari ham bor edi, endi izoh va test bilan
+   qotirilgan): `jamiSumma = 0` bo'lgan qarz Qarzdorlar ro'yxatida
+   ko'rinmaydi va CRM'da yolg'on holat berardi.
+2. MOLIYA RAQAMLARINING MANBASI — SERVER. `lib/crm/dto.ts` →
+   `zakazMoliyaSnapshot` kirim summasi, qarz qoldig'i va QARZ HOLATINI
+   bitta joyda hisoblaydi; doska, zakaz tafsiloti va PATCH javobi AYNI
+   shu funksiyadan o'qiydi. Brauzer hech narsani qayta hisoblamaydi.
+3. TUZATISH = QAYTARISH + QAYTA YOZISH, BITTA TRANZAKSIYADA. Direktor
+   narx/to'lovni o'zgartirsa `lib/crm/direktorTahrir.ts` eski kirimlarni
+   yumshoq o'chiradi, qarzni bekor qiladi, yangi raqamlarni yozadi va
+   moliyani qayta hisoblaydi. Shu sabab "Yutildi → Jarayonda → Yutildi"
+   ham, to'g'ridan-to'g'ri tuzatish ham AYNI ikki yadroni ishlatadi va
+   dublikat kirim/qarz/to'lov paydo bo'lmaydi.
+
+Yadrolar ajratildi: `zakazniYakunlashTx` va `zakazMoliyasiniQaytarTx` endi
+tayyor `tx` ichida ishlaydi, mustaqil amallar (`zakazniYakunlash`,
+`zakazMoliyasiniQaytarish`) esa avvalgidek o'ramada qoladi.
+
+## Direktor huquqi
+
+Moliyaga o'tgan zakazning narxi, kategoriyasi va to'lovi oddiy yo'ldan
+avvalgidek QULFLANGAN. Qulf FAQAT `isDirektor` (OWNER) uchun ochiladi —
+administratorga ham emas, chunki bu qarz summasini qayta yozish bilan bir
+darajadagi amal (`lib/auth/roles.ts` izohi). Tekshiruv API qatlamida
+(`api/crm/deals/[id]`), UI tugmasi himoya emas. Qarziga TO'LOV qabul
+qilingan zakaz tuzatilmaydi: pul haqiqatda kelgan.
+
+## Kassa topshirish: naqd + Click + Payme
+
+`TOLOV_KANALLARI` ga "payme" qo'shildi. Moliya lug'ati (`Transaction.tolovTuri`
+= naqd | click | qarz) ATAYLAB o'zgarmadi — `kanalTolovTuri` Paymeni ham
+karta/hisob yo'nalishiga qo'shadi, ya'ni hisobotlar va kassa taqsimoti
+avvalgidek ishlaydi.
+
+Yangi model `TopshirishKanali` (`AccountTransfer` ga 1:N). Qoida:
+NAQD — PUL, ONLINE — HISOBOT. Naqd qatori `AccountTransfer.summa` bilan
+ayni raqam va ledgerda ko'chadi; online qatorlari LEDGERGA TEGMAYDI, chunki
+o'sha pul allaqachon karta/hisob kassasida — uni ikkinchi marta o'tkazish
+kassa qoldig'ini buzardi.
+
+Online summa QO'LDA KIRITILMAYDI: brauzerdan faqat KANAL NOMI keladi,
+summani `lib/queries/topshirishKanali.ts` CRM to'lovlaridan (`DealTolov` →
+o'sha qatordan yozilgan `Transaction`) hisoblaydi. Ikki marta topshirishga
+qarshi — HAR KANALNING O'Z RESET NUQTASI: o'sha kanal bilan oxirgi
+topshirish vaqti. Kesim `boshi < createdAt <= hozir` oralig'ida olinadi va
+qator AYNI `hozir` bilan yoziladi, shuning uchun oraliqda pul na yo'qoladi,
+na ikki marta sanaladi. Tanlanmagan kanal keyingi topshirishda yana chiqadi.
+
+Naqd summa NOL bo'lishi mumkin (faqat online topshirilsa): bunda
+`hisoblangan` va `farq` ham nol — naqd umuman topshirilmagan bo'lsa unga
+qarshi "kamomad" yozishning ma'nosi yo'q. Bunday topshiriq naqd smenani
+ham yopmaydi (`getSmenaBoshlari` endi `summa > 0` shartini qo'yadi).
+
+## Testlar
+
+`npm run test:crm-qarz-direktor` (17 ta test, topshiriqdagi 10 qadam
+stsenariysi to'liq): 1M zakaz → 200k naqd + 300k Click → 500k qarz →
+Qarzdorlarda aynan 500 000 → deep link → direktor tuzatishi (550k qarz)
+→ Yutildi/Jarayonda/Yutildi dublikatsiz → topshirishda naqd va Click
+alohida → topshirilgandan keyin balansga qayta qo'shilmaydi.
+
+Regressiya (hammasi yashil): crm, crm-pipeline, crm-tolovlar,
+crm-xodim-kassa, crm-sotuvchi, zakaz-jamoasi, kassa, kassa-transfer,
+kassa-qoldiq, kassa-nazorat, kassa-maxfiylik, kassir-kassa, kunlik-kassa,
+smena, qarz, qarzdorlik, qarz-mijoz, qarz-tahrir, qarz-taqsimot,
+mijoz-dublikat, moliya-pul, moliya-audit, atomik, soft-delete, isolation,
+izolyatsiya-royxati, backup, tozalash, migratsiya, dashboard-ux, panel,
+magazin. `npm run build` o'tadi.
+
 # Direktor huquqlari va kassa topshirish oqimi (2026-09-05)
 
 Ikkita alohida muammo bitta ishda yopildi: xodim kassani topshirgan zahoti

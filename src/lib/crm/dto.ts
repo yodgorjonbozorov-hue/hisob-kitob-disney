@@ -28,6 +28,56 @@ function kirimSummasi(d: {
   return d.transaction && !d.transaction.deletedAt ? d.transaction.summa : 0;
 }
 
+/** `zakazMoliyaSnapshot` uchun minimal shakl (doska ham, PATCH javobi ham beradi). */
+export interface XomZakazMoliya {
+  transactionId: string | null;
+  debtId: string | null;
+  transaction: { summa: number; deletedAt: Date | null } | null;
+  tolovlar: Array<{ transaction: { summa: number; deletedAt: Date | null } | null }>;
+  debt: { jamiSumma: number; tolangan: number; status: string; isYopilgan: boolean } | null;
+}
+
+/** Zakazning MOLIYAVIY natijasi — YAGONA joyda hisoblanadi. */
+export interface ZakazMoliyaDTO {
+  transactionId: string | null;
+  debtId: string | null;
+  /** Kirimga o'tgan REAL summa (o'chirilgani sanalmaydi). */
+  kirimSumma: number;
+  /** Ochilgan qarzning QOLDIG'I (jami − to'langan). */
+  qarzQoldiq: number;
+  /** Qarz OCHIQmi (bekor qilingani va to'liq to'langani — yo'q). */
+  qarzOchiq: boolean;
+  /** Qarz holati: "OPEN" | "PARTIALLY_PAID" | "PAID" | "CANCELLED"; qarz yo'q — null. */
+  qarzHolat: string | null;
+}
+
+/**
+ * ZAKAZNING MOLIYAVIY NATIJASI.
+ *
+ * ═══ NEGA `debtId` NING O'ZI YETARLI EMAS ═══
+ * CRM ilgari "Qarzdorlikka yozildi" ni FAQAT `debtId` bor-yo'qligidan
+ * ko'rsatardi. Qarz keyin to'liq to'langan (`PAID`) yoki bekor qilingan
+ * (`CANCELLED`) bo'lsa ham karta "🔴 Qarzdorlikka yozildi · Qoldiq: 0 so'm"
+ * deb turardi va "Qarzdorlikni ochish" foydalanuvchini Qarzdorlar
+ * ro'yxatiga olib borardi — u yerda esa mijoz YO'Q, chunki ro'yxat ochiq
+ * qarzlarni ko'rsatadi (`listQarzdorlar` qoldiqsizni tashlaydi). Endi
+ * QARZNING HOLATI ham qaytadi, ya'ni UI "ochiq qarz", "to'langan" va
+ * "bekor qilingan" ni ajratib ko'rsata oladi.
+ */
+export function zakazMoliyaSnapshot(d: XomZakazMoliya): ZakazMoliyaDTO {
+  return {
+    transactionId: d.transactionId,
+    debtId: d.debtId,
+    kirimSumma: kirimSummasi(d),
+    qarzQoldiq: d.debt ? Math.max(0, d.debt.jamiSumma - d.debt.tolangan) : 0,
+    // OCHIQ QARZ — "Qarz" ustunining sharti. Serverda hisoblanadi, shunda
+    // brauzer qarz yozuvining ichki maydonlariga bog'lanmaydi va doska
+    // ustuni ikkala tarafda AYNI qoidadan chiqadi (lib/crm/pipeline.ts).
+    qarzOchiq: zakazQarzdormi(d.debt),
+    qarzHolat: d.debt ? d.debt.status : null,
+  };
+}
+
 type XomZakaz = UstunSahifa["deals"][number];
 
 export function zakazDTO(
@@ -59,14 +109,7 @@ export function zakazDTO(
     yoqotishSababi: d.yoqotishSababi,
     masulId: d.masulId,
     masulIsm,
-    transactionId: d.transactionId,
-    debtId: d.debtId,
-    kirimSumma: kirimSummasi(d),
-    qarzQoldiq: d.debt ? Math.max(0, d.debt.jamiSumma - d.debt.tolangan) : 0,
-    // OCHIQ QARZ — "Qarz" ustunining sharti. Serverda hisoblanadi, shunda
-    // brauzer qarz yozuvining ichki maydonlariga bog'lanmaydi va doska
-    // ustuni ikkala tarafda AYNI qoidadan chiqadi (lib/crm/pipeline.ts).
-    qarzOchiq: zakazQarzdormi(d.debt),
+    ...zakazMoliyaSnapshot(d),
     tolovlar: d.tolovlar.map((t) => ({ id: t.id, kanal: t.kanal, summa: t.summa })),
     sotuvchi: sotuvchi
       ? { employeeId: sotuvchi.employeeId, ism: sotuvchi.ism, isActive: sotuvchi.isActive }

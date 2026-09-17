@@ -94,6 +94,8 @@ const BUSINESS_SCOPED = new Set([
   // Kassa / hisob-raqamlar (Faza 4.1)
   "Account",
   "AccountTransfer",
+  // Kassa topshirishning to'lov kanali kesimi (naqd + Click + Payme).
+  "TopshirishKanali",
   "StockAdjustment",
   // Xarid (Faza 6.1)
   "Supplier",

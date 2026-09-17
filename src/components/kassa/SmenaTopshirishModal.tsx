@@ -6,50 +6,82 @@ import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { useToast } from "@/components/ui/Toast";
 import { parseSomInput, formatMoney } from "@/lib/format";
+import { SmenaTopshirishTasdiq } from "./SmenaTopshirishTasdiq";
+import type { KanalKesimDTO } from "@/lib/queries/topshirishKanali";
 
 export interface TopshirishNishoni {
   id: string;
   nomi: string;
   egaIsm: string | null;
 }
-
 /**
- * SMENANI TOPSHIRISH.
+ * SMENANI TOPSHIRISH — NAQD + ONLINE KANALLAR.
  *
- * Kassadagi TIZIM hisobi ko'rsatiladi va u o'zgartirilmaydi — xodim faqat
- * haqiqatda topshirayotgan summani kiritadi. Farq bo'lsa (kamomad/ortiqcha)
- * u darhol ko'rinadi va sabab so'raladi: nazoratning butun ma'nosi shunda.
+ * NAQD: tizim hisobi ko'rsatiladi va o'zgartirilmaydi; xodim faqat
+ * haqiqatda topshirayotgan summani kiritadi. Farq (kamomad/ortiqcha)
+ * darhol ko'rinadi va sabab so'raladi — nazoratning ma'nosi shunda.
  *
- * Topshiriq DARHOL yakunlanmaydi — qabul qiluvchi pulni sanab "Qabul qilish"ni
- * bosgunicha pul topshiruvchining kassasida qoladi.
+ * ONLINE (Click / Payme / terminal): pul xodimning qo'lida EMAS, u
+ * karta/hisob kassasida. Shuning uchun summa TAHRIRLANMAYDI — uni CRM
+ * to'lovlaridan server hisoblaydi (`lib/queries/topshirishKanali.ts`),
+ * xodim esa faqat QAYSILARINI topshirayotganini belgilaydi ("taxminan
+ * 300 000 Click oldim" degan qo'lda raqam paydo bo'lmaydi). Tanlanmagan
+ * kanal keyingi topshirishda yana chiqadi.
+ *
+ * Topshiriq DARHOL yakunlanmaydi — qabul qiluvchi "Qabul qilish"ni
+ * bosgunicha naqd pul topshiruvchining kassasida qoladi.
  */
 export function SmenaTopshirishModal({
   qoldiq,
   nishonlar,
+  kanallar = [],
   sarlavha = "Smenani topshirish",
   onClose,
   onDone,
 }: {
-  /** Tizim hisoblagan joriy kassa qoldig'i. */
+  /** Tizim hisoblagan joriy kassa qoldig'i (naqd). */
   qoldiq: number;
   /** Kimga topshirish mumkin — boshqa faol kassalar. */
   nishonlar: TopshirishNishoni[];
+  /**
+   * TO'LOV KANALI KESIMI (naqd + online). Berilmasa — faqat naqd
+   * topshirish (eski chaqiruvchilar avvalgidek ishlaydi).
+   */
+  kanallar?: KanalKesimDTO[];
   /** Oyna sarlavhasi — chaqirilgan joyning tili bilan mos ("Kassa topshirish"). */
   sarlavha?: string;
   onClose: () => void;
   onDone: () => void;
 }) {
   const { toast } = useToast();
+  // Naqd kanali alohida maydonda — ro'yxatda faqat ONLINE kanallar.
+  const onlineKanallar = kanallar.filter((k) => k.kanal !== "naqd" && k.summa > 0);
   const [toAccountId, setTo] = useState(nishonlar[0]?.id ?? "");
   const [summaMatn, setSummaMatn] = useState(String(qoldiq));
+  const [tanlangan, setTanlangan] = useState<string[]>(() => onlineKanallar.map((k) => k.kanal));
   const [izoh, setIzoh] = useState("");
   const [tasdiq, setTasdiq] = useState(false);
   const [loading, setLoading] = useState(false);
   const [xato, setXato] = useState<string | null>(null);
 
   const summa = parseSomInput(summaMatn);
-  const farq = summa - qoldiq;
+  // FARQ faqat naqd topshirilganda ma'noga ega: naqd 0 bo'lsa (faqat online
+  // topshirilmoqda) tizim hisobiga qarshi kamomad yozilmaydi — server ham
+  // AYNI qoidani qo'llaydi (`lib/services/kassaTransfer.ts`).
+  const farq = summa > 0 ? summa - qoldiq : 0;
   const nishon = nishonlar.find((n) => n.id === toAccountId);
+  const onlineJami = onlineKanallar
+    .filter((k) => tanlangan.includes(k.kanal))
+    .reduce((s, k) => s + k.summa, 0);
+  const jamiTopshirish = summa + onlineJami;
+  /** Farq bo'lsa sabab SHART — server ham AYNI qoidani majburlaydi. */
+  const bosilmaydi = summa < 0 || (farq !== 0 && !izoh.trim());
+
+  function kanalAlmash(kanal: string) {
+    setTanlangan((oldingi) =>
+      oldingi.includes(kanal) ? oldingi.filter((k) => k !== kanal) : [...oldingi, kanal]
+    );
+  }
 
   async function yubor() {
     // Ikki marta bosishdan himoya: birinchi so'rov tugamaguncha ikkinchisi ketmaydi
@@ -66,6 +98,8 @@ export function SmenaTopshirishModal({
           summa,
           turi: "smena",
           izoh: izoh.trim() || null,
+          // FAQAT KANAL NOMLARI — summani server o'zi hisoblaydi.
+          kanallar: tanlangan,
         }),
       });
       const data = await res.json();
@@ -74,10 +108,12 @@ export function SmenaTopshirishModal({
         setTasdiq(false);
         return;
       }
+      const online = onlineJami > 0 ? `, online ${formatMoney(onlineJami)}` : "";
       toast({
         message:
-          `Kassa muvaffaqiyatli topshirildi · Topshirildi: ${formatMoney(summa)} · ` +
-          `Joriy kassa: ${formatMoney(Math.max(qoldiq - summa, 0))}`,
+          `Kassa topshirildi · Jami: ${formatMoney(jamiTopshirish)} ` +
+          `(naqd ${formatMoney(summa)}${online}) · ` +
+          `Joriy naqd kassa: ${formatMoney(Math.max(qoldiq - summa, 0))}`,
         tone: "success",
         duration: 7000,
       });
@@ -91,55 +127,21 @@ export function SmenaTopshirishModal({
   }
 
   const input = "w-full px-3 py-2 rounded-lg bg-surface-2 border border-line text-fg";
-
   if (tasdiq) {
     return (
-      <Modal open onClose={() => setTasdiq(false)} title={`${sarlavha}ni tasdiqlaysizmi?`}>
-        <div className="space-y-4">
-          <div className="rounded-xl bg-surface-2 border border-line p-4 space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted">Kimga</span>
-              <span className="text-fg font-medium">{nishon?.egaIsm ?? nishon?.nomi}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted">Kassadagi hisob</span>
-              <span className="text-fg tnum">{formatMoney(qoldiq)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted">Topshiriladigan</span>
-              <span className="text-fg font-semibold tnum">{formatMoney(summa)}</span>
-            </div>
-            {farq !== 0 && (
-              <div className="flex justify-between border-t border-line pt-2">
-                <span className={farq < 0 ? "text-expense" : "text-debt"}>
-                  {farq < 0 ? "Kamomad" : "Ortiqcha"}
-                </span>
-                <span className={`tnum font-semibold ${farq < 0 ? "text-expense" : "text-debt"}`}>
-                  {farq > 0 ? "+" : "−"}
-                  {Math.abs(farq).toLocaleString("ru-RU")}
-                </span>
-              </div>
-            )}
-          </div>
-          <p className="text-2xs text-muted">
-            {nishon?.egaIsm ?? "Qabul qiluvchi"} tasdiqlamaguncha pul sizning kassangizda qoladi.
-          </p>
-          {xato && <p className="text-sm text-expense">{xato}</p>}
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => setTasdiq(false)}
-              disabled={loading}
-            >
-              Orqaga
-            </Button>
-            <Button type="button" loading={loading} disabled={loading} onClick={yubor}>
-              Topshirish
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      <SmenaTopshirishTasdiq
+        sarlavha={sarlavha}
+        nishon={nishon}
+        naqd={summa}
+        naqdQoldiq={qoldiq}
+        farq={farq}
+        online={onlineKanallar.filter((k) => tanlangan.includes(k.kanal))}
+        jami={jamiTopshirish}
+        loading={loading}
+        xato={xato}
+        onOrqaga={() => setTasdiq(false)}
+        onTasdiq={yubor}
+      />
     );
   }
 
@@ -153,7 +155,7 @@ export function SmenaTopshirishModal({
         className="space-y-3"
       >
         <div className="rounded-xl bg-surface-2 border border-line p-3 text-center">
-          <p className="text-2xs text-muted">Kassangizdagi hisob</p>
+          <p className="text-2xs text-muted">Naqd kassangizdagi hisob</p>
           <p className="text-xl font-bold text-fg tnum">{formatMoney(qoldiq)}</p>
         </div>
 
@@ -169,10 +171,9 @@ export function SmenaTopshirishModal({
             options={nishonlar.map((n) => ({ value: n.id, label: n.egaIsm ?? n.nomi }))}
           />
         </div>
-
         <div>
           <label className="block text-sm text-muted mb-1" htmlFor="sm-summa">
-            Topshiriladigan summa
+            Topshiriladigan naqd summa
           </label>
           <input
             id="sm-summa"
@@ -190,6 +191,35 @@ export function SmenaTopshirishModal({
           )}
         </div>
 
+        {onlineKanallar.length > 0 && (
+          <div className="rounded-xl border border-line p-3 space-y-2">
+            <p className="text-2xs uppercase tracking-wide text-faint">
+              Online tushum — CRM to&apos;lovlaridan hisoblangan
+            </p>
+            {onlineKanallar.map((k) => (
+              <label key={k.kanal} className="flex items-center justify-between gap-2 text-sm">
+                <span className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={tanlangan.includes(k.kanal)}
+                    onChange={() => kanalAlmash(k.kanal)}
+                    className="w-5 h-5"
+                  />
+                  <span className="text-fg">{k.nomi}</span>
+                </span>
+                <span className="tnum text-fg font-medium">{formatMoney(k.summa)}</span>
+              </label>
+            ))}
+            <p className="text-2xs text-faint">
+              Summalar yozilgan to&apos;lovlardan olinadi va tahrirlanmaydi.
+            </p>
+          </div>
+        )}
+
+        <div className="rounded-xl bg-surface-2 border border-line p-3 flex items-baseline justify-between">
+          <span className="text-sm font-medium text-fg">Jami topshirish</span>
+          <span className="text-lg font-bold text-fg tnum">{formatMoney(jamiTopshirish)}</span>
+        </div>
         <div>
           <label className="block text-sm text-muted mb-1" htmlFor="sm-izoh">
             Izoh {farq !== 0 ? "(farq sababi)" : "(ixtiyoriy)"}
@@ -207,7 +237,7 @@ export function SmenaTopshirishModal({
         {xato && <p className="text-sm text-expense">{xato}</p>}
 
         <div className="flex gap-2 pt-1">
-          <Button type="submit" disabled={summa <= 0 || !toAccountId || (farq !== 0 && !izoh.trim())}>
+          <Button type="submit" disabled={jamiTopshirish <= 0 || !toAccountId || bosilmaydi}>
             Davom etish
           </Button>
           <Button type="button" variant="secondary" onClick={onClose}>

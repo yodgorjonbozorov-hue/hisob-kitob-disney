@@ -34,6 +34,28 @@ function boshlangichQatorlar(b: BuyurtmaDTO): TolovQatori[] {
 const INPUT =
   "w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand";
 
+/** PATCH javobidagi maydonlar — ochiq oynadagi zakazga qo'yiladi. */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export function serverdanYangi(javob: any, kategoriyalar: KategoriyaDTO[]): Partial<BuyurtmaDTO> {
+  const categoryId: string | null = javob.categoryId ?? null;
+  return {
+    categoryId,
+    kategoriya: javob.category?.nomi ?? kategoriyalar.find((k) => k.id === categoryId)?.nomi ?? null,
+    summa: javob.summa ?? 0,
+    tolangan: javob.tolangan ?? 0,
+    tolovTuri: javob.tolovTuri ?? null,
+    holat: javob.holat,
+    tolovlar: javob.tolovlar ?? [],
+    transactionId: javob.transactionId ?? null,
+    debtId: javob.debtId ?? null,
+    kirimSumma: javob.kirimSumma ?? 0,
+    qarzQoldiq: javob.qarzQoldiq ?? 0,
+    qarzOchiq: Boolean(javob.qarzOchiq),
+    qarzHolat: javob.qarzHolat ?? null,
+  };
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
 /**
  * ZAKAZ KATEGORIYASI, NARXI VA TO'LOVINI TUZATISH.
  *
@@ -55,16 +77,8 @@ export function BuyurtmaTahrir({
 }: {
   b: BuyurtmaDTO;
   kategoriyalar: KategoriyaDTO[];
-  onSaqlandi: (yangi: {
-    categoryId: string;
-    kategoriya: string;
-    summa: number;
-    tolangan: number;
-    tolovTuri: string | null;
-    /** Yutilgan zakazda to'lov belgilanganda server moliyani DARHOL yozadi. */
-    transactionId: string | null;
-    debtId: string | null;
-  }) => void;
+  /** SERVER javobidan olingan yangi qiymatlar (brauzer o'zi hisoblamaydi). */
+  onSaqlandi: (yangi: Partial<BuyurtmaDTO>) => void;
 }) {
   const [categoryId, setCategoryId] = useState(b.categoryId ?? "");
   const [summa, setSumma] = useState(b.summa > 0 ? String(b.summa) : "");
@@ -113,15 +127,11 @@ export function BuyurtmaTahrir({
       setXato(javob.error ?? "Saqlanmadi");
       return;
     }
-    onSaqlandi({
-      categoryId,
-      kategoriya: kategoriyalar.find((k) => k.id === categoryId)?.nomi ?? "",
-      summa: yangiSumma,
-      tolangan: yangiTolangan,
-      tolovTuri: yangiQarzga ? "qarz" : tolovSatrlari.length === 1 ? tolovSatrlari[0].kanal : tolovSatrlari.length > 1 ? "aralash" : null,
-      transactionId: javob.transactionId ?? b.transactionId,
-      debtId: javob.debtId ?? b.debtId,
-    });
+    // MOLIYA RAQAMLARI SERVERDAN. Ilgari `tolangan`/`tolovTuri` formadan,
+    // `qarzQoldiq` esa brauzerda qayta hisoblanardi — server yozgan qarz
+    // bilan mos kelmasa oyna "Qarzdorlikka yozildi · Qoldiq: 0 so'm" kabi
+    // yolg'on holat ko'rsatardi. Endi javobning o'zi haqiqat manbai.
+    onSaqlandi(serverdanYangi(javob, kategoriyalar));
   }
 
   return (

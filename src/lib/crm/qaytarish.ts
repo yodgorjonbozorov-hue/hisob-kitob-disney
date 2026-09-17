@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { BadRequestError, ForbiddenError } from "@/lib/auth/guard";
-import { runBusinessTx } from "@/lib/db/businessTx";
+import { runBusinessTx, type BusinessTx } from "@/lib/db/businessTx";
 import { kunlikSinxron } from "@/lib/services/kunlik";
 import { logAudit } from "@/lib/services/audit";
 import { yopiqHolat, type ZakazHolat } from "@/lib/crm/pipeline";
@@ -34,6 +34,12 @@ import { yopiqHolat, type ZakazHolat } from "@/lib/crm/pipeline";
  * qoldig'i sababsiz o'zgaradi va audit izi uziladi (ayni qoida
  * `api/transactions/[id]` da ham bor). Yumshoq o'chirish esa qoldiqdan
  * chiqaradi va yozuvni savatda qoldiradi.
+ *
+ * ═══ NEGA IKKI QATLAM (`...Tx` + o'rama) ═══
+ * Direktor tuzatishi (`lib/crm/direktorTahrir.ts`) qaytarish + yangi summa
+ * + qayta yozishni BITTA tranzaksiyada bajaradi, shuning uchun yadro
+ * `zakazMoliyasiniQaytarTx` sifatida ochiq. Mustaqil amal
+ * (`zakazMoliyasiniQaytarish`) avvalgidek ishlaydi.
  */
 
 export interface ZakazQaytarishNatija {
@@ -59,129 +65,175 @@ export interface ZakazQaytarishParams {
   yoqotishSababi?: string | null;
 }
 
+/** Qaytarishda yumshoq o'chirilgan kirim (kunlik sinxron uchun kerak). */
+type OchirilganKirim = { id: string; summa: number };
+
+export interface ZakazQaytarishTxParams extends Omit<ZakazQaytarishParams, "yangiHolat"> {
+  /**
+   * Zakaz qaysi holatga qaytariladi. `null` — HOLAT TEGILMAYDI: direktor
+   * tuzatishi moliyani qaytarib, zakazni AYNI "Yutildi" holatida qoldiradi
+   * va yangi summa bilan qayta yozadi (`lib/crm/direktorTahrir.ts`).
+   */
+  yangiHolat: Exclude<ZakazHolat, "YUTILDI"> | null;
+  /** Faoliyat jurnalidagi matn (berilmasa standart "qaytarildi" matni). */
+  faoliyatMatni?: string;
+}
+
+export interface ZakazQaytarishTxNatija {
+  /** Yumshoq o'chirilgan kirimlar (id + summa). */
+  kirimlar: OchirilganKirim[];
+  kirimSumma: number;
+  bekorQilinganQarzId: string | null;
+}
+
+/**
+ * MOLIYANI QAYTARISH — TRANZAKSIYA ICHIDAGI YADRO.
+ *
+ * `tx` ichida xom delegatlar: HAR so'rovga `businessId` sharti QO'LDA
+ * yoziladi (lib/db/businessTx.ts kelishuvi).
+ */
+export async function zakazMoliyasiniQaytarTx(
+  tx: BusinessTx,
+  params: ZakazQaytarishTxParams
+): Promise<ZakazQaytarishTxNatija> {
+  const deal = await tx.deal.findFirst({
+    where: { id: params.dealId, businessId: params.businessId, deletedAt: null },
+    select: { id: true, contactId: true, holat: true, transactionId: true, debtId: true },
+  });
+  if (!deal) throw new ForbiddenError("Zakaz topilmadi");
+
+  const satrlar = await tx.dealTolov.findMany({
+    where: { businessId: params.businessId, dealId: deal.id },
+    select: { id: true, transactionId: true },
+  });
+
+  // Kirim bog'lanishlari ikki joyda: `Deal.transactionId` (bir kanalli
+  // eski zakaz) va har to'lov qatorida (aralash to'lov). Ikkalasi ham
+  // yig'iladi — takrorlanmasin uchun to'plam orqali.
+  const kirimIdlari = Array.from(
+    new Set(
+      [deal.transactionId, ...satrlar.map((s) => s.transactionId)].filter(
+        (x): x is string => !!x
+      )
+    )
+  );
+
+  const kirimlar =
+    kirimIdlari.length > 0
+      ? await tx.transaction.findMany({
+          where: { id: { in: kirimIdlari }, businessId: params.businessId, deletedAt: null },
+        })
+      : [];
+
+  // QARZ. To'lovi bor qarz bekor qilinmaydi — `qarzBekor` bilan AYNI
+  // qoida: pul haqiqatda kelgan bo'lsa uni jimgina yo'q qilib bo'lmaydi.
+  let bekorQilinganQarzId: string | null = null;
+  if (deal.debtId) {
+    const qarz = await tx.debt.findFirst({
+      where: { id: deal.debtId, businessId: params.businessId },
+      select: { id: true, tolangan: true, status: true },
+    });
+    if (qarz && qarz.status !== "CANCELLED") {
+      if (qarz.tolangan > 0) {
+        throw new BadRequestError(
+          "Bu zakaz qarziga to'lov qabul qilingan — avval Qarzdorlik bo'limida to'lovlarni tuzating, " +
+            "keyin zakaz holatini qaytaring"
+        );
+      }
+      await tx.debt.updateMany({
+        where: { id: qarz.id, businessId: params.businessId, tolangan: 0 },
+        data: {
+          status: "CANCELLED",
+          isYopilgan: true,
+          cancelledAt: new Date(),
+          cancelledBy: params.userId,
+          cancelReason:
+            params.yangiHolat === null
+              ? "Direktor zakaz summasini/to'lovini tuzatdi — qarz qayta hisoblandi"
+              : "Zakaz 'Yutildi' holatidan qaytarildi",
+          updatedBy: params.userId,
+        },
+      });
+      bekorQilinganQarzId = qarz.id;
+    }
+  }
+
+  const endi = new Date();
+  for (const kirim of kirimlar) {
+    await tx.transaction.updateMany({
+      where: { id: kirim.id, businessId: params.businessId, deletedAt: null },
+      data: { deletedAt: endi, deletedBy: params.userId },
+    });
+  }
+
+  // Bog'lanishlarni uzish — zakaz qayta yutilsa kirim YANGIDAN yoziladi.
+  // (`transactionId: null` sharti `yakunlash.ts` dagi dublikat himoyasining
+  // kaliti, shuning uchun uni tozalash SHART.)
+  if (satrlar.some((s) => s.transactionId)) {
+    await tx.dealTolov.updateMany({
+      where: { businessId: params.businessId, dealId: deal.id },
+      data: { transactionId: null },
+    });
+  }
+
+  const upd = await tx.deal.updateMany({
+    where: { id: deal.id, businessId: params.businessId, deletedAt: null, holat: deal.holat },
+    data: {
+      transactionId: null,
+      debtId: null,
+      // HOLAT — faqat qaytarish amalida. Direktor tuzatishida (`null`)
+      // zakaz "Yutildi"da qoladi va moliyani QAYTA yozish uni o'zi
+      // yangilaydi; holatni bu yerda ham yozish ikki marta o'zgartirish
+      // bo'lardi va doskadagi tartib vaqti sababsiz surilardi.
+      ...(params.yangiHolat
+        ? {
+            holat: params.yangiHolat,
+            stageId: params.stageId,
+            yopilganAt: yopiqHolat(params.yangiHolat) ? endi : null,
+            holatAt: endi,
+            yoqotishSababi:
+              params.yangiHolat === "YOQOTILDI" ? params.yoqotishSababi?.trim() || null : null,
+          }
+        : {}),
+    },
+  });
+  if (upd.count !== 1) {
+    throw new BadRequestError("Zakaz holati o'zgarib ketdi — sahifani yangilang");
+  }
+
+  const kirimSumma = kirimlar.reduce((s, k) => s + k.summa, 0);
+  await tx.activity.create({
+    data: {
+      businessId: params.businessId,
+      dealId: deal.id,
+      contactId: deal.contactId,
+      turi: "tizim",
+      matn:
+        params.faoliyatMatni ??
+        `Yutildi holatidan qaytarildi (${params.yangiHolat}). ` +
+          `O'chirilgan kirim: ${kirimSumma} so'm` +
+          (bekorQilinganQarzId ? ", qarz bekor qilindi" : ""),
+      userId: params.userId,
+    },
+  });
+
+  return {
+    kirimlar: kirimlar.map((k) => ({ id: k.id, summa: k.summa })),
+    kirimSumma,
+    bekorQilinganQarzId,
+  };
+}
+
 export async function zakazMoliyasiniQaytarish(
   params: ZakazQaytarishParams
 ): Promise<ZakazQaytarishNatija> {
-  const natija = await runBusinessTx(params.businessId, async (tx) => {
-    // Tranzaksiya ichida xom `tx` — HAR so'rovga `businessId` sharti QO'LDA
-    // yoziladi (lib/db/businessTx.ts kelishuvi).
-    const deal = await tx.deal.findFirst({
-      where: { id: params.dealId, businessId: params.businessId, deletedAt: null },
-      select: { id: true, contactId: true, holat: true, transactionId: true, debtId: true },
-    });
-    if (!deal) throw new ForbiddenError("Zakaz topilmadi");
-
-    const satrlar = await tx.dealTolov.findMany({
-      where: { businessId: params.businessId, dealId: deal.id },
-      select: { id: true, transactionId: true },
-    });
-
-    // Kirim bog'lanishlari ikki joyda: `Deal.transactionId` (bir kanalli
-    // eski zakaz) va har to'lov qatorida (aralash to'lov). Ikkalasi ham
-    // yig'iladi — takrorlanmasin uchun to'plam orqali.
-    const kirimIdlari = Array.from(
-      new Set(
-        [deal.transactionId, ...satrlar.map((s) => s.transactionId)].filter(
-          (x): x is string => !!x
-        )
-      )
-    );
-
-    const kirimlar =
-      kirimIdlari.length > 0
-        ? await tx.transaction.findMany({
-            where: { id: { in: kirimIdlari }, businessId: params.businessId, deletedAt: null },
-          })
-        : [];
-
-    // QARZ. To'lovi bor qarz bekor qilinmaydi — `qarzBekor` bilan AYNI
-    // qoida: pul haqiqatda kelgan bo'lsa uni jimgina yo'q qilib bo'lmaydi.
-    let bekorQilinganQarzId: string | null = null;
-    if (deal.debtId) {
-      const qarz = await tx.debt.findFirst({
-        where: { id: deal.debtId, businessId: params.businessId },
-        select: { id: true, tolangan: true, status: true },
-      });
-      if (qarz && qarz.status !== "CANCELLED") {
-        if (qarz.tolangan > 0) {
-          throw new BadRequestError(
-            "Bu zakaz qarziga to'lov qabul qilingan — avval Qarzdorlik bo'limida to'lovlarni tuzating, " +
-              "keyin zakaz holatini qaytaring"
-          );
-        }
-        await tx.debt.updateMany({
-          where: { id: qarz.id, businessId: params.businessId, tolangan: 0 },
-          data: {
-            status: "CANCELLED",
-            isYopilgan: true,
-            cancelledAt: new Date(),
-            cancelledBy: params.userId,
-            cancelReason: "Zakaz 'Yutildi' holatidan qaytarildi",
-            updatedBy: params.userId,
-          },
-        });
-        bekorQilinganQarzId = qarz.id;
-      }
-    }
-
-    const endi = new Date();
-    for (const kirim of kirimlar) {
-      await tx.transaction.updateMany({
-        where: { id: kirim.id, businessId: params.businessId, deletedAt: null },
-        data: { deletedAt: endi, deletedBy: params.userId },
-      });
-    }
-
-    // Bog'lanishlarni uzish — zakaz qayta yutilsa kirim YANGIDAN yoziladi.
-    // (`transactionId: null` sharti `yakunlash.ts` dagi dublikat himoyasining
-    // kaliti, shuning uchun uni tozalash SHART.)
-    if (satrlar.some((s) => s.transactionId)) {
-      await tx.dealTolov.updateMany({
-        where: { businessId: params.businessId, dealId: deal.id },
-        data: { transactionId: null },
-      });
-    }
-
-    const upd = await tx.deal.updateMany({
-      where: { id: deal.id, businessId: params.businessId, deletedAt: null, holat: deal.holat },
-      data: {
-        transactionId: null,
-        debtId: null,
-        holat: params.yangiHolat,
-        stageId: params.stageId,
-        yopilganAt: yopiqHolat(params.yangiHolat) ? endi : null,
-        holatAt: endi,
-        yoqotishSababi:
-          params.yangiHolat === "YOQOTILDI" ? params.yoqotishSababi?.trim() || null : null,
-      },
-    });
-    if (upd.count !== 1) {
-      throw new BadRequestError("Zakaz holati o'zgarib ketdi — sahifani yangilang");
-    }
-
-    const kirimSumma = kirimlar.reduce((s, k) => s + k.summa, 0);
-    await tx.activity.create({
-      data: {
-        businessId: params.businessId,
-        dealId: deal.id,
-        contactId: deal.contactId,
-        turi: "tizim",
-        matn:
-          `Yutildi holatidan qaytarildi (${params.yangiHolat}). ` +
-          `O'chirilgan kirim: ${kirimSumma} so'm` +
-          (bekorQilinganQarzId ? ", qarz bekor qilindi" : ""),
-        userId: params.userId,
-      },
-    });
-
-    return { kirimlar, kirimSumma, bekorQilinganQarzId };
-  });
+  const natija = await runBusinessTx(params.businessId, (tx) =>
+    zakazMoliyasiniQaytarTx(tx, params)
+  );
 
   // KUNLIK hisobot sinxroni tranzaksiyadan TASHQARIDA: `kunlikSinxron` o'zi
   // `runBusinessTx` ochadi (lib/crm/yakunlash.ts bilan bir xil sabab).
-  for (const kirim of natija.kirimlar) {
-    await kunlikSinxron({ ...kirim, deletedAt: new Date() }, null);
-  }
+  await kunlikOchirilganlarniSinxron(params.businessId, natija.kirimlar);
 
   await logAudit({
     businessId: params.businessId,
@@ -204,6 +256,24 @@ export async function zakazMoliyasiniQaytarish(
     kirimSumma: natija.kirimSumma,
     bekorQilinganQarzId: natija.bekorQilinganQarzId,
   };
+}
+
+/**
+ * O'CHIRILGAN KIRIMLARNI KUNLIK HISOBOTDAN CHIQARISH — tranzaksiyadan
+ * TASHQARIDA. Yozuvlar yumshoq o'chirilgani uchun bazadan qayta o'qiladi:
+ * `kunlikSinxron` to'liq yozuvni (kategoriya, sana, kassa) talab qiladi.
+ */
+export async function kunlikOchirilganlarniSinxron(
+  businessId: string,
+  kirimlar: OchirilganKirim[]
+): Promise<void> {
+  if (kirimlar.length === 0) return;
+  const yozuvlar = await prisma.transaction.findMany({
+    where: { id: { in: kirimlar.map((k) => k.id) }, businessId },
+  });
+  for (const kirim of yozuvlar) {
+    await kunlikSinxron({ ...kirim, deletedAt: kirim.deletedAt ?? new Date() }, null);
+  }
 }
 
 /** Zakaz moliyaga o'tganmi (kirim yoki qarz yozilgan). */

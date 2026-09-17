@@ -30,16 +30,32 @@ import type { Prisma } from "@prisma/client";
 /**
  * CRM to'lov kanallari. "boshqa" — nomi boshqacha bo'lgan pul kanali
  * (bank o'tkazmasi va h.k.): moliyada u ham naqd EMAS deb hisoblanadi.
+ *
+ * "payme" QO'SHILDI (kassa topshirishda online pul kesimi kerak bo'lgani
+ * uchun): ilgari Payme to'lovi "click" yoki "boshqa" bo'lib yozilardi va
+ * topshirishda uni Clickdan ajratib bo'lmasdi. Moliya lug'ati esa
+ * O'ZGARMAYDI — `kanalTolovTuri` uni baribir "click" yo'nalishiga
+ * (karta/hisob kassasi) qo'shadi, ya'ni hisobotlar va kassa taqsimoti
+ * avvalgidek ishlaydi. Eski yozuvlar ham tegilmaydi.
  */
-export const TOLOV_KANALLARI = ["naqd", "click", "terminal", "boshqa"] as const;
+export const TOLOV_KANALLARI = ["naqd", "click", "payme", "terminal", "boshqa"] as const;
 export type TolovKanali = (typeof TOLOV_KANALLARI)[number];
 
 export const TOLOV_KANAL_NOMI: Record<TolovKanali, string> = {
   naqd: "Naqd",
   click: "Click",
+  payme: "Payme",
   terminal: "Terminal",
   boshqa: "Boshqa",
 };
+
+/** Naqd BO'LMAGAN (online/terminal) kanallar — kassa topshirish kesimi. */
+export const ONLINE_KANALLAR = TOLOV_KANALLARI.filter((k) => k !== "naqd");
+
+/** Kanal nomi (ro'yxatda bo'lmagan eski qiymat ham o'qiladigan qolsin). */
+export function kanalNomi(kanal: string): string {
+  return tolovKanalimi(kanal) ? TOLOV_KANAL_NOMI[kanal] : kanal;
+}
 
 /** Bir zakazdagi to'lov qatorlarining sog'lom chegarasi. */
 export const TOLOV_SATR_LIMITI = 10;
@@ -162,8 +178,7 @@ export function kirimSatrlari(
 /** Kirim izohi: bir nechta kanal bo'lsa qaysi kanal ekani ko'rinib tursin. */
 export function satrIzohi(izoh: string, kanal: string | null, kopKanal: boolean): string {
   if (!kopKanal || !kanal) return izoh;
-  const nom = tolovKanalimi(kanal) ? TOLOV_KANAL_NOMI[kanal] : kanal;
-  return `${izoh} · ${nom}`;
+  return `${izoh} · ${kanalNomi(kanal)}`;
 }
 
 /** Tranzaksiya ichida ham, tashqarisida ham ishlaydigan minimal shakl. */

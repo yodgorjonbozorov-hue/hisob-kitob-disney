@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getMeningKassam } from "@/lib/queries/accounts";
+import { topshirishKesimi, type KanalKesimDTO } from "@/lib/queries/topshirishKanali";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { QARZ_EMAS } from "@/lib/qarzFiltr";
 
@@ -48,6 +49,15 @@ export interface XodimKassaDTO {
   /** Topshirilgan, hali qabul qilinmagan summa (bo'lsa). */
   ochiqTopshirish: { summa: number; kimga: string } | null;
   nishonlar: TopshirishNishoniDTO[];
+  /**
+   * TOPSHIRISH KESIMI — naqd + Click + Payme + terminal.
+   *
+   * Naqd summa kassa ledgeridan (`mavjud`), online summalar esa CRM
+   * to'lovlaridan hisoblanadi (`lib/queries/topshirishKanali.ts`). Online
+   * pul xodimning naqd kassasiga tushmaydi, shuning uchun u `kassada`
+   * raqamiga QO'SHILMAYDI — u alohida kesim.
+   */
+  kanallar: KanalKesimDTO[];
 }
 
 export interface ChiqimQatoriDTO {
@@ -83,7 +93,7 @@ export async function xodimKassaHolati(
   const meniki = await getMeningKassam(businessId, userId);
   if (!meniki) return null;
 
-  const [nishonlar, ochiq] = await Promise.all([
+  const [nishonlar, ochiq, kanallar] = await Promise.all([
     // Nishonlar — FAQAT nom va ega ismi. Qoldiq ATAYLAB olinmaydi: xodim
     // boshqa kassadagi pulni bu yerdan bilib olmasin.
     prisma.account.findMany({
@@ -101,6 +111,9 @@ export async function xodimKassaHolati(
       orderBy: { createdAt: "desc" },
       select: { summa: true, toUserIsm: true, toAccount: { select: { nomi: true } } },
     }),
+    // TO'LOV KANALI KESIMI: naqd — ledgerdagi BAND BO'LMAGAN qism
+    // (`mavjud`), online — CRM to'lovlaridan.
+    topshirishKesimi(businessId, userId, meniki.mavjud),
   ]);
 
   return {
@@ -114,6 +127,7 @@ export async function xodimKassaHolati(
       ? { summa: ochiq.summa, kimga: ochiq.toUserIsm ?? ochiq.toAccount.nomi }
       : null,
     nishonlar: nishonlar.map((n) => ({ id: n.id, nomi: n.nomi, egaIsm: n.user?.ism ?? null })),
+    kanallar,
   };
 }
 

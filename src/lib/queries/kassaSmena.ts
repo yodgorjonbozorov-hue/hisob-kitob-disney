@@ -19,6 +19,9 @@ import { toshkentKunBoshi } from "@/lib/kassaDavr";
  * storno qilingan (`bekor`) topshirish reset nuqtasi EMAS: pul qaytdi,
  * demak smena yopilmagan.
  *
+ * NAQD summasi nol bo'lgan topshirish (faqat online kanal belgilangan)
+ * reset nuqtasi EMAS: pul ko'chmagan, demak naqd smena yopilmagan.
+ *
  * Hech qachon topshirilmagan kassa (bank, terminal, umumiy seyf) uchun
  * smena Toshkent kun boshidan — avvalgi "bugungi" xatti-harakat saqlanadi.
  * Kechagi topshirish ATAYLAB kun boshi bilan almashtirilmaydi (smena
@@ -68,6 +71,12 @@ export async function getSmenaBoshlari(
       fromAccountId: { in: accountIds },
       turi: "smena",
       holat: { in: [...SMENA_BOSHI_HOLATLARI] },
+      // NAQD SMENANI FAQAT NAQD TOPSHIRISH YOPADI. Topshirishda xodim
+      // faqat online kanalni (Click/Payme) belgilashi mumkin — u holda
+      // `summa = 0` va pul umuman ko'chmaydi, ya'ni naqd kassa smenasi
+      // yopilmaydi. Aks holda naqd kirim/chiqim kesimi sababsiz nolga
+      // tushib ketardi (`lib/services/kassaTransfer.ts` izohi).
+      summa: { gt: 0 },
     },
     select: { fromAccountId: true, createdAt: true },
     orderBy: { createdAt: "desc" },

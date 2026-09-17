@@ -146,6 +146,13 @@ export interface BuyurtmaDTO {
    */
   qarzOchiq: boolean;
   /**
+   * QARZ HOLATI: "OPEN" | "PARTIALLY_PAID" | "PAID" | "CANCELLED".
+   * Qarz yo'q — `null`. `debtId` NING O'ZI YETARLI EMAS: to'langan yoki
+   * bekor qilingan qarz ham `debtId` ni saqlaydi va CRM uni "qarzdorlikka
+   * yozildi" deb ko'rsatib qo'yardi (`lib/crm/dto.ts` izohi).
+   */
+  qarzHolat: string | null;
+  /**
    * ARALASH TO'LOV qatorlari (naqd + click + terminal...). Bo'sh — bir
    * kanalli eski zakaz: pul `tolangan`/`tolovTuri` da.
    */
@@ -170,8 +177,19 @@ export function kirimHavolasi(b: BuyurtmaDTO): string {
 }
 
 /**
- * Ochilgan qarzga havola. Qarzdorlik sahifasi faqat `turi` filtrini
- * o'qiydi (mijoz bo'yicha qidiruv sahifaning o'zida) — shuning uchun
- * havola olinadigan qarzlar ro'yxatini ochadi.
+ * OCHILGAN QARZGA HAVOLA — AYNAN SHU YOZUVGA.
+ *
+ * Ilgari havola `/app/qarzlar?turi=olinadigan` — shunchaki ro'yxat — edi.
+ * Ro'yxat esa "Qarzdorlar" kesimida OCHIQ qarzlarni ko'rsatadi, ya'ni
+ * to'langan, bekor qilingan yoki o'chirilgan qarz u yerda UMUMAN yo'q:
+ * foydalanuvchi CRM'da "Qarzdorlikka yozildi" ni ko'rib, havolani bosib,
+ * bo'sh ro'yxatga tushardi ("mijoz Qarzdorlar bo'limida ko'rinmayapti").
+ * Endi havola `?qarz=<id>` bilan keladi va sahifa o'sha QARZ YOZUVINI
+ * darhol ochadi (`app/qarzlar/page.tsx` → `QarzlarClient`) — yozuv
+ * ro'yxatda bo'lmasa ham tafsilot serverdan o'qiladi.
  */
-export const QARZ_HAVOLASI = "/app/qarzlar?turi=olinadigan";
+export function qarzHavolasi(b: Pick<BuyurtmaDTO, "debtId">): string {
+  const p = new URLSearchParams({ turi: "olinadigan" });
+  if (b.debtId) p.set("qarz", b.debtId);
+  return `/app/qarzlar?${p.toString()}`;
+}
