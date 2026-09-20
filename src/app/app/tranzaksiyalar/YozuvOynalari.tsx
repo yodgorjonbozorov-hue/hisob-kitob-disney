@@ -5,7 +5,7 @@ import { DetailSheet } from "./DetailSheet";
 import { EditModal } from "./EditModal";
 import { OchirishTasdiq } from "./OchirishTasdiq";
 import type { TransactionDTO } from "@/lib/queries/transactions";
-import type { CategoryOption } from "./turlar";
+import type { AccountOption, CategoryOption, XodimOption } from "./turlar";
 
 /**
  * YOZUV OYNALARI — tafsilot, tahrirlash va o'chirish tasdig'i.
@@ -49,6 +49,9 @@ export function YozuvOynalari({
   holat,
   setHolat,
   categories,
+  accounts = [],
+  sotuvchilar = [],
+  sotuvchiTanlash = false,
   ozgartirsaBoladi,
   onUpdated,
   onDelete,
@@ -56,6 +59,11 @@ export function YozuvOynalari({
   holat: OynaHolati;
   setHolat: (h: OynaHolati) => void;
   categories: CategoryOption[];
+  /** Tahrir formasidagi kassa tanlovi uchun faol kassalar (audit K-2). */
+  accounts?: AccountOption[];
+  /** Tahrir formasidagi "Sotuvchi / Xodim" tanlovi uchun. */
+  sotuvchilar?: XodimOption[];
+  sotuvchiTanlash?: boolean;
   /** RBAC oynasi — server har so'rovda egalikni qaytadan tekshiradi. */
   ozgartirsaBoladi: (t: TransactionDTO) => boolean;
   onUpdated: (t: TransactionDTO) => void;
@@ -91,6 +99,9 @@ export function YozuvOynalari({
         <EditModal
           transaction={holat.editing}
           categories={categories}
+          accounts={accounts}
+          sotuvchilar={sotuvchilar}
+          sotuvchiTanlash={sotuvchiTanlash}
           canDelete={ozgartirsaBoladi(holat.editing)}
           onClose={yop}
           onSaved={(t) => {

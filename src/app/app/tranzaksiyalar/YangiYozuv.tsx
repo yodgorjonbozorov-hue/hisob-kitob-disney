@@ -6,7 +6,7 @@ import { Modal } from "@/components/ui/Modal";
 import { TransactionForm } from "./TransactionForm";
 import type { TransactionDTO } from "@/lib/queries/transactions";
 import type { QarzMasul } from "./QarzForm";
-import type { CategoryOption, XodimOption } from "./turlar";
+import type { AccountOption, CategoryOption, XodimOption } from "./turlar";
 import type { TezKategoriyalar } from "@/lib/queries/tezKategoriyalar";
 
 /**
@@ -25,6 +25,7 @@ import type { TezKategoriyalar } from "@/lib/queries/tezKategoriyalar";
 export function YangiYozuv({
   categories,
   accounts,
+  standartKassa,
   masullar,
   sotuvchilar = [],
   currentUserId = "",
@@ -35,7 +36,9 @@ export function YangiYozuv({
   ochSignal = 0,
 }: {
   categories: CategoryOption[];
-  accounts: { id: string; nomi: string }[];
+  accounts: AccountOption[];
+  /** Formada oldindan tanlanadigan kassa (to'lov turi kesimida). */
+  standartKassa?: { naqd: string | null; click: string | null };
   masullar: QarzMasul[];
   /** Kirim formasidagi "Sotuvchi / Xodim" tanlovi uchun. */
   sotuvchilar?: XodimOption[];
@@ -140,6 +143,7 @@ export function YangiYozuv({
           <TransactionForm
             categories={categories}
             accounts={accounts}
+            standartKassa={standartKassa}
             masullar={masullar}
             sotuvchilar={sotuvchilar}
             currentUserId={currentUserId}

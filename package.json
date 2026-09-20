@@ -64,6 +64,8 @@
     "test:kategoriya": "node -r ts-node/register tests/kategoriya-tafsilot.test.ts",
     "test:kategoriya-boshqaruv": "node -r ts-node/register tests/kategoriya-boshqaruv.test.ts",
     "test:kirim-chiqim": "node -r ts-node/register tests/kirim-chiqim.test.ts",
+    "test:pul-format": "node -r ts-node/register tests/pul-format.test.ts",
+    "test:kassa-majburiy": "node -r ts-node/register tests/kassa-majburiy.test.ts",
     "test:tolov-taqsimoti": "node -r ts-node/register tests/tolov-taqsimoti.test.ts",
     "test:ombor-kartasi": "node -r ts-node/register tests/ombor-kartasi.test.ts",
     "test:panel": "node -r ts-node/register tests/panel.test.ts",

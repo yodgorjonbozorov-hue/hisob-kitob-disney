@@ -1,4 +1,6 @@
 import { tolovGuruhi, TOLOV_GURUHI_NOMI, TOLOV_GURUHI_BELGI } from "@/lib/tolovBolimi";
+import { buOyDavri } from "@/lib/date";
+import { ACCOUNT_TURI_NOMI, type AccountTuri } from "@/lib/validation/account";
 import type { TransactionDTO } from "@/lib/queries/transactions";
 
 /** Kirim/Chiqim sahifasi komponentlari (forma, ro'yxat, tafsilot) uchun umumiy turlar. */
@@ -18,6 +20,17 @@ export interface XodimOption {
   ism: string;
 }
 
+/**
+ * Formada tanlanadigan KASSA. `turi` va `egaIsm` faqat variant ostidagi
+ * izoh uchun — QOLDIQ bu yerda uzatilmaydi (u maxfiy, "kassa.jami" huquqi).
+ */
+export interface AccountOption {
+  id: string;
+  nomi: string;
+  turi?: string;
+  egaIsm?: string | null;
+}
+
 /** Ro'yxat/filtrda foydalaniladigan URL filtr qiymatlari (bo'sh satr — filtrsiz). */
 export interface FiltrQiymati {
   from: string;
@@ -29,6 +42,8 @@ export interface FiltrQiymati {
   q: string;
   minSumma: string;
   maxSumma: string;
+  /** `hammasi` — standart "Bu oy" davri ataylab o'chirilgan (butun tarix). */
+  davr: string;
 }
 
 export const BOSH_FILTR: FiltrQiymati = {
@@ -41,11 +56,34 @@ export const BOSH_FILTR: FiltrQiymati = {
   q: "",
   minSumma: "",
   maxSumma: "",
+  davr: "",
 };
 
-/** Nechta filtr faol — mobil "Filter (3)" belgisi uchun. */
+/**
+ * STANDART DAVR — sahifa hech qanday filtrsiz ochilganda ko'rsatiladigan
+ * oraliq. Server (app/tranzaksiyalar/page.tsx) ham AYNI funksiyani ishlatadi.
+ */
+export function standartDavr(): { from: string; to: string } {
+  return buOyDavri();
+}
+
+/** Davr foydalanuvchi tomonidan o'zgartirilganmi (standart "Bu oy" emasmi). */
+export function davrFiltriFaol(f: FiltrQiymati): boolean {
+  if (f.davr === "hammasi") return true;
+  const s = standartDavr();
+  return f.from !== s.from || f.to !== s.to;
+}
+
+/**
+ * Nechta filtr faol — mobil "Filter (3)" belgisi uchun.
+ *
+ * STANDART DAVR SANALMAYDI: sahifa endi har doim "Bu oy" bilan ochiladi
+ * (audit K-7), va uni filtr deb ko'rsatish har kirishda "2 ta filtr faol"
+ * degan soxta ogohlantirish berardi.
+ */
 export function faolFiltrSoni(f: FiltrQiymati): number {
-  return Object.values(f).filter(Boolean).length;
+  const { from: _from, to: _to, davr: _davr, ...qolgani } = f;
+  return Object.values(qolgani).filter(Boolean).length + (davrFiltriFaol(f) ? 1 : 0);
 }
 
 /**
@@ -69,4 +107,36 @@ export function ozgartirsaBoladi(
   manager: boolean
 ): boolean {
   return manager || t.userId === currentUserId;
+}
+
+/**
+ * Kassa variantining ostidagi kichik izoh: shaxsiy kassa egasi yoki kassa
+ * turi. Yaratish va TAHRIR formalari bittasidan foydalanadi.
+ *
+ * SUMMA ATAYLAB YO'Q: kassa qoldig'i "kassa.jami" huquqiga bog'liq maxfiy
+ * ma'lumot (tests/kassa-maxfiylik.test.ts) — uni tanlov ro'yxatida
+ * ko'rsatish har bir xodimga barcha kassalar qoldig'ini ochib berardi.
+ */
+export function kassaTavsifi(a: AccountOption): string | undefined {
+  if (a.egaIsm) return `Shaxsiy · ${a.egaIsm}`;
+  return a.turi ? (ACCOUNT_TURI_NOMI[a.turi as AccountTuri] ?? a.turi) : undefined;
+}
+
+/**
+ * KLIENTDAN KETADIGAN SO'ROVLAR UCHUN EFFEKTIV FILTR.
+ *
+ * URL'da davr bo'lmasa sahifa standart "Bu oy" ni qo'llaydi (audit K-7),
+ * shuning uchun eksport va kategoriya ichini yuklash ham SHU davrni olib
+ * yurishi shart — aks holda ekrandagi summa bilan ro'yxat mos kelmasdi.
+ */
+export function effektivFiltrQuery(url: string, f: FiltrQiymati): string {
+  const p = new URLSearchParams(url);
+  for (const [kalit, qiymat] of [
+    ["from", f.from],
+    ["to", f.to],
+  ] as const) {
+    if (qiymat) p.set(kalit, qiymat);
+    else p.delete(kalit);
+  }
+  return p.toString();
 }

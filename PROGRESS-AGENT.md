@@ -6835,3 +6835,81 @@ Regressiya: mijozlar, qarz, qarz-mijoz, qarz-mijoz-bogla, qarz-tahrir,
 qarz-taqsimot, qarzdorlik, crm, crm-pipeline, crm-tolovlar, crm-sotuvchi,
 zakaz-jamoasi, optom, magazin, atomik, soft-delete, tozalash, isolation,
 izolyatsiya-royxati, mijoz-xos — hammasi yashil. `npm run build` o'tadi.
+
+---
+
+## Faza: Kassa va moliyaviy ishonchlilik (audit 20.09.2026, 1-bosqich)
+
+Manba: `Balansa ERP — chuqur UX & QA audit (20.09.2026)`. Faqat kassa va
+Kirim/Chiqim bilan bog'liq Critical/High nuqtalar. CRM lead, HR, payroll —
+tegilmadi.
+
+### Kassa qoldig'i modeli (qaror uchun asos)
+
+Qoldiq SAQLANMAYDI — u har safar ledgerdan hisoblanadi
+(`lib/queries/accounts.ts`: kirim − chiqim ± transfer). Shu sababli
+yozuvning `accountId` sini almashtirish ikkala kassani o'zi to'g'rilaydi:
+tuzatish (adjustment) yozuvi kerak emas va yaratilmaydi ham. Bu Faza 1
+dagi eng muhim aniqlik — usiz "kassani tahrirlash" ikki marta pul
+yozilishiga olib kelardi.
+
+### Nima tuzatildi
+
+1. **Manfiy kassa belgisiz ko'rinardi.** Sabab bitta joyda edi:
+   `components/ui/Money.tsx` `signed=false` bo'lganda belgini umuman
+   qo'ymay `Math.abs(value)` ni chizardi. Belgi qoidasi endi
+   `lib/format.ts` `pulBelgisi()` da — manfiy HAR DOIM `−` oladi, `signed`
+   faqat musbatga `+` qo'shadi. Kassalar, Mening kassam va CRM xodim
+   kassasi shu bitta o'zgarishdan tuzaldi (uchalasi ham `Money` orqali).
+   Kassa lentasidagi qo'lda yozilgan belgi/`toLocaleString` takrorlari ham
+   `Money` ga o'tkazildi.
+2. **Kassa tanlanmasa yozuv jimgina shaxsiy kassaga tushardi.** Qoida
+   ikkiga bo'lindi: `lib/kassaQoida.ts` (klient + server uchun umumiy
+   shart va matn) va `lib/services/kassaTalab.ts` (server tekshiruvi).
+   `POST /api/transactions` — ODAM to'ldiradigan formalarning yagona
+   kirish nuqtasi — endi kassani MAJBURIY qiladi (400 + aniq matn).
+   Bot, CSV import, CRM ko'chirmasi, qarz to'lovi, oylik, POS va takroriy
+   chiqimlar `createTransaction(Tx)` orqali ketadi va eski qoidada
+   (`resolveAccountId`) qoladi — ularda kassa tanlash ekrani yo'q.
+   Forma standart kassani serverdagi AYNI funksiyadan oladi
+   (`standartKassaId` / `standartKassalar`), shuning uchun ekranda
+   ko'ringan kassa = yoziladigan kassa.
+3. **Tahrirda kassa va sotuvchi yo'q edi.** `EditModal` yangidan yig'ildi
+   (`EditMaydonlar`, `EditKgMaydonlari` — 250 satr qoidasi), barcha
+   maydonlarga label qo'yildi. `PATCH` endi `accountId` ni `tolovTuri` dan
+   MUSTAQIL qabul qiladi (`kassaYangilanishi`). Audit izi avtomatik
+   (`tenantDb` extension'i eski va yangi `accountId` ni yozadi).
+4. **Jadval qatori to'liq bosiladi** — `<tr>` o'zi tugma (Tab/Enter/Space,
+   focus ring); belgilash katakchasi va amallar menyusi qator bosilishini
+   ishga tushirmaydi. Mobil kartochkalar tegilmadi.
+5. **Paneldagi tez formada klaviatura ishlamasdi** — summa `<p>` edi, endi
+   input; keypad bilan BITTA state. 0 summa yoki kassasiz Saqlash
+   bloklanadi (tugma `disabled`).
+6. **Default davr — "Bu oy".** URL'da `from`/`to` bo'lsa u USTUN;
+   `davr=hammasi` — butun tarix. Server so'rovi, filtr chipi, eksport va
+   kategoriya ichini yuklash bitta EFFEKTIV davrdan yuradi
+   (`effektivFiltrQuery`), aks holda ekranda bu oy, faylda butun tarix
+   chiqardi. Filtr presetlari endi Toshkent kalendari bo'yicha.
+
+### Migratsiya
+
+YO'Q. `Transaction.accountId` `NOT NULL` QILINMADI: u qarz yozuvlari uchun
+ataylab null (sxema izohi) va eski yozuvlarda ham null bo'lishi mumkin.
+Majburiylik faqat yozish qatlamida.
+
+### Tekshirish
+
+`npm run test:pul-format` (7 ta, bazasiz) va `npm run test:kassa-majburiy`
+(16 ta) yangi. Regressiya: kirim-chiqim, kassa, kassa-qoldiq,
+kassa-transfer, kassa-maxfiylik, kassir-kassa, kassa-nazorat, atomik,
+agregat, panel, kunlik, kunlik-kassa, crm, crm-tolovlar, crm-xodim-kassa,
+qarz, qarz-taqsimot, moliya-pul, izolyatsiya-royxati, audit-qoldiq,
+soft-delete — hammasi yashil. `next build` o'tadi.
+
+### Ataylab qilinmadi
+
+Auditdagi "kassa tanlovida qoldiqni ko'rsatish" taklifi RAD ETILDI: kassa
+qoldig'i `kassa.jami` huquqiga bog'liq maxfiy ma'lumot
+(`tests/kassa-maxfiylik.test.ts`) — uni tanlov ro'yxatiga chiqarish har
+bir xodimga barcha kassalarni ochib berardi. O'rniga kassa turi va
+shaxsiy kassa egasi ko'rsatiladi.

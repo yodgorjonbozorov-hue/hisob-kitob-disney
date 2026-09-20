@@ -177,14 +177,9 @@ export default async function KassaDetalPage({
                       {formatToshkentVaqt(new Date(h.vaqt))}
                     </p>
                   </div>
-                  <p
-                    className={`font-display tnum text-sm font-medium shrink-0 whitespace-nowrap ${
-                      h.summa >= 0 ? "text-income" : "text-expense"
-                    }`}
-                  >
-                    {h.summa >= 0 ? "+ " : "− "}
-                    {formatSom(Math.abs(h.summa))}
-                  </p>
+                  <div className="shrink-0">
+                    <Money value={h.summa} size="sm" signed suffix={false} />
+                  </div>
                 </li>
               ))}
             </ul>

@@ -15,6 +15,14 @@ import type { TransactionDTO } from "@/lib/queries/transactions";
  * xodim — bosiq. Summa FAQAT rangga tayanmaydi: `+`/`−` belgisi va
  * "Kirim/Chiqim" nishoni ham bor — rang ko'rmaydigan foydalanuvchi uchun
  * ham, oq-qora chop etilganda ham farq qoladi.
+ *
+ * BUTUN QATOR BOSILADI (audit K-5): ilgari tafsilotni ochish uchun faqat
+ * KATEGORIYA katakchasidagi matnni bosish kerak edi — sana, summa yoki
+ * izohga bosilganda hech narsa bo'lmasdi. Endi qator o'zi tugma:
+ * `Tab` bilan fokus, `Enter`/`Space` bilan ochiladi.
+ *
+ * Qator ichidagi ALOHIDA amallar (belgilash katakchasi, amallar menyusi)
+ * qator bosilishini ishga tushirmaydi — ularda hodisa to'xtatiladi.
  */
 export function TransactionTable({
   items,
@@ -65,8 +73,25 @@ export function TransactionTable({
             const kirim = t.turi === "kirim";
             const mumkin = ozgartirsaBoladi(t);
             return (
-              <tr key={t.id} className={`hover:bg-surface-2 ${selected.has(t.id) ? "bg-brand/5" : ""}`}>
-                <td className="px-4 py-3">
+              <tr
+                key={t.id}
+                tabIndex={0}
+                role="button"
+                aria-label={`${t.category.nomi} — tafsilotni ochish`}
+                onClick={() => onBatafsil(t)}
+                onKeyDown={(e) => {
+                  // Space sahifani pastga suradi — to'xtatiladi.
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onBatafsil(t);
+                  }
+                }}
+                className={`cursor-pointer hover:bg-surface-2 transition-colors
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset
+                  focus-visible:ring-brand ${selected.has(t.id) ? "bg-brand/5" : ""}`}
+              >
+                {/* Belgilash katakchasi qator bosilishini ishga tushirmaydi. */}
+                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                   <input
                     type="checkbox"
                     checked={selected.has(t.id)}
@@ -82,13 +107,9 @@ export function TransactionTable({
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-muted">{tolovYorligi(t)}</td>
                 <td className="px-4 py-3">
-                  <button
-                    type="button"
-                    onClick={() => onBatafsil(t)}
-                    className="text-left font-medium text-fg hover:text-brand hover:underline"
-                  >
-                    {t.category.nomi}
-                  </button>
+                  {/* Qatorning o'zi tugma — ichiga ikkinchi tugma qo'yilmaydi
+                      (ichma-ich interaktiv elementlar skrinriderni chalkashtiradi). */}
+                  <span className="font-medium text-fg">{t.category.nomi}</span>
                   {/* Kg savdosi: miqdor × 1 kg narxi — o'sha savdodagi REAL narx. */}
                   {t.miqdorGr != null && t.kgNarxi != null && (
                     <span className="block text-2xs text-muted tnum">
@@ -114,7 +135,8 @@ export function TransactionTable({
                   )}
                 </td>
                 <td className="px-4 py-3 text-muted">{t.user.ism}</td>
-                <td className="px-4 py-3 text-right">
+                {/* Amallar menyusi qator bosilishidan mustaqil. */}
+                <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                   <AmalMenu
                     onBatafsil={() => onBatafsil(t)}
                     onTahrirlash={mumkin ? () => onTahrirlash(t) : undefined}

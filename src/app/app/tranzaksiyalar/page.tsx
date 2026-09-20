@@ -9,10 +9,11 @@ import { hasPermission } from "@/lib/permissions/tekshir";
 import { getTezKategoriyalar } from "@/lib/queries/tezKategoriyalar";
 import { isTolovGuruhi, type TolovGuruhi } from "@/lib/tolovBolimi";
 import { formatSom } from "@/lib/format";
-import { todayTashkentDateOnlyString } from "@/lib/date";
+import { buOyDavri, todayTashkentDateOnlyString } from "@/lib/date";
 import { isModuleOnForTenant } from "@/lib/modules/guard";
 import { TransactionsClient } from "./TransactionsClient";
 import { listAccounts, getMeningKassam } from "@/lib/queries/accounts";
+import { standartKassalar } from "@/lib/services/accounts";
 import { listBiznesXodimlari } from "@/lib/services/sotuvchi";
 import { KassamKartasi } from "@/components/kassa/KassamKartasi";
 import { SotilganMahsulotlar } from "./SotilganMahsulotlar";
@@ -31,6 +32,8 @@ interface SearchParams {
   minSumma?: string;
   maxSumma?: string;
   page?: string;
+  /** `hammasi` — standart "Bu oy" davrini ATAYLAB o'chirish (butun tarix). */
+  davr?: string;
 }
 
 /**
@@ -61,6 +64,19 @@ export default async function TranzaksiyalarPage({
 
   const scopeUserId = transactionScopeUserId(session);
 
+  // STANDART DAVR — "Bu oy" (audit K-7). Ilgari sahifa ochilganda butun
+  // tarix (1600+ yozuv) chiqardi va yig'indi ham butun tarixniki edi.
+  //
+  // Foydalanuvchi bergan davr USTUN: `from`/`to` URL'da bo'lsa, standart
+  // umuman qo'llanmaydi. `davr=hammasi` — butun tarixni ataylab so'rash.
+  // Davr URL'siz saqlanadi, shuning uchun refresh va back/forward'da holat
+  // o'zgarmaydi; server so'rovi, filtr chipi va eksport AYNI qiymatni oladi.
+  const davrBerilgan = !!(searchParams.from || searchParams.to) || searchParams.davr === "hammasi";
+  const standartDavr = buOyDavri();
+  const davr = davrBerilgan
+    ? { from: searchParams.from ?? "", to: searchParams.to ?? "" }
+    : standartDavr;
+
   // FILTR BITTA JOYDA quriladi: ro'yxat ham, kategoriya kesimi ham AYNI
   // shartdan yuradi. Aks holda kategoriya kartasidagi summa bir davrni,
   // ichkaridagi yozuvlar boshqa davrni ko'rsatib qolishi mumkin edi.
@@ -68,8 +84,8 @@ export default async function TranzaksiyalarPage({
     businessId,
     // Xodim faqat o'zi kiritgan yozuvlarni ko'radi, direktor — barchasini.
     userId: scopeUserId,
-    from: searchParams.from,
-    to: searchParams.to,
+    from: davr.from || undefined,
+    to: davr.to || undefined,
     turi: searchParams.turi,
     tolov: isTolovGuruhi(searchParams.tolov) ? (searchParams.tolov as TolovGuruhi) : null,
     categoryId: searchParams.categoryId,
@@ -79,8 +95,17 @@ export default async function TranzaksiyalarPage({
     maxSumma: searchParams.maxSumma ? parseInt(searchParams.maxSumma, 10) : null,
   };
 
-  const [result, kategoriyaJamlari, jamiKorish, categories, accounts, masullar, meningKassam, tezKategoriyalar] =
-    await Promise.all([
+  const [
+    result,
+    kategoriyaJamlari,
+    jamiKorish,
+    categories,
+    accounts,
+    masullar,
+    meningKassam,
+    tezKategoriyalar,
+    standartKassa,
+  ] = await Promise.all([
     listTransactions({
       ...filtr,
       page: searchParams.page ? parseInt(searchParams.page, 10) : 1,
@@ -97,7 +122,7 @@ export default async function TranzaksiyalarPage({
       where: { businessId, isActive: true },
       orderBy: [{ tartib: "asc" }, { nomi: "asc" }],
     }),
-    // Faol kassalar — formada tanlash uchun (bitta bo'lsa qadam yashiriladi).
+    // Faol kassalar — formada tanlash uchun (maydon HAR DOIM ko'rinadi).
     listAccounts(businessId, true),
     // Biznes xodimlari: qarz mas'uli, "Kim kiritdi" filtri va kirimdagi
     // "Sotuvchi / Xodim" tanlovi uchun BITTA ro'yxat. Boshqa biznesga
@@ -108,6 +133,10 @@ export default async function TranzaksiyalarPage({
     getMeningKassam(businessId, session.userId),
     // Ko'p ishlatiladigan kategoriyalar — FAQAT formadagi tartib uchun.
     getTezKategoriyalar(businessId, scopeUserId),
+    // FORMADA OLDINDAN TANLANADIGAN KASSA — serverdagi yozish qoidasi bilan
+    // AYNI funksiya (lib/services/accounts.ts). Shu tufayli ekranda ko'ringan
+    // kassa bilan yoziladigan kassa hech qachon farq qilmaydi (audit K-1).
+    standartKassalar(businessId, session.userId),
   ]);
 
   // SOTILGAN MAHSULOTLAR (Kirim bo'limi) — ombor yuritadigan biznesda.
@@ -150,6 +179,7 @@ export default async function TranzaksiyalarPage({
         pageSize={result.pageSize}
         categories={categories}
         accounts={accounts}
+        standartKassa={standartKassa}
         masullar={masullar}
         // "Kim kiritdi" filtri faqat direktorga: xodim baribir o'z
         // yozuvlarinigina ko'radi, ro'yxat unga faqat yolg'on tanlov berardi.
@@ -165,8 +195,10 @@ export default async function TranzaksiyalarPage({
         totals={jamiKorish ? result.totals : null}
         kategoriyaJamlari={kategoriyaJamlari}
         filters={{
-          from: searchParams.from ?? "",
-          to: searchParams.to ?? "",
+          // Chip "Bu oy" tanlangan ko'rinishi uchun EFFEKTIV davr yuboriladi
+          // (server so'rovi ham aynan shu davr bilan ketdi).
+          from: davr.from,
+          to: davr.to,
           turi: searchParams.turi ?? "",
           tolov: searchParams.tolov ?? "",
           categoryId: searchParams.categoryId ?? "",
@@ -174,6 +206,7 @@ export default async function TranzaksiyalarPage({
           q: searchParams.q ?? "",
           minSumma: searchParams.minSumma ? formatSom(parseInt(searchParams.minSumma, 10)) : "",
           maxSumma: searchParams.maxSumma ? formatSom(parseInt(searchParams.maxSumma, 10)) : "",
+          davr: searchParams.davr === "hammasi" ? "hammasi" : "",
         }}
       />
       {/* OMBOR → SOTUV → STATISTIKA. Blok tranzaksiya ro'yxatidan keyin

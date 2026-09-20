@@ -12,13 +12,9 @@ import { SummaMaydoni } from "./SummaMaydoni";
 import { KategoriyaTanlov } from "./KategoriyaTanlov";
 import { QoshimchaMaydonlar } from "./QoshimchaMaydonlar";
 import type { TransactionDTO } from "@/lib/queries/transactions";
-import type { CategoryOption, XodimOption } from "./turlar";
+import type { AccountOption, CategoryOption, XodimOption } from "./turlar";
+import { KASSA_TANLANMADI, kassaKerakmi } from "@/lib/kassaQoida";
 import type { TezKategoriyalar } from "@/lib/queries/tezKategoriyalar";
-
-interface AccountOption {
-  id: string;
-  nomi: string;
-}
 
 /**
  * KIRIM / CHIQIM FORMASI — pastdan chiqadigan varaq (mobil) yoki dialog
@@ -35,6 +31,7 @@ interface AccountOption {
 export function TransactionForm({
   categories,
   accounts,
+  standartKassa,
   masullar = [],
   sotuvchilar = [],
   currentUserId = "",
@@ -45,8 +42,15 @@ export function TransactionForm({
   onQarzCreated,
 }: {
   categories: CategoryOption[];
-  /** Faol kassalar. Bitta bo'lsa tanlash maydoni KO'RSATILMAYDI — ortiqcha qadam. */
+  /** Faol kassalar. Maydon HAR DOIM ko'rinadi — kassa majburiy (audit K-1). */
   accounts: AccountOption[];
+  /**
+   * To'lov turi kesimida OLDINDAN TANLANADIGAN kassa — serverdagi
+   * `standartKassaId` bilan AYNI qoida (lib/services/accounts.ts). Shuning
+   * uchun ekranda ko'rinib turgan kassa bilan yoziladigan kassa bir xil.
+   * `null` — standart kassa yo'q, foydalanuvchi o'zi tanlaydi.
+   */
+  standartKassa?: { naqd: string | null; click: string | null };
   /** Qarzga mas'ul qilib belgilash mumkin bo'lgan xodimlar. */
   masullar?: QarzMasul[];
   /** Kirimda "Sotuvchi / Xodim" tanlovi uchun biznes xodimlari. */
@@ -69,7 +73,11 @@ export function TransactionForm({
   const [summaText, setSummaText] = useState("");
   const [sana, setSana] = useState(todayDateOnlyString());
   const [izoh, setIzoh] = useState("");
-  const [accountId, setAccountId] = useState("");
+  // Kassa: forma ochilganda darhol foydalanuvchining standart kassasi
+  // tanlangan turadi (audit K-1 — "Tanlang..." bo'sh qolib, yozuv jimgina
+  // boshqa kassaga tushmasin). Standart kassa bo'lmasa maydon bo'sh qoladi
+  // va saqlash bloklanadi.
+  const [accountId, setAccountId] = useState(standartKassa?.naqd ?? "");
   const [sotuvchiId, setSotuvchiId] = useState(currentUserId);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,7 +113,19 @@ export function TransactionForm({
     setTuri(yangi);
     setCategoryId("");
     // Qarz faqat kirim uchun — chiqimga o'tilganda naqdga qaytariladi.
-    if (yangi === "chiqim" && tolovTuri === "qarz") setTolovTuri("naqd");
+    if (yangi === "chiqim" && tolovTuri === "qarz") tolovAlmash("naqd");
+  }
+
+  /**
+   * To'lov turi almashganda kassa ham o'sha turning standart kassasiga
+   * qaytadi: Click puli naqd kassaga tushib qolmasin (u terminalda qoladi).
+   * Foydalanuvchi keyin baribir boshqa kassani tanlay oladi.
+   */
+  function tolovAlmash(yangi: TolovTuri) {
+    setTolovTuri(yangi);
+    if (yangi === "qarz") return;
+    const standart = yangi === "click" ? standartKassa?.click : standartKassa?.naqd;
+    setAccountId(standart ?? "");
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -118,6 +138,9 @@ export function TransactionForm({
     if (kgRejimi && kg.miqdorKg <= 0) return setError("Miqdorni (kg) kiriting");
     if (kgRejimi && kg.kgNarxi <= 0) return setError("1 kg narxini kiriting");
     if (summa <= 0) return setError("Summani kiriting");
+    // KASSA MAJBURIY — server ham AYNI qoidani majburlaydi
+    // (lib/services/kassaTalab.ts). Frontend faqat tezroq aytadi.
+    if (kassaKerakmi(tolovTuri) && !accountId) return setError(KASSA_TANLANMADI);
 
     yuborilmoqda.current = true;
     setLoading(true);
@@ -134,9 +157,9 @@ export function TransactionForm({
           izoh: izoh || undefined,
           // Kg savdosida server summani miqdor × narxdan qayta hisoblaydi.
           ...(kgRejimi ? { miqdorKg: kg.miqdorKg, kgNarxi: kg.kgNarxi } : {}),
-          // Bitta kassali biznesda accountId yuborilmaydi — server birinchi
-          // faol kassani o'zi tanlaydi.
-          ...(accountId ? { accountId } : {}),
+          // Kassa HAR DOIM yuboriladi — server bo'sh kelganda uni jimgina
+          // boshqa kassa bilan almashtirmaydi, 400 qaytaradi.
+          accountId,
           // Sotuvchi faqat kirimda; yuborilmasa server yozuvchining o'zini oladi.
           ...(turi === "kirim" && sotuvchiId ? { sotuvchiId } : {}),
         }),
@@ -170,7 +193,7 @@ export function TransactionForm({
 
   return (
     <div ref={ildiz} className="space-y-4">
-      <TurVaTolov turi={turi} tolovTuri={tolovTuri} onTuri={turiAlmash} onTolov={setTolovTuri} />
+      <TurVaTolov turi={turi} tolovTuri={tolovTuri} onTuri={turiAlmash} onTolov={tolovAlmash} />
 
       {/* QARZ — butunlay boshqa forma: tranzaksiya emas, majburiyat yoziladi.
           Shuning uchun kassa/summa maydonlari o'rniga mijoz formasi chiqadi. */}

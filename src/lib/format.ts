@@ -33,6 +33,31 @@ export function formatSomLabel(value: number): string {
 }
 
 /**
+ * PUL BELGISI — YAGONA QOIDA (Money komponenti va matnli formatlash uchun).
+ *
+ * MANFIY QIYMAT HAR DOIM `−` BILAN CHIQADI. Ilgari belgi faqat `signed`
+ * rejimida chizilardi, shuning uchun Kassalar / Mening kassam / CRM xodim
+ * kassasi ekranlarida −17 450 000 lik qoldiq "17 450 000" bo'lib ko'rinardi:
+ * rang (qizil) belgining O'RNINI BOSA OLMAYDI — rang ko'rmaydigan
+ * foydalanuvchi ham, oq-qora chop etilgan hisobot ham minusni yo'qotardi.
+ *
+ * `signed` faqat MUSBAT qiymatga `+` qo'shadi. Nol belgisiz qoladi.
+ */
+export function pulBelgisi(value: number, signed = false): "" | "+ " | "− " {
+  if (value < 0) return "− ";
+  if (value > 0 && signed) return "+ ";
+  return "";
+}
+
+/**
+ * `− 17 450 000 soʻm` — belgili matnli format (Money komponenti
+ * ishlatib bo'lmaydigan joylar uchun: toast, aria-label, hisobot sarlavhasi).
+ */
+export function formatMoneySigned(value: number, signed = false): string {
+  return `${pulBelgisi(value, signed)}${formatSom(Math.abs(value))} soʻm`;
+}
+
+/**
  * PDF (Helvetica) uchun xavfsiz matn — o'zbek lotinidagi maxsus apostroflarni
  * (ʻ U+02BB, ʼ U+02BC, curly ' ') oddiy ASCII apostrofga aylantiradi, aks holda
  * Helvetica ularni ko'rsatmaydi (bo'sh katakcha).

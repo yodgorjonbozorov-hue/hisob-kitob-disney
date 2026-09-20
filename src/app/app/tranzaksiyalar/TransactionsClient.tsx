@@ -22,8 +22,9 @@ import type {
 } from "@/lib/queries/transactions";
 import type { TezKategoriyalar } from "@/lib/queries/tezKategoriyalar";
 import type { Rol } from "@/lib/auth/session";
-import type { CategoryOption, FiltrQiymati, XodimOption } from "./turlar";
+import type { AccountOption, CategoryOption, FiltrQiymati, XodimOption } from "./turlar";
 import {
+  effektivFiltrQuery,
   faolFiltrSoni,
   ozgartirsaBoladi as ozgartirishMumkinmi,
 } from "./turlar";
@@ -35,6 +36,7 @@ export function TransactionsClient({
   pageSize,
   categories,
   accounts,
+  standartKassa,
   masullar = [],
   xodimlar = [],
   xodimlarStat = false,
@@ -51,7 +53,9 @@ export function TransactionsClient({
   page: number;
   pageSize: number;
   categories: CategoryOption[];
-  accounts: { id: string; nomi: string }[];
+  accounts: AccountOption[];
+  /** Formada oldindan tanlanadigan kassa — serverdagi qoida bilan AYNI. */
+  standartKassa?: { naqd: string | null; click: string | null };
   /** Qarzga mas'ul qilib belgilash mumkin bo'lgan xodimlar. */
   masullar?: { id: string; ism: string }[];
   /** "Kim kiritdi" filtri uchun — faqat direktorga to'ldirilgan holda keladi. */
@@ -107,9 +111,18 @@ export function TransactionsClient({
     router.push(`${pathname}${p.toString() ? `?${p}` : ""}`);
   }
 
-  const exportUrl = `/api/transactions/export${searchParams.toString() ? `?${searchParams}` : ""}`;
+  // Eksport va kategoriya ichi ham EFFEKTIV davr bilan ketadi (turlar.ts).
+  const effektivQuery = useMemo(
+    () => effektivFiltrQuery(searchParams.toString(), filters),
+    [searchParams, filters]
+  );
+  const exportUrl = `/api/transactions/export${effektivQuery ? `?${effektivQuery}` : ""}`;
   const manager = isManager(currentUserRol);
-  const filtrFaol = faolFiltrSoni(filters) > 0;
+  // Standart davr ham ro'yxatni TORAYTIRADI, shuning uchun bo'sh natija
+  // "hali yozuv yo'q" emas, "bu davrda yozuv yo'q" degani — tozalash tugmasi
+  // ko'rsatiladi va u butun tarixga olib boradi.
+  const filtrFaol = faolFiltrSoni(filters) > 0 || !!filters.from || !!filters.to;
+  const butunTarix = `${pathname}?davr=hammasi`;
   const ozgartirsaBoladi = useMemo(
     () => (t: TransactionDTO) => ozgartirishMumkinmi(t, currentUserId, manager),
     [currentUserId, manager],
@@ -128,6 +141,7 @@ export function TransactionsClient({
             ochSignal={yangiOchilsin}
             categories={categories}
             accounts={accounts}
+            standartKassa={standartKassa}
             masullar={masullar}
             sotuvchilar={masullar}
             currentUserId={currentUserId}
@@ -187,11 +201,11 @@ export function TransactionsClient({
       {korinish === "kategoriya" ? (
         <KategoriyaKorinish
           kategoriyalar={kategoriyaJamlari}
-          filtrQuery={searchParams.toString()}
+          filtrQuery={effektivQuery}
           amallar={amallar}
           ozgartirsaBoladi={ozgartirsaBoladi}
           filtrFaol={filtrFaol}
-          onFiltrTozalash={() => router.push(pathname)}
+          onFiltrTozalash={() => router.push(butunTarix)}
           onYangi={() => setYangiOchilsin((n) => n + 1)}
           yangilanish={yangilanish}
         />
@@ -213,7 +227,7 @@ export function TransactionsClient({
             filtrFaol={filtrFaol}
             amallar={amallar}
             onYangi={() => setYangiOchilsin((n) => n + 1)}
-            onFiltrTozalash={() => router.push(pathname)}
+            onFiltrTozalash={() => router.push(butunTarix)}
             selected={selected}
             onToggleSelect={toggleSelect}
             onToggleAll={toggleAll}
@@ -227,6 +241,9 @@ export function TransactionsClient({
         holat={holat}
         setHolat={setHolat}
         categories={categories}
+        accounts={accounts}
+        sotuvchilar={masullar}
+        sotuvchiTanlash={manager}
         ozgartirsaBoladi={ozgartirsaBoladi}
         onUpdated={handleUpdated}
         onDelete={handleDelete}

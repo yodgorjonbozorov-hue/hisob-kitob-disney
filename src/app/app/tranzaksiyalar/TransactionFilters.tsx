@@ -4,38 +4,46 @@ import { useRouter, usePathname } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import { SlidersHorizontal, Search, X } from "lucide-react";
 import { parseSomInput } from "@/lib/format";
+import { TOSHKENT_OFFSET_MS, buOyDavri } from "@/lib/date";
 import { FiltrSheet } from "./FiltrSheet";
 import { BOSH_FILTR, faolFiltrSoni, type CategoryOption, type FiltrQiymati, type XodimOption } from "./turlar";
 
 function pad(n: number) {
   return n.toString().padStart(2, "0");
 }
+/** Toshkentga siljitilgan Date'dan "YYYY-MM-DD" (UTC komponentlari bo'yicha). */
 function ymd(d: Date) {
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 }
 
-/** Sana preseti → { from, to } (mahalliy vaqt bo'yicha). */
+/**
+ * Sana preseti → { from, to } — ASIA/TASHKENT kalendari bo'yicha.
+ *
+ * Ilgari brauzerning mahalliy vaqti ishlatilardi, server esa Toshkent kuni
+ * bilan hisoblaydi (`todayTashkentDateOnlyString`). Boshqa mintaqadagi
+ * brauzerda "Bu oy" chipi standart davr bilan bir kunga farq qilib, chip
+ * tanlanmagan ko'rinardi.
+ */
 function presetRange(key: string): { from: string; to: string } {
-  const now = new Date();
+  const now = new Date(Date.now() + TOSHKENT_OFFSET_MS);
   const today = ymd(now);
   if (key === "bugun") return { from: today, to: today };
   if (key === "hafta") {
-    const day = (now.getDay() + 6) % 7; // Dushanba = 0
-    const start = new Date(now);
-    start.setDate(now.getDate() - day);
+    const day = (now.getUTCDay() + 6) % 7; // Dushanba = 0
+    const start = new Date(now.getTime() - day * 86_400_000);
     return { from: ymd(start), to: today };
   }
-  if (key === "oy") return { from: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`, to: today };
+  if (key === "oy") return buOyDavri();
   if (key === "otganOy") {
-    const first = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const last = new Date(now.getFullYear(), now.getMonth(), 0);
+    const first = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+    const last = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0));
     return { from: ymd(first), to: ymd(last) };
   }
   if (key === "chorak") {
-    const q = Math.floor(now.getMonth() / 3);
-    return { from: `${now.getFullYear()}-${pad(q * 3 + 1)}-01`, to: today };
+    const q = Math.floor(now.getUTCMonth() / 3);
+    return { from: `${now.getUTCFullYear()}-${pad(q * 3 + 1)}-01`, to: today };
   }
-  if (key === "yil") return { from: `${now.getFullYear()}-01-01`, to: today };
+  if (key === "yil") return { from: `${now.getUTCFullYear()}-01-01`, to: today };
   return { from: "", to: "" };
 }
 
@@ -51,6 +59,9 @@ const PRESETS = [
   { key: "otganOy", label: "O'tgan oy", mobil: false },
   { key: "chorak", label: "Chorak", mobil: false },
   { key: "yil", label: "Yil", mobil: false },
+  // Sahifa standart "Bu oy" bilan ochiladi (audit K-7) — butun tarixni
+  // ko'rish endi ATAYLAB tanlanadi va URL'da (`davr=hammasi`) qoladi.
+  { key: "hammasi", label: "Butun tarix", mobil: false },
 ];
 
 /**
@@ -80,6 +91,9 @@ export function TransactionFilters({
 
   function applyFilters(next: FiltrQiymati) {
     const params = new URLSearchParams();
+    // Aniq oraliq berilgan bo'lsa "butun tarix" bayrog'i o'z kuchini
+    // yo'qotadi — ikkovi bir vaqtda URL'da turmasin.
+    if (next.davr === "hammasi" && !next.from && !next.to) params.set("davr", "hammasi");
     if (next.from) params.set("from", next.from);
     if (next.to) params.set("to", next.to);
     if (next.turi) params.set("turi", next.turi);
@@ -118,12 +132,21 @@ export function TransactionFilters({
       <div className="flex items-center gap-2">
         <div className="flex flex-1 min-w-0 flex-wrap gap-2">
           {PRESETS.map((p) => {
+            const hammasi = p.key === "hammasi";
             const r = presetRange(p.key);
-            const active = values.from === r.from && values.to === r.to;
+            const active = hammasi
+              ? values.davr === "hammasi" && !values.from && !values.to
+              : values.davr !== "hammasi" && values.from === r.from && values.to === r.to;
             return (
               <button
                 key={p.key}
-                onClick={() => update(presetRange(p.key))}
+                onClick={() =>
+                  update(
+                    hammasi
+                      ? { from: "", to: "", davr: "hammasi" }
+                      : { ...presetRange(p.key), davr: "" }
+                  )
+                }
                 className={`px-2.5 sm:px-3 py-1.5 rounded-full text-xs sm:text-sm min-h-[36px] border transition ${
                   p.mobil ? "" : "hidden sm:inline-flex"
                 } ${active ? "bg-brand text-brand-fg border-transparent" : "bg-surface-2 text-fg border-line"}`}
@@ -169,7 +192,9 @@ export function TransactionFilters({
           <span className="text-xs text-muted">{activeCount} ta filtr faol</span>
           <button
             onClick={() => {
-              setValues(BOSH_FILTR);
+              // "Tozalash" — standart davrga (Bu oy) qaytish: URL'siz holat
+              // ayni shu davrni bildiradi (app/tranzaksiyalar/page.tsx).
+              setValues({ ...BOSH_FILTR, ...presetRange("oy") });
               router.push(pathname);
             }}
             className="inline-flex items-center gap-1 text-xs font-medium text-expense hover:underline min-h-[32px]"

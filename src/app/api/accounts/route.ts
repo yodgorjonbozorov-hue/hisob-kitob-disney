@@ -3,7 +3,7 @@ import { withTenant } from "@/lib/auth/tenant";
 import { requireManager } from "@/lib/auth/guard";
 import { resolveActiveBusinessId } from "@/lib/business";
 import { listAccounts, getAccountBalances } from "@/lib/queries/accounts";
-import { createAccount } from "@/lib/services/accounts";
+import { createAccount, standartKassalar } from "@/lib/services/accounts";
 import { createAccountSchema } from "@/lib/validation/account";
 import { dashboardYangilandi } from "@/lib/cache";
 import { requirePermission } from "@/lib/permissions/tekshir";
@@ -14,6 +14,9 @@ import { requirePermission } from "@/lib/permissions/tekshir";
  * barcha xodimlarning kassa qoldig'ini ochadi, shuning uchun "kassa.jami"
  * huquqi shart (default — faqat OWNER/ADMIN). Kassir to'g'ridan-to'g'ri
  * so'rov yuborsa ham 403 oladi.
+ * `?forma=1` — yozuv formasi uchun: faol kassalar + to'lov turi kesimida
+ * OLDINDAN TANLANADIGAN kassa (serverdagi yozish qoidasi bilan AYNI
+ * funksiya). Qoldiq QAYTARILMAYDI — u maxfiy.
  */
 export const GET = withTenant(async (request, _ctx, { session: user }) => {
   const businessId = await resolveActiveBusinessId(user);
@@ -23,6 +26,13 @@ export const GET = withTenant(async (request, _ctx, { session: user }) => {
   if (searchParams.get("qoldiq") === "1") {
     await requirePermission(user.userId, "kassa.jami");
     return NextResponse.json(await getAccountBalances(businessId));
+  }
+  if (searchParams.get("forma") === "1") {
+    const [kassalar, standart] = await Promise.all([
+      listAccounts(businessId, true),
+      standartKassalar(businessId, user.userId),
+    ]);
+    return NextResponse.json({ kassalar, standart });
   }
   // Yozuv kiritishda kassa tanlash uchun — barcha rollarga faol kassalar.
   return NextResponse.json(await listAccounts(businessId, true));

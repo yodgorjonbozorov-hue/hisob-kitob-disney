@@ -10,6 +10,7 @@ import { transactionScopeUserId } from "@/lib/auth/visibility";
 import { dashboardYangilandi } from "@/lib/cache";
 import { hasPermission } from "@/lib/permissions/tekshir";
 import { sotuvchiniHalQil } from "@/lib/services/sotuvchi";
+import { webKassaId } from "@/lib/services/kassaTalab";
 
 export const GET = withTenant(async (request, _ctx, { session: user }) => {
 
@@ -72,6 +73,18 @@ export const POST = withTenant(async (request, _ctx, tenantCtx) => {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
   }
+
+  // KASSA MAJBURIY (audit K-1). Bu route — ODAM to'ldiradigan web
+  // formalarining yagona kirish nuqtasi (Kirim/Chiqim formasi, paneldagi tez
+  // forma, CRM tez chiqimi, kg savdosi). Kassa kelmasa yozuv JIMGINA standart
+  // kassaga tushib ketmaydi — 400 qaytadi va forma foydalanuvchini to'xtatadi.
+  // Bot/import/CRM ko'chirmasi boshqa yo'ldan yuradi va o'zgarmaydi
+  // (lib/services/kassaTalab.ts).
+  parsed.data.accountId = await webKassaId({
+    businessId,
+    accountId: parsed.data.accountId,
+    tolovTuri: parsed.data.tolovTuri,
+  });
 
   // SOTUVCHI/XODIM: kirimda har doim to'ldiriladi (berilmasa — yozuvchi o'zi);
   // boshqa xodimni tanlash faqat boshqaruvchiga, xodim shu biznesniki bo'lishi

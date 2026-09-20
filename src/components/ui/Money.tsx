@@ -1,5 +1,5 @@
 import { cn } from "@/lib/cn";
-import { formatSom } from "@/lib/format";
+import { formatSom, pulBelgisi } from "@/lib/format";
 
 type Tone = "income" | "expense" | "debt" | "brand" | "neutral";
 type Size = "sm" | "md" | "lg" | "xl" | "display";
@@ -27,8 +27,15 @@ const sizeClass: Record<Size, string> = {
 
 /**
  * Barcha pul ko'rsatishlari SHU komponent orqali (REDESIGN.md 8).
- * Manrope (font-display), tabular. `sign` — ±belgisi; `tone` — rang; agar tone
- * berilmasa, `signed` bo'lsa qiymat belgisidan aniqlanadi.
+ * Manrope (font-display), tabular. `tone` — rang; agar tone berilmasa,
+ * `signed` bo'lsa qiymat belgisidan aniqlanadi.
+ *
+ * MANFIY QIYMAT HAR DOIM `−` BILAN CHIQADI — `signed` dan QAT'I NAZAR
+ * (belgi qoidasi: lib/format.ts `pulBelgisi`). `signed` endi faqat MUSBAT
+ * qiymatga `+` qo'shadi. Ilgari `signed={false}` da minus butunlay tushib
+ * qolardi va Kassalar / Mening kassam / CRM xodim kassasi ekranlarida
+ * −17 450 000 lik qoldiq "17 450 000" bo'lib ko'rinardi — rang belgining
+ * o'rnini bosa olmaydi.
  */
 export function Money({
   value,
@@ -46,7 +53,7 @@ export function Money({
   className?: string;
 }) {
   const effectiveTone: Tone = tone ?? (signed ? (value >= 0 ? "income" : "expense") : "neutral");
-  const sign = signed ? (value >= 0 ? "+ " : "− ") : "";
+  const sign = pulBelgisi(value, signed);
   const abs = Math.abs(value);
   return (
     <span className={cn("font-display tnum whitespace-nowrap", sizeClass[size], toneClass[effectiveTone], className)}>

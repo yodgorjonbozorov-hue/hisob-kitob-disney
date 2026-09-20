@@ -1,26 +1,36 @@
 "use client";
 
 import { useState } from "react";
-import { formatSom, formatSomLabel, parseSomInput } from "@/lib/format";
+import { formatSom, parseSomInput } from "@/lib/format";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { Select } from "@/components/ui/Select";
-import { TOLOV_TURLARI, TOLOV_NOMI, TOLOV_BELGI, type TolovTuri } from "@/lib/validation/transaction";
+import { KASSA_TANLANMADI, kassaKerakmi } from "@/lib/kassaQoida";
+import { type TolovTuri } from "@/lib/validation/transaction";
 import { formatKg, kgSumma, kgToGram, parseKgInput } from "@/lib/kg";
 import type { TransactionDTO } from "@/lib/queries/transactions";
-import type { CategoryOption } from "./turlar";
+import type { AccountOption, CategoryOption, XodimOption } from "./turlar";
+import { EditKgMaydonlari } from "./EditKgMaydonlari";
+import { EditMaydonlar, type EditQiymat } from "./EditMaydonlar";
 
 /**
- * Yozuvni tahrirlash oynasi. Alohida faylda: `TransactionList` 250 satr
- * chegarasidan oshib ketmasligi kerak (CLAUDE.md kod qoidalari).
+ * Yozuvni tahrirlash oynasi. Maydonlar `EditMaydonlar.tsx` da (250 satr
+ * chegarasi — CLAUDE.md), bu yerda holat, tekshiruv va saqlash.
+ *
+ * KASSA VA SOTUVCHI (audit K-2): endi tahrirda ham bor. Xato kassaga
+ * tushgan yozuvni o'chirib qayta yaratish SHART EMAS — audit izi saqlanadi.
+ * Kassa qoldig'i ledgerdan hisoblanadi (lib/queries/accounts.ts), shuning
+ * uchun `accountId` almashganda eski kassadan avtomatik chiqadi va yangisiga
+ * qo'shiladi: qo'shimcha tuzatish yozuvi YARATILMAYDI (dublikat pul yo'q).
  *
  * KG SAVDOSI yozuvida (mijozga xos — Fortex Selos) summa maydoni YO'Q:
- * miqdor va 1 kg narxi tuzatiladi, jami ikkalasidan qayta hisoblanadi
- * (server ham shunday qiladi — lib/kg.ts).
+ * miqdor va 1 kg narxi tuzatiladi, jami ikkalasidan qayta hisoblanadi.
  */
 export function EditModal({
   transaction,
   categories,
+  accounts = [],
+  sotuvchilar = [],
+  sotuvchiTanlash = false,
   canDelete,
   onClose,
   onSaved,
@@ -28,29 +38,40 @@ export function EditModal({
 }: {
   transaction: TransactionDTO;
   categories: CategoryOption[];
+  /** Faol kassalar. Bo'sh ro'yxat — kassa maydoni ko'rsatilmaydi. */
+  accounts?: AccountOption[];
+  /** "Sotuvchi / Xodim" tanlovi uchun biznes xodimlari. */
+  sotuvchilar?: XodimOption[];
+  /** Boshqa xodim nomiga yozish — faqat boshqaruvchiga (server ham tekshiradi). */
+  sotuvchiTanlash?: boolean;
   canDelete: boolean;
   onClose: () => void;
   onSaved: (t: TransactionDTO) => void;
   onDelete: () => void;
 }) {
-  const [turi, setTuri] = useState<"kirim" | "chiqim">(transaction.turi as "kirim" | "chiqim");
-  // Eski yozuvda tolovTuri null — kassa turidan boshlang'ich qiymat chiqariladi.
-  const [tolovTuri, setTolovTuri] = useState<TolovTuri>(
-    (transaction.tolovTuri as TolovTuri | null) ??
+  // KG SAVDOSI yozuvi (mijozga xos): summa QO'LDA tahrirlanmaydi.
+  const kgYozuvi = transaction.miqdorGr != null && transaction.kgNarxi != null;
+
+  const [q, setQ] = useState<EditQiymat>({
+    turi: transaction.turi as "kirim" | "chiqim",
+    // Eski yozuvda tolovTuri null — kassa turidan boshlang'ich qiymat chiqariladi.
+    tolovTuri:
+      (transaction.tolovTuri as TolovTuri | null) ??
       (transaction.account?.turi === "plastik" || transaction.account?.turi === "bank"
         ? "click"
-        : "naqd")
-  );
-  const [categoryId, setCategoryId] = useState(transaction.categoryId);
-  const [summaText, setSummaText] = useState(formatSom(transaction.summa));
-  const [sana, setSana] = useState(new Date(transaction.sana).toISOString().slice(0, 10));
-  const [izoh, setIzoh] = useState(transaction.izoh ?? "");
+        : "naqd"),
+    categoryId: transaction.categoryId,
+    summaText: formatSom(transaction.summa),
+    sana: new Date(transaction.sana).toISOString().slice(0, 10),
+    izoh: transaction.izoh ?? "",
+    accountId: transaction.account?.id ?? "",
+    sotuvchiId: transaction.sotuvchi?.id ?? "",
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // KG SAVDOSI yozuvi (mijozga xos): summa QO'LDA tahrirlanmaydi — miqdor va
-  // 1 kg narxi tuzatiladi, jami shundan qayta hisoblanadi (server ham).
-  const kgYozuvi = transaction.miqdorGr != null && transaction.kgNarxi != null;
+  const set = (patch: Partial<EditQiymat>) => setQ((oldi) => ({ ...oldi, ...patch }));
+
   const [miqdorText, setMiqdorText] = useState(kgYozuvi ? formatKg(transaction.miqdorGr!) : "");
   const [kgNarxText, setKgNarxText] = useState(kgYozuvi ? formatSom(transaction.kgNarxi!) : "");
   const miqdorKg = parseKgInput(miqdorText);
@@ -60,29 +81,54 @@ export function EditModal({
   // Kg yozuvi kirim bo'lib qoladi va faqat kg kategoriyalari orasida ko'chadi.
   const filteredCategories = kgYozuvi
     ? categories.filter((c) => c.kgAsosli)
-    : categories.filter((c) => c.turi === turi);
+    : categories.filter((c) => c.turi === q.turi);
+
+  const kassaKerak = kassaKerakmi(q.tolovTuri);
+
+  function turiAlmash(yangi: "kirim" | "chiqim") {
+    // Qarz faqat kirim uchun — chiqimga o'tilganda naqdga qaytariladi.
+    set({
+      turi: yangi,
+      categoryId: "",
+      ...(yangi === "chiqim" && q.tolovTuri === "qarz" ? { tolovTuri: "naqd" as TolovTuri } : {}),
+    });
+  }
 
   async function handleSave() {
+    if (loading) return;
     setError(null);
     if (kgYozuvi) {
       if (miqdorKg <= 0) return setError("Miqdorni (kg) kiriting");
       if (kgNarxi <= 0) return setError("1 kg narxini kiriting");
     }
-    const summa = parseSomInput(summaText);
-    if (!kgYozuvi && summa <= 0) {
-      setError("Summani kiriting");
-      return;
-    }
+    const summa = parseSomInput(q.summaText);
+    if (!kgYozuvi && summa <= 0) return setError("Summani kiriting");
+    // KASSA MAJBURIY — server ham AYNI qoidani majburlaydi
+    // (lib/services/kassaTalab.ts). Qarzda kassa umuman bo'lmaydi.
+    if (kassaKerak && accounts.length > 0 && !q.accountId) return setError(KASSA_TANLANMADI);
+
     setLoading(true);
     try {
       const res = await fetch(`/api/transactions/${transaction.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          kgYozuvi
-            ? { tolovTuri, categoryId, sana, izoh: izoh || undefined, miqdorKg, kgNarxi }
-            : { turi, tolovTuri, categoryId, summa, sana, izoh: izoh || undefined }
-        ),
+        body: JSON.stringify({
+          tolovTuri: q.tolovTuri,
+          categoryId: q.categoryId,
+          sana: q.sana,
+          izoh: q.izoh || undefined,
+          // Kassa: qarzda pul kassaga tushmaydi, shuning uchun yuborilmaydi
+          // (server `accountId` ni null qiladi).
+          ...(kassaKerak && q.accountId ? { accountId: q.accountId } : {}),
+          ...(kgYozuvi
+            ? { miqdorKg, kgNarxi }
+            : { turi: q.turi, summa }),
+          // Sotuvchi faqat kirimda ma'noga ega; bo'sh tanlov — bog'lanishni
+          // olib tashlash (null).
+          ...(sotuvchiTanlash && q.turi === "kirim"
+            ? { sotuvchiId: q.sotuvchiId || null }
+            : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -100,106 +146,40 @@ export function EditModal({
   return (
     <Modal open onClose={onClose} title="Tranzaksiyani tahrirlash">
       <div className="space-y-3">
-        {/* Kg savdosida kirim/chiqim tanlovi YO'Q: sotuv har doim kirim. */}
-        <div className={`flex gap-2 ${kgYozuvi ? "hidden" : ""}`}>
-          <button
-            onClick={() => {
-              setTuri("kirim");
-              setCategoryId("");
-            }}
-            className={`flex-1 py-1.5 rounded-lg text-sm ${turi === "kirim" ? "bg-income text-white" : "bg-income-soft text-income-fg"}`}
-          >
-            Kirim
-          </button>
-          <button
-            onClick={() => {
-              setTuri("chiqim");
-              setCategoryId("");
-              // Qarz faqat kirim uchun — chiqimga o'tilganda naqdga qaytariladi.
-              if (tolovTuri === "qarz") setTolovTuri("naqd");
-            }}
-            className={`flex-1 py-1.5 rounded-lg text-sm ${turi === "chiqim" ? "bg-expense text-white" : "bg-expense-soft text-expense-fg"}`}
-          >
-            Chiqim
-          </button>
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          {TOLOV_TURLARI.filter((t) => t !== "qarz" || turi === "kirim").map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTolovTuri(t)}
-              className={`px-3 py-1.5 rounded-lg border text-sm transition ${
-                tolovTuri === t
-                  ? "border-brand bg-brand-wash text-brand font-medium"
-                  : "border-line bg-surface-2 text-fg hover:border-brand"
-              }`}
-            >
-              {TOLOV_BELGI[t]} {TOLOV_NOMI[t]}
-            </button>
-          ))}
-        </div>
-        <Select
-          value={categoryId}
-          onChange={setCategoryId}
-          searchable={filteredCategories.length > 7}
-          options={filteredCategories.map((c) => ({ value: c.id, label: c.nomi }))}
+        <EditMaydonlar
+          q={q}
+          set={set}
+          kgYozuvi={kgYozuvi}
+          kgMaydon={
+            <EditKgMaydonlari
+              miqdorText={miqdorText}
+              kgNarxText={kgNarxText}
+              kgJami={kgJami}
+              onMiqdor={setMiqdorText}
+              onNarx={setKgNarxText}
+              disabled={loading}
+            />
+          }
+          filteredCategories={filteredCategories}
+          accounts={accounts}
+          sotuvchilar={sotuvchilar}
+          sotuvchiTanlash={sotuvchiTanlash}
+          kassaKerak={kassaKerak}
+          onTuri={turiAlmash}
+          onTolov={(t) => set({ tolovTuri: t })}
+          disabled={loading}
         />
-        {kgYozuvi ? (
-          <div className="space-y-2">
-            <div className="grid grid-cols-2 gap-2">
-              <label className="block">
-                <span className="text-2xs text-muted">Miqdor (kg)</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={miqdorText}
-                  onChange={(e) => setMiqdorText(e.target.value.replace(/[^\d.,]/g, ""))}
-                  className="mt-0.5 w-full rounded-lg border border-line px-3 py-2 text-sm tnum"
-                />
-              </label>
-              <label className="block">
-                <span className="text-2xs text-muted">1 kg narxi</span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={kgNarxText}
-                  onChange={(e) => setKgNarxText(formatSom(parseSomInput(e.target.value)))}
-                  className="mt-0.5 w-full rounded-lg border border-line px-3 py-2 text-sm tnum"
-                />
-              </label>
-            </div>
-            <p className="text-sm text-muted tnum">
-              Jami: <span className="font-medium text-income">{formatSomLabel(kgJami)}</span>
-            </p>
-          </div>
-        ) : (
-          <input
-            type="text"
-            inputMode="numeric"
-            value={summaText}
-            onChange={(e) => setSummaText(formatSom(parseSomInput(e.target.value)))}
-            className="w-full rounded-lg border border-line px-3 py-2 text-sm"
-          />
+
+        {error && (
+          <p role="alert" className="text-expense text-sm">
+            {error}
+          </p>
         )}
-        <input
-          type="date"
-          value={sana}
-          onChange={(e) => setSana(e.target.value)}
-          className="w-full rounded-lg border border-line px-3 py-2 text-sm"
-        />
-        <input
-          type="text"
-          value={izoh}
-          onChange={(e) => setIzoh(e.target.value)}
-          placeholder="Izoh"
-          className="w-full rounded-lg border border-line px-3 py-2 text-sm"
-        />
-        {error && <p className="text-expense text-sm">{error}</p>}
+
         <div className="flex gap-2 items-center pt-2">
           {canDelete && (
             <Button variant="danger" onClick={onDelete} type="button">
-              O'chirish
+              O&apos;chirish
             </Button>
           )}
           <div className="flex gap-2 ml-auto">

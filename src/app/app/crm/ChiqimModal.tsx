@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { INPUT_CLASS, LABEL_CLASS } from "@/components/ui/fieldStyles";
 import { formatSom, parseSomInput } from "@/lib/format";
+import { KASSA_TANLANMADI } from "@/lib/kassaQoida";
 
 export interface ChiqimTanlov {
   id: string;
@@ -51,6 +52,8 @@ export function ChiqimModal({
     if (loading) return;
     if (summa <= 0) return setXato("Summani kiriting");
     if (!categoryId) return setXato("Kategoriyani tanlang");
+    // Kassa majburiy — server ham AYNI qoidani majburlaydi (audit K-1).
+    if (!accountId) return setXato(KASSA_TANLANMADI);
     setLoading(true);
     setXato(null);
     try {
@@ -64,8 +67,7 @@ export function ChiqimModal({
           summa,
           sana,
           izoh: izoh.trim() || undefined,
-          // Kassa tanlanmagan bo'lsa (bitta ham kassa yo'q) — server o'zi tanlaydi.
-          ...(accountId ? { accountId } : {}),
+          accountId,
         }),
       });
       const data = await res.json();

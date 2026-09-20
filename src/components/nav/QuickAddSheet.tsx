@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { formatSom } from "@/lib/format";
+import { formatSom, parseSomInput } from "@/lib/format";
 import { todayDateOnlyString } from "@/lib/date";
 import { Button } from "@/components/ui/Button";
+import { KASSA_TANLANMADI } from "@/lib/kassaQoida";
+import { TezKassa, TezSumma, type KassaFormaDTO } from "@/components/nav/TezSummaKassa";
 import { NumberPad } from "@/components/ui/NumberPad";
 import { CategoryPicker } from "@/components/ui/CategoryPicker";
 import { KgSavdoSheet } from "@/components/nav/KgSavdoSheet";
@@ -22,8 +24,16 @@ interface CategoryOption {
 }
 
 /**
- * Tez qo'shish (REDESIGN.md 5.1) — FAB dan ochiladi. 3 qadam: katta keypad'da summa
- * → ikonkali kategoriya to'ri → Saqlash. Sotuvchi uchun faqat kirim.
+ * Tez qo'shish (REDESIGN.md 5.1) — FAB dan ochiladi. 3 qadam: summa →
+ * ikonkali kategoriya to'ri → Saqlash. Sotuvchi uchun faqat kirim.
+ *
+ * SUMMA BITTA HOLATDA (audit K-4): tepadagi katta raqam endi INPUT —
+ * jismoniy klaviaturadan ham, nusxa-joylashdan ham, ekrandagi keypad'dan
+ * ham AYNI `summa` state'i to'ldiriladi. Ilgari raqam oddiy `<p>` edi va
+ * desktopda yozilgan summa umuman qabul qilinmasdi.
+ *
+ * KASSA MAJBURIY (audit K-1): bu forma ilgari kassani umuman so'ramasdi va
+ * yozuv jimgina foydalanuvchining shaxsiy kassasiga tushardi.
  */
 export function QuickAddSheet({
   open,
@@ -47,6 +57,9 @@ export function QuickAddSheet({
   const [error, setError] = useState<string | null>(null);
   /** Kg savdosi oynasi ochiq bo'lgan kategoriya (mijozga xos, null — yopiq). */
   const [kgKategoriya, setKgKategoriya] = useState<CategoryOption | null>(null);
+  /** Faol kassalar va standart tanlov — forma ochilganda yuklanadi. */
+  const [kassaForma, setKassaForma] = useState<KassaFormaDTO | null>(null);
+  const [accountId, setAccountId] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -57,6 +70,16 @@ export function QuickAddSheet({
     setIzoh("");
     setKecha(false);
     setTuri(defaultTuri);
+    // Kassalar HAR ochilishda qayta olinadi: standart kassa smena/kassa
+    // topshirishdan keyin o'zgarishi mumkin, eskirgan qiymat esa pulni
+    // noto'g'ri yashikka yozardi.
+    fetch("/api/accounts?forma=1")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: KassaFormaDTO | null) => {
+        setKassaForma(d);
+        setAccountId(d?.standart.naqd ?? "");
+      })
+      .catch(() => setKassaForma(null));
     if (categories === null) {
       // `active=true` SHART: nofaollashtirilgan kategoriya yangi yozuv
       // formasida chiqmasligi kerak (eski yozuvlari esa joyida qoladi).
@@ -88,10 +111,14 @@ export function QuickAddSheet({
   }
 
   async function submit() {
+    if (loading) return;
     setError(null);
     const catId = categoryId || filtered[0]?.id;
     if (summa <= 0) return setError("Summani kiriting");
     if (!catId) return setError("Kategoriya tanlang");
+    // Kassa majburiy — server ham AYNI qoidani majburlaydi
+    // (lib/services/kassaTalab.ts).
+    if (!accountId) return setError(KASSA_TANLANMADI);
     // Kg kategoriyasi keypad orqali yozilmaydi — jami miqdor × narxdan chiqadi.
     const kgCat = filtered.find((c) => c.id === catId);
     if (kgCat?.kgAsosli) {
@@ -106,7 +133,14 @@ export function QuickAddSheet({
       const res = await fetch("/api/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ turi, categoryId: catId, summa, sana, izoh: izoh || undefined }),
+        body: JSON.stringify({
+          turi,
+          categoryId: catId,
+          summa,
+          sana,
+          accountId,
+          izoh: izoh || undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) return setError(data.error ?? "Xatolik yuz berdi");
@@ -131,12 +165,7 @@ export function QuickAddSheet({
       <div onClick={(e) => e.stopPropagation()} className="bg-app text-fg w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl pb-safe max-h-[94vh] overflow-y-auto animate-slide-up">
         <div className="w-10 h-1 rounded-full bg-line-strong mx-auto my-3" />
 
-        {/* Katta summa */}
-        <div className="px-5 text-center">
-          <p className={`font-display text-3xl tnum ${turi === "kirim" ? "text-income" : "text-expense"}`}>
-            {formatSom(summa)} <span className="text-lg text-faint font-sans">soʻm</span>
-          </p>
-        </div>
+        <TezSumma summa={summa} onSumma={setSumma} turi={turi} />
 
         {/* Kirim / Chiqim */}
         <div className="flex gap-2 px-5 mt-3">
@@ -159,6 +188,9 @@ export function QuickAddSheet({
           )}
         </div>
 
+        {/* KASSA — majburiy (audit K-1). Qoldiq ko'rsatilmaydi — maxfiy. */}
+        <TezKassa forma={kassaForma} accountId={accountId} onAccount={setAccountId} />
+
         {/* Izoh + sana */}
         <div className="px-5 mt-3 flex gap-2 items-center">
           <input type="text" value={izoh} onChange={(e) => setIzoh(e.target.value)} placeholder="Izoh (ixtiyoriy)" className="flex-1 rounded-lg border border-line bg-surface px-3 py-2.5 text-base" />
@@ -171,7 +203,18 @@ export function QuickAddSheet({
 
         <div className="sticky bottom-0 bg-app px-5 py-3 mt-3 flex gap-2 border-t border-line">
           <Button variant="secondary" size="lg" onClick={onClose} className="flex-1">Bekor</Button>
-          <Button size="lg" variant={turi === "chiqim" ? "danger" : "primary"} loading={loading} onClick={submit} className="flex-[2]">Saqlash</Button>
+          {/* 0 summa yoki kassasiz saqlash BLOKLANADI — ilgari tugma faol
+              ko'rinib, bosilganda hech narsa bo'lmasdi (audit K-4). */}
+          <Button
+            size="lg"
+            variant={turi === "chiqim" ? "danger" : "primary"}
+            loading={loading}
+            disabled={summa <= 0 || !accountId}
+            onClick={submit}
+            className="flex-[2]"
+          >
+            Saqlash
+          </Button>
         </div>
       </div>
 
@@ -180,6 +223,7 @@ export function QuickAddSheet({
       <KgSavdoSheet
         open={kgKategoriya !== null}
         kategoriya={kgKategoriya}
+        accountId={accountId}
         onClose={() => setKgKategoriya(null)}
         onSaved={() => {
           setKgKategoriya(null);

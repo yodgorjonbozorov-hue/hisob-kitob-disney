@@ -169,29 +169,25 @@ export async function createTransfer(
 }
 
 /**
- * Yozuv uchun kassani aniqlaydi.
+ * FOYDALANUVCHINING STANDART KASSASI — tanlov qilinmaganda pul qayerga
+ * tushishi. FAQAT O'QISH: hech narsa yozmaydi.
  *
- * Foydalanuvchi tanlagan bo'lsa — u shu biznesniki ekani tekshiriladi.
- * Tanlanmagan bo'lsa — to'lov turiga MOS birinchi faol kassa (naqd → naqd
- * kassa, click → plastik/bank kassa); mos kassa bo'lmasa yoki tur berilmasa —
- * birinchi faol kassa (bitta kassali bizneslarda UI'da bu qadam umuman
- * ko'rsatilmaydi).
+ * Qoida (tartib bilan):
+ *   1. Shaxsiy kassa rejimi — naqd pul yozuvchining o'z kassasiga;
+ *   2. To'lov turiga MOS birinchi faol kassa (naqd → naqd, click → plastik/bank);
+ *   3. Birinchi faol kassa.
+ *
+ * Bu funksiya UI va server uchun BITTA MANBA: forma kassa tanlovini aynan
+ * shu qiymat bilan oldindan to'ldiradi (`standartKassalar`), shuning uchun
+ * ekranda ko'rinib turgan kassa bilan yoziladigan kassa har doim bir xil.
+ * Ilgari qoida faqat serverda bo'lgani uchun forma "Tanlang..." bo'sh
+ * turganda ham yozuv jimgina shaxsiy kassaga tushardi.
  */
-export async function resolveAccountId(
+export async function standartKassaId(
   businessId: string,
-  accountId?: string | null,
   tolovTuri?: string | null,
   userId?: string | null
 ): Promise<string | null> {
-  if (accountId) {
-    const acc = await prisma.account.findFirst({
-      where: { id: accountId, businessId, isActive: true },
-      select: { id: true },
-    });
-    if (!acc) throw new ForbiddenError("Kassa topilmadi yoki nofaol");
-    return acc.id;
-  }
-  // Shaxsiy kassa rejimi: naqd pul yozuvni kiritgan xodimning kassasiga tushadi.
   const shaxsiy = await shaxsiyKassaId(prisma, businessId, userId, tolovTuri);
   if (shaxsiy) return shaxsiy;
   if (tolovTuri === "naqd" || tolovTuri === "click") {
@@ -209,4 +205,49 @@ export async function resolveAccountId(
     select: { id: true },
   });
   return birinchi?.id ?? null;
+}
+
+/**
+ * Formada oldindan tanlanadigan kassalar — to'lov turi kesimida.
+ * Sahifa serverda render qilinadi, to'lov turi esa klientda almashadi,
+ * shuning uchun ikkala variant birdaniga yuboriladi. `null` — standart
+ * kassa yo'q, foydalanuvchi qo'lda tanlashi SHART.
+ */
+export async function standartKassalar(
+  businessId: string,
+  userId: string
+): Promise<{ naqd: string | null; click: string | null }> {
+  const [naqd, click] = await Promise.all([
+    standartKassaId(businessId, "naqd", userId),
+    standartKassaId(businessId, "click", userId),
+  ]);
+  return { naqd, click };
+}
+
+/**
+ * Yozuv uchun kassani aniqlaydi.
+ *
+ * Foydalanuvchi tanlagan bo'lsa — u shu biznesniki ekani tekshiriladi.
+ * Tanlanmagan bo'lsa — `standartKassaId` qoidasi.
+ *
+ * DIQQAT: bu yo'l TIZIM va BOT yozuvlari uchun qoladi (Telegram, CSV import,
+ * CRM ko'chirmasi, oylik, qarz to'lovi) — ularda kassa tanlash ekrani yo'q.
+ * Web formalarida esa kassa MAJBURIY (lib/services/kassaTalab.ts): u yerda
+ * jimgina standart kassaga yozish — aynan auditdagi K-1 muammosi.
+ */
+export async function resolveAccountId(
+  businessId: string,
+  accountId?: string | null,
+  tolovTuri?: string | null,
+  userId?: string | null
+): Promise<string | null> {
+  if (accountId) {
+    const acc = await prisma.account.findFirst({
+      where: { id: accountId, businessId, isActive: true },
+      select: { id: true },
+    });
+    if (!acc) throw new ForbiddenError("Kassa topilmadi yoki nofaol");
+    return acc.id;
+  }
+  return standartKassaId(businessId, tolovTuri, userId);
 }

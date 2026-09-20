@@ -7,6 +7,7 @@ import { todayDateOnlyString } from "@/lib/date";
 import { kgSumma, kgToGram, parseKgInput } from "@/lib/kg";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
+import { KASSA_TANLANMADI } from "@/lib/kassaQoida";
 
 /**
  * KG SAVDOSI OYNASI (mijozga xos — Fortex Selos, lib/mijozXos.ts).
@@ -21,11 +22,17 @@ import { useToast } from "@/components/ui/Toast";
 export function KgSavdoSheet({
   open,
   kategoriya,
+  accountId,
   onClose,
   onSaved,
 }: {
   open: boolean;
   kategoriya: { id: string; nomi: string; oxirgiKgNarxi?: number | null } | null;
+  /**
+   * Pul tushadigan kassa — chaqiruvchi oynada tanlanadi. Kassa majburiy
+   * (lib/services/kassaTalab.ts): bo'sh bo'lsa saqlash bloklanadi.
+   */
+  accountId: string;
   /** Bekor / fon bosilganda — chaqiruvchi oyna ochiq qoladi. */
   onClose: () => void;
   /** Saqlangandan keyin (chaqiruvchi oyna ham yopiladi). Berilmasa `onClose`. */
@@ -60,6 +67,7 @@ export function KgSavdoSheet({
     if (!kategoriya) return;
     if (miqdorKg <= 0) return setError("Miqdorni (kg) kiriting");
     if (kgNarxi <= 0) return setError("1 kg narxini kiriting");
+    if (!accountId) return setError(KASSA_TANLANMADI);
     setLoading(true);
     try {
       const sana = kecha
@@ -76,6 +84,7 @@ export function KgSavdoSheet({
           miqdorKg,
           kgNarxi,
           sana,
+          accountId,
           izoh: izoh || undefined,
         }),
       });

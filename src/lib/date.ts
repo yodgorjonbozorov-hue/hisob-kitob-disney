@@ -29,6 +29,23 @@ export function todayTashkentDateOnlyString(now: Date = new Date()): string {
   return utcDateToDateOnlyString(new Date(now.getTime() + TOSHKENT_OFFSET_MS));
 }
 
+/**
+ * "BU OY" DAVRI — Toshkent kalendari bo'yicha oyning 1-kunidan bugungacha.
+ *
+ * Kirim/Chiqim sahifasining STANDART davri (audit K-7): ilgari sahifa
+ * ochilganda butun tarix (1600+ yozuv) va "butun tarix" yig'indisi
+ * ko'rsatilardi. Server so'rovi ham, filtr chipi ham, eksport ham AYNI
+ * shu funksiyadan oladi — aks holda ekrandagi raqam bilan yuklab olingan
+ * fayl bir-biriga mos kelmasdi.
+ *
+ * Toshkent (UTC+5) sababi: server UTC'da ishlaydi, oy chegarasi esa
+ * O'zbekiston yarim tunida o'tishi kerak.
+ */
+export function buOyDavri(now: Date = new Date()): { from: string; to: string } {
+  const bugun = todayTashkentDateOnlyString(now);
+  return { from: `${bugun.slice(0, 7)}-01`, to: bugun };
+}
+
 /** "YYYY-MM" -> { from, to } UTC-midnight chegaralari (to — keyingi oyning 1-kuni, exclusive). */
 export function monthRangeUTC(monthStr: string): { from: Date; to: Date } {
   const [yearStr, monthStr2] = monthStr.split("-");

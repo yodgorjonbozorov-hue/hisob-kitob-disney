@@ -173,14 +173,12 @@ export function KassamClient({
                   <p className="text-sm text-fg truncate">{h.matn}</p>
                   <p className="text-2xs text-faint">{formatToshkentVaqt(new Date(h.vaqt))}</p>
                 </div>
-                <p
-                  className={`text-sm font-semibold tnum shrink-0 ${
-                    h.summa >= 0 ? "text-income" : "text-expense"
-                  }`}
-                >
-                  {h.summa >= 0 ? "+" : "−"}
-                  {Math.abs(h.summa).toLocaleString("ru-RU")}
-                </p>
+                {/* Belgi va guruhlash YAGONA joydan (Money → lib/format).
+                    Ilgari bu qator `toLocaleString("ru-RU")` ishlatardi —
+                    ajratkich ilovaning qolgan qismidan farq qilardi. */}
+                <div className="shrink-0">
+                  <Money value={h.summa} size="sm" signed suffix={false} />
+                </div>
               </li>
             ))}
           </ul>

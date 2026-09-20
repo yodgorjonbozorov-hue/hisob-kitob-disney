@@ -7,7 +7,7 @@ import { updateTransactionSchema } from "@/lib/validation/transaction";
 import { dateOnlyStringToUTCDate } from "@/lib/date";
 import { kgSumma, kgToGram } from "@/lib/kg";
 import { resolveActiveBusinessId } from "@/lib/business";
-import { resolveAccountId } from "@/lib/services/accounts";
+import { kassaYangilanishi } from "@/lib/services/kassaTalab";
 import { dashboardYangilandi } from "@/lib/cache";
 import { kunlikSinxron } from "@/lib/services/kunlik";
 import { tekshirilganSotuvchi } from "@/lib/services/sotuvchi";
@@ -105,18 +105,23 @@ export const PATCH = withTenant<{ params: { id: string } }>(async (request, { pa
     return NextResponse.json({ error: "Qarz to'lov turi faqat kirim uchun" }, { status: 400 });
   }
 
-  // Kassa bog'lanishi to'lov turiga ergashadi: qarz — kassasiz; qarzdan
-  // naqd/click'ka qaytsa — mos faol kassa qayta bog'lanadi.
-  let accountYangilash: { accountId: string | null } | Record<string, never> = {};
-  if (data.tolovTuri !== undefined) {
-    if (yakuniyTolov === "qarz") {
-      accountYangilash = { accountId: null };
-    } else if (existing.accountId === null || data.accountId !== undefined) {
-      accountYangilash = {
-        accountId: await resolveAccountId(businessId!, data.accountId, yakuniyTolov),
-      };
-    }
-  }
+  // KASSANI TUZATISH (audit K-2). Ilgari `accountId` FAQAT `tolovTuri` bilan
+  // birga kelganda qo'llanardi — shuning uchun xato kassaga tushgan yozuvni
+  // UI orqali umuman to'g'rilab bo'lmasdi. Endi kassa mustaqil maydon.
+  //
+  // QOLDIQ IKKI MARTA O'ZGARMAYDI: kassa qoldig'i saqlanadigan raqam emas,
+  // u har safar ledgerdan hisoblanadi (lib/queries/accounts.ts:
+  // qoldiq = kirim − chiqim ± transfer). Yozuvning `accountId` si
+  // ko'chganda eski kassadan avtomatik chiqadi, yangisiga qo'shiladi —
+  // qo'shimcha tuzatish yozuvi KERAK EMAS va yaratilmaydi ham.
+  const accountYangilash = await kassaYangilanishi({
+    businessId: businessId!,
+    mavjudAccountId: existing.accountId,
+    mavjudUserId: existing.userId,
+    yangiAccountId: data.accountId,
+    tolovTuriKeldi: data.tolovTuri !== undefined,
+    yakuniyTolov,
+  });
 
   // SOTUVCHI tuzatish: faqat kirimda; boshqa xodimni belgilash — boshqaruvchi
   // yoki xodim shu biznesniki ekani tekshiriladi (lib/services/sotuvchi.ts).
