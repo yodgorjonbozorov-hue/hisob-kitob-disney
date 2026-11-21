@@ -73,8 +73,8 @@ export async function POST(request: NextRequest) {
   const rl = await rateLimit(rlKey, 8, IP_OYNA);
   if (!rl.ok) {
     return NextResponse.json(
-      { error: `Juda ko'p urinish. ${rl.retryAfter} soniyadan keyin qayta urining.` },
-      { status: 429 }
+      { error: `Juda ko'p urinish. ${rl.retryAfter} soniyadan keyin qayta urining.`, retryAfter: rl.retryAfter },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } }
     );
   }
 
@@ -92,8 +92,11 @@ export async function POST(request: NextRequest) {
   const rlLogin = await rateLimit(rlLoginKey, 5, LOGIN_OYNA);
   if (!rlLogin.ok) {
     return NextResponse.json(
-      { error: `Bu login uchun juda ko'p urinish. ${rlLogin.retryAfter} soniyadan keyin qayta urining.` },
-      { status: 429 }
+      {
+        error: `Bu login uchun juda ko'p urinish. ${rlLogin.retryAfter} soniyadan keyin qayta urining.`,
+        retryAfter: rlLogin.retryAfter,
+      },
+      { status: 429, headers: { "Retry-After": String(rlLogin.retryAfter) } }
     );
   }
 
