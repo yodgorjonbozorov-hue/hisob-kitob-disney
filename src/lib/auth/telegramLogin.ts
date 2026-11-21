@@ -4,12 +4,14 @@
  * Oqim:
  *   1. Brauzer `boshlash()` — tasodifiy TOKEN (havolada) va NONCE (httpOnly
  *      cookie'da) oladi. Bazada faqat ikkalasining SHA-256 xeshi turadi.
- *   2. Foydalanuvchi `t.me/<bot>?start=login_<TOKEN>` ni ochadi. Bot chatni
- *      bog'langan akkauntga moslaydi va "Tasdiqlash / Rad etish" so'raydi
- *      (`botdaOchildi`). Xabarda IP va brauzer ko'rsatiladi.
- *   3. Tasdiqlansa (`botQarori`) — so'rov akkauntga biriktiriladi.
- *   4. Brauzer `holat()` ni so'rab turadi; tasdiqlangan so'rovni TOKEN +
- *      NONCE bilan BIR MARTA oladi (`olish`) va sessiya ochiladi.
+ *   2. Foydalanuvchi `t.me/<bot>?start=login_<TOKEN>` ni ochadi; bot
+ *      "📱 Raqamni yuborish" (request_contact) tugmasini beradi (`botdaOchildi`).
+ *   3. Kontakt keladi (`kontaktKeldi`): egasi yuboruvchining o'zi ekani
+ *      tekshiriladi, raqam E.164 ga keltirilib akkaunt topiladi
+ *      (`telefonAkkaunt.ts`). Bot IP/brauzer/vaqtni ko'rsatib tasdiq so'raydi.
+ *   4. Tasdiqlansa (`botQarori`) — so'rov akkauntga biriktiriladi.
+ *   5. Brauzer `holat()` ni so'rab turadi; tasdiqlangan so'rovni TOKEN +
+ *      NONCE bilan BIR MARTA oladi va sessiya ochiladi.
  *
  * Nega NONCE: havola (TOKEN) Telegram'ga, tarixga, skrinshotga tushadi. Uni
  * ko'rgan boshqa brauzer sessiyani ololmasligi uchun kirish so'rovni
@@ -22,6 +24,7 @@
 import { rawPrisma as prisma } from "@/lib/db/rawPrisma";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { User } from "@prisma/client";
+import { chatniBogla, kontaktRaqami, telefonBoyichaAkkaunt } from "./telefonAkkaunt";
 
 export const TG_LOGIN_TTL_MS = 5 * 60 * 1000;
 const KALIT_OLD = "tglogin:";
@@ -38,6 +41,8 @@ interface Yozuv {
   brauzer: string | null;
   /** Botda ochgan chat — tasdiqni faqat shu chat bera oladi. */
   chatId: string | null;
+  /** Kontakt bo'yicha topilgan akkaunt — tasdiq kutilmoqda. */
+  nomzodId?: string | null;
   /** Tasdiqlangan akkaunt. */
   userId: string | null;
 }
@@ -140,44 +145,90 @@ export async function boshlash(p: { ip: string | null; userAgent: string | null 
   return { token, nonce, expiresAt: exp };
 }
 
-export type BotOchishNatija =
-  | { tur: "topilmadi" }
-  | { tur: "boglanmagan" }
-  | { tur: "tasdiq_kerak"; id: string; ism: string; ip: string | null; brauzer: string | null };
+/** Chat → ochiq so'rov ko'rsatkichi: kontakt kelganda qaysi so'rovga tegishli ekani. */
+const chatKalit = (chatId: string) => `${KALIT_OLD}chat:${chatId}`;
 
-/** 2-qadam: bot `/start login_<token>` ni oldi. */
+export type BotOchishNatija = { tur: "topilmadi" } | { tur: "kontakt_kerak" };
+
+/** 2-qadam: bot `/start login_<token>` ni oldi — endi kontakt so'raladi. */
 export async function botdaOchildi(token: string, chatId: string): Promise<BotOchishNatija> {
   const id = idOl(token);
   const y = await oqi(id);
-  if (!y || y.holat !== "kutilmoqda") return { tur: "topilmadi" };
-
-  const user = await prisma.user.findUnique({ where: { telegramChatId: chatId } });
-  if (!user || !user.isActive) {
-    // Sahifa foydalanuvchiga "Telegram akkauntga bog'lanmagan" deb aytishi uchun.
-    await yoz(id, { ...y, holat: "boglanmagan" });
-    return { tur: "boglanmagan" };
-  }
-  await yoz(id, { ...y, chatId });
-  return { tur: "tasdiq_kerak", id, ism: user.ism, ip: y.ip, brauzer: y.brauzer };
+  // Boshqa chat allaqachon ochgan so'rovni egallab bo'lmaydi.
+  if (!y || y.holat !== "kutilmoqda" || (y.chatId && y.chatId !== chatId)) return { tur: "topilmadi" };
+  await yoz(id, { ...y, chatId, nomzodId: null });
+  const qiymat = JSON.stringify({ id, exp: y.exp });
+  await prisma.appSetting.upsert({
+    where: { key: chatKalit(chatId) },
+    create: { key: chatKalit(chatId), value: qiymat },
+    update: { value: qiymat },
+  });
+  return { tur: "kontakt_kerak" };
 }
 
-/** 3-qadam: botdagi tugma. Faqat so'rovni ochgan chat qaror qila oladi. */
+export type KontaktNatija =
+  | { tur: "sorov_yoq" }
+  | { tur: "begona_kontakt" }
+  | { tur: "raqam_yaroqsiz" }
+  | { tur: "topilmadi" }
+  | { tur: "tasdiq_kerak"; id: string; ism: string; ip: string | null; brauzer: string | null };
+
+/**
+ * 3-qadam: foydalanuvchi "Raqamni yuborish" tugmasi bilan kontakt yubordi.
+ *
+ * `contactUserId === fromId` — Telegram standarti bo'yicha kontakt egasi
+ * yuboruvchining O'ZI ekanini bildiradi (request_contact tugmasi faqat o'z
+ * raqamini yuboradi; boshqa odamning kontaktini ulashsa user_id boshqacha
+ * yoki umuman yo'q bo'ladi). Shu tekshiruvsiz begona raqam bilan kirish mumkin edi.
+ */
+export async function kontaktKeldi(p: {
+  chatId: string;
+  fromId: number;
+  contactUserId: number | undefined;
+  telefon: string;
+}): Promise<KontaktNatija> {
+  const k = await prisma.appSetting.findUnique({ where: { key: chatKalit(p.chatId) } });
+  let id: string | null = null;
+  try {
+    const v = k ? (JSON.parse(k.value) as { id: string; exp: number }) : null;
+    id = v && v.exp > Date.now() ? v.id : null;
+  } catch {
+    id = null;
+  }
+  const y = id ? await oqi(id) : null;
+  if (!id || !y || y.holat !== "kutilmoqda" || y.chatId !== p.chatId) return { tur: "sorov_yoq" };
+  if (p.contactUserId === undefined || p.contactUserId !== p.fromId) return { tur: "begona_kontakt" };
+
+  const e164 = kontaktRaqami(p.telefon);
+  if (!e164) return { tur: "raqam_yaroqsiz" };
+
+  const natija = await telefonBoyichaAkkaunt(e164, p.chatId);
+  if (natija.tur !== "topildi") {
+    await yoz(id, { ...y, holat: "boglanmagan" });
+    return { tur: "topilmadi" };
+  }
+  await yoz(id, { ...y, nomzodId: natija.user.id });
+  return { tur: "tasdiq_kerak", id, ism: natija.user.ism, ip: y.ip, brauzer: y.brauzer };
+}
+
+/** 4-qadam: botdagi tugma. Faqat so'rovni ochgan chat, kontakt tekshirilgandan keyin. */
 export async function botQarori(
   id: string,
   chatId: string,
   tasdiq: boolean
 ): Promise<"tasdiqlandi" | "rad" | "eskirgan"> {
   const y = await oqi(id);
-  if (!y || y.holat !== "kutilmoqda" || y.chatId !== chatId) return "eskirgan";
+  if (!y || y.holat !== "kutilmoqda" || y.chatId !== chatId || !y.nomzodId) return "eskirgan";
   if (!tasdiq) {
     await yoz(id, { ...y, holat: "rad" });
     return "rad";
   }
-  // Tasdiq paytida akkaunt QAYTA tekshiriladi: oraliqda bog'lanish uzilgan yoki
-  // akkaunt o'chirilgan bo'lishi mumkin.
-  const user = await prisma.user.findUnique({ where: { telegramChatId: chatId } });
+  // Tasdiq paytida akkaunt QAYTA tekshiriladi: oraliqda o'chirilgan bo'lishi mumkin.
+  const user = await prisma.user.findUnique({ where: { id: y.nomzodId } });
   if (!user || !user.isActive) return "eskirgan";
   await yoz(id, { ...y, holat: "tasdiqlandi", userId: user.id });
+  await prisma.appSetting.deleteMany({ where: { key: chatKalit(chatId) } });
+  await chatniBogla(user.id, chatId);
   return "tasdiqlandi";
 }
 

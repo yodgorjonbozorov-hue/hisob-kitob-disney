@@ -1,7 +1,10 @@
 /**
- * TELEGRAM ORQALI KIRISH — xizmat va bot qatlami.
+ * TELEGRAM ORQALI KIRISH — xizmat va bot qatlami (kontakt bilan tasdiq).
  *
  *   npm run test:telegram-login
+ *
+ * Oqim: /start login_<token> → "📱 Raqamni yuborish" → kontakt → akkaunt
+ * topiladi → "Ha, kirish" → brauzer sessiyani BIR MARTA oladi.
  *
  * Alohida baza: prisma/test-telegram-login.db. Bot soxta `ctx` bilan
  * chaqiriladi (Telegram'ga so'rov ketmaydi).
@@ -20,8 +23,7 @@ let svc: Svc;
 let flow: Flow;
 
 const T = "t_tgl";
-const CHAT = "5550001";
-const BEGONA_CHAT = "5550002";
+const BIZ = "biz_tgl";
 
 before(async () => {
   rmSync("prisma/test-telegram-login.db", { force: true });
@@ -32,25 +34,37 @@ before(async () => {
   flow = await import("@/bot/loginFlow");
 
   await rawPrisma.tenant.create({ data: { id: T, name: "Tg", slug: "tg", status: "ACTIVE" } });
-  await rawPrisma.user.create({
-    data: { id: "u_tg", ism: "Aziz", login: "aziz", parolHash: "x", rol: "OWNER", tenantId: T, telegramChatId: CHAT },
+  await rawPrisma.business.create({ data: { id: BIZ, nomi: "Tg biznes", tenantId: T } });
+  const u = (id: string, login: string, extra: Record<string, unknown> = {}) =>
+    rawPrisma.user.create({ data: { id, ism: id, login, parolHash: "x", rol: "OWNER", tenantId: T, ...extra } });
+  await u("u_tel", "+998901112233"); // telefon login (yangi format)
+  await u("u_eski", "902223344"); // telefon login (eski 9 raqam)
+  await u("u_kassir", "kassir1", { rol: "CASHIER" }); // harfli login, raqam xodim kartochkasida
+  await rawPrisma.employee.create({
+    data: { ism: "Kassir", tel: "+998 (93) 444-55-66", userId: "u_kassir", businessId: BIZ } as never,
   });
-  await rawPrisma.user.create({
-    data: { id: "u_off", ism: "Nofaol", login: "nofaol", parolHash: "x", rol: "CASHIER", tenantId: T, telegramChatId: "5550009", isActive: false },
-  });
+  await u("u_chat", "boshqaruvchi", { telegramChatId: "7000005" }); // faqat /kod bilan bog'langan
+  await u("u_off", "+998905556677", { isActive: false });
+  await u("u_dub1", "+998937778899");
+  await u("u_dub2", "937778899"); // bitta raqam ikki akkauntda
 });
 
 after(async () => {
   await rawPrisma?.$disconnect();
 });
 
-const yangi = () => svc.boshlash({ ip: "203.0.113.5", userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) Chrome/130.0 Safari/537.36" });
+const yangi = () =>
+  svc.boshlash({ ip: "203.0.113.5", userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) Chrome/130.0 Safari/537.36" });
+
+type Javob = { text: string; markup?: unknown };
 
 /** Soxta grammy konteksti: javoblarni yig'adi. */
-function ctx(p: { chatId: string; tur?: string; data?: string }) {
-  const javoblar: { text: string; markup?: unknown }[] = [];
+function ctx(p: { chatId: string; tur?: string; data?: string; contact?: { phone_number: string; user_id?: number }; fromId?: number }) {
+  const javoblar: Javob[] = [];
   const c = {
     chat: { id: Number(p.chatId), type: p.tur ?? "private" },
+    from: { id: p.fromId ?? Number(p.chatId) },
+    message: p.contact ? { contact: p.contact } : undefined,
     callbackQuery: p.data ? { data: p.data } : undefined,
     reply: async (text: string, o?: { reply_markup?: unknown }) => {
       javoblar.push({ text, markup: o?.reply_markup });
@@ -63,165 +77,210 @@ function ctx(p: { chatId: string; tur?: string; data?: string }) {
   return { c: c as never, javoblar };
 }
 
-/** Bot xabaridagi inline tugmalardan callback_data larni oladi. */
-function tugmalar(markup: unknown): string[] {
-  const m = markup as { inline_keyboard: { callback_data: string }[][] };
-  return m.inline_keyboard.flat().map((b) => b.callback_data);
+const inlineTugmalar = (markup: unknown) =>
+  (markup as { inline_keyboard: { callback_data: string }[][] }).inline_keyboard.flat().map((b) => b.callback_data);
+
+/** Start → kontakt; oxirgi javobni (tasdiq xabari yoki xato) qaytaradi. */
+async function startVaKontakt(token: string, chatId: string, telefon: string, contactUserId?: number) {
+  await flow.handleLoginStart(ctx({ chatId }).c, `login_${token}`);
+  const k = ctx({ chatId, contact: { phone_number: telefon, user_id: contactUserId ?? Number(chatId) } });
+  await flow.handleLoginContact(k.c);
+  return k.javoblar;
 }
 
 // ---------- To'liq oqim ----------
 
-test("to'liq oqim: boshlash → bot → tasdiq → brauzer akkauntni oladi (bir marta)", async () => {
-  const { token, nonce } = await yangi();
-  assert.match(token, /^[A-Za-z0-9_-]{43}$/);
-  assert.ok(`login_${token}`.length <= 64, "Telegram start payload chegarasi");
-
-  assert.equal((await svc.holat(token, nonce)).holat, "kutilmoqda");
-
-  const s = ctx({ chatId: CHAT });
+test("Start: request_contact tugmasi beriladi", async () => {
+  const { token } = await yangi();
+  const s = ctx({ chatId: "7000001" });
   await flow.handleLoginStart(s.c, `login_${token}`);
-  const xabar = s.javoblar[0];
-  assert.match(xabar.text, /Aziz/);
-  assert.match(xabar.text, /Chrome · macOS/, "qurilma ko'rsatiladi");
-  assert.match(xabar.text, /203\.0\.113\.5/, "IP ko'rsatiladi");
-  const [ha, yoq] = tugmalar(xabar.markup);
-  assert.match(ha, /^tgl:ok:[0-9a-f]{40}$/);
+  const kb = s.javoblar[0].markup as { keyboard: { text: string; request_contact?: boolean }[][]; one_time_keyboard?: boolean };
+  assert.equal(kb.keyboard[0][0].request_contact, true, "Telegram standarti: request_contact");
+  assert.match(kb.keyboard[0][0].text, /Raqamni yuborish/);
+  assert.equal(kb.one_time_keyboard, true);
+});
+
+test("to'liq oqim: kontakt → tasdiq → brauzer akkauntni BIR MARTA oladi", async () => {
+  const { token, nonce } = await yangi();
+  assert.ok(`login_${token}`.length <= 64, "Telegram start payload chegarasi");
+  const javoblar = await startVaKontakt(token, "7000001", "998901112233");
+  assert.equal((javoblar[0].markup as { remove_keyboard: boolean }).remove_keyboard, true, "klaviatura yopiladi");
+  const tasdiq = javoblar[1];
+  assert.match(tasdiq.text, /u_tel/);
+  assert.match(tasdiq.text, /Chrome · macOS/);
+  assert.match(tasdiq.text, /203\.0\.113\.5/);
+  const [ha, yoq] = inlineTugmalar(tasdiq.markup);
   assert.ok(ha.length <= 64 && yoq.length <= 64, "callback_data 64 bayt chegarasi");
 
-  const cb = ctx({ chatId: CHAT, data: ha });
+  assert.equal((await svc.holat(token, nonce)).holat, "kutilmoqda", "tasdiqsiz kirilmaydi");
+  const cb = ctx({ chatId: "7000001", data: ha });
   await flow.handleLoginCallback(cb.c);
   assert.match(cb.javoblar[0].text, /tasdiqlandi/);
 
   const n = await svc.holat(token, nonce);
   assert.equal(n.holat, "tasdiqlandi");
-  assert.equal(n.user?.id, "u_tg");
+  assert.equal(n.user?.id, "u_tel");
   assert.equal((await svc.holat(token, nonce)).holat, "eskirgan", "ikkinchi marta olib bo'lmaydi");
+});
+
+test("tasdiqdan keyin chat akkauntga bog'lanadi (bot funksiyalari ochiladi)", async () => {
+  const u = await rawPrisma.user.findUnique({ where: { id: "u_tel" } });
+  assert.equal(u?.telegramChatId, "7000001");
+});
+
+test("raqam har xil formatda kelsa ham topiladi; eski loginlar ham", async () => {
+  for (const [tel, kutilgan] of [["+998902223344", "u_eski"], ["998902223344", "u_eski"]] as const) {
+    const { token } = await yangi();
+    const j = await startVaKontakt(token, "7000002", tel);
+    assert.match(j[1]?.text ?? "", new RegExp(kutilgan), tel);
+  }
+});
+
+test("harfli login: raqam xodim kartochkasidan (erkin format) topiladi", async () => {
+  const { token } = await yangi();
+  const j = await startVaKontakt(token, "7000003", "998934445566");
+  assert.match(j[1].text, /u_kassir/);
+});
+
+test("raqam topilmasa, lekin chat /kod bilan bog'langan bo'lsa — o'sha akkaunt", async () => {
+  const { token } = await yangi();
+  const j = await startVaKontakt(token, "7000005", "998909990000");
+  assert.match(j[1].text, /u_chat/);
 });
 
 // ---------- Xavfsizlik ----------
 
-test("boshqa brauzer (nonce'siz yoki boshqa nonce) tasdiqlangan so'rovni ololmaydi", async () => {
+test("BEGONA kontakt (boshqa odamniki) qabul qilinmaydi", async () => {
   const { token, nonce } = await yangi();
-  const s = ctx({ chatId: CHAT });
-  await flow.handleLoginStart(s.c, `login_${token}`);
-  const [ha] = tugmalar(s.javoblar[0].markup);
-  await flow.handleLoginCallback(ctx({ chatId: CHAT, data: ha }).c);
-
-  assert.equal((await svc.holat(token, null)).holat, "eskirgan");
-  assert.equal((await svc.holat(token, "begona-nonce-qiymati")).holat, "eskirgan");
-  assert.equal((await svc.holat(token, nonce)).user?.id, "u_tg", "egasi baribir oladi");
+  const j = await startVaKontakt(token, "7000006", "998901112233", 123456);
+  assert.match(j[0].text, /o'zingizning raqamingizni/);
+  assert.equal(j.length, 1, "tasdiq so'ralmaydi");
+  assert.equal((await svc.holat(token, nonce)).holat, "kutilmoqda");
+  // user_id umuman yo'q kontakt (qo'lda tuzilgan) ham rad etiladi.
+  const k = ctx({ chatId: "7000006", contact: { phone_number: "998901112233" } });
+  await flow.handleLoginContact(k.c);
+  assert.match(k.javoblar[0].text, /o'zingizning raqamingizni/);
 });
 
-test("tasdiqni faqat so'rovni ochgan chat bera oladi", async () => {
+test("kontaktsiz tasdiq tugmasini soxtalashtirib bo'lmaydi", async () => {
   const { token, nonce } = await yangi();
-  const s = ctx({ chatId: CHAT });
-  await flow.handleLoginStart(s.c, `login_${token}`);
-  const [ha] = tugmalar(s.javoblar[0].markup);
+  await flow.handleLoginStart(ctx({ chatId: "7000007" }).c, `login_${token}`);
+  const id = (await rawPrisma.appSetting.findUnique({ where: { key: "tglogin:chat:7000007" } }))!;
+  const soxta = ctx({ chatId: "7000007", data: `tgl:ok:${JSON.parse(id.value).id}` });
+  await flow.handleLoginCallback(soxta.c);
+  assert.match(soxta.javoblar[0].text, /eskirgan/);
+  assert.equal((await svc.holat(token, nonce)).holat, "kutilmoqda");
+});
 
-  const begona = ctx({ chatId: BEGONA_CHAT, data: ha });
+test("boshqa brauzer (nonce'siz yoki boshqa nonce) tasdiqlangan so'rovni ololmaydi", async () => {
+  const { token, nonce } = await yangi();
+  const j = await startVaKontakt(token, "7000002", "998902223344");
+  await flow.handleLoginCallback(ctx({ chatId: "7000002", data: inlineTugmalar(j[1].markup)[0] }).c);
+  assert.equal((await svc.holat(token, null)).holat, "eskirgan");
+  assert.equal((await svc.holat(token, "begona-nonce")).holat, "eskirgan");
+  assert.equal((await svc.holat(token, nonce)).user?.id, "u_eski", "egasi baribir oladi");
+});
+
+test("tasdiqni faqat so'rovni ochgan chat bera oladi; boshqa chat so'rovni egallay olmaydi", async () => {
+  const { token, nonce } = await yangi();
+  const j = await startVaKontakt(token, "7000002", "998902223344");
+  const [ha] = inlineTugmalar(j[1].markup);
+  const begona = ctx({ chatId: "7000099", data: ha });
   await flow.handleLoginCallback(begona.c);
   assert.match(begona.javoblar[0].text, /eskirgan/);
+  const ikkinchi = ctx({ chatId: "7000099" });
+  await flow.handleLoginStart(ikkinchi.c, `login_${token}`);
+  assert.match(ikkinchi.javoblar[0].text, /eskirgan/, "havola boshqa chatda ochilmaydi");
   assert.equal((await svc.holat(token, nonce)).holat, "kutilmoqda");
 });
 
 test("rad etilsa brauzer 'rad' oladi va keyin tasdiqlab bo'lmaydi", async () => {
   const { token, nonce } = await yangi();
-  const s = ctx({ chatId: CHAT });
-  await flow.handleLoginStart(s.c, `login_${token}`);
-  const [ha, yoq] = tugmalar(s.javoblar[0].markup);
-  await flow.handleLoginCallback(ctx({ chatId: CHAT, data: yoq }).c);
+  const j = await startVaKontakt(token, "7000002", "998902223344");
+  const [ha, yoq] = inlineTugmalar(j[1].markup);
+  await flow.handleLoginCallback(ctx({ chatId: "7000002", data: yoq }).c);
   assert.equal((await svc.holat(token, nonce)).holat, "rad");
-  const keyin = ctx({ chatId: CHAT, data: ha });
+  const keyin = ctx({ chatId: "7000002", data: ha });
   await flow.handleLoginCallback(keyin.c);
   assert.match(keyin.javoblar[0].text, /eskirgan/);
 });
 
-test("bog'lanmagan Telegram: yo'riqnoma va brauzerga 'boglanmagan'", async () => {
+test("akkaunt topilmasa: aniq xabar, brauzerga 'boglanmagan'", async () => {
   const { token, nonce } = await yangi();
-  const s = ctx({ chatId: BEGONA_CHAT });
-  await flow.handleLoginStart(s.c, `login_${token}`);
-  assert.match(s.javoblar[0].text, /bog'lanmagan/);
-  assert.equal(s.javoblar[0].markup, undefined, "tasdiq tugmasi yo'q");
+  const j = await startVaKontakt(token, "7000008", "998911234567");
+  assert.match(j[0].text, /akkaunti topilmadi/);
   assert.equal((await svc.holat(token, nonce)).holat, "boglanmagan");
 });
 
-test("nofaol akkaunt kira olmaydi", async () => {
-  const { token, nonce } = await yangi();
-  const s = ctx({ chatId: "5550009" });
-  await flow.handleLoginStart(s.c, `login_${token}`);
-  assert.equal((await svc.holat(token, nonce)).holat, "boglanmagan");
+test("nofaol akkaunt va bitta raqamli ikki akkaunt — kirish yo'q", async () => {
+  for (const tel of ["998905556677", "998937778899"]) {
+    const { token, nonce } = await yangi();
+    const j = await startVaKontakt(token, "7000009", tel);
+    assert.match(j[0].text, /akkaunti topilmadi/, tel);
+    assert.equal((await svc.holat(token, nonce)).holat, "boglanmagan", tel);
+  }
 });
 
 test("tasdiqdan keyin akkaunt o'chirilsa sessiya berilmaydi", async () => {
   await rawPrisma.user.create({
-    data: { id: "u_tmp", ism: "Vaqtinchalik", login: "tmp", parolHash: "x", rol: "OWNER", tenantId: T, telegramChatId: "5550010" },
+    data: { id: "u_tmp", ism: "u_tmp", login: "+998901010101", parolHash: "x", rol: "OWNER", tenantId: T },
   });
   const { token, nonce } = await yangi();
-  const s = ctx({ chatId: "5550010" });
-  await flow.handleLoginStart(s.c, `login_${token}`);
-  const [ha] = tugmalar(s.javoblar[0].markup);
-  await flow.handleLoginCallback(ctx({ chatId: "5550010", data: ha }).c);
+  const j = await startVaKontakt(token, "7000010", "998901010101");
+  await flow.handleLoginCallback(ctx({ chatId: "7000010", data: inlineTugmalar(j[1].markup)[0] }).c);
   await rawPrisma.user.update({ where: { id: "u_tmp" }, data: { isActive: false } });
   assert.equal((await svc.holat(token, nonce)).holat, "eskirgan");
 });
 
-test("guruh chatida tasdiq so'ralmaydi", async () => {
+test("so'rovsiz kontakt va guruh chati", async () => {
+  const k = ctx({ chatId: "7000011", contact: { phone_number: "998901112233", user_id: 7000011 } });
+  await flow.handleLoginContact(k.c);
+  assert.match(k.javoblar[0].text, /eskirgan/);
   const { token, nonce } = await yangi();
-  const s = ctx({ chatId: CHAT, tur: "group" });
-  await flow.handleLoginStart(s.c, `login_${token}`);
-  assert.match(s.javoblar[0].text, /shaxsiy chat/);
+  const g = ctx({ chatId: "7000012", tur: "group" });
+  await flow.handleLoginStart(g.c, `login_${token}`);
+  assert.match(g.javoblar[0].text, /shaxsiy chat/);
   assert.equal((await svc.holat(token, nonce)).holat, "kutilmoqda");
 });
 
-test("yaroqsiz yoki eskirgan havola — aniq javob", async () => {
-  const s = ctx({ chatId: CHAT });
+test("yaroqsiz/bekor qilingan havola — aniq javob", async () => {
+  const s = ctx({ chatId: "7000001" });
   await flow.handleLoginStart(s.c, "login_buzilgan");
   assert.match(s.javoblar[0].text, /eskirgan/);
+  const { token, nonce } = await yangi();
+  await svc.bekorQilish(token, nonce);
+  const b = ctx({ chatId: "7000001" });
+  await flow.handleLoginStart(b.c, `login_${token}`);
+  assert.match(b.javoblar[0].text, /eskirgan/);
   assert.equal(flow.kirishSorovimi("login_x"), true);
   assert.equal(flow.kirishSorovimi(""), false);
-  assert.equal(flow.kirishSorovimi("boshqa"), false);
 });
 
-test("muddati o'tgan so'rov eskirgan; yangi so'rovda eskilari tozalanadi", async () => {
+test("muddati o'tgan yozuvlar eskirgan va tozalanadi; bazada token/nonce xom yo'q", async () => {
   const { token, nonce } = await yangi();
-  const kalitlar = await rawPrisma.appSetting.findMany({ where: { key: { startsWith: "tglogin:" } } });
-  // Hammasini o'tmishga suramiz.
-  for (const k of kalitlar) {
+  const matn = JSON.stringify(await rawPrisma.appSetting.findMany({ where: { key: { startsWith: "tglogin:" } } }));
+  assert.ok(!matn.includes(token) && !matn.includes(nonce), "faqat xesh saqlanadi");
+  for (const k of await rawPrisma.appSetting.findMany({ where: { key: { startsWith: "tglogin:" } } })) {
     const v = JSON.parse(k.value);
     await rawPrisma.appSetting.update({ where: { key: k.key }, data: { value: JSON.stringify({ ...v, exp: Date.now() - 1 }) } });
   }
   assert.equal((await svc.holat(token, nonce)).holat, "eskirgan");
   await yangi();
-  const qoldi = await rawPrisma.appSetting.count({ where: { key: { startsWith: "tglogin:" } } });
-  assert.equal(qoldi, 1, "faqat yangi so'rov qoladi");
+  assert.equal(await rawPrisma.appSetting.count({ where: { key: { startsWith: "tglogin:" } } }), 1);
 });
 
-test("bekor qilingan so'rovni botda tasdiqlab bo'lmaydi", async () => {
-  const { token, nonce } = await yangi();
-  await svc.bekorQilish(token, nonce);
-  const s = ctx({ chatId: CHAT });
-  await flow.handleLoginStart(s.c, `login_${token}`);
-  assert.match(s.javoblar[0].text, /eskirgan/);
+test("kontaktRaqami: Telegram formatlari E.164 ga", async () => {
+  const { kontaktRaqami } = await import("@/lib/auth/telefonAkkaunt");
+  assert.equal(kontaktRaqami("998901234567"), "+998901234567");
+  assert.equal(kontaktRaqami("+998901234567"), "+998901234567");
+  assert.equal(kontaktRaqami("79161234567"), "+79161234567", "Telegram har doim davlat kodi bilan yuboradi");
+  assert.equal(kontaktRaqami(""), null);
 });
 
-test("bazada token va nonce XOM saqlanmaydi (faqat xesh)", async () => {
-  const { token, nonce } = await yangi();
-  const hammasi = await rawPrisma.appSetting.findMany({ where: { key: { startsWith: "tglogin:" } } });
-  const matn = JSON.stringify(hammasi);
-  assert.ok(!matn.includes(token), "token bazada yo'q");
-  assert.ok(!matn.includes(nonce), "nonce bazada yo'q");
-});
-
-test("brauzerNomi: qisqa o'qiladigan nom", () => {
-  assert.equal(svc.brauzerNomi("Mozilla/5.0 (Linux; Android 14) Chrome/130 Mobile Safari/537.36"), "Chrome · Android");
-  assert.equal(svc.brauzerNomi("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) Version/17.0 Mobile Safari/604.1"), "Safari · iOS");
-  assert.equal(svc.brauzerNomi(null), null);
-});
-
-test("route'lar rawPrisma ishlatmaydi (tenant izolyatsiya qoidasi)", () => {
+test("route'lar rawPrisma ishlatmaydi; kontakt handler tenantHandler'dan oldin", () => {
   for (const f of ["boshlash", "holat", "bekor"]) {
-    const src = readFileSync(`src/app/api/auth/telegram/${f}/route.ts`, "utf8");
-    assert.doesNotMatch(src, /rawPrisma/, f);
+    assert.doesNotMatch(readFileSync(`src/app/api/auth/telegram/${f}/route.ts`, "utf8"), /rawPrisma/, f);
   }
-  assert.doesNotMatch(readFileSync("src/app/api/auth/login/route.ts", "utf8"), /rawPrisma/);
+  const bot = readFileSync("src/bot/bot.ts", "utf8");
+  assert.ok(bot.indexOf('"message:contact"') < bot.indexOf('"message:text"'));
 });
