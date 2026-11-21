@@ -38,6 +38,12 @@ Auditdagi bandlarning katta qismi allaqachon yopilgan; quyida faqat OCHIQ qolgan
 - [ ] **9.** AI model nomi kodda qattiq yozilgan (`claude-sonnet-5` — `src/lib/ai/claude.ts`,
       `src/lib/ai/chekOcr.ts`). Env sozlamasiga chiqarish va yangi modelga (`claude-sonnet-5-5`) o'tish.
 - [ ] **10.** `engines: node 22.x`, lokal muhitda Node 24 — `engines` ni kengaytirish.
+- [ ] **10a.** `tests/dialect.test.ts` main'da QIZIL: Postgres boshlang'ich migratsiyasi
+      eskirgan (sxemada 79 model, migratsiyada 78 jadval). `npm run pg:migratsiya` bilan
+      yangilash kerak (2026-11-21 da aniqlandi).
+- [ ] **10b.** Eski telefon-loginlar (`998...`, `9 raqam`) bazada E.164 ga ko'chirilmagan —
+      kirish ularni topadi (`lib/auth/loginTop.ts`), lekin ixtiyoriy migratsiya skripti
+      (dublikatlarni ko'rsatadigan DRY RUN bilan) bazani bir xil formatga keltiradi.
 
 ## 🟡 Unumdorlik
 

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-// Signup tizim-darajali amal (tenant endi yaratilmoqda) — rawPrisma.
-import { rawPrisma } from "@/lib/db/rawPrisma";
 import { getSession } from "@/lib/auth/session";
-import { signupSchema, normalizePhone } from "@/lib/validation/auth";
+import { signupSchema } from "@/lib/validation/auth";
+import { telE164 } from "@/lib/tel";
+import { telefonBandmi } from "@/lib/auth/loginTop";
 import { createTenantWithOwner, findRecentDuplicateTenant } from "@/lib/services/signup";
 import { isBusinessType } from "@/lib/pricing/profil";
 import { isAddonKey } from "@/lib/pricing/config";
@@ -31,14 +31,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Xato ma'lumot" }, { status: 400 });
   }
 
-  const login = normalizePhone(parsed.data.telefon);
-  if (login.replace("+", "").length < 9) {
-    return NextResponse.json({ error: "Telefon raqam noto'g'ri" }, { status: 400 });
+  // Login — telefon E.164 ko'rinishida (`+998901234567`): foydalanuvchi uni
+  // qanday yozganidan qat'i nazar bazaga bitta format tushadi (lib/tel.ts).
+  const login = telE164(parsed.data.telefon);
+  if (!login) {
+    return NextResponse.json(
+      {
+        error:
+          "Telefon raqam noto'g'ri. O'zbekiston raqami: +998 90 123 45 67. " +
+          "Boshqa davlat raqamini + va davlat kodi bilan kiriting.",
+      },
+      { status: 400 }
+    );
   }
 
-  // Login (telefon) butun tizim bo'ylab unique.
-  const existing = await rawPrisma.user.findUnique({ where: { login }, select: { id: true } });
-  if (existing) {
+  // Login (telefon) butun tizim bo'ylab unique — eski yozuvlardagi BARCHA
+  // ko'rinishlar bo'yicha (`901234567` bilan ochilgan akkaunt ham hisobga olinadi).
+  if (await telefonBandmi(login)) {
     return NextResponse.json(
       { error: "Bu telefon raqam allaqachon ro'yxatdan o'tgan. Tizimga kiring." },
       { status: 409 }

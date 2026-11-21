@@ -7,13 +7,6 @@ export const loginSchema = z.object({
   parol: z.string().min(1, "Parol kiritilishi shart"),
 });
 
-/** Telefon raqamni normalizatsiya qiladi: bo'shliq/chiziqchalar olib tashlanadi, + saqlanadi. */
-export function normalizePhone(raw: string): string {
-  const trimmed = raw.trim();
-  const plus = trimmed.startsWith("+") ? "+" : "";
-  return plus + trimmed.replace(/\D/g, "");
-}
-
 export const signupSchema = z.object({
   kompaniya: z.string().trim().min(2, "Kompaniya nomi kamida 2 belgi bo'lsin").max(100),
   ism: z.string().trim().min(1, "Ismingizni kiriting").max(100),
