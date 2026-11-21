@@ -4,6 +4,8 @@ import { useMemo, useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { INPUT_CLASS, LABEL_CLASS } from "@/components/ui/fieldStyles";
+import { TelefonInput } from "@/components/ui/TelefonInput";
+import { telE164 } from "@/lib/tel";
 import {
   narxHisobla,
   normalizeFiliallar,
@@ -47,6 +49,11 @@ export default function SignupForm({ boshlangich }: { boshlangich: SignupBoshlan
   function birinchiQadam(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    // Raqam 2-qadamdan OLDIN tekshiriladi — aks holda xato oxirgi tugmada chiqardi.
+    if (!telE164(telefon)) {
+      setError("Telefon raqam noto'g'ri. Masalan: +998 90 123 45 67");
+      return;
+    }
     if (parol.length < 8) {
       setError("Parol kamida 8 belgi bo'lishi kerak");
       return;
@@ -102,15 +109,10 @@ export default function SignupForm({ boshlangich }: { boshlangich: SignupBoshlan
           />
         </div>
         <div>
-          <label className={LABEL_CLASS}>Telefon raqamingiz (login)</label>
-          <input
-            type="tel"
-            value={telefon}
-            onChange={(e) => setTelefon(e.target.value)}
-            placeholder="+998 90 123 45 67"
-            className={INPUT_CLASS}
-            required
-          />
+          <label htmlFor="telefon" className={LABEL_CLASS}>
+            Telefon raqamingiz (login)
+          </label>
+          <TelefonInput id="telefon" value={telefon} onChange={setTelefon} placeholder="+998 90 123 45 67" required />
         </div>
         <div>
           <label className={LABEL_CLASS}>Parol</label>

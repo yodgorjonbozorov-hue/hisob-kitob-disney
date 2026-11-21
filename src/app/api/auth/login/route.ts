@@ -1,36 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 // Login global (tenantlar aro) unique — autentifikatsiya rawPrisma bilan ishlaydi.
 import { rawPrisma as prisma } from "@/lib/db/rawPrisma";
-import { Prisma } from "@prisma/client";
-import { registrsizTeng } from "@/lib/db/dialect";
 import { verifyPassword } from "@/lib/auth/password";
 import { getSession, sealMobileSession } from "@/lib/auth/session";
 import { normalizeRol } from "@/lib/auth/roles";
 import { loginSchema } from "@/lib/validation/auth";
 import { rateLimit, rateLimitReset } from "@/lib/rateLimit";
 import { getClientIp } from "@/lib/services/audit";
-
-/**
- * Loginni topadi: avval aniq moslik, topilmasa registr (katta/kichik harf)
- * e'tiborga olinmagan holda. Mobil klaviaturalar birinchi harfni avtomatik
- * kattalashtiradi ("superadmin" -> "Superadmin"), SQLite esa registrga sezgir.
- *
- * Xavfsizlik: registrsiz moslik FAQAT bitta foydalanuvchi topilgandagina
- * qabul qilinadi — "Admin"/"admin" kabi ikki xil akkaunt bo'lsa hech biri
- * tanlanmaydi (noto'g'ri akkauntga kirib qolishning oldi olinadi).
- */
-async function findUserByLogin(login: string) {
-  const exact = await prisma.user.findUnique({ where: { login } });
-  if (exact) return exact;
-
-  // Registrsiz taqqoslash provayderga bog'liq (SQLite: COLLATE NOCASE,
-  // Postgres: LOWER() + funksional indeks) — `lib/db/dialect.ts` da.
-  const matches = await prisma.$queryRaw<Array<{ id: string }>>(
-    Prisma.sql`SELECT "id" FROM "User" WHERE ${registrsizTeng('"login"', login)} LIMIT 2`
-  );
-  if (matches.length !== 1) return null;
-  return prisma.user.findUnique({ where: { id: matches[0].id } });
-}
+import { findUserByLogin, loginLimitKaliti } from "@/lib/auth/loginTop";
 
 /** Rate limit oynalari — reset ham xuddi shu oyna kaliti bilan ishlashi kerak. */
 const IP_OYNA = 5 * 60 * 1000;
@@ -87,8 +64,9 @@ export async function POST(request: NextRequest) {
   const { login, parol } = parsed.data;
 
   // Bir login bo'yicha ham alohida limit (IP almashtirib brute-force qilishga qarshi):
-  // 15 daqiqada 5 urinish.
-  const rlLoginKey = `login:l:${login.toLowerCase()}`;
+  // 15 daqiqada 5 urinish. Telefon E.164 ga keltiriladi — bitta raqamni har
+  // xil yozib limitni chetlab o'tib bo'lmaydi (lib/auth/loginTop.ts).
+  const rlLoginKey = loginLimitKaliti(login);
   const rlLogin = await rateLimit(rlLoginKey, 5, LOGIN_OYNA);
   if (!rlLogin.ok) {
     return NextResponse.json(

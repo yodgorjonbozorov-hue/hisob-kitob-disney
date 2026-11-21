@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { ParolInput } from "@/components/ui/ParolInput";
 import { INPUT_CLASS, LABEL_CLASS } from "@/components/ui/fieldStyles";
+import { telgaOxshaydi, telKorinish, telNormalize } from "@/lib/tel";
 
 /** Qolgan vaqt: 60 soniyadan kami "45 s", ko'pi "12:55" (daqiqa:soniya). */
 function sanoqMatni(soniya: number): string {
@@ -75,13 +76,21 @@ export default function LoginForm() {
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <label htmlFor="login" className={LABEL_CLASS}>
-          Login
+          Login yoki telefon raqam
         </label>
         <input
           id="login"
           type="text"
           value={login}
           onChange={(e) => setLogin(e.target.value)}
+          // Raqam yozilgan bo'lsa E.123 ko'rinishiga keltiriladi — foydalanuvchi
+          // to'g'ri tushunilganini ko'radi. Server raqamni qanday yozilganidan
+          // qat'i nazar topadi (lib/auth/loginTop.ts); harfli login tegilmaydi.
+          onBlur={() => {
+            if (!telgaOxshaydi(login)) return;
+            const uz = telNormalize(login);
+            if (uz) setLogin(telKorinish(uz));
+          }}
           className={INPUT_CLASS}
           // Telefon klaviaturasi birinchi harfni kattalashtirmasin va loginni
           // "to'g'rilab" yubormasin — aks holda kirish bekorga rad etiladi.

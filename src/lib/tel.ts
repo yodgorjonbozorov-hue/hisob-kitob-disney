@@ -30,6 +30,51 @@ export function telNormalize(xom: string | null | undefined): string | null {
   return null;
 }
 
+/**
+ * LOGIN SIFATIDAGI TELEFON — xalqaro standart (ITU-T E.164) ko'rinishi.
+ *
+ * O'zbekiston raqami `telNormalize` bilan `+998XXXXXXXXX` bo'ladi. Boshqa
+ * davlat raqami faqat `+` bilan yozilgandagina qabul qilinadi: E.164 bo'yicha
+ * `+`, birinchi raqam 1–9, jami 8–15 raqam. `+` siz chet el raqami NOANIQ
+ * (mamlakat kodi qayerda tugashini bilib bo'lmaydi) — `null`.
+ */
+export function telE164(xom: string | null | undefined): string | null {
+  const uz = telNormalize(xom);
+  if (uz) return uz;
+  const t = xom?.trim() ?? "";
+  if (!t.startsWith("+")) return null;
+  const raqamlar = t.replace(/\D/g, "");
+  return /^[1-9]\d{7,14}$/.test(raqamlar) ? `+${raqamlar}` : null;
+}
+
+/**
+ * Kiritilgan matn telefon raqamiga o'xshaydimi: faqat raqam va telefon yozuv
+ * belgilari (`+`, bo'shliq, `-`, `.`, qavslar) va kamida 9 ta raqam. Harfli
+ * login ("admin", "kassir1") hech qachon telefon deb talqin qilinmaydi.
+ */
+export function telgaOxshaydi(xom: string | null | undefined): boolean {
+  const t = xom?.trim() ?? "";
+  return /^\+?[\d\s().-]+$/.test(t) && t.replace(/\D/g, "").length >= 9;
+}
+
+/**
+ * Telefon-login uchun bazada uchrashi mumkin bo'lgan BARCHA ko'rinishlar.
+ *
+ * Ro'yxatdan o'tish ilgari raqamni foydalanuvchi qanday yozgan bo'lsa shunday
+ * saqlardi (`+998901234567`, `998901234567`, `901234567`). Mavjud akkauntlar
+ * ko'chirilmaydi — kirishda shu ro'yxat bo'yicha qidiriladi. Birinchi element
+ * har doim E.164 (yangi yozuvlar shu ko'rinishda saqlanadi).
+ */
+export function telLoginKorinishlari(xom: string | null | undefined): string[] {
+  if (!telgaOxshaydi(xom)) return [];
+  const e164 = telE164(xom);
+  if (!e164) return [];
+  const raqamlar = e164.slice(1);
+  const royxat = [e164, raqamlar];
+  if (e164.startsWith("+998")) royxat.push(raqamlar.slice(3));
+  return royxat;
+}
+
 /** Ko'rsatish uchun: `+998901234567` → `+998 90 123 45 67`. */
 export function telKorinish(tel: string | null | undefined): string {
   const n = telNormalize(tel);

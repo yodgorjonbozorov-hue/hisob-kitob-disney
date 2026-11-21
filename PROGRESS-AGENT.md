@@ -6851,3 +6851,25 @@ Tekshirish: `next build` o'tadi; smoke (11), foydalanuvchilar-brauzer (17),
 foydalanuvchilar (34), isolation (22), izolyatsiya-royxati (9) yashil;
 yangi xulq Playwright bilan alohida sinaldi (oq/qorong'i mavzu).
 Ochiq qolgan audit bandlari: `Reja.md`.
+
+## Telefon bilan kirish — E.164 / E.123 (2026-11-21)
+
+Muammo: signup raqamni yozilgan ko'rinishida saqlardi (`+998...`, `998...`,
+`9 raqam`), login esa AYNAN solishtirardi — "90 123 45 67" bilan kirib
+bo'lmasdi; bitta raqam ikki formatda ikki akkaunt ochardi; login limiti
+formatni almashtirib chetlab o'tilardi; `normalizePhone` — `lib/tel.ts` dan
+tashqaridagi ikkinchi normalizatsiya edi.
+
+- `lib/tel.ts`: `telE164`, `telgaOxshaydi`, `telLoginKorinishlari`.
+- `lib/auth/loginTop.ts`: `findUserByLogin` (aynan → telefon ko'rinishlari →
+  registrsiz; 2+ moslik — null), `loginLimitKaliti` (E.164), `telefonBandmi`.
+- Signup: login E.164 da saqlanadi, dublikat barcha ko'rinishlar bo'yicha;
+  `normalizePhone` o'chirildi; route'dagi ruxsatsiz `rawPrisma` importi ketdi.
+- UI: `components/ui/TelefonInput.tsx` (type/inputmode/autocomplete=tel,
+  blur'da E.123, aria-invalid). Login maydoni "Login yoki telefon raqam".
+- Eski loginlar ko'chirilmadi — kirish ularni topadi (Reja.md 10b).
+
+Tekshirish: `npm run test:telefon-login` (13), signup, mijoz-dublikat,
+mijozlar, qarz, qarz-mijoz, crm, isolation, izolyatsiya-royxati,
+foydalanuvchilar, smoke yashil; `next build` o'tadi. `dialect` main'da
+avvaldan qizil (Reja.md 10a).
