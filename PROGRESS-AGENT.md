@@ -6835,3 +6835,19 @@ Regressiya: mijozlar, qarz, qarz-mijoz, qarz-mijoz-bogla, qarz-tahrir,
 qarz-taqsimot, qarzdorlik, crm, crm-pipeline, crm-tolovlar, crm-sotuvchi,
 zakaz-jamoasi, optom, magazin, atomik, soft-delete, tozalash, isolation,
 izolyatsiya-royxati, mijoz-xos — hammasi yashil. `npm run build` o'tadi.
+
+## Login formasi qulayliklari (2026-11-21)
+
+- `components/ui/ParolInput.tsx` — parolni ko'rsatish/yashirish tugmasi va
+  Caps Lock ogohlantirishi (`getModifierState`; blur'da yashiriladi).
+  Tugma yorlig'ida "parol" so'zi ATAYLAB yo'q: 10 ta brauzer to'plami maydonni
+  `getByLabel("Parol")` (qisman moslik) bilan topadi.
+- `LoginForm` — xato `role="alert"`; 401 da parol maydoni fokuslanib belgilanadi;
+  429 da tugma bloklanadi va teskari sanoq ("Kuting (11:15)") ko'rsatiladi.
+- `/api/auth/login` 429 javobiga `retryAfter` maydoni va `Retry-After` header
+  qo'shildi (faqat qo'shuvchi; `error` matni o'zgarmadi).
+
+Tekshirish: `next build` o'tadi; smoke (11), foydalanuvchilar-brauzer (17),
+foydalanuvchilar (34), isolation (22), izolyatsiya-royxati (9) yashil;
+yangi xulq Playwright bilan alohida sinaldi (oq/qorong'i mavzu).
+Ochiq qolgan audit bandlari: `Reja.md`.
