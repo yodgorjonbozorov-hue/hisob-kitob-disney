@@ -7,7 +7,8 @@
  * jarayon davomida keshlanadi. Token yo'q yoki Telegram javob bermasa —
  * `TELEGRAM_BOT_USERNAME`, u ham bo'lmasa loyiha boti.
  */
-export const STANDART_BOT = "balansauz_bot";
+/** Loyihaning ishlayotgan boti (2026-11-22 da egasi tasdiqladi; @balansauz_bot ishlatilmaydi). */
+export const STANDART_BOT = "disney_hisob_kitob_bot";
 
 let kesh: string | null = null;
 

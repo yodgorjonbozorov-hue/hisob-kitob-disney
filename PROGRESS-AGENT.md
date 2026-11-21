@@ -6896,4 +6896,8 @@ oladi va sessiya ochiladi.
 
 Tekshirish: `npm run test:telegram-login` (14) + bot/cron/auth/isolation
 to'plamlari yashil; brauzerda 14 tekshiruv. Smoke'dagi CRM testi 00:00–05:00
-da main'da ham qizil (Reja.md 10c). Webhook @balansauz_bot uchun o'rnatildi.
+da main'da ham qizil (Reja.md 10c).
+
+YANGILANISH: loyiha egasi @disney_hisob_kitob_bot'da qolishga qaror qildi;
+@balansauz_bot ishlatilmaydi, uning webhook'i o'chirildi. `STANDART_BOT`
+(getMe ishlamaganda zaxira nom) eski botga qaytarildi.
