@@ -6873,3 +6873,27 @@ Tekshirish: `npm run test:telefon-login` (13), signup, mijoz-dublikat,
 mijozlar, qarz, qarz-mijoz, crm, isolation, izolyatsiya-royxati,
 foydalanuvchilar, smoke yashil; `next build` o'tadi. `dialect` main'da
 avvaldan qizil (Reja.md 10a).
+
+## Telegram orqali kirish + login sahifasi dizayni (2026-11-22)
+
+Oqim (deep link, BotFather /setdomain kerak emas): sayt `boshlash` →
+`t.me/<bot>?start=login_<token>` → bot IP/brauzer/vaqtni ko'rsatib tasdiq
+so'raydi (`tgl:ok|no:<id>`) → brauzer `holat` ni so'rab, tasdiqni BIR MARTA
+oladi va sessiya ochiladi.
+
+- `lib/auth/telegramLogin.ts` — so'rovlar `AppSetting` da (`tglogin:<xesh>`),
+  5 daqiqa; token/nonce faqat SHA-256 xesh. NONCE httpOnly cookie
+  (`balansa_tg_login`, path `/api/auth/telegram`) — havolani ko'rgan begona
+  brauzer sessiya ololmaydi. Tasdiqni faqat so'rovni ochgan shaxsiy chat beradi.
+- `lib/auth/telegramBot.ts` — bot nomi `getMe` dan (havola webhook egasiga).
+- `lib/auth/kirish.ts` — `webSessiyaOch` + `loginUrinishiYoz` (parol va
+  Telegram yo'li uchun yagona); login route'dan `rawPrisma` chiqdi.
+- `bot/loginFlow.ts`, `/start login_...` va `tgl:` callback. Obuna holati
+  tekshirilmaydi (parol yo'li ham tekshirmaydi).
+- UI: `TelegramKirish` (telefonda tugma, kompyuterda QR), `AuthBrendPanel`
+  (lg+), "Xush kelibsiz", "Unutdingizmi?", `ESKI_NOM_IZOHI` login'dan olindi.
+  Tugma matnida "kirish" yo'q — smoke `getByRole("button",{name:"Kirish"})`.
+
+Tekshirish: `npm run test:telegram-login` (14) + bot/cron/auth/isolation
+to'plamlari yashil; brauzerda 14 tekshiruv. Smoke'dagi CRM testi 00:00–05:00
+da main'da ham qizil (Reja.md 10c). Webhook @balansauz_bot uchun o'rnatildi.

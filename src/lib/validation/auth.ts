@@ -24,3 +24,8 @@ export const signupSchema = z.object({
 });
 
 export type SignupInput = z.infer<typeof signupSchema>;
+
+/** Telegram orqali kirish: brauzer o'z so'rovining tokenini yuboradi. */
+export const telegramTokenSchema = z.object({
+  token: z.string().regex(/^[A-Za-z0-9_-]{43}$/, "Yaroqsiz so'rov"),
+});

@@ -41,6 +41,10 @@ Auditdagi bandlarning katta qismi allaqachon yopilgan; quyida faqat OCHIQ qolgan
 - [ ] **10a.** `tests/dialect.test.ts` main'da QIZIL: Postgres boshlang'ich migratsiyasi
       eskirgan (sxemada 79 model, migratsiyada 78 jadval). `npm run pg:migratsiya` bilan
       yangilash kerak (2026-11-21 da aniqlandi).
+- [ ] **10c.** Smoke testi "CRM buyurtmasi 'Bugungi holat'..." Toshkent vaqti bilan
+      00:00–05:00 oralig'ida QIZIL: test sanani `toISOString()` (UTC) bilan yuboradi,
+      dashboard esa "bugun"ni Toshkent bo'yicha hisoblaydi. Main'da ham takrorlanadi
+      (2026-11-22 00:10 da tasdiqlandi). Testda `lib/date.ts` dagi Toshkent sanasini ishlatish kerak.
 - [ ] **10b.** Eski telefon-loginlar (`998...`, `9 raqam`) bazada E.164 ga ko'chirilmagan —
       kirish ularni topadi (`lib/auth/loginTop.ts`), lekin ixtiyoriy migratsiya skripti
       (dublikatlarni ko'rsatadigan DRY RUN bilan) bazani bir xil formatga keltiradi.
