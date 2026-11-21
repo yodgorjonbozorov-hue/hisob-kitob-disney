@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-// Login global (tenantlar aro) unique — autentifikatsiya rawPrisma bilan ishlaydi.
-import { rawPrisma as prisma } from "@/lib/db/rawPrisma";
 import { verifyPassword } from "@/lib/auth/password";
-import { getSession, sealMobileSession } from "@/lib/auth/session";
+import { sealMobileSession } from "@/lib/auth/session";
+import { loginUrinishiYoz, webSessiyaOch } from "@/lib/auth/kirish";
 import { normalizeRol } from "@/lib/auth/roles";
 import { loginSchema } from "@/lib/validation/auth";
 import { rateLimit, rateLimitReset } from "@/lib/rateLimit";
@@ -12,35 +11,6 @@ import { findUserByLogin, loginLimitKaliti } from "@/lib/auth/loginTop";
 /** Rate limit oynalari — reset ham xuddi shu oyna kaliti bilan ishlashi kerak. */
 const IP_OYNA = 5 * 60 * 1000;
 const LOGIN_OYNA = 15 * 60 * 1000;
-
-/**
- * Kirish urinishini audit jurnaliga yozadi. HECH QACHON xato tashlamaydi —
- * jurnal yozib bo'lmagani login oqimini buzmasligi kerak.
- */
-async function loginUrinishiYoz(p: {
-  login: string;
-  ip: string;
-  ok: boolean;
-  userId: string | null;
-  tenantId: string | null;
-}): Promise<void> {
-  try {
-    await prisma.auditLog.create({
-      data: {
-        tenantId: p.tenantId,
-        businessId: null,
-        userId: p.userId,
-        userIsm: p.login,
-        action: p.ok ? "login" : "login_failed",
-        entity: "auth",
-        entityId: p.userId ?? p.login,
-        ip: p.ip === "unknown" ? null : p.ip,
-      },
-    });
-  } catch (error) {
-    console.error("Kirish urinishini yozib bo'lmadi:", error);
-  }
-}
 
 export async function POST(request: NextRequest) {
   const ip = getClientIp(request) ?? "unknown";
@@ -98,18 +68,7 @@ export async function POST(request: NextRequest) {
   // Muvaffaqiyat — rate limitlarni tozalaymiz va oxirgi kirish vaqtini yozamiz.
   await rateLimitReset(rlKey, IP_OYNA);
   await rateLimitReset(rlLoginKey, LOGIN_OYNA);
-  await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }).catch(() => {});
-
-  const session = await getSession();
-  session.userId = user.id;
-  session.login = user.login;
-  session.ism = user.ism;
-  session.rol = normalizeRol(user.rol);
-  session.tenantId = user.tenantId ?? null;
-  session.businessId = user.businessId ?? null;
-  session.mustChangePassword = user.mustChangePassword ?? false;
-  session.sessionEpoch = user.sessionEpoch ?? 0;
-  await session.save();
+  await webSessiyaOch(user);
 
   await loginUrinishiYoz({ login, ip, ok: true, userId: user.id, tenantId: user.tenantId });
 

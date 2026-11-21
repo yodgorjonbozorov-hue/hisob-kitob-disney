@@ -21,6 +21,7 @@ export default function LoginForm() {
   const [parol, setParol] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [unutdim, setUnutdim] = useState(false);
   // Urinishlar chegarasiga yetilganda (429) qolgan soniyalar. 0 — bloklanmagan.
   const [kutish, setKutish] = useState(0);
   const parolRef = useRef<HTMLInputElement>(null);
@@ -103,9 +104,26 @@ export default function LoginForm() {
         />
       </div>
       <div>
-        <label htmlFor="parol" className={LABEL_CLASS}>
-          Parol
-        </label>
+        <div className="flex items-baseline justify-between gap-3">
+          <label htmlFor="parol" className={LABEL_CLASS}>
+            Parol
+          </label>
+          <button
+            type="button"
+            onClick={() => setUnutdim((v) => !v)}
+            aria-expanded={unutdim}
+            aria-controls="parol-unutdim"
+            className="text-xs text-brand hover:underline mb-1.5"
+          >
+            Unutdingizmi?
+          </button>
+        </div>
+        {unutdim && (
+          <p id="parol-unutdim" className="mb-2 rounded-lg bg-surface-2 px-3 py-2 text-sm text-muted">
+            Parolni kompaniyangiz direktori yoki administratori tiklab beradi: Sozlamalar → Foydalanuvchilar →
+            &quot;Parolni tiklash&quot;. Telegram bog&apos;langan bo&apos;lsa, pastdagi Telegram tugmasi bilan parolsiz kiring.
+          </p>
+        )}
         <ParolInput
           ref={parolRef}
           id="parol"

@@ -1,6 +1,7 @@
 import { Bot, type Context } from "grammy";
 import type { User } from "@prisma/client";
 import { findUserByChatId, linkByCode } from "./auth";
+import { kirishSorovimi, handleLoginStart, handleLoginCallback } from "./loginFlow";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { computeAccess } from "@/lib/billing/access";
@@ -138,6 +139,12 @@ function tenantHandler(
 }
 
 bot.command("start", async (ctx) => {
+  // Saytdan "Telegram orqali kirish" havolasi: /start login_<token>.
+  const payload = typeof ctx.match === "string" ? ctx.match.trim() : "";
+  if (kirishSorovimi(payload)) {
+    await handleLoginStart(ctx, payload);
+    return;
+  }
   const chatId = String(ctx.chat.id);
   const user = await findUserByChatId(chatId);
   if (user) {
@@ -245,6 +252,9 @@ bot.command("bekor", async (ctx) => {
   await clearAllFlows(String(ctx.chat.id));
   await ctx.reply("Amal bekor qilindi.");
 });
+
+// Saytga kirishni tasdiqlash/rad etish — tenant konteksti kerak emas (loginFlow.ts).
+bot.callbackQuery(/^tgl:/, (ctx) => handleLoginCallback(ctx));
 
 bot.callbackQuery(/^lbiz:/, tenantHandler((ctx, user) => handleLeadBusinessCallback(ctx, user)));
 
