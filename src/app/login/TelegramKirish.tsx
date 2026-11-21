@@ -15,8 +15,8 @@ import { useTelegramKirish, type TgBosqich } from "./useTelegramKirish";
  */
 const XATO_MATNI: Record<Extract<TgBosqich, { tur: "xato" }>["sabab"], string> = {
   boglanmagan:
-    "Bu Telegram hisobi hali akkauntga bog'lanmagan. Avval login va parol bilan kiring, so'ng menyudagi " +
-    "\"Telegram bot bilan bog'lash\" orqali ulang — keyingi safar Telegram bilan kirasiz.",
+    "Telegram raqamingiz bilan akkaunt topilmadi. Login va parol bilan kiring yoki direktoringizdan " +
+    "raqamingizni xodim kartochkasiga yozib qo'yishini so'rang.",
   rad: "Kirish Telegram'da rad etildi.",
   eskirgan: "So'rov vaqti tugadi. Qaytadan urinib ko'ring.",
   tarmoq: "Serverga ulanib bo'lmadi. Internetni tekshirib, qayta urining.",
@@ -57,7 +57,8 @@ export function TelegramKirish() {
           </h2>
           <ol className="mt-2 space-y-1 text-sm text-muted list-decimal list-inside">
             <li>&quot;Telegram&apos;ni ochish&quot; tugmasini bosing</li>
-            <li>Botda <span className="font-medium text-fg">Start</span>, so&apos;ng <span className="font-medium text-fg">Ha, kirish</span></li>
+            <li>Botda <span className="font-medium text-fg">Start</span> ni bosing</li>
+            <li><span className="font-medium text-fg">📱 Raqamni yuborish</span>, so&apos;ng <span className="font-medium text-fg">Ha, kirish</span></li>
           </ol>
         </div>
 

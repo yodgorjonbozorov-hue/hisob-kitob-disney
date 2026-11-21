@@ -1,7 +1,7 @@
 import { Bot, type Context } from "grammy";
 import type { User } from "@prisma/client";
 import { findUserByChatId, linkByCode } from "./auth";
-import { kirishSorovimi, handleLoginStart, handleLoginCallback } from "./loginFlow";
+import { kirishSorovimi, handleLoginStart, handleLoginCallback, handleLoginContact } from "./loginFlow";
 import { runWithTenant } from "@/lib/db/tenantContext";
 import { rawPrisma } from "@/lib/db/rawPrisma";
 import { computeAccess } from "@/lib/billing/access";
@@ -341,6 +341,10 @@ bot.callbackQuery(
 );
 
 // Chek rasmi — AI moduli yoqiq bo'lsa o'qiladi (chekFlow ichida tekshiriladi).
+// Saytga kirish: "📱 Raqamni yuborish" tugmasidan kelgan kontakt (loginFlow.ts).
+// tenantHandler'dan OLDIN: bu bosqichda chat hali akkauntga bog'lanmagan bo'lishi mumkin.
+bot.on("message:contact", (ctx) => handleLoginContact(ctx));
+
 bot.on(
   "message:photo",
   tenantHandler((ctx, user) => handleChekPhoto(ctx, user), { yozish: true })

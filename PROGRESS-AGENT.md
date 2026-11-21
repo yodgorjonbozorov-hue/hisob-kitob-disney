@@ -6901,3 +6901,14 @@ da main'da ham qizil (Reja.md 10c).
 YANGILANISH: loyiha egasi @disney_hisob_kitob_bot'da qolishga qaror qildi;
 @balansauz_bot ishlatilmaydi, uning webhook'i o'chirildi. `STANDART_BOT`
 (getMe ishlamaganda zaxira nom) eski botga qaytarildi.
+
+## Telegram kirish: kontakt bilan tasdiq (2026-11-22)
+
+Egasi talabi: Start'dan keyin kontakt yuborilsin, tasdiqdan so'ng kirilsin.
+`/start login_<token>` → `request_contact` tugmasi → `kontaktKeldi`
+(`contact.user_id === from.id` majburiy) → `lib/auth/telefonAkkaunt.ts`:
+login (telefon) → `Employee.tel` (normallashtirib) → `/kod` bilan bog'langan
+chat; har qadamda faqat BITTA faol akkaunt → "Ha, kirish". Tasdiqdan keyin
+chat akkauntga bog'lanadi (bo'sh bo'lsa). Chat → so'rov ko'rsatkichi:
+`tglogin:chat:<chatId>`. `message:contact` handler `tenantHandler`dan oldin.
+Testlar: `npm run test:telegram-login` (19).
